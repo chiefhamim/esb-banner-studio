@@ -50,7 +50,9 @@ export function OutputsPanel({ base, onToast }: { base: Assets; onToast: (msg: s
   const pick = (t: OutputTab) => { setTab(t); try { localStorage.setItem('esb-banner-studio/editorial/output', t) } catch { /* ignore */ } }
   const [device, setDevice] = useState<SiteDevice>('mobile')
   const [theme, setTheme] = useState<SiteTheme>('white')
-  const [hostRef, hostW] = useWidth<HTMLDivElement>(300)
+  const [hostRef, hostOuter] = useWidth<HTMLDivElement>(300)
+  // the stage is an inset well with 10 px padding; previews size to what is inside it
+  const hostW = Math.max(160, hostOuter - 20)
   const [previewDate] = useState(() => new Date())
   const [busy, setBusy] = useState<null | 'export' | 'copy'>(null)
   const [heroMode, setHeroMode] = useHeroMode()
@@ -160,10 +162,10 @@ export function OutputsPanel({ base, onToast }: { base: Assets; onToast: (msg: s
 
         {tab === 'article' && (
           <>
-            <div className="ed-outputs-row">
-              <Seg<SiteDevice> value={device} onChange={setDevice} options={[{ value: 'desktop', label: 'Desktop' }, { value: 'tablet', label: 'Tablet' }, { value: 'mobile', label: 'Phone' }]} />
-              <Seg<SiteTheme> value={theme} onChange={setTheme} options={SITE_THEMES.map((t) => ({ value: t.id, label: t.label }))} />
-              <Seg<'banner' | 'photo'> value={heroMode} onChange={setHeroMode} options={[{ value: 'banner', label: 'Hero: Web banner' }, { value: 'photo', label: 'Hero: photo' }]} />
+            <div className="ed-outputs-opts">
+              <Select<SiteDevice> className="sm" title="Screen" value={device} onChange={setDevice} options={[{ value: 'desktop', label: 'Desktop' }, { value: 'tablet', label: 'Tablet' }, { value: 'mobile', label: 'Phone' }]} />
+              <Select<SiteTheme> className="sm" title="Site theme" value={theme} onChange={setTheme} options={SITE_THEMES.map((t) => ({ value: t.id, label: t.label }))} />
+              <Select<'banner' | 'photo'> className="sm" title="Article image" value={heroMode} onChange={setHeroMode} options={[{ value: 'banner', label: 'Banner hero' }, { value: 'photo', label: 'Photo hero' }]} />
             </div>
             <SitePreview
               theme={theme}

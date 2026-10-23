@@ -17,8 +17,8 @@ import {
   fetchLiveArticleBody,
   checkSlugAvailability,
   getStoredStaffSession,
-  clearStaffSession,
   authenticateStaff,
+  signOutStaff,
   type SiteStatus,
   type StaffSession,
   type LiveArticleSummary,
@@ -112,7 +112,7 @@ interface EditorialState {
 
   checkConnection: () => Promise<void>
   syncFromLiveFeed: () => Promise<void>
-  loginStaff: (email: string, pass: string, allowBypass?: boolean) => Promise<{ success: boolean; error?: string }>
+  loginStaff: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>
   logoutStaff: () => void
   checkSlug: (slug: string) => Promise<void>
 
@@ -237,8 +237,8 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
     }
   },
 
-  loginStaff: async (email, pass, allowBypass = false) => {
-    const res = await authenticateStaff(email, pass, allowBypass)
+  loginStaff: async (email, pass) => {
+    const res = await authenticateStaff(email, pass)
     if (res.success && res.session) {
       set({ staffSession: res.session })
       return { success: true }
@@ -247,8 +247,11 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
   },
 
   logoutStaff: () => {
-    clearStaffSession()
+    const session = get().staffSession
     set({ staffSession: null })
+    // ends the session on the site's auth service and in the CMS window, not just here
+    void signOutStaff(session)
+    void (window as unknown as { esb?: { siteSignOut?: () => Promise<boolean> } }).esb?.siteSignOut?.()
   },
 
   checkSlug: async (slug) => {

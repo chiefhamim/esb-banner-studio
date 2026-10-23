@@ -45,6 +45,24 @@ try {
   const metaFetch = await page.evaluate(() => window.esb.fetchUrl('http://169.254.169.254/latest/meta-data/'))
   console.log(!metaFetch.ok && metaFetch.code === 'private_address' ? 'PASS' : 'FAIL', 'SSRF 169.254.169.254 rejected')
 
+  // Opening the site CMS as the signed-in editor: the main process writes the site's own session cookie into the
+  // separate esbpowerline.com profile (never the app's) and opens the CMS in its own window. Junk is refused.
+  const fakeCookie = [{ name: 'sb-sxgokpmrbgdndstygapc-auth-token', value: 'base64-eyJhY2Nlc3NfdG9rZW4iOiJ0In0' }]
+  await page.evaluate((c) => window.esb.openSiteAs(c, '/cms/articles/new'), fakeCookie)
+  const siteState = await app.evaluate(async ({ session, BrowserWindow }) => {
+    const site = await session.fromPartition('persist:esb-site').cookies.get({ url: 'https://esbpowerline.com' })
+    const appSide = await session.defaultSession.cookies.get({ url: 'https://esbpowerline.com' })
+    const wins = BrowserWindow.getAllWindows().map((w) => w.webContents.getURL() || w.getTitle())
+    return { site: site.map((c) => c.name + '=' + c.value.slice(0, 12) + (c.secure ? ' secure' : '')), appSide: appSide.length, wins }
+  })
+  console.log(siteState.site.length === 1 && /secure/.test(siteState.site[0]) && siteState.appSide === 0 ? 'PASS' : 'FAIL', 'site session cookie written to the site profile only', JSON.stringify(siteState.site))
+  console.log(siteState.wins.some((u) => /esbpowerline\.com\/cms\/articles\/new|esbpowerline/.test(u)) ? 'PASS' : 'FAIL', 'CMS window opened on esbpowerline.com', JSON.stringify(siteState.wins))
+  const junk = await page.evaluate(() => window.esb.openSiteAs([{ name: 'evil', value: 'x;Domain=.example.com' }], '//evil.com').then(() => 'accepted', (e) => 'refused'))
+  console.log(junk === 'refused' ? 'PASS' : 'FAIL', 'malformed session cookies are refused')
+  await page.evaluate(() => window.esb.siteSignOut())
+  const afterOut = await app.evaluate(async ({ session }) => (await session.fromPartition('persist:esb-site').cookies.get({ url: 'https://esbpowerline.com' })).length)
+  console.log(afterOut === 0 ? 'PASS' : 'FAIL', 'signing out clears the site session')
+
   const menuGone = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null)
   console.log(menuGone ? 'PASS' : 'FAIL', 'native menu removed (Alt cannot pop it up)')
   const title = await page.title()

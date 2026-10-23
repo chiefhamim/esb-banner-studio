@@ -17,6 +17,7 @@ import { BN_FONTS, useBnFont } from './bnFont'
 import { useBannerImage } from './useBannerImage'
 import { useHeroMode } from './heroMode'
 import { SeoPanel } from './SeoPanel'
+import { SignInSheet } from './SignInSheet'
 import { suggestKeyphrases } from './seo'
 import { FeaturedImage } from './FeaturedImage'
 import { SitePreview, SITE_THEMES, formatArticleDate } from './SitePreview'
@@ -44,9 +45,10 @@ import {
 } from './translator'
 import type { GeminiModelInfo } from './translator'
 import {
-  SITE_BASE_URL,
   buildCmsArticlePayload,
   insertArticleToSupabase,
+  ensureFreshSession,
+  openSiteCms,
 } from './siteApi'
 import { parseArticleDocument } from './extract'
 
@@ -131,8 +133,6 @@ export function EditorialWorkspace() {
 
   const checkConnection = useEditorialStore((s) => s.checkConnection)
   const syncFromLiveFeed = useEditorialStore((s) => s.syncFromLiveFeed)
-  const loginStaff = useEditorialStore((s) => s.loginStaff)
-  const logoutStaff = useEditorialStore((s) => s.logoutStaff)
   const checkSlug = useEditorialStore((s) => s.checkSlug)
   const loadLiveArticleForEdit = useEditorialStore((s) => s.loadLiveArticleForEdit)
   const setSourceArticle = useEditorialStore((s) => s.setSourceArticle)
@@ -211,11 +211,6 @@ export function EditorialWorkspace() {
 
   // Modals
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [loginEmail, setLoginEmail] = useState('hamim2964@gmail.com')
-  const [loginPassword, setLoginPassword] = useState('')
-  const [loginBypass, setLoginBypass] = useState(false)
-  const [loginError, setLoginError] = useState<string | null>(null)
-  const [loginLoading, setLoginLoading] = useState(false)
   const [showPublishModal, setShowPublishModal] = useState(false)
   const [publishingLive, setPublishingLive] = useState(false)
   const [publishResult, setPublishResult] = useState<{ ok?: boolean; msg?: string; url?: string } | null>(null)
@@ -506,7 +501,7 @@ export function EditorialWorkspace() {
       focusKeyphrase: draft.focusKeyphrase,
         metaTitle: draft.metaTitle,
         metaDescription: draft.metaDescription,
-        byline: staffSession?.name || draft.byline || 'Mehedi Hasan Hamim',
+        byline: staffSession?.name || draft.byline,
         credit: draft.credit,
         imageUrl: bannerLeadImage || undefined,
         status: targetStatus,
@@ -516,7 +511,9 @@ export function EditorialWorkspace() {
         await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
       } catch {}
 
-      const result = await insertArticleToSupabase(payload, staffSession)
+      // a token older than an hour is renewed first, so a long editing session does not fail at the last step
+      const fresh = await ensureFreshSession(staffSession)
+      const result = await insertArticleToSupabase(payload, fresh)
 
       if (result.success) {
         setPublishResult({
@@ -548,10 +545,7 @@ export function EditorialWorkspace() {
   }
 
   const handleOpenInSiteCms = () => {
-    const targetUrl = `${SITE_BASE_URL}/cms/articles/new`
-    if (typeof window !== 'undefined' && window.open) {
-      window.open(targetUrl, '_blank')
-    }
+    void openSiteCms(staffSession, '/cms/articles/new').then((how) => showToast(how === 'signed-in' ? 'Opened the CMS — signed in as you' : 'Opened the CMS in your browser'))
   }
 
   const handleCopyCmsPayload = () => {
@@ -827,7 +821,7 @@ export function EditorialWorkspace() {
                 <div className="ed-src-intake">{intakeForm(true)}</div>
               ) : (
                 <>
-                  <Panel id="ed-src-link" defaultOpen={false} title="Original link" sub={sourceHost} persist={false} actions={
+                  <Panel id="ed-src-link" icon="link" defaultOpen={false} title="Original link" sub={sourceHost} persist={false} actions={
                     <button type="button" className={'btn xs' + (sourceEditing ? ' primary' : ' ghost')} onClick={() => setSourceEditing(!sourceEditing)} title="Correct the extracted source text by hand">
                       <Icon name="edit" size={12} />
                       <span>{sourceEditing ? 'Done' : 'Edit'}</span>
@@ -858,7 +852,7 @@ export function EditorialWorkspace() {
                   </Panel>
 
                   {sourceEditing ? (
-                    <Panel id="ed-src-edit" title="Edit source text" persist={false}>
+                    <Panel id="ed-src-edit" icon="edit" title="Edit source text" persist={false}>
                       <Field label="Original headline">
                         <input id="source-title-input" type="text" className="input" value={source?.title || ''} onChange={(e) => updateSourceManual(e.target.value, source?.deck || '', source?.paragraphs || [])} />
                       </Field>
@@ -876,7 +870,7 @@ export function EditorialWorkspace() {
                     </Panel>
                   ) : (
                     <>
-                      <Panel id="ed-src-head" defaultOpen={false} title="Headline & deck" sub={languageLabel ?? undefined}>
+                      <Panel id="ed-src-head" icon="newspaper" defaultOpen={false} title="Headline & deck" sub={languageLabel ?? undefined}>
                         <div className="ed-source-reader">
                           <textarea id="source-title-input" className="source-reader-title-input" readOnly rows={2} value={source?.title || ''} title="Original headline" />
                           {source?.deck && <p className="source-reader-deck">{source.deck}</p>}
@@ -884,7 +878,7 @@ export function EditorialWorkspace() {
                       </Panel>
 
                       {factTable.length > 0 && (
-                        <Panel id="ed-src-facts" defaultOpen={false} title="Facts to check" sub={`${factTable.length}`}>
+                        <Panel id="ed-src-facts" icon="check" defaultOpen={false} title="Facts to check" sub={`${factTable.length}`}>
                           <div className="fact-strip">
                             {factTable.map((f) => (
                               <span
@@ -902,7 +896,7 @@ export function EditorialWorkspace() {
                         </Panel>
                       )}
 
-                      <Panel id="ed-src-body" title="Original story" sub={`${source?.paragraphs.length || 0} ¶`}>
+                      <Panel id="ed-src-body" icon="type" title="Original story" sub={`${source?.paragraphs.length || 0} ¶`}>
                         <div className="source-paragraphs">
                           {(source?.paragraphs || []).map((p, idx) => (
                             <p key={idx} className="source-reader-p"><span className="source-reader-n">{String(idx + 1).padStart(2, '0')}</span>{p}</p>
@@ -1077,7 +1071,7 @@ export function EditorialWorkspace() {
           <aside className="right ed-side" aria-label="Publishing and image">
             <Splitter axis="vert" side="l" label="Resize the sidebar" value={cols.side} min={280} max={560} reset={COLS_DEFAULT.side} onLive={liveCol('side')} onCommit={commitCol('side')} root={() => wsRef.current} />
             <div className="scroll ed-side-scroll">
-            <Panel id="ed-publish" defaultOpen={false} title="Publish" sub={publishResult?.ok ? 'Published' : 'Draft'}>
+            <Panel id="ed-publish" icon="upload" defaultOpen={false} title="Publish" sub={publishResult?.ok ? 'Published' : 'Draft'}>
               <dl className="ed-kv">
                 <dt>Status</dt>
                 <dd><span className={'ed-status ' + (publishResult?.ok ? 'live' : 'draft')}>{publishResult?.ok ? 'Published' : 'Draft · not on the site yet'}</span></dd>
@@ -1109,11 +1103,11 @@ export function EditorialWorkspace() {
               </div>
             </Panel>
 
-            <Panel id="ed-image" defaultOpen={false} title="Featured image" sub={bannerLeadImage ? 'Set' : 'None'}>
+            <Panel id="ed-image" icon="image" defaultOpen={false} title="Featured image" sub={bannerLeadImage ? 'Set' : 'None'}>
               <FeaturedImage onToast={showToast} />
             </Panel>
 
-            <Panel id="ed-organize" title="Organize" sub={catData.name}>
+            <Panel id="ed-organize" icon="folder" title="Organize" sub={catData.name}>
               <Field label="Category">
                 <div className="row">
                   <Select
@@ -1154,7 +1148,7 @@ export function EditorialWorkspace() {
               </Field>
             </Panel>
 
-            <Panel id="ed-outputs" defaultOpen={false} title="Outputs" sub="Banner · Web · Facebook">
+            <Panel id="ed-outputs" icon="layers" defaultOpen={false} title="Outputs" sub="Banner · Web · Facebook">
               {baseAssets ? <OutputsPanel base={baseAssets} onToast={showToast} /> : <p className="hint">Loading the banner…</p>}
             </Panel>
             </div>
@@ -1193,108 +1187,8 @@ export function EditorialWorkspace() {
           ========================================================================= */}
 
       {/* Staff Authentication Dialog */}
-      {showLoginModal && (
-        <Dialog
-          title="ESB PowerLine Staff Authentication"
-          kicker="CMS ACCOUNT"
-          width={500}
-          onClose={() => setShowLoginModal(false)}
-          footer={
-            <>
-              <div className="spacer" />
-              <button type="button" className="btn" onClick={() => setShowLoginModal(false)}>
-                Close
-              </button>
-            </>
-          }
-        >
-          {staffSession ? (
-            <div className="stack">
-              <div className="callout good">
-                <Icon name="check" size={15} />
-                <div>
-                  <b>Signed in as {staffSession.name}</b> ({staffSession.email}) · Role:{' '}
-                  <span className="ed-tag">{staffSession.role.toUpperCase()}</span>
-                </div>
-              </div>
-              <p className="sub">
-                Authenticated session valid for direct Supabase REST insertion to <code>public.Article</code>.
-              </p>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => {
-                  logoutStaff()
-                  showToast('Signed out of CMS account')
-                }}
-              >
-                Sign Out
-              </button>
-            </div>
-          ) : (
-            <div className="stack" style={{ gap: 12 }}>
-              <Field label="Staff Email">
-                <input
-                  type="email"
-                  className="ed-url-input"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                />
-              </Field>
-              <Field label="Password">
-                <input
-                  type="password"
-                  className="ed-url-input"
-                  placeholder="Supabase staff password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                />
-              </Field>
-              <div className="row">
-                <Check
-                  checked={loginBypass}
-                  onChange={() => setLoginBypass(!loginBypass)}
-                  label="Verified Newsroom Bypass (hamim2964@gmail.com)"
-                />
-              </div>
-              {loginError && (
-                <div className="callout warn">
-                  <Icon name="info" size={14} />
-                  <span>{loginError}</span>
-                </div>
-              )}
-              <div className="row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="btn primary"
-                  disabled={loginLoading}
-                  onClick={async () => {
-                    setLoginLoading(true)
-                    setLoginError(null)
-                    try {
-                      const res = await loginStaff(loginEmail, loginPassword, loginBypass)
-                      if (res.success) {
-                        setShowLoginModal(false)
-                        showToast('Signed in successfully')
-                      } else {
-                        setLoginError(res.error || 'Authentication failed')
-                      }
-                    } catch (e: any) {
-                      setLoginError(e.message)
-                    } finally {
-                      setLoginLoading(false)
-                    }
-                  }}
-                >
-                  {loginLoading ? 'Authenticating…' : 'Sign In'}
-                </button>
-              </div>
-            </div>
-          )}
-        </Dialog>
-      )}
+      {showLoginModal && <SignInSheet onClose={() => setShowLoginModal(false)} onToast={showToast} />}
 
-      {/* Gemini API Key Dialog */}
       {showApiKeyModal && (
         <Dialog
           title="Gemini translation"

@@ -10,6 +10,8 @@ import { ComponentGallery } from './ui/ComponentGallery'
 import { useShellStore } from './shell/shellStore'
 import { useStore } from './store'
 import { installBannerLink } from './editorial/bannerLink'
+// the design layer loads after every other stylesheet so it is the last word on shared chrome
+import './styles/studio.css'
 
 installBannerLink()
 

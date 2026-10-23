@@ -118,7 +118,6 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   }
   const commitSize = (k: keyof LayoutState) => (v: number) => setLayout((l) => { const n = { ...l, [k]: v }; saveLayout(n); return n })
   const maxW = Math.min(LIMITS.lw[1], Math.round(window.innerWidth * 0.38))
-  const warned = useRef('')
   const file = useRef<HTMLInputElement>(null)
   const pasteInPlace = useRef(false)
 
@@ -159,19 +158,16 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   const quickExport = useCallback(async (formats: FormatId[]) => {
     if (!base) return
     const st = useStore.getState()
+    // A quick export always exports. It used to stop at the first click on a banner with an empty photo slot and only
+    // say "run it again", which read as a dead button; the empty slot is now reported with the result instead.
     const missing = formats.map((f) => emptySlots(st.doc, f)).reduce((a, b) => Math.max(a, b), 0)
-    const sig = formats.join() + st.doc.photos.collage + missing
-    if (missing > 0 && warned.current !== sig) {
-      warned.current = sig
-      st.setNotice(`${missing} photo slot${missing > 1 ? 's are' : ' is'} still empty. Run it again to export anyway.`)
-      return
-    }
     setBusy(true)
     try {
       const r = await runExport(st.doc, base, { ...exp, formats }, () => undefined)
       if (r.dir && r.dir !== exp.dir) setExp({ ...exp, dir: r.dir })
       if (exp.openAfter && r.saved[0]) void window.esb?.reveal?.(r.saved[0])
-      st.setNotice(`Saved ${r.saved.length} file${r.saved.length === 1 ? '' : 's'} · ${humanBytes(r.bytes)}`)
+      const note = missing > 0 ? ` — ${missing} empty photo slot${missing > 1 ? 's' : ''} exported as placeholder` : ''
+      st.setNotice(r.saved.length ? `Saved ${r.saved.length} file${r.saved.length === 1 ? '' : 's'} · ${humanBytes(r.bytes)}${note}` : 'Export cancelled')
     } catch (err) {
       st.setNotice(err instanceof Error ? err.message : String(err))
     } finally {

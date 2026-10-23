@@ -1,0 +1,255 @@
+/* ============================================================================
+   Studio design layer (2026-10) — loaded last, applies to every workspace.
+
+   What changed and why: the chrome mixed white boxes, grey boxes, rings and
+   underlines; panels were flat strips separated by hairlines; dialogs had a
+   grey footer band. Everything here follows one model instead:
+     · the window is a quiet canvas (--bg-0) with side columns (--side);
+     · content lives on rounded cards (--card) that lift when open;
+     · toolbar controls are borderless fills (--fill) that darken on hover,
+       and a selected one is a raised white chip (--raised) — like macOS;
+     · fields are filled (--field) and gain a ring on focus;
+     · motion is short and springy (--spring), and respects reduced motion.
+   Every colour is a token with a light and a dark value (tokens.css).
+   ============================================================================ */
+
+/* ---------------------------------------------------------------- header bar */
+.topbar, .vw-header {
+  height: var(--h-app-header);
+  padding: 0 8px;
+  gap: 6px;
+  align-items: center;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--card-line);
+  box-shadow: none;
+}
+.topbar > *, .vw-header > * { align-self: center; flex: none; }
+.topbar > .spacer, .vw-header > .spacer { flex: 1 1 0; min-width: 0; }
+.topbar .fmtgroup, .topbar .ed-head-group { gap: 6px; }
+
+/* toolbar items: one shape, one fill, centred content */
+.topbar .fmtpick, .topbar .dual-toggle-btn, .topbar .pv-btn, .topbar .mb-item,
+.vw-header .btn:not(.primary), .vw-header .select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  gap: 6px;
+  font: 500 13px/1 var(--ui);
+  color: var(--text);
+  background: var(--fill);
+  border: 0;
+  border-radius: var(--r-2);
+  box-shadow: none;
+  transform: none;
+  transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring);
+}
+.topbar .fmtpick:hover, .topbar .dual-toggle-btn:hover, .topbar .pv-btn:hover,
+.vw-header .btn:not(.primary):hover:not(:disabled), .vw-header .select:hover { background: var(--fill-hover); box-shadow: none; transform: none; }
+.topbar .fmtpick:active, .topbar .dual-toggle-btn:active, .topbar .pv-btn:active { background: var(--fill-active); transform: none; }
+.topbar .pv-btn.on, .topbar .fmtpick.open { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+.topbar .pv-btn:disabled { opacity: .45; }
+.topbar .pv-btn > svg, .topbar .dual-toggle-btn > svg { flex: none; }
+.topbar .dual-toggle-btn { padding: 0 10px; color: var(--text); }
+.topbar .fmtpick { padding: 0 10px 0 4px; }
+.topbar .fmtpick .ratio-glyph { width: 24px !important; height: 24px !important; background: var(--raised); border: 0; border-radius: 6px; box-shadow: var(--raised-shadow); }
+.topbar .fmtpick .chev { margin-left: 2px; }
+.topbar .pv-btn kbd { height: 18px; min-width: 18px; padding: 0 5px; font: 500 11px/18px var(--ui); color: var(--text-3); background: var(--raised); border: 0; border-radius: var(--r-1); box-shadow: var(--raised-shadow); opacity: 1; }
+
+/* menu bar titles are plain text until hovered or open — macOS style */
+.topbar .menubar { gap: 0; margin: 0 2px; }
+.topbar .mb-item { height: 28px; padding: 0 10px; color: var(--text); background: transparent; }
+.topbar .mb-item:hover, .topbar .mb-item.open { background: var(--fill-hover); }
+
+/* grouped icon buttons */
+.topbar .pillbar, .vw-header .pillbar { display: inline-flex; align-items: center; height: 32px; padding: 2px; gap: 2px; background: var(--fill); border: 0; border-radius: var(--r-2); box-shadow: none; }
+.topbar .pillbar .ibtn, .vw-header .pillbar .ibtn { width: 28px; height: 28px; border-radius: 6px; color: var(--text-2); }
+.topbar .pillbar .ibtn:hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
+.topbar .pillbar .ibtn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+.topbar .pillbar .pill-sep { width: 1px; height: 16px; margin: 0 2px; background: var(--card-line); }
+.topbar .drag-post-chip { height: 28px; padding: 0 8px; gap: 6px; font: 500 13px/1 var(--ui); color: var(--text-2); background: transparent; border: 0; border-radius: 6px; box-shadow: none; transform: none; }
+.topbar .drag-post-chip:hover { color: var(--text); background: var(--fill-hover); box-shadow: none; transform: none; }
+.topbar .dpc-tag { padding: 0 5px; font: 600 11px/16px var(--ui); color: var(--text-3); background: var(--raised); border: 0; border-radius: 4px; box-shadow: var(--raised-shadow); }
+
+/* primary action, and the Export split button as ONE control with a hairline divider */
+.topbar .btn.primary, .vw-header .btn.primary, .btn.primary {
+  color: var(--on-ink);
+  background: var(--ink);
+  border: 0;
+  box-shadow: var(--primary-sheen);
+}
+.btn.primary:hover:not(:disabled) { background: var(--ink-2); }
+.topbar .btn.primary, .vw-header .btn.primary { height: 32px; padding: 0 14px; gap: 6px; border-radius: var(--r-2); font: 600 13px/1 var(--ui); }
+.topbar .split { display: inline-flex; align-items: stretch; height: 32px; border-radius: var(--r-2); background: var(--ink); box-shadow: var(--primary-sheen); overflow: hidden; }
+.topbar .split > .btn.primary, .topbar .split > .mbtn, .topbar .split > * { height: 32px; margin: 0; border-radius: 0; box-shadow: none; }
+.topbar .split > .btn.primary:first-child { padding: 0 12px 0 14px; }
+.topbar .split > .btn.primary.split-caret { width: 30px; padding: 0; color: var(--on-ink); background: transparent; border: 0; box-shadow: inset 1px 0 0 var(--split-line); border-radius: 0; }
+.topbar .split > .btn.primary.split-caret:hover:not(:disabled) { background: color-mix(in srgb, var(--on-ink) 12%, transparent); }
+.topbar .split .split-caret svg { color: var(--on-ink); }
+
+/* workspace switcher: same capsule as the icon groups */
+.ws-switch { height: 32px; padding: 2px; background: var(--fill); border-radius: var(--r-2); }
+.ws-switch .ws-btn { height: 28px; padding: 0 10px; gap: 6px; font: 500 13px/1 var(--ui); color: var(--text-2); border-radius: 6px; }
+.ws-switch .ws-btn:hover { color: var(--text); }
+.ws-switch .ws-btn.on { color: var(--text); }
+
+/* segmented controls and tabs share the raised chip */
+.seg-ctl, .side-tabs { background: var(--fill); border: 0; box-shadow: none; }
+.pill-slide { background: var(--raised); box-shadow: var(--raised-shadow); }
+.pill-slide.ready { transition: transform 280ms var(--spring), width 280ms var(--spring); }
+.seg-ctl button.on, .side-tabs button.on { box-shadow: none; }
+.side-tabs { margin: 10px 10px 4px; border-radius: var(--r-2); }
+.side-tabs button { border-radius: 6px; }
+.side-tabs .pill-slide { border-radius: 6px; }
+
+/* Elements / Layers: a segmented pair instead of underlined tabs */
+.dock-tabs { height: 44px; align-items: center; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--card-line); }
+.dock-tabs > button { height: 28px; padding: 0 10px; border-radius: 6px; color: var(--text-2); }
+.dock-tabs > button:hover { color: var(--text); background: var(--fill); }
+.dock-tabs > button.on { color: var(--text); background: var(--fill-hover); }
+.dock-tabs > button.on::after { display: none; }
+
+/* ---------------------------------------------------------------- side columns & panel cards */
+.left, .right, .ed-src, .ed-side { background: var(--side); }
+.left .scroll.rail > .pane,
+.right > .scroll.rail.insp,
+.ed-src-scroll,
+.ed-side-scroll { padding: 6px 8px 16px; }
+.right > .scroll.rail.insp { padding-top: 8px; }
+
+.pnl {
+  position: relative;
+  margin: 0 0 8px;
+  background: var(--card);
+  border: 0;
+  border-radius: 12px;
+  box-shadow: var(--card-shadow);
+  transition: box-shadow var(--t-3) var(--spring), background var(--t-2) var(--ease);
+}
+.pnl.open { box-shadow: var(--card-shadow-open); }
+.pnl:focus-within { background: var(--card); }
+.pnl > header {
+  position: sticky;
+  top: -6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 10px 0 8px;
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: none;
+  cursor: pointer;
+  transition: background var(--t-1) var(--ease);
+}
+.pnl.open > header { border-radius: 12px 12px 0 0; }
+.pnl > header:hover { background: color-mix(in srgb, var(--fill) 60%, var(--card)); }
+.pnl:focus-within > header { background: var(--card); }
+.pnl > header:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+/* the icon sits in a soft rounded tile; open sections invert it so the eye finds them */
+.pnl-icon { display: grid; place-items: center; flex: none; width: 26px; height: 26px; padding: 6px; color: var(--text-2); background: var(--fill); border-radius: 6px; transition: background var(--t-2) var(--spring), color var(--t-2) var(--ease); box-sizing: border-box; }
+.pnl.open .pnl-icon { color: var(--on-ink); background: var(--ink); }
+.pnl > header h3 { flex: 1; gap: 6px; }
+.pnl > header h3 .t { font-size: 13px; font-weight: 600; color: var(--text); }
+.pnl:not(.open) > header h3 .t { font-weight: 500; color: var(--text); }
+.pnl > header h3 small { font-weight: 400; color: var(--text-3); letter-spacing: 0; }
+/* disclosure chevron on the right, turning down when open */
+.pnl > header .pnl-chev { order: 10; color: var(--text-3); transform: rotate(0deg); transition: transform var(--t-3) var(--spring), color var(--t-1) var(--ease); }
+.pnl.open > header .pnl-chev { transform: rotate(90deg); color: var(--text-2); }
+.pnl > header .pnl-actions { order: 9; }
+.pnl.open > header { box-shadow: 0 1px 0 var(--card-line); }
+/* panels without an icon keep the title aligned with those that have one */
+.pnl > header:not(:has(.pnl-icon)) { padding-left: 14px; }
+.pnl-body { padding: 12px 14px 16px; gap: 12px; animation: pnl-in 240ms var(--spring); }
+@keyframes pnl-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* category tiles: two across inside the card, filled like fields, whole words only */
+.pnl-body .cat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.pnl-body .cat { min-height: 52px; padding: 8px 8px 8px 7px; gap: 8px; background: var(--field); border: 0; border-radius: var(--r-2); box-shadow: none; }
+.pnl-body .cat:hover { background: var(--field-hover); box-shadow: none; }
+.pnl-body .cat.on { background: color-mix(in srgb, var(--c) 10%, var(--card)); box-shadow: 0 0 0 1.5px var(--c); }
+.pnl-body .cat-ico { width: 28px; height: 28px; border-radius: 6px; }
+.pnl-body .cat-txt b { overflow-wrap: normal; word-break: normal; hyphens: auto; -webkit-hyphens: auto; }
+
+/* ---------------------------------------------------------------- fields: filled, ring on focus */
+.input, input[type=text], input[type=email], input[type=password], input[type=url], input[type=search], textarea.input,
+.select, .scrub, .colorfield, .search, .ed-input, .ed-slug .ed-slug-input, .ed-tags {
+  background: var(--field);
+  border: 0;
+  box-shadow: none;
+  transition: background var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring);
+}
+.input:hover, input[type=text]:hover, input[type=email]:hover, input[type=password]:hover, input[type=url]:hover, textarea.input:hover,
+.select:hover, .scrub:hover, .colorfield:hover, .search:hover, .ed-input:hover, .ed-slug .ed-slug-input:hover, .ed-tags:hover {
+  background: var(--field-hover);
+  border: 0;
+  box-shadow: none;
+}
+.input:focus, input[type=text]:focus, input[type=email]:focus, input[type=password]:focus, input[type=url]:focus, textarea.input:focus,
+.select.open, .scrub:focus-within, .colorfield:focus-within, .search:focus-within, .ed-input:focus, .ed-slug .ed-slug-input:focus, .ed-tags:focus-within {
+  background: var(--card);
+  border: 0;
+  outline: none;
+  box-shadow: 0 0 0 1px var(--line-3), 0 0 0 4px var(--ink-ring);
+}
+.ed-tags input[type=text], .ed-tags input[type=text]:hover, .ed-tags input[type=text]:focus { background: transparent; box-shadow: none; }
+.source-reader-title-input, .source-reader-title-input:hover, .source-reader-title-input:focus { background: transparent !important; box-shadow: none !important; }
+
+/* secondary buttons: raised chips */
+.btn:not(.primary):not(.ghost) { background: var(--raised); border: 0; box-shadow: var(--raised-shadow); }
+.btn:not(.primary):not(.ghost):hover:not(:disabled) { background: color-mix(in srgb, var(--fill) 50%, var(--raised)); box-shadow: var(--raised-shadow); }
+.btn.ghost { background: transparent; border: 0; box-shadow: none; }
+.btn.ghost:hover:not(:disabled) { background: var(--fill-hover); }
+.btn { border-radius: var(--r-2); transition: background var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring), transform 120ms var(--spring); }
+.btn:active:not(:disabled) { transform: scale(.98); }
+
+/* ---------------------------------------------------------------- dialogs: sheets */
+.modal-bg { background: color-mix(in srgb, var(--scrim) 70%, transparent); backdrop-filter: blur(8px) saturate(1.2); -webkit-backdrop-filter: blur(8px) saturate(1.2); animation: fade 180ms var(--ease); }
+.dialog { background: var(--card); border: 0; border-radius: 16px; box-shadow: var(--shadow-2); animation: sheet-in 260ms var(--spring); }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+.dialog > header { align-items: center; padding: 20px 20px 8px 24px; }
+.dialog > header .kicker { font-size: 11px; letter-spacing: .06em; color: var(--text-3); }
+.dialog h2 { margin: 2px 0 0; font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: -.01em; }
+.dialog > footer { padding: 14px 20px 18px 24px; background: transparent; border-top: 1px solid var(--card-line); }
+
+/* ---------------------------------------------------------------- status bar */
+.statusbar { background: var(--side); border-top: 1px solid var(--card-line); }
+
+/* ---------------------------------------------------------------- the centre canvas well */
+.center, .ed-center { background: var(--bg-0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pnl-body, .dialog, .modal-bg { animation: none; }
+  .pill-slide.ready, .pnl, .pnl-icon, .pnl > header .pnl-chev { transition: none; }
+}
+
+/* a disabled primary keeps its colour and fades, instead of turning into a grey slab */
+.btn.primary:disabled, .btn.primary:disabled:hover { color: var(--on-ink); background: var(--ink); box-shadow: none; opacity: .32; }
+.btn:not(.primary):disabled { opacity: .45; }
+
+/* Story tab: the card-type switch is a segmented control, the link importer a card */
+.pane .card-type-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 4px 0 8px; padding: 2px; background: var(--fill); border-radius: var(--r-2); }
+.pane .card-type-bar .ct-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; min-width: 0; padding: 0 6px; font: 500 12px/1 var(--ui); white-space: nowrap; color: var(--text-2); background: transparent; border: 0; border-radius: 6px; box-shadow: none; transition: background var(--t-2) var(--spring), color var(--t-1) var(--ease); }
+.pane .card-type-bar .ct-tab:hover { color: var(--text); }
+.pane .card-type-bar .ct-tab.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+.pane .url-importer { margin: 0 0 8px; padding: 12px; background: var(--card); border: 0; border-radius: 12px; box-shadow: var(--card-shadow); }
+.pane .url-importer .input { height: 32px; }
+
+/* Video: the media-bin tabs are a segmented control like everywhere else */
+.vw-bin-tabs { display: flex; gap: 2px; margin: 8px; padding: 2px; background: var(--fill); border: 0; border-radius: var(--r-2); }
+.vw-bin-tabs button { flex: 1; height: 28px; padding: 0 6px; font: 500 12px/1 var(--ui); white-space: nowrap; color: var(--text-2); background: transparent; border: 0; border-radius: 6px; box-shadow: none; transition: background var(--t-2) var(--spring), color var(--t-1) var(--ease); }
+.vw-bin-tabs button:hover { color: var(--text); background: transparent; }
+.vw-bin-tabs button.active { color: var(--text); background: var(--raised); border: 0; box-shadow: var(--raised-shadow); }
+.vw-bin-tabs button.active::after { display: none; }
+
+/* Home: the ESB logo is drawn for a light ground, so in dark mode it sits on a white plate (artwork untouched) */
+:root[data-theme="dark"] .home-brand-logo { padding: 6px 10px; background: #fff; border-radius: var(--r-3); box-sizing: content-box; }
+
+/* narrow side columns: the card-type switch is text-only, and category tiles give their words more room */
+.pane .card-type-bar .ct-tab svg { display: none; }
+.pane .card-type-bar .ct-tab { overflow: hidden; text-overflow: ellipsis; }
+.pnl-body .cat { padding: 7px 6px; gap: 7px; }
+.pnl-body .cat-ico { width: 24px; height: 24px; }
+.pnl-body .cat-ico svg { width: 14px; height: 14px; }

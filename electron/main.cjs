@@ -79,6 +79,60 @@ function createWindow() {
   })
 }
 
+// ---------------------------------------------------------------- esbpowerline.com as the signed-in editor
+// The Studio signs in with the site's own auth service (renderer: siteApi.authenticateStaff). To open the real CMS
+// as that editor, the main process writes the site's own session cookie — the one @supabase/ssr reads — into a
+// separate browser profile (persist:esb-site) and opens the CMS in its own window. The app's session never carries
+// site cookies, and the window can only show esbpowerline.com; any other link goes to the system browser.
+const SITE_ORIGIN = 'https://esbpowerline.com'
+const SITE_PARTITION = 'persist:esb-site'
+const SITE_COOKIE_NAME = /^sb-[a-z0-9]{8,40}-auth-token(\.[0-5])?$/
+const SITE_COOKIE_VALUE = /^[A-Za-z0-9_-]{1,3200}$|^base64-[A-Za-z0-9_-]{1,3200}$/
+let siteWin = null
+
+async function writeSiteSession(cookies) {
+  const { session } = require('electron')
+  const ses = session.fromPartition(SITE_PARTITION)
+  if (!Array.isArray(cookies) || cookies.length < 1 || cookies.length > 6) throw new Error('bad session')
+  for (const c of cookies) {
+    if (!c || typeof c.name !== 'string' || typeof c.value !== 'string' || !SITE_COOKIE_NAME.test(c.name) || !SITE_COOKIE_VALUE.test(c.value)) throw new Error('bad session')
+  }
+  // drop any older session (whole or chunked) before writing this one
+  const base = cookies[0].name.replace(/\.\d$/, '')
+  for (const n of [base, ...[0, 1, 2, 3, 4, 5].map((i) => `${base}.${i}`)]) await ses.cookies.remove(SITE_ORIGIN, n).catch(() => {})
+  const expirationDate = Math.floor(Date.now() / 1000) + 400 * 24 * 60 * 60
+  for (const c of cookies) await ses.cookies.set({ url: SITE_ORIGIN, name: c.name, value: c.value, path: '/', secure: true, sameSite: 'lax', expirationDate })
+  return ses
+}
+
+ipcMain.handle('esb:open-site-as', async (_e, cookies, sitePath) => {
+  const target = typeof sitePath === 'string' && /^\/[A-Za-z0-9/_\-?=&.%]*$/.test(sitePath) && !sitePath.startsWith('//') ? sitePath : '/cms'
+  await writeSiteSession(cookies)
+  if (siteWin && !siteWin.isDestroyed()) { siteWin.loadURL(SITE_ORIGIN + target); siteWin.focus(); return true }
+  siteWin = new BrowserWindow({
+    width: 1360, height: 900, minWidth: 900, minHeight: 600, title: 'esbpowerline.com — CMS', autoHideMenuBar: true, backgroundColor: '#0b0b0d',
+    webPreferences: { partition: SITE_PARTITION, contextIsolation: true, nodeIntegration: false, sandbox: true },
+  })
+  siteWin.setMenuBarVisibility(false)
+  siteWin.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(SITE_ORIGIN + '/')) { siteWin.loadURL(url); return { action: 'deny' } }
+    if (/^https?:/.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  siteWin.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(SITE_ORIGIN + '/') && url !== SITE_ORIGIN) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url) } })
+  siteWin.on('closed', () => { siteWin = null })
+  siteWin.loadURL(SITE_ORIGIN + target)
+  return true
+})
+
+// Signing out of the Studio signs the CMS window out too.
+ipcMain.handle('esb:site-sign-out', async () => {
+  const { session } = require('electron')
+  await session.fromPartition(SITE_PARTITION).clearStorageData({ origin: SITE_ORIGIN }).catch(() => {})
+  if (siteWin && !siteWin.isDestroyed()) siteWin.close()
+  return true
+})
+
 // Save one rendered banner. With `dir` (batch export) it is written straight there; otherwise ask where.
 ipcMain.handle('esb:save-image', async (_e, name, bytes, dir) => {
   if (!bytes) return null

@@ -9,5 +9,7 @@ contextBridge.exposeInMainWorld('esb', {
   fetchUrl: (url, options) => ipcRenderer.invoke('esb:fetch-url', url, options),
   fetchImageData: (url, options) => ipcRenderer.invoke('esb:fetch-image-data', url, options),
   prepareDragFile: (name, bytes) => ipcRenderer.invoke('esb:prepare-drag-file', name, bytes),
+  openSiteAs: (cookies, sitePath) => ipcRenderer.invoke('esb:open-site-as', cookies, sitePath),
+  siteSignOut: () => ipcRenderer.invoke('esb:site-sign-out'),
   startDrag: (filePath) => ipcRenderer.send('esb:start-drag', filePath),
 })

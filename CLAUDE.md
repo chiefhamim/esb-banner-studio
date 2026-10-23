@@ -193,6 +193,11 @@ The shared project is the product's connective tissue. Editorial, Graphics and V
   - **Needs review:** Ambiguous extraction or comparison.
 - Bi-directional linking: Clicking a source chip smoothly scrolls to and pulses the match in the story body.
 
+### Staff sign-in and the site connection (`src/editorial/siteApi.ts`, `SignInSheet.tsx`, `electron/main.cjs`)
+- Sign-in is the site's own: Supabase Auth password grant, then the `profiles` row (role, status, full name) read with the editor's token — the same checks as the site's `app/login/actions.ts`. Error copy matches the site's `lib/auth-error-copy.ts`. There is no bypass or offline sign-in; sessions refresh with the refresh token (`ensureFreshSession`).
+- "Open the CMS" in the desktop app writes the site's `@supabase/ssr` session cookie (`sb-<ref>-auth-token`, `base64-` + base64url JSON, chunked at 3,180) into a separate `persist:esb-site` profile and opens esbpowerline.com/cms in its own window, signed in as the editor. The format was verified by having `@supabase/ssr` 0.12.4 read the cookies back. Sign-out clears that profile and calls the auth service's logout.
+- Publishing requires a signed-in staff session; the public key is never used to write, and an article is credited only to the signed-in account.
+
 ### Publication Gate (`src/editorial/siteApi.ts`)
 Before publishing to Supabase (`public.Article`):
 - All 3 pre-flight items must be confirmed:
@@ -248,7 +253,8 @@ Video must not destabilise working Editorial and Graphics features.
 
 ## 8. Design System and Interaction Details
 
-### Token System (`src/styles/tokens.css`, `primitives.css`, `base.css`)
+### Token System (`src/styles/tokens.css`, `primitives.css`, `base.css`, `studio.css`)
+- `src/styles/studio.css` is the design layer and loads last: cards (`--card`, `--card-shadow[-open]`), borderless toolbar fills (`--fill*`), raised chips for selected/segmented states (`--raised`, `--raised-shadow`), filled fields (`--field*`), the primary sheen and the Export split divider (`--split-line`), spring motion (`--spring`). Every token has a light and a dark value.
 - **Spacing:** Base 4px grid (`--s-0` to `--s-11`: 0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48px).
 - **Radii:** `--r-1: 4px` (chips/tags), `--r-2: 8px` (controls), `--r-3: 12px` (panels), `--r-4: 16px` (dialogs), `--r-pill: 9999px`.
 - **Heights:** Controls 28/32/36px; every control inside a 40px workspace header is 32px with an 8px radius; Panel Headers 40px.

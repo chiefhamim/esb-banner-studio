@@ -264,3 +264,47 @@
 .seo-check-label { font-weight: 500; color: var(--text); }
 .seo-check-detail { color: var(--text-2); }
 @container ed (max-width: 1100px) { .seo-check { grid-template-columns: 16px minmax(0, 1fr); } .seo-check-detail { grid-column: 2; } }
+
+/* ---------------------------------------------------------------- sign in to esbpowerline.com */
+.dialog.signin { position: relative; width: min(400px, 92vw); }
+.signin-close { position: absolute; top: 12px; right: 12px; z-index: 1; }
+.signin-body { display: flex; flex-direction: column; align-items: stretch; gap: 12px; padding: 32px 32px 24px; text-align: center; }
+.signin-mark { align-self: center; width: 52px; height: 52px; object-fit: contain; padding: 6px; background: #fff; border-radius: var(--r-3); box-shadow: var(--raised-shadow); }
+.signin-body h2 { margin: 4px 0 0; font-size: 19px; line-height: 26px; font-weight: 600; letter-spacing: -.015em; color: var(--text); }
+.signin-sub { margin: -6px 0 6px; font-size: 13px; line-height: 19px; color: var(--text-2); }
+.signin-field { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.signin-field > span { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-2); }
+.signin-field input[type=email], .signin-field input[type=text], .signin-field input[type=password] { height: 40px; padding: 0 12px; font-size: 14px; border-radius: var(--r-2); }
+.signin-pass { position: relative; }
+.signin-pass input { width: 100%; padding-right: 40px !important; }
+.signin-eye { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 32px; height: 32px; color: var(--text-3); background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
+.signin-eye:hover { color: var(--text); background: var(--fill); }
+.signin-error { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; font-size: 12px; line-height: 17px; text-align: left; color: var(--danger); background: var(--danger-soft); border-radius: var(--r-2); }
+.signin-error svg { flex: none; margin-top: 1px; }
+.signin-submit, .signin-wide { justify-content: center; width: 100%; height: 40px !important; font-size: 14px !important; border-radius: var(--r-2) !important; }
+.signin-submit { margin-top: 4px; }
+.signin-spin { width: 14px; height: 14px; margin-right: 8px; border: 2px solid color-mix(in srgb, var(--on-ink) 35%, transparent); border-top-color: var(--on-ink); border-radius: 50%; animation: signin-spin 700ms linear infinite; }
+@keyframes signin-spin { to { transform: rotate(360deg); } }
+.signin-foot { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; font-size: 11.5px; line-height: 16px; color: var(--text-3); }
+.signin-foot a { font-size: 12px; font-weight: 500; color: var(--text-2); text-decoration: none; }
+.signin-foot a:hover { color: var(--text); text-decoration: underline; }
+.signin-avatar { display: grid; place-items: center; align-self: center; width: 64px; height: 64px; font-size: 22px; font-weight: 600; letter-spacing: .02em; color: var(--on-ink); background: var(--ink); border-radius: 50%; box-shadow: 0 0 0 4px var(--card), 0 0 0 5px var(--card-line); }
+.signin-badges { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.signin-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; font-size: 12px; font-weight: 500; color: var(--text-2); background: var(--fill); border-radius: var(--r-pill); }
+.signin-badge.ok { color: var(--success); background: var(--success-soft); }
+.signin-badge.ok i { width: 6px; height: 6px; background: currentColor; border-radius: 50%; }
+.signin-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.signin-note { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-3); }
+.signin-signout { align-self: center; color: var(--danger) !important; }
+
+/* ---------------------------------------------------------------- outputs: the preview sits in an inset well */
+.ed-outputs { gap: 10px; }
+.ed-outputs-stage { padding: 10px; gap: 10px; background: var(--bg-0); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--card-line); }
+.ed-outputs-stage > .fmtpick { align-self: stretch; height: 32px; background: var(--card); border: 0; box-shadow: var(--raised-shadow); }
+.ed-outputs-canvas { border-radius: var(--r-2); box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 4px 14px rgba(0, 0, 0, .08); }
+.ed-outputs-meta { padding: 0 2px; }
+.ed-outputs-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; align-self: stretch; }
+.ed-outputs-opts .select { min-width: 0; height: 30px; background: var(--card); box-shadow: var(--raised-shadow); }
+.ed-outputs-opts .select .select-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-outputs-link { gap: 2px; }
+.ed-outputs .esb-site-mock { border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 4px 14px rgba(0, 0, 0, .08); }

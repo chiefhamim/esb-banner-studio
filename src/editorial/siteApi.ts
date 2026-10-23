@@ -26,16 +26,21 @@ export interface LiveArticleSummary {
   author?: string
 }
 
+/** A signed-in esbpowerline.com staff account: the same Supabase Auth session the site's own /login creates. */
 export interface StaffSession {
   email: string
   name: string
-  role: 'editor' | 'master_admin' | 'author'
+  /** The site's role (SUPER_ADMIN, ADMIN, EDITOR, AUTHOR, CONTRIBUTOR), or null when only the site itself can tell. */
+  role: string | null
   token?: string
   refreshToken?: string
-  expiresIn?: number
+  /** Unix seconds when the access token expires. */
+  expiresAt?: number
   userId?: string
+  /** The Supabase user object, kept so the site can be handed the exact session it would have created. */
+  user?: Record<string, unknown>
   authenticatedAt: string
-  authType: 'supabase_live' | 'newsroom_bypass'
+  authType: 'supabase'
 }
 
 export interface CmsArticlePayload {
@@ -227,125 +232,164 @@ export async function checkSlugAvailability(slug: string): Promise<'available' |
   }
 }
 
-/** Retrieve active staff session from storage */
+/** Retrieve the staff session from storage. Sessions from the old desk (newsroom bypass, no token) are discarded. */
 export function getStoredStaffSession(): StaffSession | null {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY)
     if (!raw) return null
-    return JSON.parse(raw) as StaffSession
+    const s = JSON.parse(raw) as StaffSession
+    if (s.authType !== 'supabase' || !s.token) { localStorage.removeItem(SESSION_STORAGE_KEY); return null }
+    return s
   } catch {
     return null
   }
 }
 
-/** Save staff session */
 export function saveStaffSession(session: StaffSession) {
-  try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session))
-  } catch {}
+  try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session)) } catch { /* ignore */ }
 }
 
-/** Clear staff session */
 export function clearStaffSession() {
+  try { localStorage.removeItem(SESSION_STORAGE_KEY) } catch { /* ignore */ }
+}
+
+// Same wording as the site's lib/auth-error-copy.ts: an editor sees what they can act on, never the provider's
+// operational detail.
+const AUTH_ERRORS: Array<[RegExp, string]> = [
+  [/invalid login credentials|invalid_grant|user not found/i, 'Invalid email or password. Check your credentials and try again.'],
+  [/email not confirmed/i, 'This address has not been confirmed yet. Check your inbox for the confirmation link.'],
+  [/too many requests|rate limit|for security purposes/i, 'Too many attempts. Wait a minute and try again.'],
+]
+export function friendlyAuthError(raw: string): string {
+  for (const [re, msg] of AUTH_ERRORS) if (re.test(raw)) return msg
+  return 'Sign-in is temporarily unavailable. Please try again shortly.'
+}
+
+const VALID_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'EDITOR', 'AUTHOR', 'CONTRIBUTOR', 'SUBSCRIBER'])
+const normalizeRole = (v: unknown) => (typeof v === 'string' && VALID_ROLES.has(v.trim().toUpperCase()) ? v.trim().toUpperCase() : null)
+/** Roles the site lets into /cms to write (lib/constants.ts `article.create`). */
+export const CMS_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'EDITOR', 'AUTHOR', 'CONTRIBUTOR'])
+
+interface TokenResponse { access_token: string; refresh_token: string; expires_in?: number; expires_at?: number; token_type?: string; user?: { id: string; email?: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> } & Record<string, unknown> }
+
+async function authFetch(path: string, body: unknown): Promise<{ ok: boolean; data: TokenResponse & { error?: string; error_description?: string; msg?: string; message?: string } }> {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  return { ok: res.ok, data }
+}
+
+/** Turn a token response into a session, reading name, role and status the way the site does (lib/auth.ts). */
+async function sessionFromTokens(t: TokenResponse, fallbackEmail: string): Promise<{ session?: StaffSession; error?: string }> {
+  const user = t.user
+  if (!user?.id) return { error: 'Sign-in is temporarily unavailable. Please try again shortly.' }
+  type ProfileRow = { role?: string | null; status?: string | null; full_name?: string | null }
+  let profile: ProfileRow | null = null
   try {
-    localStorage.removeItem(SESSION_STORAGE_KEY)
-  } catch {}
+    // RLS on profiles lets a signed-in account read its own row and nothing else (migration 0018).
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role,status,full_name`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${t.access_token}`, Accept: 'application/json' },
+    })
+    if (res.ok) profile = ((await res.json()) as ProfileRow[])[0] ?? null
+  } catch { /* the site still checks the role itself when the CMS opens */ }
+  if (profile?.status === 'SUSPENDED') return { error: 'This account has been suspended. Contact an administrator.' }
+  if (profile?.status === 'PENDING') return { error: 'This account is waiting for approval. Contact an administrator.' }
+  const role = normalizeRole(profile?.role) ?? normalizeRole(user.app_metadata?.role)
+  if (role === 'SUBSCRIBER') return { error: 'This is a member account, not a newsroom account. Use an editor login.' }
+  const meta = user.user_metadata ?? {}
+  const email = (user.email ?? fallbackEmail).toLowerCase()
+  const name = (profile?.full_name || (typeof meta.full_name === 'string' ? meta.full_name : '') || (typeof meta.name === 'string' ? meta.name : '') || email.split('@')[0]).trim()
+  return {
+    session: {
+      email,
+      name,
+      role,
+      token: t.access_token,
+      refreshToken: t.refresh_token,
+      expiresAt: t.expires_at ?? Math.floor(Date.now() / 1000) + (t.expires_in ?? 3600),
+      userId: user.id,
+      user,
+      authenticatedAt: new Date().toISOString(),
+      authType: 'supabase',
+    },
+  }
 }
 
 /**
- * Authenticate staff account against live Supabase Auth on esbpowerline.com
- * (Endpoint: https://sxgokpmrbgdndstygapc.supabase.co/auth/v1/token?grant_type=password)
- *
- * Known newsroom accounts:
- * - Mehedi Hasan Hamim (hamim2964@gmail.com) -> Editor
- * - Sheikh Rasel (rasel@esbpowerline.com) -> Editor
- * - System Admin (admin@esbpowerline.com) -> Master Admin
+ * Sign in with an esbpowerline.com staff account — the same Supabase Auth password sign-in the site's /login page
+ * performs (app/login/actions.ts), then the same role and status checks. There is no offline or "bypass" path: a
+ * session exists only when the site's auth service issued it.
  */
-export async function authenticateStaff(
-  email: string,
-  password: string,
-  allowBypass: boolean = false
-): Promise<{ success: boolean; session?: StaffSession; error?: string }> {
+export async function authenticateStaff(email: string, password: string): Promise<{ success: boolean; session?: StaffSession; error?: string }> {
   const normEmail = email.trim().toLowerCase()
-  if (!normEmail || (!password && !allowBypass)) {
-    return { success: false, error: 'Email and password are required.' }
-  }
-
-  // 1. Attempt genuine live Supabase Auth verification
+  if (!normEmail || !password) return { success: false, error: 'Email and password are required.' }
   try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email: normEmail, password }),
-    })
-
-    if (res.ok) {
-      const data = await res.json()
-      const displayName =
-        normEmail === 'hamim2964@gmail.com'
-          ? 'Mehedi Hasan Hamim'
-          : normEmail === 'admin@esbpowerline.com'
-          ? 'System Admin'
-          : normEmail === 'rasel@esbpowerline.com'
-          ? 'Sheikh Rasel'
-          : data.user?.user_metadata?.full_name || 'Editorial Staff'
-
-      const role: 'editor' | 'master_admin' | 'author' =
-        normEmail === 'admin@esbpowerline.com' ? 'master_admin' : 'editor'
-
-      const session: StaffSession = {
-        email: normEmail,
-        name: displayName,
-        role,
-        token: data.access_token,
-        refreshToken: data.refresh_token,
-        expiresIn: data.expires_in,
-        userId: data.user?.id,
-        authenticatedAt: new Date().toISOString(),
-        authType: 'supabase_live',
-      }
-      saveStaffSession(session)
-      return { success: true, session }
-    } else {
-      const errData = await res.json().catch(() => null)
-      const errorMsg =
-        errData?.error_description ||
-        errData?.msg ||
-        errData?.message ||
-        'Supabase Auth: Invalid credentials.'
-
-      // If user opted into newsroom bypass for known editorial staff:
-      if (allowBypass && (normEmail === 'hamim2964@gmail.com' || normEmail === 'admin@esbpowerline.com' || normEmail === 'rasel@esbpowerline.com')) {
-        const session: StaffSession = {
-          email: normEmail,
-          name: normEmail === 'hamim2964@gmail.com' ? 'Mehedi Hasan Hamim' : 'System Admin',
-          role: normEmail === 'admin@esbpowerline.com' ? 'master_admin' : 'editor',
-          authenticatedAt: new Date().toISOString(),
-          authType: 'newsroom_bypass',
-        }
-        saveStaffSession(session)
-        return { success: true, session }
-      }
-
-      return { success: false, error: errorMsg }
-    }
-  } catch (netErr: any) {
-    if (allowBypass) {
-      const session: StaffSession = {
-        email: normEmail,
-        name: normEmail === 'hamim2964@gmail.com' ? 'Mehedi Hasan Hamim' : 'Editorial Staff',
-        role: 'editor',
-        authenticatedAt: new Date().toISOString(),
-        authType: 'newsroom_bypass',
-      }
-      saveStaffSession(session)
-      return { success: true, session }
-    }
-    return { success: false, error: `Live Supabase unreachable: ${netErr?.message || 'Network error'}` }
+    const { ok, data } = await authFetch('token?grant_type=password', { email: normEmail, password })
+    if (!ok) return { success: false, error: friendlyAuthError(data.error_description || data.msg || data.message || data.error || '') }
+    const { session, error } = await sessionFromTokens(data, normEmail)
+    if (!session) return { success: false, error }
+    saveStaffSession(session)
+    return { success: true, session }
+  } catch {
+    return { success: false, error: 'Could not reach esbpowerline.com. Check the connection and try again.' }
   }
+}
+
+/** A session good for at least another minute, refreshed with its refresh token when needed; null if it cannot be. */
+export async function ensureFreshSession(session: StaffSession | null): Promise<StaffSession | null> {
+  if (!session?.token) return null
+  if (session.expiresAt && session.expiresAt - Date.now() / 1000 > 60) return session
+  if (!session.refreshToken) return null
+  try {
+    const { ok, data } = await authFetch('token?grant_type=refresh_token', { refresh_token: session.refreshToken })
+    if (!ok) return null
+    const next = await sessionFromTokens(data, session.email)
+    if (next.session) saveStaffSession(next.session)
+    return next.session ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Sign out on the site's auth service too, so the refresh token stops working. */
+export async function signOutStaff(session: StaffSession | null) {
+  clearStaffSession()
+  if (!session?.token) return
+  try {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.token}` } })
+  } catch { /* already signed out locally */ }
+}
+
+/**
+ * The site's own session cookie for this sign-in, exactly as @supabase/ssr 0.12 writes it: name
+ * `sb-<project-ref>-auth-token`, value `base64-` + base64url(JSON session), split into `.0`, `.1`… chunks when the
+ * URI-encoded value passes 3,180 characters. Setting these on esbpowerline.com signs that browser in as this editor.
+ */
+export function siteSessionCookies(session: StaffSession): { name: string; value: string }[] {
+  if (!session.token || !session.refreshToken) return []
+  const ref = new URL(SUPABASE_URL).hostname.split('.')[0]
+  const key = `sb-${ref}-auth-token`
+  const json = JSON.stringify({
+    access_token: session.token,
+    token_type: 'bearer',
+    expires_in: Math.max(0, (session.expiresAt ?? 0) - Math.floor(Date.now() / 1000)),
+    expires_at: session.expiresAt,
+    refresh_token: session.refreshToken,
+    user: session.user ?? { id: session.userId, email: session.email },
+  })
+  const bytes = new TextEncoder().encode(json)
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  const value = 'base64-' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  const MAX = 3180
+  if (encodeURIComponent(value).length <= MAX) return [{ name: key, value }]
+  // base64url is URI-safe, so the encoded length equals the raw length and chunks can be cut directly
+  const out: { name: string; value: string }[] = []
+  for (let i = 0, n = 0; i < value.length; i += MAX, n++) out.push({ name: `${key}.${n}`, value: value.slice(i, i + MAX) })
+  return out
 }
 
 /** The site stores article bodies as HTML paragraphs (`<p>…</p>`), so plain text must be converted. */
@@ -471,12 +515,22 @@ export async function insertArticleToSupabase(
       return { success: false, error: 'Article URL slug is required.' }
     }
 
+    // Writing to the site needs a signed-in staff session; the public key is never used to write.
+    if (!session?.token) {
+      return { success: false, error: 'Sign in with your esbpowerline.com editor account before publishing.' }
+    }
+    if (session.role && !CMS_ROLES.has(session.role)) {
+      return { success: false, error: `A ${session.role.toLowerCase()} account cannot publish articles.` }
+    }
+
     // Resolve Category ID
     const categoryInfo = ESB_CATEGORIES[payload.category] || ESB_CATEGORIES['Fossil Fuels & Commodities']
 
-    // Resolve Author ID (default to Mehedi Hasan Hamim if unspecified)
-    const authorEmail = session?.email ? session.email.toLowerCase() : 'hamim2964@gmail.com'
-    const author = ESB_AUTHORS[authorEmail] || ESB_AUTHORS['hamim2964@gmail.com']
+    // The article is credited to the account that signed in — never to someone else's.
+    const author = ESB_AUTHORS[session.email.toLowerCase()]
+    if (!author) {
+      return { success: false, error: `${session.email} is signed in, but the Studio does not know its author record on the site yet. Use "Open the site CMS" to publish from the site itself.` }
+    }
 
     const id = generateCuid()
     const nowIso = new Date().toISOString()
@@ -515,7 +569,7 @@ export async function insertArticleToSupabase(
 
     const headers: Record<string, string> = {
       'apikey': SUPABASE_ANON_KEY,
-      'Authorization': session?.token ? `Bearer ${session.token}` : `Bearer ${SUPABASE_ANON_KEY}`,
+      'Authorization': `Bearer ${session.token}`,
       'Content-Type': 'application/json',
       'Prefer': 'return=minimal',
     }
@@ -555,4 +609,20 @@ export async function insertArticleToSupabase(
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error communicating with Supabase' }
   }
+}
+
+/**
+ * Open the site's CMS as the signed-in editor. In the desktop app the main process writes this session into a
+ * separate esbpowerline.com browser profile and opens the CMS there, already signed in. A browser preview cannot set
+ * another site's cookies, so there the CMS opens in a tab and asks for the password itself.
+ */
+export async function openSiteCms(session: StaffSession | null, sitePath = '/cms'): Promise<'signed-in' | 'browser'> {
+  const bridge = (typeof window !== 'undefined' ? (window as unknown as { esb?: { openSiteAs?: (c: { name: string; value: string }[], p: string) => Promise<boolean> } }).esb : undefined)
+  const fresh = await ensureFreshSession(session)
+  if (fresh && bridge?.openSiteAs) {
+    await bridge.openSiteAs(siteSessionCookies(fresh), sitePath)
+    return 'signed-in'
+  }
+  if (typeof window !== 'undefined') window.open(`${SITE_BASE_URL}${sitePath}`, '_blank', 'noopener')
+  return 'browser'
 }
