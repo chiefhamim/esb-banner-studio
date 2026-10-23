@@ -16,8 +16,8 @@ import type { LabelPresetId } from '../core/newsroom'
 import type { Assets } from '../core/render'
 import { DEFAULT_SETTINGS, copyToClipboard, runExport, humanBytes } from '../export'
 import { bannerImageIdForUrl, importImageToBanner, syncArticlePhotosToBanner } from './automation'
-import logoUrl from '../assets/images/esb-logo.png'
-import avatarUrl from '../assets/images/esb-avatar.png'
+import { SitePreview, SITE_THEMES } from './SitePreview'
+import type { SiteDevice, SiteTheme } from './SitePreview'
 
 const labelOptions = [
   { value: 'none', label: 'No label' },
@@ -51,8 +51,19 @@ export function GraphicsRail({ base, onToast }: { base: Assets; onToast: (msg: s
 
   // Preview tab switcher: Banner 4:5 · Web Article · Facebook Feed
   const [railTab, setRailTab] = useState<'banner' | 'article' | 'facebook'>('banner')
-  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop')
-  const [previewTheme, setPreviewTheme] = useState<'dark' | 'light'>('dark')
+  const [previewDevice, setPreviewDevice] = useState<SiteDevice>('desktop')
+  const [previewTheme, setPreviewTheme] = useState<SiteTheme>('white')
+  const articleHostRef = useRef<HTMLDivElement>(null)
+  const [articleW, setArticleW] = useState(560)
+  useEffect(() => {
+    const el = articleHostRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setArticleW(el.clientWidth - 24))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [railTab])
+  // The date a reader would see if the story went live now; fixed per mount so the preview does not tick.
+  const [previewDate] = useState(() => new Date())
 
   const stageRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -75,6 +86,14 @@ export function GraphicsRail({ base, onToast }: { base: Assets; onToast: (msg: s
   const stageW = Math.max(120, Math.min(box.w - 24, (box.h - 24) * ratio))
 
   const cat = CATEGORIES.find((c) => c.id === content.categoryId) || CATEGORIES[0]
+  const liveArticles = useEditorialStore((s) => s.liveArticles)
+  const relatedStories = useMemo(
+    () => liveArticles
+      .filter((a) => a.category === cat.name && a.slug !== draft.slug)
+      .slice(0, 4)
+      .map((a) => ({ slug: a.slug, title: a.title, excerpt: a.description, category: a.category, imageUrl: a.imageUrl, date: a.publishedAt })),
+    [liveArticles, cat.name, draft.slug],
+  )
   const slotImage = slot0?.src ? images.find((i) => i.id === slot0.src) : undefined
   const bannerLeadImage = slotImage?.url || null
   const generatedCaption = useMemo(() => defaultCaption({ ...content }), [content])
@@ -276,166 +295,45 @@ export function GraphicsRail({ base, onToast }: { base: Assets; onToast: (msg: s
           </div>
         )}
 
-        {/* Web Article Replica */}
+        {/* Web Article — the esbpowerline.com article page, in an iframe with the site's own stylesheet */}
         {railTab === 'article' && (
-          <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <div ref={articleHostRef} style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <div className="seg-ctl">
-                <button
-                  type="button"
-                  className={previewDevice === 'desktop' ? 'on' : ''}
-                  onClick={() => setPreviewDevice('desktop')}
-                >
-                  Desktop
-                </button>
-                <button
-                  type="button"
-                  className={previewDevice === 'mobile' ? 'on' : ''}
-                  onClick={() => setPreviewDevice('mobile')}
-                >
-                  Mobile
-                </button>
+                {(['desktop', 'tablet', 'mobile'] as const).map((d) => (
+                  <button key={d} type="button" className={previewDevice === d ? 'on' : ''} onClick={() => setPreviewDevice(d)}>
+                    {d[0].toUpperCase() + d.slice(1)}
+                  </button>
+                ))}
               </div>
-              <button
-                type="button"
-                className="btn xs"
-                onClick={() => setPreviewTheme(previewTheme === 'dark' ? 'light' : 'dark')}
-              >
-                {previewTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-              </button>
+              <div className="seg-ctl" title="Site theme, as a reader would see it">
+                {SITE_THEMES.map((t) => (
+                  <button key={t.id} type="button" className={previewTheme === t.id ? 'on' : ''} onClick={() => setPreviewTheme(t.id)}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
-
-            <div
-              className="esb-site-mock"
-              style={{
-                background: previewTheme === 'light' ? '#ffffff' : '#0b0f19',
-                color: previewTheme === 'light' ? '#0f172a' : '#f8fafc',
-                border: '1px solid var(--line-2)',
-                borderRadius: 8,
-                overflow: 'hidden',
-                maxWidth: previewDevice === 'mobile' ? 340 : '100%',
-                margin: '0 auto',
-                width: '100%',
-              }}
-            >
-              <div
-                style={{
-                  padding: '6px 12px',
-                  background: previewTheme === 'light' ? '#f1f5f9' : '#060911',
-                  borderBottom: '1px solid var(--line)',
-                  fontSize: 10,
-                }}
-              >
-                <span className="mono" style={{ color: 'var(--text-3)' }}>
-                  https://esbpowerline.com/articles/{draft.slug || 'story-slug'}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  padding: '8px 12px',
-                  borderBottom: '1px solid var(--line)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div className="row" style={{ gap: 6, alignItems: 'center' }}>
-                  <img src={logoUrl} alt="ESB" style={{ height: 16, objectFit: 'contain' }} />
-                  <b style={{ fontSize: 11, letterSpacing: '0.02em' }}>ESB POWERLINE</b>
-                </div>
-                <img src={avatarUrl} alt="Editor" style={{ width: 18, height: 18, borderRadius: '50%' }} />
-              </div>
-
-              <div style={{ padding: '14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div className="row" style={{ gap: 6, alignItems: 'center' }}>
-                  <span className="swatch-dot" style={{ background: cat.accent }} />
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                      color: cat.accent,
-                    }}
-                  >
-                    {cat.name}
-                  </span>
-                </div>
-
-                <h1
-                  style={{
-                    fontSize: previewDevice === 'mobile' ? 14 : 16,
-                    fontWeight: 700,
-                    lineHeight: 1.25,
-                    margin: 0,
-                    whiteSpace: 'pre-line',
-                  }}
-                >
-                  {draft.headline || 'English Headline Appears Here'}
-                </h1>
-
-                {draft.deck && (
-                  <p
-                    style={{
-                      fontSize: 11.5,
-                      lineHeight: 1.45,
-                      color: previewTheme === 'light' ? '#475569' : '#94a3b8',
-                      margin: 0,
-                    }}
-                  >
-                    {draft.deck}
-                  </p>
-                )}
-
-                <div
-                  className="row"
-                  style={{
-                    justifyContent: 'space-between',
-                    padding: '4px 0',
-                    borderTop: '1px solid var(--line)',
-                    borderBottom: '1px solid var(--line)',
-                    fontSize: 10,
-                    color: 'var(--text-3)',
-                  }}
-                >
-                  <span>By {staffSession?.name || draft.byline || 'Mehedi Hasan Hamim'}</span>
-                  <span>~{readTimeMin} min read</span>
-                </div>
-
-                {bannerLeadImage && (
-                  <div style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid var(--line)' }}>
-                    <img
-                      src={bannerLeadImage}
-                      alt="Lead"
-                      style={{ width: '100%', maxHeight: 150, objectFit: 'cover', display: 'block' }}
-                    />
-                  </div>
-                )}
-
-                <div
-                  style={{
-                    fontSize: 11.5,
-                    lineHeight: 1.55,
-                    color: previewTheme === 'light' ? '#334155' : '#cbd5e1',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                  }}
-                >
-                  {draft.body ? (
-                    draft.body.split(/\n\n+/).slice(0, 3).map((para, idx) => (
-                      <p key={idx} style={{ margin: 0 }}>
-                        {para}
-                      </p>
-                    ))
-                  ) : (
-                    <p style={{ margin: 0, fontStyle: 'italic', color: 'var(--text-3)' }}>
-                      Article body will appear here formatted as published on esbpowerline.com…
-                    </p>
-                  )}
-                </div>
-              </div>
+            <SitePreview
+              theme={previewTheme}
+              device={previewDevice}
+              availableWidth={Math.max(240, articleW)}
+              title={draft.headline}
+              excerpt={draft.deck}
+              slug={draft.slug}
+              category={cat.name}
+              author={staffSession?.name || draft.byline || 'ESB PowerLine'}
+              date={previewDate}
+              readTime={readTimeMin}
+              heroUrl={bannerLeadImage}
+              heroCredit={draft.credit || 'ESB PowerLine'}
+              paragraphs={draft.body.split(/\n{2,}/).map((t) => t.trim()).filter(Boolean)}
+              tags={draft.focusKeywords.split(',').map((t) => t.trim()).filter(Boolean)}
+              related={relatedStories}
+            />
+            <div className="ed-rail-meta">
+              <span className="mono">https://esbpowerline.com/articles/{draft.slug || 'story-slug'}</span>
+              <span>{previewDevice === 'desktop' ? '1280' : previewDevice === 'tablet' ? '768' : '390'} px · {SITE_THEMES.find((t) => t.id === previewTheme)?.label}</span>
             </div>
           </div>
         )}

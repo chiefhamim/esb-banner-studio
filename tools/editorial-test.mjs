@@ -109,8 +109,22 @@ try {
 
   // Test Web Article Replica
   await page.click('button:has-text("Web Article")')
-  await page.waitForSelector('.esb-site-mock')
+  await page.waitForSelector('.esb-site-mock iframe')
   check('Official esbpowerline.com website replica rendered', (await page.locator('.esb-site-mock').count()) === 1)
+  // The preview is the site's own article template in an iframe with the site stylesheet (tools/site-css.mjs).
+  const site = page.frameLocator('.esb-site-mock iframe')
+  await site.locator('h1').waitFor({ timeout: 10000 })
+  const siteInfo = await page.evaluate(() => {
+    const d = document.querySelector('.esb-site-mock iframe').contentDocument
+    const h1 = d.querySelector('h1')
+    return { theme: d.documentElement.className, h1: h1?.textContent ?? '', h1Font: getComputedStyle(h1).fontFamily, cells: d.querySelectorAll('.category-nav-cell').length, active: d.querySelector('.category-nav-cell--active .category-nav-label')?.textContent ?? '', bg: getComputedStyle(d.body).backgroundColor }
+  })
+  check('Site preview uses the site theme and headline font', siteInfo.theme.includes('theme-white') && /Space Grotesk/.test(siteInfo.h1Font) && siteInfo.bg === 'rgb(248, 250, 252)', JSON.stringify(siteInfo))
+  check('Site preview binds the draft headline and desk ribbon', siteInfo.h1 === (await page.inputValue('#draft-headline')) && siteInfo.cells === 10 && siteInfo.active.length > 0, siteInfo.active)
+  await page.click('.ed-rail .seg-ctl button:has-text("Midnight")')
+  await page.waitForTimeout(300)
+  check('Site preview switches to the Midnight theme', await page.evaluate(() => document.querySelector('.esb-site-mock iframe').contentDocument.documentElement.classList.contains('theme-midnight')))
+  await page.click('.ed-rail .seg-ctl button:has-text("White")')
 
   // Test Facebook Mock
   await page.click('button:has-text("Facebook")')
