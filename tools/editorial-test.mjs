@@ -46,6 +46,9 @@ try {
     window.__customTranslator = async (text) => dict[text.trim()] ?? text.replace(/[ঀ-৿]+/g, 'translated')
   })
 
+  // Fixture pages reference photos under /media/…; every one is served the drawn test picture (tools/fixtures/README.md).
+  const fixturePhoto = path.join(root, 'tools', 'fixtures', 'media', 'synthetic-rig.jpg')
+  await page.route('**/media/**', (r) => r.fulfill({ path: fixturePhoto, contentType: 'image/jpeg' }))
   await page.goto(`http://localhost:${PORT}/`)
   await page.waitForSelector('.studio-shell')
 
@@ -113,30 +116,50 @@ try {
   check('Extraction report shows method, language and counts', /Page markup|Structured data|Page data|Metadata only/.test(await page.locator('.ed-extract-report').innerText().catch(() => '')) || (await page.locator('.ed-extract-report').count()) === 0)
   check('Draft body populated in English', bodyVal.length > 0 && !/[\u0980-\u09FF]/.test(bodyVal))
 
-  // 5. Test Trucent headline line breaker
-  const trucentWords = await page.locator('.ed-trucent-word-item').count()
-  check('Trucent interactive word strip rendered', trucentWords > 0)
+  // 5. CMS layout: "Headline & deck" and "Story" are separate panels, no banner line-break strip in the editor
+  const layout = await page.evaluate(() => {
+    const head = document.querySelector('.ed-card-headline')
+    const story = document.querySelector('.ed-card-story')
+    return { head: !!head, story: !!story, nested: !!(head && story && head.contains(story)), breaker: document.querySelectorAll('.ed-trucent-word-item, .ed-headline-breaker-wrap').length, details: document.querySelectorAll('details.ed-story-details').length }
+  })
+  check('Centre is the CMS editor: Headline & deck panel, then a standalone Story panel', layout.head && layout.story && !layout.nested && layout.details === 0, JSON.stringify(layout))
+  check('Banner line-break strip is gone from the editor', layout.breaker === 0)
+  await page.click('.ed-story-tabs button:has-text("SEO")')
+  check('Story → SEO holds the slug with the /articles/ prefix', (await page.locator('.ed-card-story #draft-slug').count()) === 1 && (await page.locator('.ed-slug-prefix').innerText()) === '/articles/')
+  await page.click('.ed-story-tabs button:has-text("Preview")')
+  await page.waitForSelector('.ed-card-story .esb-site-mock iframe')
+  check('Story → Preview shows the esbpowerline.com article page', (await page.locator('.ed-card-story .esb-site-mock').count()) === 1)
+  await page.click('.ed-story-tabs button:has-text("Body")')
 
-  // 6. Test Send Headline to Banner
+  // 6. Send Headline to Banner
   await page.fill('#draft-headline', 'Official: Two New Wells to Add 30 MMCFD Gas to Grid for Tk 592 Crore')
-  await page.click('button:has-text("Send to Banner")')
+  await page.click('.ed-outputs button:has-text("Send to Banner")')
 
-  // Asserts switch to Graphics workspace
-  await page.click('button:has-text("Graphics Studio")')
+  // Asserts switch to Graphics workspace, with the way back offered
+  await page.click('.ed-outputs-link button:has-text("Graphics")')
   await page.waitForSelector('.stage-canvas')
   check('Switched to Graphics workspace', (await page.locator('.stage-canvas').count()) === 1)
+  check('Graphics offers the way back to the Editorial desk', (await page.locator('.back-to-desk').count()) === 1)
 
   // Verify headline in banner store
   const storeHeadline = await page.evaluate(() => window.__store.getState().doc.content.headline)
   check('Banner headline updated from Editorial Draft', storeHeadline.includes('Official: Two New Wells to Add 30 MMCFD Gas to Grid for Tk 592 Crore'))
 
   // 7. Return to Editorial Desk and test Live Preview replicas
-  await page.click('.rail-btn:has-text("Editorial")')
+  await page.click('.back-to-desk')
   await page.waitForSelector('.editorial-workspace')
 
+  // Outputs: one smooth segmented control, not three loose tabs
+  const segs = await page.evaluate(() => {
+    const seg = document.querySelector('.ed-outputs-tabs')
+    const btns = [...seg.querySelectorAll('button')].map((b) => b.getBoundingClientRect())
+    return { isSeg: seg.classList.contains('seg-ctl'), thumb: !!seg.querySelector('.pill-slide'), tops: new Set(btns.map((b) => Math.round(b.top))).size, bottoms: new Set(btns.map((b) => Math.round(b.bottom))).size, n: btns.length }
+  })
+  check('Banner / Web article / Facebook share one segmented control with level edges', segs.isSeg && segs.thumb && segs.n === 3 && segs.tops === 1 && segs.bottoms === 1, JSON.stringify(segs))
+
   // Test Web Article Replica
-  await page.click('button:has-text("Web Article")')
-  await page.waitForSelector('.esb-site-mock iframe')
+  await page.click('.ed-outputs-tabs button:has-text("Web article")')
+  await page.waitForSelector('.ed-outputs .esb-site-mock iframe')
   check('Official esbpowerline.com website replica rendered', (await page.locator('.esb-site-mock').count()) === 1)
   // The preview is the site's own article template in an iframe with the site stylesheet (tools/site-css.mjs).
   const site = page.frameLocator('.esb-site-mock iframe')
@@ -148,29 +171,67 @@ try {
   })
   check('Site preview uses the site theme and headline font', siteInfo.theme.includes('theme-white') && /Space Grotesk/.test(siteInfo.h1Font) && siteInfo.bg === 'rgb(248, 250, 252)', JSON.stringify(siteInfo))
   check('Site preview binds the draft headline and desk ribbon', siteInfo.h1 === (await page.inputValue('#draft-headline')) && siteInfo.cells === 10 && siteInfo.active.length > 0, siteInfo.active)
-  await page.click('.ed-rail .seg-ctl button:has-text("Midnight")')
+  await page.click('.ed-outputs .seg-ctl button:has-text("Midnight")')
   await page.waitForTimeout(300)
   check('Site preview switches to the Midnight theme', await page.evaluate(() => document.querySelector('.esb-site-mock iframe').contentDocument.documentElement.classList.contains('theme-midnight')))
-  await page.click('.ed-rail .seg-ctl button:has-text("White")')
+  await page.click('.ed-outputs .seg-ctl button:has-text("White")')
 
   // Test Facebook Mock
-  await page.click('button:has-text("Facebook")')
-  await page.waitForSelector('.fb')
+  await page.click('.ed-outputs-tabs button:has-text("Facebook")')
+  await page.waitForSelector('.ed-outputs .fb')
   check('Facebook feed replica rendered', (await page.locator('.fb').count()) === 1)
 
-
-  // 8. Graphics rail + live link
-  await page.waitForSelector('.ed-rail')
-  check('Graphics rail shows the live banner', (await page.locator('.ed-rail canvas').count()) === 1)
+  // 8. Banner output + live link
+  await page.click('.ed-outputs-tabs button:has-text("Banner")')
+  check('Outputs shows the live banner', (await page.locator('.ed-outputs-canvas canvas').count()) === 1)
   await page.fill('#draft-headline', 'Live link headline test')
   await page.waitForTimeout(250)
   check('Typing the headline updates the banner live', (await page.evaluate(() => window.__store.getState().doc.content.headline)) === 'Live link headline test')
   await page.evaluate(() => window.__store.getState().setContent({ headline: 'Edited from Graphics' }))
   await page.waitForTimeout(250)
   check('Editing the banner updates the draft headline', (await page.inputValue('#draft-headline')) === 'Edited from Graphics')
-  await page.click('.ed-rail-desk:has-text("07")')
-  await page.click('button:has-text("Send to Banner")')
-  check('A hand-picked desk survives Send to Banner', (await page.evaluate(() => window.__store.getState().doc.content.categoryId)) === '07')
+  await page.click('.ed-desk-select')
+  await page.click('.menu-item:has-text("Consumers & Tariffs")')
+  await page.click('.ed-outputs button:has-text("Send to Banner")')
+  check('A hand-picked category survives Send to Banner', (await page.evaluate(() => window.__store.getState().doc.content.categoryId)) === '07')
+
+  // 8b. Featured image: add one from disk (this story was pasted, so it has no photos), reframe, round-trip through Graphics
+  await page.setInputFiles('.fi input[type=file]', fixturePhoto)
+  await page.waitForSelector('.fi-canvas', { timeout: 15000 })
+  await page.waitForTimeout(400)
+  const slotOf = () => page.evaluate(() => { const s = window.__store.getState(); return s.doc.photos.slots[s.format][0] })
+  check('Adding a photo makes it the featured photo', !!(await slotOf())?.src)
+  const fiPx = await page.evaluate(() => { const c = document.querySelector('.fi-canvas'); const d = c.getContext('2d').getImageData(c.width / 2, c.height / 2, 1, 1).data; return d[3] })
+  check('Featured image preview draws the photo', fiPx === 255)
+  await page.evaluate(() => { const s = window.__store.getState(); s.setCollage('single') })
+  await page.waitForTimeout(200)
+  await page.locator('.fi-canvas').scrollIntoViewIfNeeded()
+  const box = await page.locator('.fi-canvas').boundingBox()
+  const pan0 = (await slotOf()).panX
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 - 50, box.y + box.height / 2, { steps: 5 })
+  await page.mouse.up()
+  const pan1 = (await slotOf()).panX
+  check('Dragging the featured image reframes the banner photo', pan1 > pan0, `${pan0} → ${pan1}`)
+  await page.click('.fi-open')
+  await page.waitForSelector('.stage-canvas')
+  const gfx = await page.evaluate(() => ({ tab: document.querySelector('.left .side-tabs button.on')?.textContent, sel: window.__store.getState().selectedId }))
+  check('Edit in Graphics opens on the Photos tab with the photo selected', gfx.tab === 'Photos' && gfx.sel === 'photos', JSON.stringify(gfx))
+  await page.evaluate(() => window.__store.getState().setSlot(0, { brightness: 30 }))
+  await page.click('.back-to-desk')
+  await page.waitForSelector('.fi-canvas')
+  check('A tone edit made in Graphics shows in the Editorial image panel', /^30/.test(await page.locator('.fi .scrub:has-text("Exposure") input').inputValue()))
+
+  // 8c. Responsive: three columns that fit at a laptop width, nothing spilling sideways
+  await page.setViewportSize({ width: 1366, height: 768 })
+  await page.waitForTimeout(300)
+  const fit = await page.evaluate(() => {
+    const w = (s) => document.querySelector(s)?.getBoundingClientRect().width ?? 0
+    return { over: document.documentElement.scrollWidth - innerWidth, center: Math.round(w('.ed-center')), side: Math.round(w('.ed-side')), src: Math.round(w('.ed-src')) }
+  })
+  check('At 1366 px the editor keeps a readable centre with both sidebars', fit.over <= 0 && fit.center >= 560 && fit.side >= 280 && (fit.src === 0 || fit.src >= 260), JSON.stringify(fit))
+  await page.setViewportSize({ width: 1600, height: 950 })
 
   // 9. Publish pre-flight gates the live publish
   await page.click('button:has-text("Publish")')

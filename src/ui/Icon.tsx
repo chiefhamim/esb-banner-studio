@@ -30,6 +30,7 @@ const P = {
   distV: 'M2 4h20 M2 20h20 M6 9h12v6H6z',
   chevDown: 'M6 9l6 6 6-6',
   chevRight: 'M9 6l6 6-6 6',
+  chevLeft: 'M15 6l-6 6 6 6',
   chevUp: 'M6 15l6-6 6 6',
   layers: 'M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5',
   sliders: 'M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6',

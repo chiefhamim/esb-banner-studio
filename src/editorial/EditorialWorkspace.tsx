@@ -1,27 +1,37 @@
-// Quiet Studio — Official Newsroom Editorial Desk for ESB PowerLine
-// Reimagined Story Document Architecture:
-//   Left Column: Source Reader (Bengali Hind Siliguri, inline fact tokens, media, optional edit mode)
-//   Center Column: Story Document (Headline 26px semibold, Deck 15px, Body 15/1.65 68ch with inline green/amber fact verification, collapsed Story Details)
-//   Right Rail: Companion Live Preview (Tabs: Banner 4:5 · Web Article · Facebook Feed)
-//   Empty State: Focused Intake Launcher Card (URL / Paste Bengali / Site CMS Posts) -> Collapses to Source Chip in topbar once loaded.
+// Editorial Desk — the ESB PowerLine CMS article editor, with the source beside it and the banner behind it.
+//   Left: the original article (link, extraction report, Bengali headline/deck, figures to check, paragraphs) and a
+//         "New link" tab for the next story.
+//   Centre: the CMS editor — "Headline & deck", then "Story" as its own panel (Body · SEO · Social · Preview).
+//   Right: the CMS sidebar — Publish, Featured image (the banner's photo slot, editable here or in Graphics),
+//          Organize (category, tags, byline), and Outputs (Banner · Web article · Facebook).
+//   Empty desk: a centred intake card (link / pasted Bengali / site CMS posts).
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import type { CSSProperties } from 'react'
+import logoUrl from '../assets/images/esb-logo.png'
+import './editorial.css'
 import { useEditorialStore } from './editorialStore'
-import { GraphicsRail } from './GraphicsRail'
+import { OutputsPanel } from './GraphicsRail'
+import { useWidth } from '../ui/useWidth'
+import { FeaturedImage } from './FeaturedImage'
+import { SitePreview, SITE_THEMES, formatArticleDate } from './SitePreview'
+import type { SiteDevice, SiteTheme } from './SitePreview'
+import { useShellStore } from '../shell/shellStore'
 import { Icon } from '../ui/Icon'
-import { Field, Select, Check, Dialog, IconButton } from '../ui/controls'
+import { Field, Select, Check, Dialog, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
+import type { MenuDef } from '../ui/controls'
 import { useStore } from '../store'
 import { CATEGORIES } from '../core/tokens'
 import type { Assets } from '../core/render'
 import { loadBaseAssets } from '../core/assets'
-import { describeIntakeError, automateNewsFromUrl, importImageToBanner } from './automation'
+import { describeIntakeError, automateNewsFromUrl } from './automation'
 import { autoDesk } from './deskFlag'
 import { detectCategory, generatePlatformCaption, suggestHighlight } from '../core/newsroom'
 import { extractFactTable, type FactItem } from './facts'
 import { bengaliToAsciiDigits } from './bengali'
 import {
   translateNewsArticle,
-  balanceHeadlineBreaks,
+  extractFocusKeywords,
   testGeminiApiKey,
 } from './translator'
 import {
@@ -93,6 +103,9 @@ function parseParagraphWithFacts(text: string, factTable: FactItem[], sourceAsci
   return spans
 }
 
+type StoryTab = 'body' | 'seo' | 'social' | 'preview'
+const SOURCE_OPEN_KEY = 'esb-banner-studio/editorial/source-open'
+
 export function EditorialWorkspace() {
   const source = useEditorialStore((s) => s.source)
   const draft = useEditorialStore((s) => s.draft)
@@ -137,6 +150,20 @@ export function EditorialWorkspace() {
   const [sourceEditing, setSourceEditing] = useState(false)
   const [activeFactId, setActiveFactId] = useState<string | null>(null)
   const [activeSocialTab, setActiveSocialTab] = useState<'facebook' | 'x' | 'linkedin' | 'telegram'>('facebook')
+  const [storyTab, setStoryTab] = useState<StoryTab>('body')
+  const [leftTab, setLeftTab] = useState<'source' | 'intake'>('source')
+  const [tagInput, setTagInput] = useState('')
+  // The source column: open by default where there is room for three columns, remembered once chosen.
+  const [sourceOpen, setSourceOpenState] = useState<boolean>(() => {
+    try { const v = localStorage.getItem(SOURCE_OPEN_KEY); if (v !== null) return v === '1' } catch { /* ignore */ }
+    return typeof window === 'undefined' || window.innerWidth >= 1280
+  })
+  const setSourceOpen = (v: boolean) => { setSourceOpenState(v); try { localStorage.setItem(SOURCE_OPEN_KEY, v ? '1' : '0') } catch { /* ignore */ } }
+  const [previewDevice, setPreviewDevice] = useState<SiteDevice>('desktop')
+  const [previewTheme, setPreviewTheme] = useState<SiteTheme>('white')
+  const [previewHostRef, previewHostW] = useWidth<HTMLDivElement>(720)
+  // The date a reader would see if the story went live now; fixed per mount so the preview does not tick.
+  const [previewDate] = useState(() => new Date())
 
   // Intake & AI states
   const [urlInput, setUrlInput] = useState('')
@@ -219,65 +246,6 @@ export function EditorialWorkspace() {
   const sourceAscii = useMemo(() => {
     return bengaliToAsciiDigits(fullSourceText)
   }, [fullSourceText])
-
-  // Sector Desk Options
-  const deskOptions = useMemo(
-    () => CATEGORIES.map((c) => ({ value: c.id, label: `${c.id} · ${c.name}` })),
-    [],
-  )
-
-  // Trucent headline word & break calculations
-  const headlineWords = useMemo(() => {
-    return draft.headline ? draft.headline.split(/\s+/).filter(Boolean) : []
-  }, [draft.headline])
-
-  const headlineBreaks = useMemo(() => {
-    const breaks: number[] = []
-    if (!draft.headline) return breaks
-    const rawLines = draft.headline.split('\n')
-    let wordIndex = 0
-    for (let i = 0; i < rawLines.length - 1; i++) {
-      const count = rawLines[i].trim().split(/\s+/).filter(Boolean).length
-      wordIndex += count
-      if (wordIndex > 0) {
-        breaks.push(wordIndex - 1)
-      }
-    }
-    return breaks
-  }, [draft.headline])
-
-  const handleToggleBreakAt = (wordIdx: number) => {
-    const words = draft.headline.replace(/\n/g, ' ').split(/\s+/).filter(Boolean)
-    if (words.length <= 1) return
-
-    const currentBreaks = new Set(headlineBreaks)
-    if (currentBreaks.has(wordIdx)) {
-      currentBreaks.delete(wordIdx)
-    } else {
-      currentBreaks.add(wordIdx)
-    }
-
-    let reconstructed = ''
-    words.forEach((w, idx) => {
-      reconstructed += w
-      if (idx < words.length - 1) {
-        reconstructed += currentBreaks.has(idx) ? '\n' : ' '
-      }
-    })
-    setDraftField('headline', reconstructed)
-  }
-
-  const handleAutoBalance = () => {
-    const balanced = balanceHeadlineBreaks(draft.headline)
-    setDraftField('headline', balanced)
-    showToast('Headline line breaks auto-balanced')
-  }
-
-  const handleClearBreaks = () => {
-    const flat = draft.headline.replace(/\r/g, '').replace(/\n+/g, ' ').trim()
-    setDraftField('headline', flat)
-    showToast('Headline reset to flat line')
-  }
 
   // Fact Clicking Interactivity
   const handleFactChipClick = (fact: FactItem) => {
@@ -583,796 +551,574 @@ export function EditorialWorkspace() {
     }
   }, [source?.url])
 
-  return (
-    <div className="editorial-workspace">
-      {/* =========================================================================
-          1. TOP BAR — Minimal, quiet, and uncluttered
-          ========================================================================= */}
-      <header className="ed-topbar">
-        <div className="row" style={{ gap: 10, alignItems: 'center' }}>
-          <div className="row" style={{ gap: 6 }}>
-            <span className="ed-topbar-title">Editorial Desk</span>
-          </div>
+  const relatedStories = useMemo(
+    () => liveArticles
+      .filter((a) => a.category === catData.name && a.slug !== draft.slug)
+      .slice(0, 4)
+      .map((a) => ({ slug: a.slug, title: a.title, excerpt: a.description, category: a.category, imageUrl: a.imageUrl, date: a.publishedAt })),
+    [liveArticles, catData.name, draft.slug],
+  )
+  const suggestTags = () => extractFocusKeywords(draft.headline, `${draft.deck} ${draft.body}`).split(',').map((t) => t.trim()).filter(Boolean)
+  const openPublish = () => { setPublishResult(null); setShowPublishModal(true) }
 
-          {/* Telemetry pill */}
-          <div
-            className="ed-site-pill"
-            onClick={() => setShowLoginModal(true)}
-            title="Click to view live site connection status or sign in"
-          >
+  // Intake form: the empty-desk launcher and the source column's "New link" tab are the same form.
+  const intakeForm = (compact: boolean) => (
+    <div className={'ed-intake' + (compact ? ' compact' : '')}>
+      <Seg<'url' | 'paste' | 'live_feed'>
+        className="block ed-intake-tabs"
+        value={launcherTab}
+        onChange={(t) => { setLauncherTab(t); setErrorMsg(null); setErrorDetail(null) }}
+        options={[
+          { value: 'url', icon: 'link', label: compact ? 'Link' : 'Paste Story Link' },
+          { value: 'paste', icon: 'edit', label: compact ? 'Paste text' : 'Paste Bengali Story' },
+          { value: 'live_feed', icon: 'globe', label: compact ? `Site (${liveArticles.length})` : `Site CMS Posts (${liveArticles.length})` },
+        ]}
+      />
+
+      {launcherTab === 'url' && (
+        <div className="ed-intake-body">
+          <div className="ed-intake-url">
+            <input
+              type="url"
+              className="input ed-url-input"
+              placeholder="https://bonikbarta.net/news/… or prothomalo.com/…"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
+            />
+            <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
+              <Icon name={loading ? 'refresh' : 'sparkle'} size={14} />
+              <span>{loading ? 'Extracting…' : 'Fetch & Auto-Translate'}</span>
+            </button>
+          </div>
+          <p className="hint">Paste a Bengali or English news link. The article is extracted, translated and laid out as a CMS draft; the original stays on the left for checking.</p>
+        </div>
+      )}
+
+      {launcherTab === 'paste' && (
+        <div className="ed-intake-body">
+          <textarea
+            className="input ed-paste-area"
+            placeholder="Paste the Bengali headline on the first line, then the story…"
+            value={rawBengaliInput}
+            onChange={(e) => setRawBengaliInput(e.target.value)}
+          />
+          <div className="ed-intake-foot">
+            <span className="mono hint">{rawBengaliInput.trim().length} characters</span>
+            <button type="button" className="btn primary" onClick={handleTranslateRawBengali} disabled={translating || !rawBengaliInput.trim()}>
+              <Icon name={translating ? 'refresh' : 'sparkle'} size={14} />
+              <span>{translating ? 'Translating…' : 'Auto-Translate & Populate'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {launcherTab === 'live_feed' && (
+        <div className="ed-intake-body">
+          <div className="ed-intake-url">
+            <input type="text" className="input ed-url-input" placeholder="Filter stories by keyword…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <button type="button" className="btn" onClick={handleSyncFeed} disabled={syncing}>
+              <Icon name="refresh" size={13} />
+              <span>{syncing ? 'Syncing…' : 'Sync'}</span>
+            </button>
+          </div>
+          <div className="ed-feed-list">
+            {filteredLiveArticles.length === 0 ? (
+              <p className="hint ed-feed-empty">{liveArticles.length ? 'No published stories match that filter.' : 'No stories loaded from esbpowerline.com yet. Sync to fetch the latest.'}</p>
+            ) : (
+              filteredLiveArticles.slice(0, 15).map((art) => (
+                <div key={art.slug} className="ed-feed-item">
+                  <div className="ed-feed-text">
+                    <b>{art.title}</b>
+                    <span>{art.category} · {art.publishedAt || 'Published'}</span>
+                  </div>
+                  <button type="button" className="btn sm" onClick={() => void loadLiveArticleForEdit(art)}>Load Story</button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="callout warn ed-intake-error" role="alert">
+          <Icon name="info" size={14} />
+          <div className="ed-intake-error-text">
+            <b>{errorMsg}</b>
+            {errorDetail?.detail && <span>{errorDetail.detail}</span>}
+          </div>
+          <div className="ed-intake-error-actions">
+            {launcherTab === 'url' && (
+              <button type="button" className="btn xs" onClick={() => void handleFetchUrl()} disabled={loading}>Try again</button>
+            )}
+            {errorDetail?.canPaste && launcherTab !== 'paste' && (
+              <button type="button" className="btn xs primary" onClick={() => { setLauncherTab('paste'); setErrorMsg(null); setErrorDetail(null) }}>Paste the text instead</button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  const extractionLabel = source?.extraction
+    ? source.extraction.method === 'structured' ? 'Structured data' : source.extraction.method === 'markup' ? 'Page markup' : source.extraction.method === 'page-data' ? 'Page data' : 'Metadata only'
+    : null
+  const languageLabel = source?.extraction
+    ? source.extraction.language === 'bn' ? 'Bengali' : source.extraction.language === 'en' ? 'English' : source.extraction.language === 'mixed' ? 'Mixed' : 'Unknown language'
+    : null
+  const sourceUrl = source?.url && /^https?:\/\//.test(source.url) ? source.url : null
+  const checksDone = [checklist.figuresChecked, checklist.namesChecked, checklist.attributionKept].filter(Boolean).length
+  const tagList = draft.focusKeywords.split(',').map((t) => t.trim()).filter(Boolean)
+  const setTags = (tags: string[]) => setDraftField('focusKeywords', tags.join(', '))
+  const addTag = (raw: string) => {
+    const t = raw.trim().replace(/^#/, '')
+    if (t && !tagList.some((x) => x.toLowerCase() === t.toLowerCase())) setTags([...tagList, t])
+    setTagInput('')
+  }
+
+  const menus: MenuDef[] = [
+    { label: 'Story', items: [
+      { label: 'New story', icon: 'plus', onClick: handleNewStory },
+      { label: 'Load another link…', icon: 'link', disabled: !hasStory, onClick: () => { setSourceOpen(true); setLeftTab('intake'); setLauncherTab('url') } },
+      { label: 'Re-translate the source', icon: 'refresh', disabled: !source || translating, onClick: () => void handleRetranslateSource() },
+      { divider: true },
+      { label: 'Copy CMS JSON', icon: 'copy', disabled: !draft.headline.trim(), onClick: handleCopyCmsPayload },
+      { label: 'Review & publish…', icon: 'upload', disabled: !draft.headline.trim(), onClick: openPublish },
+    ] },
+    { label: 'Site', items: [
+      { label: 'Sync stories from esbpowerline.com', icon: 'refresh', onClick: () => void handleSyncFeed() },
+      { label: 'Open the site CMS', icon: 'externalLink', onClick: handleOpenInSiteCms },
+      { divider: true },
+      { label: staffSession ? `Signed in as ${staffSession.name}` : 'Staff sign-in…', icon: 'user', onClick: () => setShowLoginModal(true) },
+      { label: apiKey ? 'Gemini key (active)…' : 'Gemini API key…', icon: 'sparkle', onClick: () => setShowApiKeyModal(true) },
+    ] },
+    { label: 'View', items: [
+      { label: 'Source column', checked: sourceOpen, disabled: !hasStory, onClick: () => setSourceOpen(!sourceOpen) },
+      { divider: true },
+      { label: 'Story body', checked: storyTab === 'body', disabled: !hasStory, onClick: () => setStoryTab('body') },
+      { label: 'SEO', checked: storyTab === 'seo', disabled: !hasStory, onClick: () => setStoryTab('seo') },
+      { label: 'Social captions', checked: storyTab === 'social', disabled: !hasStory, onClick: () => setStoryTab('social') },
+      { label: 'Article preview', checked: storyTab === 'preview', disabled: !hasStory, onClick: () => setStoryTab('preview') },
+      { divider: true },
+      { label: 'Graphics', icon: 'layers', onClick: () => useShellStore.getState().openGraphicsFrom('editorial', null) },
+    ] },
+  ]
+
+  return (
+    <div className={'editorial-workspace' + (hasStory && sourceOpen ? ' source-open' : '')} style={{ ['--cat' as string]: catData.accent } as CSSProperties}>
+      {/* Header: the same bar Graphics uses — brand, menus, a centred tool group, quiet icon pills, one primary action. */}
+      <header className="topbar ed-head">
+        <div className="brand">
+          <span className="logo-wrap"><img src={logoUrl} alt="ESB PowerLine" /></span>
+        </div>
+        <MenuBar menus={menus} />
+        <span className="ed-topbar-title">Editorial Desk</span>
+        <div className="spacer" />
+        <div className="fmtgroup ed-head-group">
+          {hasStory && (
+            <button type="button" className={'pv-btn' + (sourceOpen ? ' on' : '')} onClick={() => setSourceOpen(!sourceOpen)} aria-pressed={sourceOpen} title={sourceOpen ? 'Hide the source column' : 'Show the original article'}>
+              <Icon name="newspaper" size={15} />
+              <span className="ed-head-host">{sourceHost}</span>
+              <span className="dpc-tag">{source?.paragraphs.length ?? paragraphCount} ¶</span>
+            </button>
+          )}
+          <button type="button" className="pv-btn ed-site-pill" onClick={() => setShowLoginModal(true)} title="Live site connection and staff sign-in">
             <span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />
             <span className="site-host">esbpowerline.com</span>
-            <span className="site-state">
-              {siteStatus.connected ? `${siteStatus.latencyMs}ms` : 'offline'}
-            </span>
-          </div>
-
-          {/* Source Chip when story is loaded */}
-          {hasStory && (
-            <div className="ed-source-chip">
-              <Icon name="newspaper" size={13} />
-              <span><b>{sourceHost}</b></span>
-              <span>· {paragraphCount} paras</span>
-              {source?.images && source.images.length > 0 && (
-                <span>· {source.images.length} photos</span>
-              )}
-              <button
-                type="button"
-                className="btn xs ghost"
-                onClick={handleRetranslateSource}
-                disabled={translating}
-                title="Re-translate original story into English"
-              >
-                {translating ? 'Translating…' : 'Re-translate'}
-              </button>
-            </div>
+            <span className="site-state">{siteStatus.connected ? `${siteStatus.latencyMs} ms` : 'offline'}</span>
+          </button>
+          {hasStory && source && (
+            <button type="button" className="pv-btn" onClick={handleRetranslateSource} disabled={translating} title="Translate the original story again">
+              <Icon name="refresh" size={14} />
+              <span>{translating ? 'Translating…' : 'Re-translate'}</span>
+            </button>
           )}
         </div>
-
-        {/* Progress or Toast notifications */}
+        <div className="spacer" />
         {progressStatus && (
           <div className="ed-topbar-progress">
             <span className="pulse-dot" />
             <span>{progressStatus}</span>
           </div>
         )}
-
-        {toastMsg && (
-          <div className="ed-toast">
-            <span>{toastMsg}</span>
-          </div>
-        )}
-
-        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-          <IconButton
-            icon="plus"
-            tip="Start a new story intake"
-            onClick={handleNewStory}
-          />
-          <IconButton
-            icon="refresh"
-            tip="Sync articles from esbpowerline.com"
-            onClick={handleSyncFeed}
-            disabled={syncing}
-          />
-          <IconButton
-            icon="sparkle"
-            tip={apiKey ? 'Gemini 2.5 Active' : 'Configure Gemini API Key'}
-            active={!!apiKey}
-            onClick={() => setShowApiKeyModal(true)}
-          />
-          <IconButton
-            icon="user"
-            tip={staffSession ? `Signed in as ${staffSession.name}` : 'Staff Login'}
-            active={!!staffSession}
-            onClick={() => setShowLoginModal(true)}
-          />
-
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              setPublishResult(null)
-              setShowPublishModal(true)
-            }}
-            disabled={!draft.headline.trim()}
-            title="Review editorial checklist and publish to esbpowerline.com CMS"
-          >
-            <Icon name="upload" size={14} />
-            <span>Publish</span>
-          </button>
+        <div className="pillbar">
+          <IconButton icon="plus" tip="New story" onClick={handleNewStory} />
+          <IconButton icon="refresh" tip="Sync stories from esbpowerline.com" onClick={handleSyncFeed} disabled={syncing} />
+          <i className="pill-sep" />
+          <IconButton icon="sparkle" tip={apiKey ? 'Gemini 2.5 active' : 'Configure a Gemini API key'} active={!!apiKey} onClick={() => setShowApiKeyModal(true)} />
+          <IconButton icon="user" tip={staffSession ? `Signed in as ${staffSession.name}` : 'Staff sign-in'} active={!!staffSession} onClick={() => setShowLoginModal(true)} />
         </div>
+        <button type="button" className="btn primary" onClick={openPublish} disabled={!draft.headline.trim()} title="Review the checklist and publish to esbpowerline.com">
+          <Icon name="upload" size={15} />
+          <span>Publish</span>
+        </button>
       </header>
 
-      {/* =========================================================================
-          2. WORKSPACE BODY — Empty Launcher State OR 3-Column Desk
-          ========================================================================= */}
       {!hasStory ? (
-        /* -------------------------------------------------------------
-           EMPTY DESK: Focused Intake Launcher Card
-           ------------------------------------------------------------- */
         <div className="ed-launcher-wrap">
           <div className="ed-launcher-card">
             <div className="ed-launcher-hero">
               <h2>Editorial Story Desk</h2>
-              <p>
-                Translate Bengali reporting into natural newsroom English, verify technical facts,
-                and publish directly to esbpowerline.com CMS.
-              </p>
+              <p>Translate Bengali reporting into newsroom English, check every figure against the source, and publish to esbpowerline.com.</p>
             </div>
-
-            {/* Launcher Intake Tabs */}
-            <div className="ed-launcher-tabs">
-              <button
-                type="button"
-                className={`ed-launcher-tab-btn ${launcherTab === 'url' ? 'active' : ''}`}
-                onClick={() => setLauncherTab('url')}
-              >
-                <Icon name="link" size={14} />
-                <span>Paste Story Link</span>
-              </button>
-              <button
-                type="button"
-                className={`ed-launcher-tab-btn ${launcherTab === 'paste' ? 'active' : ''}`}
-                onClick={() => setLauncherTab('paste')}
-              >
-                <Icon name="edit" size={14} />
-                <span>Paste Bengali Story</span>
-              </button>
-              <button
-                type="button"
-                className={`ed-launcher-tab-btn ${launcherTab === 'live_feed' ? 'active' : ''}`}
-                onClick={() => setLauncherTab('live_feed')}
-              >
-                <Icon name="globe" size={14} />
-                <span>Site CMS Posts ({liveArticles.length})</span>
-              </button>
-            </div>
-
-            {/* Tab 1: URL Intake */}
-            {launcherTab === 'url' && (
-              <div className="stack" style={{ gap: 14 }}>
-                <div className="row" style={{ gap: 8 }}>
-                  <input
-                    type="url"
-                    className="ed-url-input"
-                    style={{ height: 42, fontSize: 14 }}
-                    placeholder="https://bonikbarta.net/news/... or prothomalo.com/..."
-                    value={urlInput}
-                    onChange={(e) => setUrlInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
-                  />
-                  <button
-                    type="button"
-                    className="btn primary"
-                    style={{ height: 42, padding: '0 20px', fontSize: 13 }}
-                    onClick={() => handleFetchUrl()}
-                    disabled={loading || !urlInput.trim()}
-                  >
-                    <Icon name={loading ? 'refresh' : 'sparkle'} size={14} />
-                    <span>{loading ? 'Extracting…' : 'Fetch & Auto-Translate'}</span>
-                  </button>
-                </div>
-                <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-                  <span className="kicker" style={{ alignSelf: 'center', marginRight: 4 }}>SAMPLE NEWS:</span>
-                  <button
-                    type="button"
-                    className="btn xs ghost"
-                    onClick={() => {
-                      setUrlInput('https://bonikbarta.net/home/news_description/365518/drilling-two-new-wells')
-                      void handleFetchUrl('https://bonikbarta.net/home/news_description/365518/drilling-two-new-wells')
-                    }}
-                  >
-                    Bonik Barta
-                  </button>
-                  <button
-                    type="button"
-                    className="btn xs ghost"
-                    onClick={() => {
-                      setUrlInput('https://www.prothomalo.com/business/petrobangla-gas-well-drilling')
-                      void handleFetchUrl('https://www.prothomalo.com/business/petrobangla-gas-well-drilling')
-                    }}
-                  >
-                    Prothom Alo
-                  </button>
-                  <button
-                    type="button"
-                    className="btn xs ghost"
-                    onClick={() => {
-                      setUrlInput('https://www.thedailystar.net/business/economy/gas-exploration-drilling')
-                      void handleFetchUrl('https://www.thedailystar.net/business/economy/gas-exploration-drilling')
-                    }}
-                  >
-                    Daily Star
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Tab 2: Bengali Story Paste */}
-            {launcherTab === 'paste' && (
-              <div className="stack" style={{ gap: 12 }}>
-                <textarea
-                  className="ed-paste-area"
-                  style={{ minHeight: 180, fontSize: 14 }}
-                  placeholder="Paste Bengali headline and body here..."
-                  value={rawBengaliInput}
-                  onChange={(e) => setRawBengaliInput(e.target.value)}
-                />
-                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                    {rawBengaliInput.trim().length} characters
-                  </span>
-                  <button
-                    type="button"
-                    className="btn primary"
-                    style={{ height: 38, padding: '0 18px' }}
-                    onClick={handleTranslateRawBengali}
-                    disabled={translating || !rawBengaliInput.trim()}
-                  >
-                    <Icon name={translating ? 'refresh' : 'sparkle'} size={14} />
-                    <span>{translating ? 'Translating…' : 'Auto-Translate & Populate'}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Tab 3: Site CMS Posts */}
-            {launcherTab === 'live_feed' && (
-              <div className="stack" style={{ gap: 10, maxHeight: 380, overflowY: 'auto' }}>
-                <div className="row" style={{ gap: 8 }}>
-                  <input
-                    type="text"
-                    className="ed-url-input"
-                    placeholder="Filter stories by keyword..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                  <button type="button" className="btn sm" onClick={handleSyncFeed} disabled={syncing}>
-                    Sync Feed
-                  </button>
-                </div>
-                {filteredLiveArticles.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-3)' }}>
-                    No published stories found matching query.
-                  </div>
-                ) : (
-                  filteredLiveArticles.slice(0, 15).map((art) => (
-                    <div
-                      key={art.slug}
-                      style={{
-                        padding: '10px 14px',
-                        background: 'var(--bg-1)',
-                        border: '1px solid var(--line-2)',
-                        borderRadius: 6,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
-                        <b style={{ fontSize: 13, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {art.title}
-                        </b>
-                        <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                          {art.category} · {art.publishedAt || 'Published'}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn sm"
-                        onClick={() => void loadLiveArticleForEdit(art)}
-                      >
-                        Load Story
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {errorMsg && (
-              <div className="callout warn ed-intake-error" role="alert">
-                <Icon name="info" size={14} />
-                <div className="ed-intake-error-text">
-                  <b>{errorMsg}</b>
-                  {errorDetail?.detail && <span>{errorDetail.detail}</span>}
-                </div>
-                <div className="ed-intake-error-actions">
-                  {launcherTab === 'url' && (
-                    <button type="button" className="btn xs" onClick={() => void handleFetchUrl()} disabled={loading}>Try again</button>
-                  )}
-                  {errorDetail?.canPaste && launcherTab !== 'paste' && (
-                    <button type="button" className="btn xs primary" onClick={() => { setLauncherTab('paste'); setErrorMsg(null); setErrorDetail(null) }}>Paste the text instead</button>
-                  )}
-                </div>
-              </div>
-            )}
+            {intakeForm(false)}
           </div>
+          {toastMsg && <div className="toast" onClick={() => setToastMsg(null)}><Icon name="info" size={15} />{toastMsg}</div>}
         </div>
       ) : (
-        /* -------------------------------------------------------------
-           ACTIVE DESK: 3-Column Layout
-           Left: Source Reader · Center: Story Document · Right: Companion Preview Rail
-           ------------------------------------------------------------- */
-        <div className="ed-body-split">
-          {/* =========================================================
-              COLUMN 1: SOURCE READER (Bengali Hind Siliguri)
-              ========================================================= */}
-          <aside className="ed-pane ed-source-pane" style={{ maxWidth: 380 }}>
-            <div className="ed-pane-header">
-              <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                <span className="kicker">ORIGINAL SOURCE</span>
-                <span className="source-meta">({sourceHost})</span>
-              </div>
-              <button
-                type="button"
-                className={`btn xs ${sourceEditing ? 'primary' : 'ghost'}`}
-                onClick={() => setSourceEditing(!sourceEditing)}
-                title="Toggle manual editing of source text"
-              >
-                <Icon name="edit" size={12} />
-                <span>{sourceEditing ? 'Done' : 'Edit Source'}</span>
-              </button>
-            </div>
-            {source?.extraction && (
-              <div className="ed-extract-report" title={source.extraction.contentSelector ? `Story block: ${source.extraction.contentSelector}` : undefined}>
-                <span className={`ed-extract-chip method-${source.extraction.method}`}>
-                  {source.extraction.method === 'structured' ? 'Structured data' : source.extraction.method === 'markup' ? 'Page markup' : source.extraction.method === 'page-data' ? 'Page data' : 'Metadata only'}
-                </span>
-                <span className="ed-extract-chip">{source.extraction.language === 'bn' ? 'Bengali' : source.extraction.language === 'en' ? 'English' : source.extraction.language === 'mixed' ? 'Mixed' : 'Unknown language'}</span>
-                <span className="ed-extract-chip">{source.paragraphs.length} paragraph{source.paragraphs.length === 1 ? '' : 's'}</span>
-                <span className="ed-extract-chip">{source.images.length} photo{source.images.length === 1 ? '' : 's'}</span>
-                {source.extraction.warnings.map((w) => (
-                  <span key={w} className="ed-extract-warn"><Icon name="info" size={11} />{w}</span>
-                ))}
-              </div>
-            )}
-
-            <div className="ed-pane-scroll">
-              {sourceEditing ? (
-                /* Editable Source Mode (Rare fallback) */
-                <div className="stack" style={{ gap: 12 }}>
-                  <Field label="Original Headline">
-                    <input
-                      id="source-title-input"
-                      type="text"
-                      className="ed-url-input"
-                      value={source?.title || ''}
-                      onChange={(e) => updateSourceManual(e.target.value, source?.deck || '', source?.paragraphs || [])}
-                    />
-                  </Field>
-                  <Field label="Original Deck / Summary">
-                    <textarea
-                      className="ed-deck-input"
-                      rows={3}
-                      value={source?.deck || ''}
-                      onChange={(e) => updateSourceManual(source?.title || '', e.target.value, source?.paragraphs || [])}
-                    />
-                  </Field>
-                  <Field label="Paragraphs (separated by blank lines)">
-                    <textarea
-                      className="ed-body-input"
-                      rows={10}
-                      value={source?.paragraphs.join('\n\n') || ''}
-                      onChange={(e) =>
-                        updateSourceManual(
-                          source?.title || '',
-                          source?.deck || '',
-                          e.target.value.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean),
-                        )
-                      }
-                    />
-                  </Field>
-                </div>
+        <div className="ed-desk">
+          {/* LEFT — the original article, untouched, beside the copy made from it */}
+          <aside className="left ed-src" aria-label="Original source">
+            <Tabs<'source' | 'intake'>
+              value={leftTab}
+              onChange={setLeftTab}
+              options={[{ value: 'source', icon: 'newspaper', label: 'Source' }, { value: 'intake', icon: 'link', label: 'New link' }]}
+            />
+            <div className="scroll ed-src-scroll">
+              {leftTab === 'intake' ? (
+                <div className="ed-src-intake">{intakeForm(true)}</div>
               ) : (
-                /* Clean Reader View in Hind Siliguri */
-                <div className="ed-source-reader">
-                  {/* Bengali Headline (Unboxed reader title input) */}
-                  <input
-                    id="source-title-input"
-                    className="source-reader-title-input"
-                    readOnly
-                    value={source?.title || ''}
-                    title="Original Bengali Headline"
-                  />
-
-                  {/* Bengali Deck */}
-                  {source?.deck && <p className="source-reader-deck">{source.deck}</p>}
-
-                  {/* Fact Chips Bar */}
-                  {factTable.length > 0 && (
-                    <div className="fact-strip">
-                      <span className="fact-strip-label">EXTRACTED FACTS ({factTable.length}):</span>
-                      {factTable.map((f) => (
-                        <span
-                          key={f.id}
-                          className={`fact-pill ${f.kind} ${activeFactId === f.id ? 'active' : ''}`}
-                          onClick={() => handleFactChipClick(f)}
-                          title={`Click to scroll to match in English story: ${f.normalized}`}
-                          data-source-digits={f.normalized.replace(/[^0-9]/g, '')}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          {f.normalized}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Media Strip */}
-                  {source?.images && source.images.length > 0 && (
-                    <div className="source-images-tray" style={{ marginTop: 8 }}>
-                      <span className="kicker">PHOTOS ({source.images.length})</span>
-                      <div className="source-images-grid">
-                        {source.images.map((img, idx) => (
-                          <div key={idx} className="source-img-card">
-                            <img src={img.src} alt={img.caption || 'Source photo'} />
-                            <div className="img-actions-overlay">
-                              <button
-                                type="button"
-                                className="img-btn-banner"
-                                onClick={() => void importImageToBanner(img.src, `lead-${idx}.jpg`, { slotIndex: 0 })}
-                              >
-                                Set as Lead Photo
-                              </button>
-                              {img.caption && <span className="img-cap">{img.caption}</span>}
-                            </div>
-                          </div>
+                <>
+                  <Panel id="ed-src-link" title="Original link" sub={sourceHost} persist={false} actions={
+                    <button type="button" className={'btn xs' + (sourceEditing ? ' primary' : ' ghost')} onClick={() => setSourceEditing(!sourceEditing)} title="Correct the extracted source text by hand">
+                      <Icon name="edit" size={12} />
+                      <span>{sourceEditing ? 'Done' : 'Edit'}</span>
+                    </button>
+                  }>
+                    {sourceUrl ? (
+                      <div className="ed-src-url">
+                        <span className="mono" title={sourceUrl}>{sourceUrl.replace(/^https?:\/\/(www\.)?/, '')}</span>
+                        <div className="ed-src-url-actions">
+                          <a className="btn xs" href={sourceUrl} target="_blank" rel="noopener noreferrer" title="Open the original article"><Icon name="externalLink" size={12} /><span>Open</span></a>
+                          <button type="button" className="btn xs" onClick={() => void handleFetchUrl(sourceUrl)} disabled={loading} title="Fetch and translate this link again"><Icon name="refresh" size={12} /><span>{loading ? 'Fetching…' : 'Re-fetch'}</span></button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="hint">{source?.url === 'pasted-text' ? 'Pasted text — no link to return to.' : 'Loaded from the site CMS.'}</p>
+                    )}
+                    {source?.extraction && (
+                      <div className="ed-extract-report" title={source.extraction.contentSelector ? `Story block: ${source.extraction.contentSelector}` : undefined}>
+                        <span className={`ed-extract-chip method-${source.extraction.method}`}>{extractionLabel}</span>
+                        <span className="ed-extract-chip">{languageLabel}</span>
+                        <span className="ed-extract-chip">{source.paragraphs.length} paragraph{source.paragraphs.length === 1 ? '' : 's'}</span>
+                        <span className="ed-extract-chip">{source.images.length} photo{source.images.length === 1 ? '' : 's'}</span>
+                        {source.extraction.warnings.map((w) => (
+                          <span key={w} className="ed-extract-warn"><Icon name="info" size={11} />{w}</span>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </Panel>
 
-                  {/* Bengali Story Paragraphs */}
-                  <div className="source-paragraphs" style={{ marginTop: 10 }}>
-                    <span className="kicker">SOURCE STORY BODY ({source?.paragraphs.length || 0} PARAS)</span>
-                    {(source?.paragraphs || []).map((p, idx) => (
-                      <div key={idx} className="source-reader-p">
-                        <span style={{ fontSize: 10, color: 'var(--text-3)', display: 'block', marginBottom: 2 }}>
-                          {String(idx + 1).padStart(2, '0')}
-                        </span>
-                        <span>{p}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                  {sourceEditing ? (
+                    <Panel id="ed-src-edit" title="Edit source text" persist={false}>
+                      <Field label="Original headline">
+                        <input id="source-title-input" type="text" className="input" value={source?.title || ''} onChange={(e) => updateSourceManual(e.target.value, source?.deck || '', source?.paragraphs || [])} />
+                      </Field>
+                      <Field label="Original deck">
+                        <textarea className="input ed-src-textarea" rows={3} value={source?.deck || ''} onChange={(e) => updateSourceManual(source?.title || '', e.target.value, source?.paragraphs || [])} />
+                      </Field>
+                      <Field label="Paragraphs (blank line between)">
+                        <textarea
+                          className="input ed-src-textarea tall"
+                          rows={12}
+                          value={source?.paragraphs.join('\n\n') || ''}
+                          onChange={(e) => updateSourceManual(source?.title || '', source?.deck || '', e.target.value.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean))}
+                        />
+                      </Field>
+                    </Panel>
+                  ) : (
+                    <>
+                      <Panel id="ed-src-head" title="Headline & deck" sub={languageLabel ?? undefined}>
+                        <div className="ed-source-reader">
+                          <textarea id="source-title-input" className="source-reader-title-input" readOnly rows={2} value={source?.title || ''} title="Original headline" />
+                          {source?.deck && <p className="source-reader-deck">{source.deck}</p>}
+                        </div>
+                      </Panel>
+
+                      {factTable.length > 0 && (
+                        <Panel id="ed-src-facts" title="Facts to check" sub={`${factTable.length}`}>
+                          <div className="fact-strip">
+                            {factTable.map((f) => (
+                              <span
+                                key={f.id}
+                                className={`fact-pill ${f.kind} ${activeFactId === f.id ? 'active' : ''}`}
+                                onClick={() => handleFactChipClick(f)}
+                                title={`Find in the English story: ${f.normalized}`}
+                                data-source-digits={f.normalized.replace(/[^0-9]/g, '')}
+                              >
+                                {f.normalized}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="hint">Click a figure to find it in the English story.</p>
+                        </Panel>
+                      )}
+
+                      <Panel id="ed-src-body" title="Original story" sub={`${source?.paragraphs.length || 0} ¶`}>
+                        <div className="source-paragraphs">
+                          {(source?.paragraphs || []).map((p, idx) => (
+                            <p key={idx} className="source-reader-p"><span className="source-reader-n">{String(idx + 1).padStart(2, '0')}</span>{p}</p>
+                          ))}
+                        </div>
+                      </Panel>
+                    </>
+                  )}
+                </>
               )}
             </div>
           </aside>
+          {sourceOpen && <div className="ed-src-scrim" onClick={() => setSourceOpen(false)} aria-hidden />}
 
-          {/* =========================================================
-              COLUMN 2: STORY DOCUMENT (English Page View)
-              ========================================================= */}
-          <main className="ed-pane" style={{ flex: 1, overflowY: 'auto' }}>
-            <div className="ed-story-document">
-              {/* Document Header Bar */}
-              <div className="ed-story-header-bar">
-                <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                  <span className="swatch-dot" style={{ background: catData.accent }} />
-                  <Select
-                    value={bannerContent.categoryId}
-                    options={deskOptions}
-                    onChange={(nextId) => setDesk(String(nextId))}
-                  />
-                  {!deskAuto && (
-                    <button
-                      type="button"
-                      className="btn xs ghost"
-                      onClick={() => {
-                        autoDetectDesk()
-                        showToast('Desk auto-detected from story')
-                      }}
-                      title="Auto-detect desk"
-                    >
-                      Auto
-                    </button>
-                  )}
-                </div>
-
-                <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
-                    {wordCount} words · ~{readTimeMin} min read
-                  </span>
-                  <div className="seg-ctl">
-                    <button
-                      type="button"
-                      className={bodyMode === 'review' ? 'on' : ''}
-                      onClick={() => setBodyMode('review')}
-                      title="Fact verification view with inline green/amber marks"
-                    >
-                      <Icon name="check" size={12} />
-                      <span>Verified View</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={bodyMode === 'edit' ? 'on' : ''}
-                      onClick={() => setBodyMode('edit')}
-                      title="Edit story body text"
-                    >
-                      <Icon name="edit" size={12} />
-                      <span>Edit Text</span>
-                    </button>
+          {/* CENTRE — the CMS article editor: headline & deck, then the story as its own panel */}
+          <main className="ed-center scroll">
+            <div className="ed-center-col">
+              <section className="ed-card ed-card-headline">
+                <header className="ed-card-head">
+                  <Icon name="newspaper" size={16} />
+                  <div className="ed-card-title">
+                    <h2>Headline &amp; deck</h2>
+                    <p>English copy for esbpowerline.com — review the translation against the source.</p>
                   </div>
-                </div>
-              </div>
-
-              {/* 1. English Headline */}
-              <div className="ed-headline-wrap">
-                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label htmlFor="draft-headline" className="kicker" style={{ color: 'var(--text)', whiteSpace: 'nowrap' }}>
-                    English headline
-                  </label>
-                  <span className={`ed-budget-counter ${draft.headline.length > 104 ? 'over' : ''}`}>
-                    {draft.headline.length} / 104 chars
+                  <span className={'ed-state-chip ' + (translationProvider === 'offline' ? 'warn' : '')}>
+                    {translationProvider === 'gemini' ? 'Gemini draft' : translationProvider === 'offline' ? 'Needs translation' : 'Machine draft'}
                   </span>
-                </div>
-                <textarea
-                  id="draft-headline"
-                  className="ed-story-headline"
-                  rows={2}
-                  placeholder="Type or edit the English newsroom headline…"
-                  value={draft.headline}
-                  onChange={(e) => setDraftField('headline', e.target.value)}
-                />
-
-                {/* Banner Line Breaker Tool */}
-                <div className="ed-headline-breaker-wrap">
-                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                    <span className="kicker" title="Click a gap between words to break the banner headline there">
-                      Banner line breaks
-                    </span>
-                    <div className="row" style={{ gap: 4 }}>
-                      <button type="button" className="btn xs ghost" onClick={handleAutoBalance} title="Auto-balance line lengths for banner">
-                        Auto-Balance
-                      </button>
-                      {headlineBreaks.length > 0 && (
-                        <button type="button" className="btn xs ghost" onClick={handleClearBreaks} title="Remove line breaks">
-                          Flat
-                        </button>
-                      )}
+                </header>
+                <div className="ed-card-body">
+                  <div className="ed-field">
+                    <div className="ed-field-row">
+                      <label htmlFor="draft-headline">Headline</label>
+                      <span className={`ed-budget-counter ${draft.headline.length > 104 ? 'over' : ''}`}>{draft.headline.length} / 104</span>
                     </div>
+                    <textarea id="draft-headline" className="ed-input ed-input-headline" rows={2} placeholder="The English headline readers will see…" value={draft.headline} onChange={(e) => setDraftField('headline', e.target.value)} />
                   </div>
-                  <div className="ed-headline-flow">
-                    {headlineWords.map((word, idx) => (
-                      <span key={idx} className="ed-trucent-word-item">
-                        <span className="ed-headline-word">{word}</span>
-                        {idx < headlineWords.length - 1 && (
-                          <span
-                            className={`word-break-gap ${headlineBreaks.includes(idx) ? 'has-break' : ''}`}
-                            onClick={() => handleToggleBreakAt(idx)}
-                            title={headlineBreaks.includes(idx) ? 'Click to remove break' : 'Click to break line here'}
-                          >
-                            <span className="gap-marker">↵</span>
-                          </span>
+                  <div className="ed-field">
+                    <div className="ed-field-row">
+                      <label htmlFor="draft-deck">Deck / excerpt</label>
+                      <span className={`ed-budget-counter ${draft.deck.length > 200 ? 'over' : ''}`}>{draft.deck.length} / 200</span>
+                    </div>
+                    <textarea id="draft-deck" className="ed-input ed-input-deck" rows={2} placeholder="One or two sentences that summarise the story…" value={draft.deck} onChange={(e) => setDraftField('deck', e.target.value)} />
+                  </div>
+                </div>
+              </section>
+
+              <section className="ed-card ed-card-story">
+                <header className="ed-card-head tabs">
+                  <Icon name="layers" size={16} />
+                  <div className="ed-card-title">
+                    <h2>Story</h2>
+                    <p>{wordCount} words · ~{readTimeMin} min read · {paragraphCount} paragraph{paragraphCount === 1 ? '' : 's'}</p>
+                  </div>
+                  <Seg<StoryTab>
+                    className="ed-story-tabs"
+                    value={storyTab}
+                    onChange={setStoryTab}
+                    options={[
+                      { value: 'body', icon: 'type', label: 'Body' },
+                      { value: 'seo', icon: 'globe', label: 'SEO' },
+                      { value: 'social', icon: 'quote', label: 'Social' },
+                      { value: 'preview', icon: 'eye', label: 'Preview' },
+                    ]}
+                  />
+                </header>
+
+                {storyTab === 'body' && (
+                  <div className="ed-card-body">
+                    <div className="ed-body-tools">
+                      <Seg<'review' | 'edit'>
+                        value={bodyMode}
+                        onChange={setBodyMode}
+                        options={[{ value: 'review', icon: 'check', label: 'Verified view' }, { value: 'edit', icon: 'edit', label: 'Edit text' }]}
+                      />
+                      <span className="ed-legend"><i className="ok" />in source <i className="bad" />not found in source</span>
+                    </div>
+                    {bodyMode === 'review' ? (
+                      <div className="ed-story-doc-view" onDoubleClick={() => setBodyMode('edit')} title="Double-click to edit">
+                        {draft.body ? (
+                          draft.body.split(/\n{2,}/).map((p, pIdx) => {
+                            const spans = parseParagraphWithFacts(p, factTable, sourceAscii)
+                            return (
+                              <p key={pIdx} className="ed-story-doc-p">
+                                {spans.map((sp, sIdx) => {
+                                  if (!sp.isFact) return <span key={sIdx}>{sp.text}</span>
+                                  const digits = sp.text.replace(/[^0-9]/g, '')
+                                  return (
+                                    <span key={sIdx} className={sp.isVerified ? 'fact-verified' : 'fact-unverified'} title={sp.tooltip} data-fact-digits={digits} onClick={() => handleBodyFactClick(digits)}>
+                                      {sp.text}
+                                    </span>
+                                  )
+                                })}
+                              </p>
+                            )
+                          })
+                        ) : (
+                          <p className="hint">The translated story appears here, with every figure checked against the source.</p>
                         )}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* 2. English Deck / Sub-Headline */}
-              <div className="ed-deck-wrap" style={{ marginTop: 10 }}>
-                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                  <label htmlFor="draft-deck" className="kicker">
-                    STORY DECK / SUMMARY
-                  </label>
-                  <span className={`ed-budget-counter ${draft.deck.length > 200 ? 'over' : ''}`}>
-                    {draft.deck.length} / 200 chars
-                  </span>
-                </div>
-                <textarea
-                  id="draft-deck"
-                  className="ed-story-deck"
-                  rows={2}
-                  placeholder="Standfirst or deck summarising the story for readers…"
-                  value={draft.deck}
-                  onChange={(e) => setDraftField('deck', e.target.value)}
-                />
-              </div>
-
-              {/* 3. English Story Body (15px / 1.65 / 68ch measure) with Inline Fact Verification */}
-              <div className="ed-story-body-wrap">
-                {bodyMode === 'review' ? (
-                  /* Formatted Document View with Inline Green/Amber Underlines */
-                  <div
-                    className="ed-story-doc-view"
-                    onDoubleClick={() => setBodyMode('edit')}
-                    title="Double-click to edit story copy"
-                  >
-                    {draft.body ? (
-                      draft.body.split(/\n{2,}/).map((p, pIdx) => {
-                        const spans = parseParagraphWithFacts(p, factTable, sourceAscii)
-                        return (
-                          <p key={pIdx} className="ed-story-doc-p">
-                            {spans.map((sp, sIdx) => {
-                              if (!sp.isFact) return <span key={sIdx}>{sp.text}</span>
-                              const digits = sp.text.replace(/[^0-9]/g, '')
-                              return (
-                                <span
-                                  key={sIdx}
-                                  className={sp.isVerified ? 'fact-verified' : 'fact-unverified'}
-                                  title={sp.tooltip}
-                                  data-fact-digits={digits}
-                                  onClick={() => handleBodyFactClick(digits)}
-                                >
-                                  {sp.text}
-                                </span>
-                              )
-                            })}
-                          </p>
-                        )
-                      })
+                        <textarea id="draft-body" hidden readOnly value={draft.body} />
+                      </div>
                     ) : (
-                      <p style={{ color: 'var(--text-3)', fontStyle: 'italic' }}>
-                        Story body will render here with inline fact verification highlights…
-                      </p>
+                      <textarea id="draft-body" className="ed-input ed-input-body" placeholder="The full English story. Leave a blank line between paragraphs." value={draft.body} onChange={(e) => setDraftField('body', e.target.value)} />
                     )}
                   </div>
-                ) : (
-                  /* Clean Unboxed Textarea */
-                  <textarea
-                    id="draft-body"
-                    className="ed-story-body-input"
-                    rows={12}
-                    placeholder="Full translated English article body text…"
-                    value={draft.body}
-                    onChange={(e) => setDraftField('body', e.target.value)}
-                  />
                 )}
 
-                {/* Keep hidden draft-body in DOM when in review mode so tests / forms read value */}
-                {bodyMode === 'review' && (
-                  <textarea
-                    id="draft-body"
-                    style={{ display: 'none' }}
-                    readOnly
-                    value={draft.body}
-                  />
-                )}
-              </div>
-
-              {/* 4. Collapsed "Story Details & Metadata" Accordion (Requirement 1) */}
-              <details className="ed-story-details">
-                <summary className="ed-details-summary">
-                  <Icon name="sliders" size={13} />
-                  <span>Story details & metadata (byline, slug, SEO & social)</span>
-                </summary>
-                <div className="ed-details-content">
-                  <div className="grid2">
-                    <Field label="Author / Byline">
-                      <input
-                        type="text"
-                        className="ed-url-input"
-                        value={draft.byline || staffSession?.name || 'Mehedi Hasan Hamim'}
-                        onChange={(e) => setDraftField('byline', e.target.value)}
-                      />
-                    </Field>
-                    <Field label="Source / Photo Credit">
-                      <input
-                        type="text"
-                        className="ed-url-input"
-                        value={draft.credit || 'ESB PowerLine'}
-                        onChange={(e) => setDraftField('credit', e.target.value)}
-                      />
-                    </Field>
-                  </div>
-
-                  <Field label="CMS Permalink Slug">
-                    <div className="permalink-row">
-                      <span className="permalink-prefix">esbpowerline.com/articles/</span>
-                      <input
-                        id="draft-slug"
-                        type="text"
-                        className="ed-slug-input"
-                        value={draft.slug}
-                        onChange={(e) => setDraftField('slug', e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="btn sm"
-                        onClick={() => void checkSlug(draft.slug)}
-                        disabled={slugStatus === 'checking'}
-                      >
-                        {slugStatus === 'checking' ? 'Checking…' : slugStatus === 'available' ? '✓ Available' : 'Check'}
-                      </button>
+                {storyTab === 'seo' && (
+                  <div className="ed-card-body">
+                    <div className="ed-field">
+                      <div className="ed-field-row"><label htmlFor="draft-meta-title">Meta title</label><span className="ed-budget-counter">{(draft.metaTitle || draft.headline).length} / 60</span></div>
+                      <input id="draft-meta-title" type="text" className="ed-input" value={draft.metaTitle || ''} placeholder={draft.headline || 'Defaults to the headline'} onChange={(e) => setDraftField('metaTitle', e.target.value)} />
                     </div>
-                  </Field>
-
-                  {/* SEO Fields */}
-                  <div className="stack" style={{ gap: 8 }}>
-                    <span className="kicker">SEARCH ENGINE OPTIMIZATION</span>
-                    <Field label="Meta Title">
-                      <input
-                        type="text"
-                        className="ed-url-input"
-                        value={draft.metaTitle || ''}
-                        onChange={(e) => setDraftField('metaTitle', e.target.value)}
-                      />
-                    </Field>
-                    <Field label="Meta Description">
-                      <textarea
-                        className="ed-deck-input"
-                        rows={2}
-                        value={draft.metaDescription || ''}
-                        onChange={(e) => setDraftField('metaDescription', e.target.value)}
-                      />
-                    </Field>
-                    <Field label="Focus Keywords">
-                      <input
-                        type="text"
-                        className="ed-url-input"
-                        value={draft.focusKeywords || ''}
-                        onChange={(e) => setDraftField('focusKeywords', e.target.value)}
-                      />
-                    </Field>
-                  </div>
-
-                  {/* Social Captions */}
-                  <div className="stack" style={{ gap: 8 }}>
-                    <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span className="kicker">SOCIAL CAPTIONS</span>
-                      <div className="seg-ctl">
-                        <button
-                          type="button"
-                          className={activeSocialTab === 'facebook' ? 'on' : ''}
-                          onClick={() => setActiveSocialTab('facebook')}
-                        >
-                          FB
-                        </button>
-                        <button
-                          type="button"
-                          className={activeSocialTab === 'x' ? 'on' : ''}
-                          onClick={() => setActiveSocialTab('x')}
-                        >
-                          X
-                        </button>
-                        <button
-                          type="button"
-                          className={activeSocialTab === 'linkedin' ? 'on' : ''}
-                          onClick={() => setActiveSocialTab('linkedin')}
-                        >
-                          LI
-                        </button>
-                        <button
-                          type="button"
-                          className={activeSocialTab === 'telegram' ? 'on' : ''}
-                          onClick={() => setActiveSocialTab('telegram')}
-                        >
-                          TG
+                    <div className="ed-field">
+                      <div className="ed-field-row"><label htmlFor="draft-meta-desc">Meta description</label><span className="ed-budget-counter">{(draft.metaDescription || '').length} / 155</span></div>
+                      <textarea id="draft-meta-desc" className="ed-input" rows={3} value={draft.metaDescription || ''} placeholder={draft.deck || 'About 155 characters for search snippets'} onChange={(e) => setDraftField('metaDescription', e.target.value)} />
+                    </div>
+                    <div className="ed-field">
+                      <div className="ed-field-row"><label htmlFor="draft-slug">URL slug</label><span className={`ed-budget-counter ${draft.slug.length > 80 ? 'over' : ''}`}>{draft.slug.length} / 80</span></div>
+                      <div className="ed-slug">
+                        <span className="ed-slug-prefix">/articles/</span>
+                        <input id="draft-slug" type="text" className="ed-slug-input mono" value={draft.slug} onChange={(e) => setDraftField('slug', e.target.value)} />
+                        <button type="button" className="btn sm" onClick={() => void checkSlug(draft.slug)} disabled={slugStatus === 'checking' || !draft.slug}>
+                          {slugStatus === 'checking' ? 'Checking…' : slugStatus === 'available' ? '✓ Available' : slugStatus === 'taken' ? 'Taken' : 'Check'}
                         </button>
                       </div>
+                      <span className="hint">Generated from the headline. Edit it to customise.</span>
                     </div>
-                    <textarea
-                      className="ed-body-input"
-                      rows={3}
-                      value={draft.social[activeSocialTab] || ''}
-                      onChange={(e) => setSocialCaption(activeSocialTab, e.target.value)}
-                    />
-                    <div style={{ textAlign: 'right' }}>
-                      <button
-                        type="button"
-                        className="btn xs"
-                        onClick={() => {
-                          navigator.clipboard.writeText(draft.social[activeSocialTab] || '')
-                          showToast(`Copied ${activeSocialTab.toUpperCase()} caption`)
-                        }}
-                      >
-                        Copy Caption
+                  </div>
+                )}
+
+                {storyTab === 'social' && (
+                  <div className="ed-card-body">
+                    <div className="ed-body-tools">
+                      <Seg<'facebook' | 'x' | 'linkedin' | 'telegram'>
+                        value={activeSocialTab}
+                        onChange={setActiveSocialTab}
+                        options={[{ value: 'facebook', label: 'Facebook' }, { value: 'x', label: 'X' }, { value: 'linkedin', label: 'LinkedIn' }, { value: 'telegram', label: 'Telegram' }]}
+                      />
+                      <span className="ed-budget-counter">{(draft.social[activeSocialTab] || '').length} chars</span>
+                    </div>
+                    <textarea className="ed-input ed-input-social" rows={6} value={draft.social[activeSocialTab] || ''} onChange={(e) => setSocialCaption(activeSocialTab, e.target.value)} />
+                    <div className="ed-card-actions">
+                      <button type="button" className="btn sm" onClick={() => { void navigator.clipboard.writeText(draft.social[activeSocialTab] || ''); showToast('Caption copied') }}>
+                        <Icon name="copy" size={13} />
+                        <span>Copy caption</span>
                       </button>
                     </div>
                   </div>
-                </div>
-              </details>
+                )}
+
+                {storyTab === 'preview' && (
+                  <div className="ed-card-body" ref={previewHostRef}>
+                    <div className="ed-body-tools">
+                      <Seg<SiteDevice> value={previewDevice} onChange={setPreviewDevice} options={[{ value: 'desktop', label: 'Desktop' }, { value: 'tablet', label: 'Tablet' }, { value: 'mobile', label: 'Phone' }]} />
+                      <Seg<SiteTheme> value={previewTheme} onChange={setPreviewTheme} options={SITE_THEMES.map((t) => ({ value: t.id, label: t.label }))} />
+                    </div>
+                    <SitePreview
+                      theme={previewTheme}
+                      device={previewDevice}
+                      availableWidth={Math.max(280, previewHostW - 32)}
+                      title={draft.headline}
+                      excerpt={draft.deck}
+                      slug={draft.slug}
+                      category={catData.name}
+                      author={staffSession?.name || draft.byline || 'ESB PowerLine'}
+                      date={previewDate}
+                      readTime={readTimeMin}
+                      heroUrl={bannerLeadImage}
+                      heroCredit={draft.credit || 'ESB PowerLine'}
+                      paragraphs={draft.body.split(/\n{2,}/).map((t) => t.trim()).filter(Boolean)}
+                      tags={tagList}
+                      related={relatedStories}
+                    />
+                    <span className="hint mono">https://esbpowerline.com/articles/{draft.slug || 'story-slug'}</span>
+                  </div>
+                )}
+              </section>
             </div>
+            {toastMsg && <div className="toast" onClick={() => setToastMsg(null)}><Icon name="info" size={15} />{toastMsg}</div>}
           </main>
 
-          {/* =========================================================
-              COLUMN 3: COMPANION PREVIEW RAIL ("At Your Shoulder")
-              Tabs: Banner 4:5 · Web Article · Facebook Feed (Requirement 5)
-              ========================================================= */}
-          {baseAssets && <GraphicsRail base={baseAssets} onToast={showToast} />}
+          {/* RIGHT — the CMS sidebar: publish, featured image, organise; then the outputs Graphics shares */}
+          <aside className="right ed-side" aria-label="Publishing and image">
+            <Panel id="ed-publish" title="Publish" sub={publishResult?.ok ? 'Published' : 'Draft'}>
+              <dl className="ed-kv">
+                <dt>Status</dt>
+                <dd><span className={'ed-status ' + (publishResult?.ok ? 'live' : 'draft')}>{publishResult?.ok ? 'Published' : 'Draft · not on the site yet'}</span></dd>
+                <dt>Destination</dt>
+                <dd>
+                  <span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />
+                  esbpowerline.com {siteStatus.connected ? '' : '(offline)'}
+                </dd>
+                <dt>Dateline</dt>
+                <dd title="What the article page shows if it is published now (Dhaka time)">{formatArticleDate(previewDate).replace(/^Published on /, '')}</dd>
+                <dt>Signed in</dt>
+                <dd>{staffSession ? staffSession.name : <button type="button" className="btn-link" onClick={() => setShowLoginModal(true)}>Sign in</button>}</dd>
+                <dt>Checks</dt>
+                <dd><span className={'ed-status ' + (checksDone === 3 ? 'live' : 'draft')}>{checksDone} of 3 pre-flight checks</span></dd>
+              </dl>
+              <button type="button" className="btn primary ed-publish-btn" onClick={openPublish} disabled={!draft.headline.trim()}>
+                <Icon name="upload" size={15} />
+                <span>Review &amp; publish</span>
+              </button>
+              <div className="ed-publish-row">
+                <button type="button" className="btn sm" onClick={handleCopyCmsPayload} disabled={!draft.headline.trim()}>
+                  <Icon name={copiedPayload ? 'check' : 'copy'} size={13} />
+                  <span>{copiedPayload ? 'Copied' : 'CMS JSON'}</span>
+                </button>
+                <button type="button" className="btn sm" onClick={handleOpenInSiteCms}>
+                  <Icon name="externalLink" size={13} />
+                  <span>Site CMS</span>
+                </button>
+              </div>
+            </Panel>
+
+            <Panel id="ed-image" title="Featured image" sub={bannerLeadImage ? 'Set' : 'None'}>
+              <FeaturedImage onToast={showToast} />
+            </Panel>
+
+            <Panel id="ed-organize" title="Organize" sub={catData.name}>
+              <Field label="Category">
+                <div className="row">
+                  <Select
+                    className="ed-desk-select"
+                    value={bannerContent.categoryId}
+                    options={CATEGORIES.map((c) => ({ value: c.id, label: c.name, swatch: c.accent }))}
+                    onChange={(id) => setDesk(String(id))}
+                  />
+                </div>
+              </Field>
+              <button
+                type="button"
+                className={'btn-link ed-auto-desk' + (deskAuto ? ' on' : '')}
+                onClick={() => { const id = autoDetectDesk(); const c = CATEGORIES.find((x) => x.id === id); showToast(`Category set to ${c?.name ?? id} from the story`) }}
+              >
+                {deskAuto ? '✓ Detected from the story' : 'Detect from the story'}
+              </button>
+              <Field label={<span className="ed-field-row"><span>Tags</span><button type="button" className="btn-link" onClick={() => setTags(suggestTags())}>Auto-pick from story</button></span>}>
+                <div className="ed-tags" onClick={(e) => (e.currentTarget.querySelector('input') as HTMLInputElement | null)?.focus()}>
+                  {tagList.map((t) => (
+                    <span key={t} className="ed-tag-pill">#{t}<button type="button" aria-label={`Remove tag ${t}`} onClick={() => setTags(tagList.filter((x) => x !== t))}><Icon name="x" size={10} /></button></span>
+                  ))}
+                  <input
+                    type="text"
+                    value={tagInput}
+                    placeholder={tagList.length ? '' : 'Type and press comma…'}
+                    onChange={(e) => { const v = e.target.value; if (v.endsWith(',')) addTag(v.slice(0, -1)); else setTagInput(v) }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput) }
+                      else if (e.key === 'Backspace' && !tagInput && tagList.length) setTags(tagList.slice(0, -1))
+                    }}
+                    onBlur={() => tagInput.trim() && addTag(tagInput)}
+                  />
+                </div>
+              </Field>
+              <Field label="Byline">
+                <input type="text" className="input" value={draft.byline} placeholder={staffSession?.name || 'Reporter name'} onChange={(e) => setDraftField('byline', e.target.value)} />
+              </Field>
+            </Panel>
+
+            <Panel id="ed-outputs" title="Outputs" sub="Banner · Web · Facebook">
+              {baseAssets ? <OutputsPanel base={baseAssets} onToast={showToast} /> : <p className="hint">Loading the banner…</p>}
+            </Panel>
+          </aside>
         </div>
       )}
 

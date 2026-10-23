@@ -79,7 +79,15 @@ function ZoomControls() {
 }
 
 export function GraphicsWorkspace({ base }: { base: Assets }) {
-  const [tab, setTab] = useState<Tab>('story')
+  // Arriving from the Editorial desk's "Edit in Graphics": open on the photo with its slot selected.
+  const [tab, setTab] = useState<Tab>(() => {
+    if (useShellStore.getState().consumeGraphicsFocus() !== 'photos') return 'story'
+    const g = useStore.getState()
+    g.selectSlot(0)
+    g.select('photos')
+    return 'photos'
+  })
+  const returnTo = useShellStore((s) => s.returnTo)
   const [exp, setExpState] = useState<ExportSettings>(loadSettings)
   const [showExport, setShowExport] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -436,6 +444,11 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
           <span className="logo-wrap" data-tip="About ESB Studio" onClick={() => setShowAbout(true)} style={{ cursor: 'pointer' }}><img src={logoUrl} alt="ESB PowerLine" /></span>
         </div>
         <MenuBar menus={menus} />
+        {returnTo === 'editorial' && (
+          <button type="button" className="pv-btn back-to-desk" aria-label="Back to the Editorial desk" onClick={() => useShellStore.getState().setWorkspace('editorial')} title="Back to the Editorial desk — your photo edits are already there">
+            <Icon name="chevLeft" size={14} /><span className="back-label">Editorial</span>
+          </button>
+        )}
         <div className="spacer" />
         <div className="fmtgroup">
           <FormatPicker value={format} onChange={setFormat} />

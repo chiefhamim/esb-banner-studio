@@ -123,10 +123,10 @@ Use one persistent application shell, with three primary workspaces and a shared
 
 ### Workspace 1 — Editorial (`src/editorial/`)
 Purpose: turn source material into an accurate, publication-ready story.
-- **Source panel:** original article, source URL, publisher, extraction status, source image, captions and credits (Hind Siliguri font).
-- **Story editor:** headline (≤104 chars), standfirst/deck (≤200 chars), body (68ch measure), tags, category, author, slug (≤80 chars) and publication metadata.
-- **Verification/inspector panel:** figures, dates, entities, source attribution, unresolved checks and publication readiness.
-- **Graphics companion (`GraphicsRail.tsx`):** live preview of linked visual assets (Banner 4:5, Web Article, Facebook 1200×630).
+The desk mirrors the esbpowerline.com CMS article editor (`components/editor/ArticleForm.tsx` in the site repo) inside the Graphics shell (same `.topbar`, `.left`/`.right` panels, `Seg`/`Tabs`/`Panel` controls).
+- **Source column (left):** original article — link with Open / Re-fetch, extraction report chips, Bengali headline & deck, facts to check, numbered paragraphs (Hind Siliguri); a "New link" tab loads the next story. Slides over the editor under 1180 px.
+- **Story editor (centre):** "Headline & deck" panel (headline ≤104, deck ≤200), then a standalone "Story" panel with Body (verified view / edit) · SEO (meta title, meta description, `/articles/` slug ≤80) · Social captions · Preview (the site article page).
+- **CMS sidebar (right):** Publish (status, destination, dateline, pre-flight count, Review & publish), Featured image (`FeaturedImage.tsx`: the banner's photo slot 0 — reframe, zoom, tone, credit, **Edit in Graphics** round trip), Organize (category, tag pills, byline), Outputs (`GraphicsRail.tsx` → `OutputsPanel`: Banner · Web article · Facebook).
 
 ### Workspace 2 — Graphics (`src/components/`, `src/core/`)
 Purpose: create accurate, polished and fully editable newsroom graphics.

@@ -1,7 +1,7 @@
 import { getCollage } from './collage'
 import { figmaGradient, rgba } from './gradient'
 import { drawText, layoutText } from './text'
-import type { El, IconEl, PhotosEl, RectEl, Scene, WatermarkEl } from './types'
+import type { Backdrop, El, IconEl, PhotoSlot, PhotosEl, RectEl, Scene, WatermarkEl } from './types'
 import type { IconPathDef } from './tokens'
 
 type Ctx = CanvasRenderingContext2D
@@ -118,6 +118,55 @@ function blurredBackdrop(img: Assets[string], w: number, h: number): HTMLCanvasE
   return c
 }
 
+/**
+ * One photo slot, exactly as the banner paints it: cover-scale × zoom, pan across the overflow, the backdrop when zoomed
+ * out past the edges, then the non-destructive tone filters and vignette. Shared with the Editorial desk's featured-image
+ * editor so its preview is the same pixels Graphics renders, not a CSS approximation.
+ */
+export function drawSlotImage(ctx: Ctx, img: Assets[string], slot: PhotoSlot, r: { x: number; y: number; w: number; h: number }, backdrop: Backdrop, tint: string) {
+  const s = Math.max(r.w / img.width, r.h / img.height) * (slot.zoom || 1)
+  const dw = img.width * s
+  const dh = img.height * s
+  const ox = dw - r.w
+  const oy = dh - r.h
+  const dx = r.x - (0.5 + slot.panX * 0.5) * ox
+  const dy = r.y - (0.5 + slot.panY * 0.5) * oy
+  // zoomed out past the slot edges: paint the chosen backdrop first
+  if (dw < r.w - 0.5 || dh < r.h - 0.5) {
+    const mode = backdrop
+    if (mode === 'blur') { ctx.imageSmoothingQuality = 'high'; ctx.drawImage(blurredBackdrop(img, r.w, r.h), r.x, r.y, r.w, r.h) }
+    else { ctx.fillStyle = mode === 'black' ? '#000000' : mode === 'white' ? '#ffffff' : tint; ctx.fillRect(r.x, r.y, r.w, r.h) }
+  }
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  const br = 1 + (slot.brightness ?? 0) / 100
+  const ct = 1 + (slot.contrast ?? 0) / 100
+  const sat = 1 + (slot.saturation ?? 0) / 100
+  const wm = slot.warmth ?? 0
+  const filters: string[] = []
+  if (br !== 1) filters.push(`brightness(${br})`)
+  if (ct !== 1) filters.push(`contrast(${ct})`)
+  if (sat !== 1) filters.push(`saturate(${sat})`)
+  if (wm !== 0) {
+    if (wm > 0) filters.push(`sepia(${Math.round(wm * 0.35)}%) hue-rotate(-${Math.round(wm * 0.15)}deg)`)
+    else filters.push(`hue-rotate(${Math.round(wm * 0.25)}deg)`)
+  }
+  if (filters.length) ctx.filter = filters.join(' ')
+  ctx.drawImage(img, dx, dy, dw, dh)
+  ctx.filter = 'none'
+
+  if (slot.vignette && slot.vignette > 0) {
+    const vig = ctx.createRadialGradient(
+      r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.3,
+      r.x + r.w / 2, r.y + r.h / 2, Math.max(r.w, r.h) * 0.75
+    )
+    vig.addColorStop(0, 'rgba(0,0,0,0)')
+    vig.addColorStop(1, `rgba(0,0,0,${((slot.vignette / 100) * 0.8).toFixed(2)})`)
+    ctx.fillStyle = vig
+    ctx.fillRect(r.x, r.y, r.w, r.h)
+  }
+}
+
 function drawPhotos(ctx: Ctx, el: PhotosEl, assets: Assets) {
   ctx.fillStyle = el.gapColor
   ctx.fillRect(el.x, el.y, el.w, el.h)
@@ -133,47 +182,7 @@ function drawPhotos(ctx: Ctx, el: PhotosEl, assets: Assets) {
       ctx.fillStyle = el.tint
       ctx.fillRect(r.x, r.y, r.w, r.h)
     } else {
-      const s = Math.max(r.w / img.width, r.h / img.height) * (slot.zoom || 1)
-      const dw = img.width * s
-      const dh = img.height * s
-      const ox = dw - r.w
-      const oy = dh - r.h
-      const dx = r.x - (0.5 + slot.panX * 0.5) * ox
-      const dy = r.y - (0.5 + slot.panY * 0.5) * oy
-      // zoomed out past the slot edges: paint the chosen backdrop first
-      if (dw < r.w - 0.5 || dh < r.h - 0.5) {
-        const mode = el.backdrop ?? 'blur'
-        if (mode === 'blur') { ctx.imageSmoothingQuality = 'high'; ctx.drawImage(blurredBackdrop(img, r.w, r.h), r.x, r.y, r.w, r.h) }
-        else { ctx.fillStyle = mode === 'black' ? '#000000' : mode === 'white' ? '#ffffff' : el.tint; ctx.fillRect(r.x, r.y, r.w, r.h) }
-      }
-      ctx.imageSmoothingEnabled = true
-      ctx.imageSmoothingQuality = 'high'
-      const br = 1 + (slot.brightness ?? 0) / 100
-      const ct = 1 + (slot.contrast ?? 0) / 100
-      const sat = 1 + (slot.saturation ?? 0) / 100
-      const wm = slot.warmth ?? 0
-      const filters: string[] = []
-      if (br !== 1) filters.push(`brightness(${br})`)
-      if (ct !== 1) filters.push(`contrast(${ct})`)
-      if (sat !== 1) filters.push(`saturate(${sat})`)
-      if (wm !== 0) {
-        if (wm > 0) filters.push(`sepia(${Math.round(wm * 0.35)}%) hue-rotate(-${Math.round(wm * 0.15)}deg)`)
-        else filters.push(`hue-rotate(${Math.round(wm * 0.25)}deg)`)
-      }
-      if (filters.length) ctx.filter = filters.join(' ')
-      ctx.drawImage(img, dx, dy, dw, dh)
-      ctx.filter = 'none'
-
-      if (slot.vignette && slot.vignette > 0) {
-        const vig = ctx.createRadialGradient(
-          r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.3,
-          r.x + r.w / 2, r.y + r.h / 2, Math.max(r.w, r.h) * 0.75
-        )
-        vig.addColorStop(0, 'rgba(0,0,0,0)')
-        vig.addColorStop(1, `rgba(0,0,0,${((slot.vignette / 100) * 0.8).toFixed(2)})`)
-        ctx.fillStyle = vig
-        ctx.fillRect(r.x, r.y, r.w, r.h)
-      }
+      drawSlotImage(ctx, img, slot, r, el.backdrop ?? 'blur', el.tint)
     }
     ctx.restore()
   })
