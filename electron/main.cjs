@@ -166,6 +166,28 @@ ipcMain.handle('esb:save-image', async (_e, name, bytes, dir) => {
   return target
 })
 
+// Save a rendered video. The renderer sends the finished file; it must be an MP4 or WebM by its own header, and
+// lands only where the editor chose in the save dialog.
+const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024
+function videoKind(b) {
+  if (b.length > 12 && b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) return 'mp4' // ....ftyp
+  if (b.length > 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'webm' // EBML
+  return null
+}
+ipcMain.handle('esb:save-video', async (_e, name, bytes) => {
+  if (!(bytes instanceof Uint8Array) || bytes.length > MAX_VIDEO_BYTES) return null
+  const kind = videoKind(bytes)
+  if (!kind) throw new Error('Not an MP4 or WebM file')
+  const safe = path.basename(String(name)).replace(/\.[a-z0-9]+$/i, '') + '.' + kind
+  fs.mkdirSync(defaultDir(), { recursive: true })
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(defaultDir(), safe), filters: [{ name: kind === 'mp4' ? 'MP4 video' : 'WebM video', extensions: [kind] }] })
+  if (r.canceled || !r.filePath) return null
+  fsScope.allowFile(r.filePath)
+  fsScope.assertAllowed(r.filePath, 'save video target')
+  fs.writeFileSync(r.filePath, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length))
+  return r.filePath
+})
+
 ipcMain.handle('esb:pick-folder', async () => {
   fs.mkdirSync(defaultDir(), { recursive: true })
   const r = await dialog.showOpenDialog(win, {

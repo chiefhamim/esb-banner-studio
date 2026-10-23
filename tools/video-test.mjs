@@ -96,29 +96,79 @@ try {
   await titleInput.fill('ESB Breaking News 2026')
   check('Editable project title updated', (await titleInput.inputValue()) === 'ESB Breaking News 2026')
 
-  // 10. Trigger real video export and capture download
-  const [download] = await Promise.all([
-    page.waitForEvent('download', { timeout: 20000 }),
-    page.click('.vw-header-actions button:has-text("Export Video")'),
-  ])
-  const downloadPath = await download.path()
+  // 10. Export the whole timeline: MP4/H.264, its true length, every frame (ffprobe reads the file back)
+  const { execFileSync, spawnSync } = await import('node:child_process')
   const fs = await import('node:fs')
-  const stats = fs.statSync(downloadPath)
-  check('Exported playable WebM file', stats.size > 5000, `size: ${(stats.size / 1024).toFixed(1)} KB`)
+  const probe = (f) => JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-count_frames', '-of', 'json', f]).toString())
+  const exportOnce = async (length) => {
+    await page.click('.vw-header-actions button:has-text("Export")')
+    await page.waitForSelector('.vx')
+    if (length) await page.click(`.vx-row .seg-ctl button:has-text("${length}")`)
+    const [download] = await Promise.all([page.waitForEvent('download', { timeout: 300000 }), page.click('.vx-go')])
+    const file = await download.path()
+    await page.waitForSelector('.vw-export-success')
+    const facts = (await page.locator('.vw-export-success').innerText()).replace(/\s+/g, ' ')
+    await page.click('.vw-export-modal button:has-text("Done")')
+    return { file, facts }
+  }
+  const projDur = await page.evaluate(() => window.__videoStore.getState().project.duration)
+  const full = await exportOnce()
+  const p1 = probe(full.file)
+  const v1 = p1.streams.find((s) => s.codec_type === 'video')
+  check('Export is MP4 / H.264', p1.format.format_name.includes('mp4') && v1.codec_name === 'h264', `${p1.format.format_name} ${v1.codec_name}`)
+  check('Export runs the whole timeline at true speed (not the old 3 s cap)', Math.abs(Number(p1.format.duration) - projDur) < 0.1 && Number(v1.nb_read_frames) === Math.round(projDur * 30), `duration ${p1.format.duration}s of ${projDur}s, ${v1.nb_read_frames} frames`)
+  check('Result reports the file as written', /MP4/.test(full.facts) && /H\.264/.test(full.facts), full.facts)
 
-  // Verify EBML WebM magic header (0x1A, 0x45, 0xDF, 0xA3)
-  const buf = Buffer.alloc(4)
-  const fd = fs.openSync(downloadPath, 'r')
-  fs.readSync(fd, buf, 0, 4, 0)
-  fs.closeSync(fd)
-  const isWebM = buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3
-  check('Exported WebM container magic header verified', isWebM)
+  // 11. Footage frames land at their own time, and A1 audio is mixed in. Synthetic fixtures: 1 s red then 1 s
+  // green (one key frame per frame), a 440 Hz tone placed at 1.0 s.
+  await page.setInputFiles('.video-workspace input[type=file][multiple]', [path.join(root, 'tools/fixtures/media/red-green-2s.mp4'), path.join(root, 'tools/fixtures/media/tone-440-2s.wav')])
+  await page.waitForFunction(() => window.__videoStore.getState().mediaAssets.length >= 2)
+  await page.evaluate(() => {
+    const st = window.__videoStore.getState()
+    const a = st.mediaAssets
+    const vid = a.find((x) => x.type === 'video'), aud = a.find((x) => x.type === 'audio')
+    window.__videoStore.setState({ project: { ...st.project, duration: 3, clips: [
+      { id: 'tv', trackId: 'v1', title: 'rg', kind: 'video', start: 0, duration: 2, in: 0, out: 2, color: '#2563eb', sourceUrl: vid.url },
+      { id: 'ta', trackId: 'a1', title: 'tone', kind: 'audio', start: 1, duration: 2, in: 0, out: 2, color: '#8b5cf6', sourceUrl: aud.url, volume: 0.8 },
+    ] } })
+  })
+  const av = await exportOnce()
+  const p2 = probe(av.file)
+  const a2 = p2.streams.find((s) => s.codec_type === 'audio')
+  check('Sound from A1 is in the file', !!a2 && /aac|opus/.test(a2.codec_name) && Math.abs(Number(p2.format.duration) - 3) < 0.1, `${a2?.codec_name} ${p2.format.duration}s`)
+  const pixel = (t) => { const r = spawnSync('ffmpeg', ['-v', 'error', '-ss', String(t), '-i', av.file, '-frames:v', '1', '-vf', 'format=rgb24,crop=1:1:300:540', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']); return [...r.stdout] }
+  const red = pixel(0.5), green = pixel(1.5)
+  const frameAt = (n) => [...spawnSync('ffmpeg', ['-v', 'error', '-i', av.file, '-vf', `select=eq(n\\,${n}),format=rgb24,crop=1:1:300:540`, '-frames:v', '1', '-f', 'rawvideo', '-']).stdout]
+  const f29 = frameAt(29), f30 = frameAt(30)
+  check('Frame-exact at the cut: frame 29 is still red, frame 30 is green', f29[0] > 180 && f29[1] < 80 && f30[1] > 180 && f30[0] < 80, JSON.stringify({ f29, f30 }))
+  check('Footage frame at 0.5 s is the red second, at 1.5 s the green one', red[0] > 180 && red[1] < 80 && green[1] > 180 && green[0] < 80, JSON.stringify({ red, green }))
+  // mean level of a stretch of the soundtrack (ffmpeg prints it on stderr; -999 when it reports none)
+  const level = (ss, t) => { const r = spawnSync('ffmpeg', ['-v', 'info', '-ss', String(ss), '-t', String(t), '-i', av.file, '-af', 'volumedetect', '-f', 'null', '-']); return Number(/mean_volume: (-?[\d.]+)/.exec(String(r.stderr))?.[1] ?? -999) }
+  const quiet = level(0.1, 0.7), tone = level(1.2, 1.5)
+  check('The tone starts where its clip starts: silent before 1 s, audible after', (quiet === -999 || quiet < -60) && tone > -30, `before ${quiet} dB, during ${tone} dB`)
+  fs.rmSync(full.file, { force: true })
 
-  // Close export modal
-  await page.click('.vw-export-modal button:has-text("Done")')
-  await page.waitForTimeout(300)
+  // 12. Story → video: the Story tab builds a cut from the Editorial draft; its stills are in the exported frames
+  await page.evaluate(() => {
+    const ed = window.__editorialStore.getState()
+    ed.setDraftField('headline', 'Two new wells to add 30 MMCFD of gas to the grid')
+    ed.setDraftField('deck', 'Two new wells in Sylhet are set to raise gas supply this winter.')
+    ed.setDraftField('body', 'Petrobangla will drill two new wells in Sylhet this winter. The wells are expected to add 30 MMCFD to the grid.')
+  })
+  await page.click('.vw-bin-tabs button:has-text("Story")')
+  await page.waitForSelector('.vw-story-points')
+  check('Story tab previews the cut from the draft', (await page.locator('.vw-story-points li').count()) === 5, String(await page.locator('.vw-story-points li').count()))
+  await page.click('.vw-story-build')
+  await page.click('.vw-story-confirm button:has-text("Replace")')
+  await page.waitForSelector('.vw-story-note')
+  const built = await page.evaluate(() => { const p = window.__videoStore.getState().project; return { n: p.clips.length, stills: p.clips.filter((c) => c.still).length, d: p.duration } })
+  check('Build story video replaces the timeline with the cut', built.stills === 3 && built.n >= 7, JSON.stringify(built))
+  const sv = await exportOnce('draft')
+  const top = (t) => [...spawnSync('ffmpeg', ['-v', 'error', '-ss', String(t), '-i', sv.file, '-frames:v', '1', '-vf', 'format=rgb24,crop=1:1:960:40', '-f', 'rawvideo', '-']).stdout]
+  const bannerPx = top(1)
+  check('The banner still is in the exported frames (not the empty-footage placeholder)', bannerPx.length === 3 && bannerPx.reduce((a, b) => a + b, 0) / 3 > 150, JSON.stringify(bannerPx))
 
-  // 11. Switch back to Graphics workspace
+  // 12. Switch back to Graphics workspace
   await page.click('.ws-btn[data-ws="graphics"]')
   await page.waitForSelector('.topbar')
   check('Switched back to Graphics workspace', (await page.locator('.topbar').count()) === 1)

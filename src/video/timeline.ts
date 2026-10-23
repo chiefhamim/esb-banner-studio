@@ -48,6 +48,10 @@ export interface Clip {
   scale?: number     // default 1
   posX?: number      // offset X
   posY?: number      // offset Y
+  /** A V1 clip that is a still picture (a photo, a rendered banner), not footage; drawn with a slow push-in. */
+  still?: boolean
+  /** Direction of the still's slow move: push in (default) or pull out. */
+  kenBurns?: 'in' | 'out'
 }
 
 export interface VideoProject {

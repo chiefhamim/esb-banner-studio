@@ -283,3 +283,6 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     })
   },
 }))
+
+// dev-only handle for the end-to-end tests, as src/store.ts exposes __store
+if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') Object.assign(window, { __videoStore: useVideoStore })

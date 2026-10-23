@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('esb', {
   saveImage: (name, bytes, dir) => ipcRenderer.invoke('esb:save-image', name, bytes, dir),
+  saveVideo: (name, bytes) => ipcRenderer.invoke('esb:save-video', name, bytes),
   pickFolder: () => ipcRenderer.invoke('esb:pick-folder'),
   reveal: (p) => ipcRenderer.invoke('esb:reveal', p),
   saveProject: (name, text, existing) => ipcRenderer.invoke('esb:save-project', name, text, existing),

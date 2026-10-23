@@ -16,7 +16,7 @@ try {
   // the OS dialogs answer with a temp folder / file, as a user picking a place would
   await app.evaluate(({ dialog }, dir) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [dir] })
-    dialog.showSaveDialog = async (_w, o) => ({ canceled: false, filePath: require('node:path').join(dir, (o && o.defaultPath ? require('node:path').basename(o.defaultPath) : 'single.png')) })
+    dialog.showSaveDialog = async (_w, o) => ({ canceled: false, filePath: dir + '/' + (o && o.defaultPath ? o.defaultPath.split(/[\\/]/).pop() : 'single.png') })
   }, outDir)
   await page.click('.split > .btn.primary:not(.split-caret)')
   await page.waitForSelector('.dialog', { timeout: 5000 })
@@ -55,6 +55,21 @@ try {
   const changed2 = Object.keys(a2).filter((f) => a2[f] !== b2[f])
   if (!changed2.length) failed++
   console.log(changed2.length ? 'PASS' : 'FAIL', 'Editorial Export PNG wrote', changed2.join(', ') || 'nothing')
+  // Video → Export: the desktop app renders a 10 s draft and saves the MP4 through the save dialog
+  await page.click('.ws-btn[data-ws="video"]')
+  await page.waitForSelector('.video-workspace')
+  await page.click('.vw-header-actions button:has-text("Export")')
+  await page.click('.vx-row .seg-ctl button:has-text("draft")')
+  await page.click('.vx-go')
+  await page.waitForSelector('.vw-export-success', { timeout: 180000 }).catch(async (e) => { await page.screenshot({ path: path.join(root, 'tools/out/video-export-fail.png') }); console.log('export sheet:', (await page.locator('.vx').innerText().catch(() => '?')).replace(/\s+/g, ' ')); throw e })
+  const vids = fs.readdirSync(outDir).filter((f) => /\.(mp4|webm)$/.test(f))
+  const vbuf = vids[0] ? fs.readFileSync(path.join(outDir, vids[0])) : Buffer.alloc(0)
+  const vok = vids.length === 1 && vbuf.subarray(4, 8).toString() === 'ftyp' && vbuf.length > 20000
+  if (!vok) failed++
+  console.log(vok ? 'PASS' : 'FAIL', 'Video export saved through the dialog', vids.join(', '), vbuf.length, 'bytes', '|', (await page.locator('.vx-file').innerText()))
+  const notVideo = await page.evaluate(() => window.esb.saveVideo('x.mp4', new Uint8Array([60, 104, 116, 109, 108, 62, 0, 0, 0, 0, 0, 0, 0, 0])).then(() => 'saved', () => 'refused'))
+  if (notVideo !== 'refused') failed++
+  console.log(notVideo === 'refused' ? 'PASS' : 'FAIL', 'save-video refuses bytes that are not MP4/WebM')
   console.log('errors:', errs.length ? errs.slice(0, 5) : 'none')
 } catch (e) { failed++; console.log('FAIL', e.message) } finally { await app.close() }
 process.exit(failed ? 1 : 0)

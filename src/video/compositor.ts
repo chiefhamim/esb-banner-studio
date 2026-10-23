@@ -34,6 +34,8 @@ export function getCachedImage(url: string): HTMLImageElement | null {
   let img = imageCache.get(url)
   if (!img) {
     img = new Image()
+    // the preview redraws only when something changes; a picture that finishes loading is such a change
+    img.onload = () => { if (typeof window !== 'undefined') window.dispatchEvent(new Event('esb:video-media-ready')) }
     img.src = url
     imageCache.set(url, img)
   }
@@ -63,7 +65,23 @@ export function renderCompositeFrame(
   const videoClip = clips.find((c) => c.trackId === 'v1')
   if (videoClip) {
     let renderedRealVideo = false
-    if (videoClip.sourceUrl) {
+    if (videoClip.sourceUrl && videoClip.still) {
+      // a still on V1 fills the frame (cover) and moves slowly, 0→6% over the clip, so a picture held for several
+      // seconds does not read as a frozen frame
+      const img = getCachedImage(videoClip.sourceUrl)
+      if (img && img.complete && img.naturalWidth > 0) {
+        const p = Math.min(1, Math.max(0, (time - videoClip.start) / Math.max(0.001, videoClip.duration)))
+        const zoom = 1 + 0.06 * (videoClip.kenBurns === 'out' ? 1 - p : p)
+        const s = Math.max(w / img.naturalWidth, h / img.naturalHeight) * zoom
+        const dw = img.naturalWidth * s
+        const dh = img.naturalHeight * s
+        ctx.save()
+        if (videoClip.opacity !== undefined) ctx.globalAlpha = videoClip.opacity
+        ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh)
+        ctx.restore()
+        renderedRealVideo = true
+      }
+    } else if (videoClip.sourceUrl) {
       const v = getCachedVideo(videoClip.sourceUrl)
       if (v) {
         const targetTime = Math.max(0, (videoClip.in || 0) + (time - videoClip.start))
@@ -265,31 +283,36 @@ function renderCaptionClip(
   h: number,
 ) {
   ctx.save()
-  const scale = h / 1080
-  const text = clip.captionText || ''
-
-  ctx.font = `600 ${Math.round(24 * scale)}px "Hind Siliguri", "ESB Sans", sans-serif`
-  const textWidth = ctx.measureText(text).width
-  const padX = 24 * scale
-  const boxW = textWidth + padX * 2
-  const boxH = 48 * scale
+  // sized off the short side, so a 9:16 caption is as legible as a 16:9 one, and wrapped to the title-safe width
+  const scale = Math.min(w, h) / 1080
+  const text = (clip.captionText || '').trim()
+  const size = Math.round(34 * scale)
+  const lineH = Math.round(size * 1.32)
+  ctx.font = `600 ${size}px "Hind Siliguri", "ESB Sans", sans-serif`
+  const maxW = w * 0.84
+  const lines: string[] = []
+  for (const word of text.split(/\s+/)) {
+    const cur = lines[lines.length - 1]
+    if (cur && ctx.measureText(cur + ' ' + word).width <= maxW) lines[lines.length - 1] = cur + ' ' + word
+    else lines.push(word)
+  }
+  if (lines.length > 3) { lines.length = 3; lines[2] = lines[2].replace(/\s*\S*$/, '') + ' …' }
+  const padX = 22 * scale
+  const padY = 12 * scale
+  const boxW = Math.min(w * 0.92, Math.max(...lines.map((l) => ctx.measureText(l).width)) + padX * 2)
+  const boxH = lines.length * lineH + padY * 2
   const boxX = (w - boxW) / 2
-  const boxY = h * 0.88
+  const boxY = h * 0.92 - boxH
 
-  // Pill background
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.82)'
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'
-  ctx.lineWidth = 1 * scale
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.78)'
   ctx.beginPath()
-  ctx.roundRect(boxX, boxY, boxW, boxH, 8 * scale)
+  ctx.roundRect(boxX, boxY, boxW, boxH, 10 * scale)
   ctx.fill()
-  ctx.stroke()
 
-  // Subtitle text
-  ctx.fillStyle = '#fef08a' // Warm broadcast caption yellow
+  ctx.fillStyle = '#fef08a' // broadcast caption yellow
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.fillText(text, w / 2, boxY + boxH / 2 + 2 * scale)
+  lines.forEach((l, k) => ctx.fillText(l, w / 2, boxY + padY + lineH * (k + 0.5) + 1 * scale))
 
   ctx.restore()
 }

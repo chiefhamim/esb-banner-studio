@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
-import { Dialog, IconButton, Select } from '../ui/controls'
+import { IconButton, Select } from '../ui/controls'
 import type { AspectRatio, Clip, MediaAsset, OverlayTemplate } from './timeline'
 import {
-  ASPECT_CONFIGS,
   deserializeVideoProject,
   formatShortTime,
   formatTimecode,
@@ -12,7 +11,9 @@ import {
 } from './timeline'
 import { useVideoStore } from './videoStore'
 import { renderCompositeFrame } from './compositor'
-import { downloadVideoBlob, exportTimelineVideo } from './exportVideo'
+import { ExportSheet } from './ExportSheet'
+import { StoryVideoPanel } from './StoryVideoPanel'
+import { downloadVideoBlob } from './exportVideo'
 
 export function VideoWorkspace() {
   const {
@@ -22,7 +23,6 @@ export function VideoWorkspace() {
     selectedClipId,
     zoom,
     exporting,
-    exportProgress,
     history,
     future,
     mediaAssets,
@@ -43,7 +43,6 @@ export function VideoWorkspace() {
     setZoom,
     toggleTrackMute,
     toggleTrackLock,
-    setExporting,
     resetToDemo,
     addMediaAsset,
     removeMediaAsset,
@@ -53,9 +52,8 @@ export function VideoWorkspace() {
     loadProject,
   } = useVideoStore()
 
-  const [activeTab, setActiveTab] = useState<'overlays' | 'media' | 'captions' | 'audio'>('media')
+  const [activeTab, setActiveTab] = useState<'overlays' | 'media' | 'captions' | 'audio' | 'story'>('media')
   const [exportModal, setExportModal] = useState(false)
-  const [exportComplete, setExportComplete] = useState<{ filename: string; size: number } | null>(null)
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
 
   // Dragging states
@@ -154,6 +152,12 @@ export function VideoWorkspace() {
   }, [playing, currentTime, project.clips, project.tracks])
 
   // ---------------------------------------------------------------- Canvas Rendering
+  const [mediaTick, setMediaTick] = useState(0)
+  useEffect(() => {
+    const bump = () => setMediaTick((n) => n + 1)
+    window.addEventListener('esb:video-media-ready', bump)
+    return () => window.removeEventListener('esb:video-media-ready', bump)
+  }, [])
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -173,7 +177,7 @@ export function VideoWorkspace() {
     ctx.scale(dpr, dpr)
     renderCompositeFrame(ctx, project, currentTime, displayWidth, displayHeight)
     ctx.restore()
-  }, [project, currentTime, monitorSize])
+  }, [project, currentTime, monitorSize, mediaTick])
 
   // Re-render when the monitor box changes size (window resize, panel drag)
   useEffect(() => {
@@ -538,30 +542,7 @@ export function VideoWorkspace() {
   }
 
   // ---------------------------------------------------------------- Export Action
-  const handleStartExport = async () => {
-    setExportModal(true)
-    setExporting(true, 0)
-    setExportComplete(null)
-
-    try {
-      const res = await exportTimelineVideo(
-        project,
-        (cur, total) => {
-          const pct = Math.round((cur / total) * 100)
-          setExporting(true, pct)
-        },
-        { maxDuration: 3.0 },
-      )
-
-      setExportComplete({ filename: res.filename, size: res.size })
-      downloadVideoBlob(res.blob, res.filename)
-    } catch (err) {
-      console.error('Video export error:', err)
-      alert('Export failed: ' + (err as Error).message)
-    } finally {
-      setExporting(false, 100)
-    }
-  }
+  const handleStartExport = () => setExportModal(true)
 
   const selectedClip = project.clips.find((c) => c.id === selectedClipId)
 
@@ -678,8 +659,8 @@ export function VideoWorkspace() {
             <Icon name="reset" size={13} /> Demo
           </button>
 
-          <button type="button" className="btn primary sm" onClick={handleStartExport}>
-            <Icon name="download" size={14} /> Export Video
+          <button type="button" className="btn primary sm" onClick={handleStartExport} disabled={exporting}>
+            <Icon name="download" size={14} /> {exporting ? 'Exporting…' : 'Export Video'}
           </button>
         </div>
       </header>
@@ -722,6 +703,13 @@ export function VideoWorkspace() {
               onClick={() => setActiveTab('audio')}
             >
               Audio
+            </button>
+            <button
+              type="button"
+              className={activeTab === 'story' ? 'active' : ''}
+              onClick={() => setActiveTab('story')}
+            >
+              Story
             </button>
           </div>
 
@@ -880,6 +868,7 @@ export function VideoWorkspace() {
               </div>
             )}
 
+            {activeTab === 'story' && <StoryVideoPanel />}
             {activeTab === 'audio' && (
               <div className="vw-preset-list">
                 <div className="vw-preset-card">
@@ -1167,49 +1156,8 @@ export function VideoWorkspace() {
         </div>
       </footer>
 
-      {/* 4. Export Progress Modal */}
-      {exportModal && (
-        <Dialog
-          title="Exporting Broadcast Video"
-          kicker="RENDER &amp; CODEC PIPELINE"
-          onClose={() => !exporting && setExportModal(false)}
-          width={500}
-        >
-          <div className="vw-export-modal">
-            {!exportComplete ? (
-              <>
-                <p>Rendering frame-by-frame composite with broadcast lower-thirds and typography…</p>
-                <div className="vw-progress-bar-bg">
-                  <div className="vw-progress-bar-fill" style={{ width: `${exportProgress}%` }} />
-                </div>
-                <div className="vw-progress-text mono">
-                  <span>Progress: {exportProgress}%</span>
-                  <span>Preset: {ASPECT_CONFIGS[project.aspect].name}</span>
-                </div>
-              </>
-            ) : (
-              <div className="vw-export-success">
-                <div className="vw-success-icon">
-                  <Icon name="check" size={24} />
-                </div>
-                <h4>Video Render Completed</h4>
-                <p className="mono">{exportComplete.filename}</p>
-                <div className="vw-success-details mono">
-                  <span>Size: {(exportComplete.size / 1024).toFixed(1)} KB</span>
-                  <span>Format: WebM Video</span>
-                </div>
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={() => setExportModal(false)}
-                >
-                  Done
-                </button>
-              </div>
-            )}
-          </div>
-        </Dialog>
-      )}
+      {/* 4. Export */}
+      {exportModal && <ExportSheet project={project} onClose={() => setExportModal(false)} />}
     </div>
   )
 }
