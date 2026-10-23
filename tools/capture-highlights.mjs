@@ -1,4 +1,5 @@
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -17,7 +18,7 @@ for (let i = 0; i < 40; i++) {
   await new Promise((r) => setTimeout(r, 400))
 }
 
-const browser = await chromium.launch({ channel: 'msedge', headless: true })
+const browser = await launchBrowser(chromium)
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 await page.goto(`http://localhost:${PORT}/`)
 await page.waitForSelector('.topbar')

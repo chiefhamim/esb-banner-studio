@@ -1,6 +1,7 @@
 // Fuzz test: random operations (store + real mouse/keyboard), invariants checked after every step.
 //   node tools/fuzz.mjs [ops=350] [seed=1]
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 
@@ -19,7 +20,7 @@ let browser
 let failure = null
 const log = []
 try {
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(chromium)
   const page = await (await browser.newContext({ viewport: { width: 1500, height: 900 } })).newPage()
   page.setDefaultTimeout(6000)
   const errors = []

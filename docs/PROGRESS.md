@@ -354,3 +354,21 @@
 - **Autosave**: draft, source and checklist persist across restarts (`esb-banner-studio/editorial/v1`).
 - **Publish**: hero image now uses the story photo's public URL (was a local blob URL); pre-flight list; Publish Live requires a valid headline/slug/body and the three verification ticks.
 - Layout: 3 panes with show/hide toggles for the source column and the rail. `npm run test:editorial`: 15 of 15.
+
+---
+
+### Phase 0 (2026-10-23) — Baseline audit, cross-platform tests, honest offline translation
+* Audit against the master product brief recorded in the session report (scratch); key corrections to earlier entries in this file:
+  - "Atomic write" autosave was never implemented — `electron/main.cjs` writes projects with a plain `writeFileSync` (still open).
+  - Only `editorial-test.mjs` fell back from Edge to Chromium; every other browser tool hard-coded `msedge`. Fixed in Phase 1 via `tools/launch-browser.mjs`.
+  - `tools/unit/security.test.ts` failed on Linux (backslash paths) — fixed in `electron/fs-scope.cjs`.
+* Translation (`src/editorial/translator.ts`, `src/core/newsroom.ts`, new `src/editorial/translateNet.ts`): GTX and MyMemory are raced under one 2.2 s deadline; remote calls are skipped when `navigator.onLine` is false; when Bengali text is left untranslated the result reports `provider: 'offline'` + `translationFailed`, and the Editorial Desk toast/status bar say so instead of "Neural".
+
+### Phase 1 (2026-10-23) — Shared design system and one shell
+* **Tokens**: `src/styles/tokens.css` is the single definition point. The duplicate `:root` blocks in `App.css` (legacy palette, radii, heights, motion) and the "Aqua-lite" surface/shadow block were removed; their shipping values were folded into `tokens.css` as aliases (light and dark), so computed colours are unchanged. `--line-1` is now defined.
+* **One shell**: Graphics `.topbar`, Editorial `.ed-topbar` and Video `.vw-header` are all `--h-app-header` (40 px) with the same surface gradient and hairline; workspace rail tiles are 48 × 48 with an 11 px label. Previously 52 / 52 / 40.
+* **Category colour out of the chrome**: focus rings, inputs, side/dock tabs, tool-rail selection, quick-bar selection, layer rows, menus, panel focus and the canvas well no longer tint with `--cat`; they use ink. The banner, category tiles/chip, headline-highlight words and the status dot keep the desk colour.
+* **Layout defects**: format pill no longer wraps (nowrap; dims hidden < 1500 px; key caps/drag tag hidden < 1400 px so the Export button stays inside the bar at 1366 px); Editorial headline textarea auto-sizes (`field-sizing: content`, min 96 px) instead of clipping; word-count meta and the headline label no longer wrap; "Banner line breaks" label replaces the 9.5 px kicker; export-dialog format tags wrap instead of overflowing.
+* **Video monitor**: the canvas now fills the monitor at the project's aspect ratio (`--vw-ar` + container units) and re-renders on resize; previously it rendered at the intrinsic 300 × 150 box. Clip tints are muted uniformly in CSS (data unchanged).
+* **Test infrastructure**: all 32 browser scripts in `tools/` use `launchBrowser()`; `tools/electron-test.mjs` is platform-aware and its stale `h2` selector now checks `.ed-topbar-title`; new `tools/css-census.mjs` (`npm run census`).
+* Not changed (by design): nested 6 px radii (DESIGN_NOTES nesting rule); Facebook/web mock palettes; security items from the audit (newsroom bypass sign-in, Gemini key in localStorage, spoofed UA in net-guard) — these need an explicit decision because they change how publishing and source fetching behave.

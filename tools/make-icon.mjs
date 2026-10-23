@@ -1,10 +1,11 @@
 // Draw the app icon (green tile + "ESB" in Inter ExtraBold) with the real browser canvas, write PNG + ICO.
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 const root = path.resolve(import.meta.dirname, '..')
 const font = fs.readFileSync(path.join(root, 'src/assets/fonts/Inter-800.woff2')).toString('base64')
-const b = await chromium.launch({ channel: 'msedge', headless: true })
+const b = await launchBrowser(chromium)
 const p = await b.newPage()
 await p.setContent('<canvas id=c width=256 height=256></canvas>')
 const dataUrl = await p.evaluate(async (f) => {

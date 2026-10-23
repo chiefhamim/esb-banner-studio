@@ -1,5 +1,6 @@
 // Visual review of the restyled UI.
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 const PORT = 5195
@@ -9,7 +10,7 @@ const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'b
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
 let browser
 try {
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(chromium)
   const page = await (await browser.newContext({ viewport: { width: 1600, height: 950 } })).newPage()
   page.setDefaultTimeout(8000)
   const errs = []

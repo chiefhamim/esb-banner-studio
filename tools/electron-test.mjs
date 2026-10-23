@@ -4,10 +4,11 @@ import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 const root = path.resolve(import.meta.dirname, '..')
-const exe = path.join(root, 'node_modules', 'electron', 'dist', 'electron.exe')
+const win = process.platform === 'win32'
+const exe = path.join(root, 'node_modules', 'electron', 'dist', win ? 'electron.exe' : 'electron')
 // isolated profile so the test never touches the user's saved work
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'esb-profile-'))
-const app = await electron.launch({ executablePath: exe, args: [root, '--user-data-dir=' + profile] })
+const app = await electron.launch({ executablePath: exe, args: [...(win ? [] : ['--no-sandbox']), root, '--user-data-dir=' + profile] })
 const page = await app.firstWindow()
 const errors = []
 page.on('pageerror', (e) => errors.push(e.message))
@@ -59,7 +60,7 @@ try {
 
   await page.click('.rail-btn:has-text("Editorial")')
   await page.waitForSelector('.editorial-workspace')
-  const editorialOk = await page.evaluate(() => !!document.querySelector('.editorial-workspace h2')?.textContent.includes('Editorial Desk'))
+  const editorialOk = await page.evaluate(() => !!document.querySelector('.editorial-workspace .ed-topbar-title')?.textContent.includes('Editorial Desk'))
   console.log(editorialOk ? 'PASS' : 'FAIL', 'switched to Editorial workspace')
 
   await page.click('.rail-btn:has-text("Video")')

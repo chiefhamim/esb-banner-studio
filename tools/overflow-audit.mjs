@@ -1,5 +1,6 @@
 // Finds text that is clipped / overflowing its container across panels, dialogs and menus (both themes).
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 const PORT = 5190
@@ -9,7 +10,7 @@ for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/
 let browser
 const found = new Map()
 try {
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(chromium)
   const page = await (await browser.newContext({ viewport: { width: Number(process.env.W ?? 1600), height: 950 } })).newPage()
   page.setDefaultTimeout(8000)
   await page.goto(`http://localhost:${PORT}/`)

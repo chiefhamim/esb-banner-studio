@@ -1,5 +1,6 @@
 // Render any format(s) with the sample photo: node tools/preview.mjs fb45 sq [cat] [headline]
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -10,7 +11,7 @@ const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'b
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/golden.html`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
 let b
 try {
-  b = await chromium.launch({ channel: 'msedge', headless: true })
+  b = await launchBrowser(chromium)
   const page = await b.newPage({ viewport: { width: 800, height: 600 } })
   page.on('pageerror', (e) => console.log('PAGE ERROR', e.message))
   for (const fmt of fmts) {

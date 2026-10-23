@@ -18,6 +18,10 @@ This document defines the single source of truth for the visual layer of ESB Stu
 
 ## 2. Token Architecture (`src/styles/tokens.css`)
 
+`tokens.css` is the only file that defines a custom property for the chrome. `App.css` consumes the legacy names (`--bg-*`, `--line*`, `--text*`, `--ink*`, `--r-*`, `--h-*`, `--t-1/2/3`, `--ui`, `--mono`, `--red`, `--amber`, `--side`, `--menu-bg`, `--shadow-*`), all of which are aliases declared in `tokens.css`. `npm run census --strict` fails if a name is defined twice or used without a definition.
+
+**Category colour rule.** The desk colour (`--cat`) appears on the banner, the category tiles, the category chip and the 8 px status dot — nowhere else. Selection, focus rings, tabs, inputs, menus and the canvas well use ink and the neutral ramp, so switching desks never recolours the chrome.
+
 ### Spacing & Grid (4 px base)
 Only the following spacing steps are permitted:
 ```css
@@ -39,8 +43,9 @@ Only the following spacing steps are permitted:
 * **Control Heights**: 24 (inline table), 28 (compact/tabs), 32 (standard input/button), 36 (toolbar/header buttons).
 * **Row Heights**: 36 px (standard table/list rows), 28 px (compact rows).
 * **Panel Headers**: 40 px.
-* **App Header**: 40 px (compatible with Windows 11 title bar caption overlay).
-* **Workspace Rail**: 56 px wide (20 px icon in 36 px square + 11 px label).
+* **App Header**: 40 px (`--h-app-header`) in every workspace — Graphics `.topbar`, Editorial `.ed-topbar`, Video `.vw-header` share the same height, surface gradient and hairline. The Graphics tool rail inside the editor is 52 px; the status bar is 28 px.
+* **Workspace Rail**: 56 px wide (`--w-rail`); 48 × 48 px tiles with a 19 px icon and an 11 px label; 3 px ink indicator on the left edge of the active tile.
+* **Narrow windows**: below 1500 px the header format pill drops its dimensions; below 1400 px the header hides key caps and the drag-chip tag and tightens menu padding, so every control stays inside the bar at 1366 px.
 
 ### Corner Radii
 * `4 px` (`--r-1`): Key caps, chips, tags inside dense rows, inner handles.
@@ -48,7 +53,7 @@ Only the following spacing steps are permitted:
 * `12 px` (`--r-3`): Panels, popovers, menus, context cards.
 * `16 px` (`--r-4`): Dialogs, modal surfaces, floating preview windows.
 * `9999 px` (`--r-pill`): Status pills, editorial category tags only.
-* *Rule*: Nested radius = outer − padding (inner never exceeds outer).
+* *Rule*: Nested radius = outer − padding (inner never exceeds outer). A 6 px radius on a segment, tab or swatch sitting 2 px inside an 8 px control is this rule, not drift.
 
 ### Typography Scale
 Font stack: `Inter, "Hind Siliguri", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`.

@@ -1,5 +1,6 @@
 // Screenshots of the main UI states for design review: node tools/shot-states.mjs <tag>
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 const PORT = 5196, root = path.resolve(import.meta.dirname, '..')
@@ -9,7 +10,7 @@ const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'b
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
 let b
 try {
-  b = await chromium.launch({ channel: 'msedge', headless: true })
+  b = await launchBrowser(chromium)
   const page = await b.newPage({ viewport: { width: 1600, height: 950 } })
   page.on('pageerror', (e) => console.log('PAGE ERROR', e.message))
   await page.goto(`http://localhost:${PORT}/`); await page.waitForTimeout(1500)

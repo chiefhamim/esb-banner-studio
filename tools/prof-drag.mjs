@@ -1,5 +1,6 @@
 // CPU profile of dragging a layer: top self-time functions. node tools/prof-drag.mjs
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 const PORT = 5200, root = path.resolve(import.meta.dirname, '..')
@@ -7,7 +8,7 @@ const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'b
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
 let b
 try {
-  b = await chromium.launch({ channel: 'msedge', headless: true })
+  b = await launchBrowser(chromium)
   const page = await (await b.newContext({ viewport: { width: 1600, height: 950 }, deviceScaleFactor: 1.25 })).newPage()
   await page.goto(`http://localhost:${PORT}/`); await page.waitForSelector('.topbar'); await page.waitForTimeout(800)
   const ph = path.join(root, 'src/assets/images/sample-photo.jpg')

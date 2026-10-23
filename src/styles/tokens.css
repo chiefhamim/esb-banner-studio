@@ -91,14 +91,26 @@
 
   --tip-bg: #18181b;
   --tip-fg: #f4f4f5;
+  --scrim: rgba(24, 24, 27, 0.42);
 
-  /* Backward compatibility aliases */
+  /* Chrome surfaces: grey sidebars with white controls, hairline control rings, translucent menus */
+  --side: #f4f4f6;
+  --ctl-shadow: 0 0 0 .5px rgba(0, 0, 0, 0.1), 0 1px 1.5px rgba(0, 0, 0, 0.07);
+  --ctl-shadow-hover: 0 0 0 .5px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.1);
+  --menu-bg: rgba(252, 252, 253, 0.82);
+  --shadow-1: 0 .5px 1px rgba(0, 0, 0, 0.08);
+  --shadow-2: 0 0 0 .5px rgba(0, 0, 0, 0.1), 0 12px 36px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  color-scheme: light;
+
+  /* ---------------------------------------------------------------- Legacy aliases (App.css vocabulary) */
   --bg-0: var(--surface-app);
   --bg-1: var(--surface-panel);
   --bg-2: var(--surface-sunken);
   --bg-3: var(--surface-hover);
   --bg-4: #e3e3e6;
   --line: var(--border-subtle);
+  --line-1: var(--border-subtle);
   --line-2: var(--border-default);
   --line-3: var(--border-strong);
   --text: var(--text-primary);
@@ -108,60 +120,71 @@
   --ink-2: #3f3f46;
   --on-ink: var(--on-accent);
   --ink-soft: var(--accent-soft);
-  --ink-ring: var(--focus-ring);
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-2: var(--shadow-l2);
+  --ink-ring: rgba(24, 24, 27, 0.14);
+  --red: var(--danger);
+  --red-soft: var(--danger-soft);
+  --amber: var(--warning);
+  --amber-soft: var(--warning-soft);
+  --accent-2: var(--ink-2);
+  --accent-ink: var(--on-ink);
+  --sel: var(--ink);
+  --green: var(--text-2);
+  --green-soft: var(--ink-soft);
+  --r: var(--r-2);
+  --r-lg: var(--r-3);
+  --h-sm: var(--h-control-sm);
+  --h-md: var(--h-control-md);
+  --h-lg: var(--h-control-lg);
+  --t-1: var(--t-hover);
+  --t-2: var(--t-state);
+  --t-3: var(--t-surface);
+  --ui: "ESB Sans", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: var(--font-mono);
 }
 
 /* ================================================================ Dark Theme Palette */
 :root[data-theme="dark"] {
   --surface-app: #0d0d0f;
-  --surface-panel: #161619;
+  --surface-panel: #18181b;
   --surface-raised: #1e1e23;
-  --surface-sunken: #111114;
-  --surface-hover: #222228;
+  --surface-sunken: #1f1f23;
+  --surface-hover: #27272b;
 
-  --border-subtle: #232328;
-  --border-default: #2e2e35;
-  --border-strong: #44444e;
+  --border-subtle: #26262a;
+  --border-default: #36363c;
+  --border-strong: #4d4d56;
 
   --text-primary: #f4f4f5;
   --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
+  --text-tertiary: #9a9aa5;
   --text-disabled: rgba(244, 244, 245, 0.42);
 
-  --accent: #ffffff;
+  --accent: #f4f4f5;
   --on-accent: #18181b;
-  --accent-soft: rgba(255, 255, 255, 0.08);
-  --focus-ring: rgba(255, 255, 255, 0.28);
+  --accent-soft: rgba(244, 244, 245, 0.08);
+  --focus-ring: rgba(244, 244, 245, 0.28);
 
-  --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.12);
-  --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.12);
+  --danger: #f2877e;
+  --danger-soft: rgba(242, 135, 126, 0.12);
+  --warning: #e5b04a;
+  --warning-soft: rgba(229, 176, 74, 0.12);
   --success: #34d399;
   --success-soft: rgba(52, 211, 153, 0.12);
 
-  --tip-bg: #27272a;
-  --tip-fg: #f4f4f5;
+  --tip-bg: #f4f4f5;
+  --tip-fg: #18181b;
+  --scrim: rgba(0, 0, 0, 0.6);
 
-  /* Backward compatibility aliases */
-  --bg-0: var(--surface-app);
-  --bg-1: var(--surface-panel);
-  --bg-2: var(--surface-sunken);
-  --bg-3: var(--surface-hover);
-  --bg-4: #282830;
-  --line: var(--border-subtle);
-  --line-2: var(--border-default);
-  --line-3: var(--border-strong);
-  --text: var(--text-primary);
-  --text-2: var(--text-secondary);
-  --text-3: var(--text-tertiary);
-  --ink: var(--accent);
+  --side: #1b1b1e;
+  --ctl-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.12), 0 1px 1.5px rgba(0, 0, 0, 0.4);
+  --ctl-shadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --menu-bg: rgba(36, 36, 40, 0.78);
+  --shadow-1: 0 .5px 1px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 0 0 .5px rgba(255, 255, 255, 0.12), 0 12px 36px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+
+  --bg-4: #323238;
   --ink-2: #d4d4d8;
-  --on-ink: var(--on-accent);
-  --ink-soft: var(--accent-soft);
-  --ink-ring: var(--focus-ring);
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-2: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --ink-ring: rgba(244, 244, 245, 0.2);
 }

@@ -698,7 +698,9 @@ try {
   const pf = await page.evaluate(() => { const p = [...document.querySelectorAll('.left .pnl')].find((x) => x.querySelector('h3')?.textContent.startsWith('Headline')); return { bar: '1', tint: getComputedStyle(p).backgroundColor } })
   check('the panel being edited is marked with a soft desk-colour tint', pf.bar === '1' && pf.tint !== 'rgba(0, 0, 0, 0)', JSON.stringify(pf))
   check('and the banner highlights the element that panel edits', (await page.locator('.el-box.linked').count()) >= 1)
-  await page.click('.left .pnl:has(h3:has-text("Date")) .select'); await page.keyboard.press('Escape'); await page.mouse.click(700, 5)
+  await page.click('.left .pnl:has(h3:has-text("Date")) .select'); await page.keyboard.press('Escape')
+  // click an empty spot of the chrome (never a fixed coordinate — the header layout is responsive)
+  { const pt = await page.evaluate(() => { const sp = [...document.querySelectorAll('.topbar .spacer')].map((e) => e.getBoundingClientRect()).find((r) => r.width > 12); const r = sp || document.querySelector('.statusbar .spacer').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } }); await page.mouse.click(pt.x, pt.y) }
   await page.waitForTimeout(200)
 
   // rulers

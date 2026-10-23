@@ -1,5 +1,6 @@
 // Reproduce "photo library / adding photos is broken" using the real user paths (Add button, drop, paste, double-click on the photo area).
 import { chromium, _electron as electron } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -16,7 +17,7 @@ if (mode === 'electron') {
   const PORT = 5184
   vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
   for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(chromium)
   page = await (await browser.newContext({ viewport: { width: 1600, height: 950 } })).newPage()
   await page.goto(`http://localhost:${PORT}/`)
 }

@@ -35,6 +35,16 @@ try {
   browser = await launchBrowser(chromium)
   const page = await browser.newPage({ viewport: { width: 1600, height: 950 } })
   page.setDefaultTimeout(8000)
+  // Hermetic translation: no live API calls from the suite (SPEC §3). The app's injectable
+  // translator seam (window.__customTranslator) gets a deterministic Bengali→English map.
+  await page.addInitScript(() => {
+    const dict = {
+      '৫৯২ কোটি টাকায় দুটি নতুন কূপ খনন করবে পেট্রোবাংলা, জাতীয় গ্রিডে যুক্ত হবে ৩০ এমএমসিএফডি গ্যাস': 'Petrobangla to drill two new wells for Tk 592 crore, adding 30 MMCFD gas to the national grid',
+      'সিলেট গ্যাস ফিল্ডের আওতায় দুটি নতুন উন্নয়ন কূপ খননের উদ্যোগ নিয়েছে পেট্রোবাংলা ও বাপেক্স।': 'Petrobangla and BAPEX have taken the initiative to drill two new development wells under the Sylhet gas field.',
+      'প্রকল্পটিতে মোট ৫৯২ কোটি টাকা ব্যয় ধরা হয়েছে এবং ২০২৬ সালের মধ্যে দৈনিক ৩০ এমএমসিএফডি গ্যাস জাতীয় গ্রিডে সরবরাহ করা হবে।': 'The project is estimated to cost a total of Tk 592 crore and will supply 30 MMCFD of gas per day to the national grid by 2026.',
+    }
+    window.__customTranslator = async (text) => dict[text.trim()] ?? text.replace(/[ঀ-৿]+/g, 'translated')
+  })
 
   await page.goto(`http://localhost:${PORT}/`)
   await page.waitForSelector('.studio-shell')
@@ -66,10 +76,11 @@ try {
   // Generous timeout: translation races two remote services with a short internal
   // budget each, but a slow/blocked network path (e.g. sandboxed proxy tunnels) can
   // still take several seconds to fail before the offline fallback kicks in.
+  // (waitForFunction's options are the 3rd argument; the 2nd is the page-function arg.)
   await page.waitForFunction(() => {
     const el = document.querySelector('#draft-headline')
     return el && el.value.trim().length > 0 && !/[\u0980-\u09FF]/.test(el.value)
-  }, { timeout: 20000 })
+  }, null, { timeout: 20000 })
   const headlineVal = await page.inputValue('#draft-headline')
   const bodyVal = await page.inputValue('#draft-body')
   check('Draft headline populated in English (no Bengali overwrite)', headlineVal.length > 0 && !/[\u0980-\u09FF]/.test(headlineVal))

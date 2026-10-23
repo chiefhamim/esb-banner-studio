@@ -15,7 +15,8 @@
     "test:unit": "vitest run",
     "app": "npm run build && electron .",
     "dist": "npm run build && electron-builder --win dir",
-    "test": "vitest run"
+    "test": "vitest run",
+    "census": "node tools/css-census.mjs"
   },
   "dependencies": {
     "@fontsource/hind-siliguri": "^5.3.0",

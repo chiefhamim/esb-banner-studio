@@ -1047,8 +1047,8 @@ export function EditorialWorkspace() {
                   )}
                 </div>
 
-                <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
                     {wordCount} words · ~{readTimeMin} min read
                   </span>
                   <div className="seg-ctl">
@@ -1077,8 +1077,8 @@ export function EditorialWorkspace() {
               {/* 1. English Headline */}
               <div className="ed-headline-wrap">
                 <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label htmlFor="draft-headline" className="kicker" style={{ color: 'var(--ink)', fontWeight: 700 }}>
-                    ENGLISH HEADLINE (CLICK TO EDIT)
+                  <label htmlFor="draft-headline" className="kicker" style={{ color: 'var(--text)', whiteSpace: 'nowrap' }}>
+                    English headline
                   </label>
                   <span className={`ed-budget-counter ${draft.headline.length > 104 ? 'over' : ''}`}>
                     {draft.headline.length} / 104 chars
@@ -1096,8 +1096,8 @@ export function EditorialWorkspace() {
                 {/* Banner Line Breaker Tool */}
                 <div className="ed-headline-breaker-wrap">
                   <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                    <span className="kicker" style={{ fontSize: 9.5 }}>
-                      BANNER LINE BREAK TUNER (CLICK ↵ GAP TO BREAK LINE FOR BANNER)
+                    <span className="kicker" title="Click a gap between words to break the banner headline there">
+                      Banner line breaks
                     </span>
                     <div className="row" style={{ gap: 4 }}>
                       <button type="button" className="btn xs ghost" onClick={handleAutoBalance} title="Auto-balance line lengths for banner">

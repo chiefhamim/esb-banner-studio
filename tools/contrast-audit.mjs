@@ -1,5 +1,6 @@
 // Automated WCAG 2.2 AA Contrast Audit for ESB Studio across both light and dark themes.
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 
@@ -75,7 +76,7 @@ let totalDefects = 0
 
 try {
   await waitUp()
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(chromium)
   const page = await browser.newPage({ viewport: { width: 1600, height: 950 } })
   page.setDefaultTimeout(8000)
 

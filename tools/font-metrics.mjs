@@ -1,10 +1,11 @@
 // Measure each bundled font's ascent / descent (as ratios of the font size) with the browser's own text engine.
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 const dir = path.resolve(import.meta.dirname, '..', 'src', 'assets', 'fonts')
 const faces = { Inter: 'Inter-700.woff2', 'Space Grotesk': 'ui-grotesk-700.woff2', 'Source Serif 4': 'serif-700.woff2', Oswald: 'oswald-700.woff2' }
-const b = await chromium.launch({ channel: 'msedge', headless: true })
+const b = await launchBrowser(chromium)
 const page = await b.newPage()
 await page.setContent('<canvas id=c></canvas>')
 const data = Object.fromEntries(Object.entries(faces).map(([k, f]) => [k, fs.readFileSync(path.join(dir, f)).toString('base64')]))

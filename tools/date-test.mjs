@@ -1,5 +1,6 @@
 // Date picker: month / year dropdowns inside the calendar must stay open and apply.
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 const PORT = 5186
@@ -9,7 +10,7 @@ for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/
 let b, ok = true
 const check = (n, v, x = '') => { ok &&= v; console.log(v ? 'PASS' : 'FAIL', n, x) }
 try {
-  b = await chromium.launch({ channel: 'msedge', headless: true })
+  b = await launchBrowser(chromium)
   const page = await (await b.newContext({ viewport: { width: 1600, height: 950 } })).newPage()
   page.setDefaultTimeout(6000)
   await page.goto(`http://localhost:${PORT}/`)

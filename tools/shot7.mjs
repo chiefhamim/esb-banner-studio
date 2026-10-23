@@ -1,4 +1,5 @@
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 const PORT = 5183
@@ -8,7 +9,7 @@ const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'b
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
 let b
 try {
-  b = await chromium.launch({ channel: 'msedge', headless: true })
+  b = await launchBrowser(chromium)
   const page = await (await b.newContext({ viewport: { width: 1600, height: 950 } })).newPage()
   const errs = []; page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()) })
   await page.goto(`http://localhost:${PORT}/`)

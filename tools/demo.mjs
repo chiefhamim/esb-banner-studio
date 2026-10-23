@@ -1,5 +1,6 @@
 // Records a ~30 s scripted demo of the app: CDP screencast frames -> ffmpeg -> 720p H.264 MP4 (WhatsApp friendly).
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -18,7 +19,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 let browser
 const frames = [] // { file, t }
 try {
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(chromium)
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 810 }, deviceScaleFactor: 1.5, acceptDownloads: true })
   const page = await ctx.newPage()
   page.setDefaultTimeout(10000)

@@ -24,6 +24,13 @@ function isOffline(): boolean {
   return typeof navigator !== 'undefined' && navigator.onLine === false
 }
 
+/** Test seam shared with core/newsroom.ts: an injected translator replaces every remote call. */
+function injectedTranslator(): ((text: string) => Promise<string>) | null {
+  if (typeof window === 'undefined') return null
+  const fn = (window as unknown as { __customTranslator?: (text: string) => Promise<string> }).__customTranslator
+  return typeof fn === 'function' ? fn : null
+}
+
 export const JOURNALISTIC_TRANSLATOR_PROMPT = `You are a professional bilingual news editor and translator specializing in Bengali-to-English journalism.
 
 Your task is to translate the provided Bengali news article into clear, natural, professional English while strictly preserving the original meaning, facts, context, tone, intent, and journalistic integrity.
@@ -328,6 +335,9 @@ async function translateParagraph(p: string): Promise<string> {
     return polishJournalisticBody(clean)
   }
 
+  const injected = injectedTranslator()
+  if (injected) return polishJournalisticBody(await injected(clean))
+
   if (!isOffline()) {
     // Race GTX and MyMemory under one short deadline; take whichever answers first.
     const translated = await raceTranslate(clean)
@@ -351,6 +361,9 @@ export async function translateParagraphsBatch(paragraphs: string[]): Promise<st
   const hasBengali = cleanList.some((p) => /[\u0980-\u09FF]/.test(p))
   if (!hasBengali) {
     return cleanList.map((p) => polishJournalisticBody(p))
+  }
+  if (injectedTranslator()) {
+    return Promise.all(cleanList.map((p) => translateParagraph(p)))
   }
 
   // Group into batches of <= 3,500 characters

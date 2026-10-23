@@ -1,5 +1,6 @@
 // Automated Accessibility & Keyboard Focus Audit for ESB Studio.
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 
@@ -22,7 +23,7 @@ let totalIssues = 0
 
 try {
   await waitUp()
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(chromium)
   const page = await browser.newPage({ viewport: { width: 1600, height: 950 } })
   page.setDefaultTimeout(8000)
 

@@ -69,6 +69,7 @@ export function VideoWorkspace() {
   const recordingTimerRef = useRef<number | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [monitorSize, setMonitorSize] = useState('')
   const rulerRef = useRef<HTMLDivElement>(null)
   const timelineTracksRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -171,7 +172,16 @@ export function VideoWorkspace() {
     ctx.scale(dpr, dpr)
     renderCompositeFrame(ctx, project, currentTime, displayWidth, displayHeight)
     ctx.restore()
-  }, [project, currentTime])
+  }, [project, currentTime, monitorSize])
+
+  // Re-render when the monitor box changes size (window resize, panel drag)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setMonitorSize(`${canvas.clientWidth}x${canvas.clientHeight}`))
+    ro.observe(canvas)
+    return () => ro.disconnect()
+  }, [])
 
   // ---------------------------------------------------------------- Keyboard Shortcuts
   useEffect(() => {
@@ -975,7 +985,11 @@ export function VideoWorkspace() {
         {/* Right: Video Canvas Monitor & Player */}
         <section className="vw-monitor-panel">
           <div className="vw-monitor-container">
-            <canvas ref={canvasRef} className="vw-canvas" />
+            <canvas
+              ref={canvasRef}
+              className="vw-canvas"
+              style={{ '--vw-ar': project.width / project.height } as React.CSSProperties}
+            />
           </div>
 
           {/* Transport Controls Bar */}

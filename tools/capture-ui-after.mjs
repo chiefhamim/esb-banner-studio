@@ -1,5 +1,6 @@
 // Capture after-screenshots of all workspaces and key states at 1366 and 1920, light + dark, DPR 1 & 1.5
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -24,7 +25,7 @@ const waitUp = async () => {
 let browser
 try {
   await waitUp()
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(chromium)
 
   const viewports = [
     { name: '1366', width: 1366, height: 768 },

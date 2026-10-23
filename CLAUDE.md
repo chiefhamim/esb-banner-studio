@@ -297,7 +297,8 @@ npm run dev
 ```
 
 ### Headless & Cloud Testing Guidelines:
-- Tests in `tools/` automatically detect environment capabilities and fall back from `msedge` to headless `chromium` when running on Linux containers.
+- Every browser-driven script in `tools/` launches through `tools/launch-browser.mjs`, which tries Edge, then Playwright's Chromium, then a locally installed Chromium under `PLAYWRIGHT_BROWSERS_PATH` — so the suites run on the Windows box and in Linux containers alike. `tools/electron-test.mjs` picks `electron.exe`/`electron` by platform; on Linux run it under `xvfb-run -a`.
+- `npm run census` (tools/css-census.mjs) reports duplicate/undefined CSS custom properties and off-scale values; `--strict` fails on duplicates or undefined names.
 - Content Security Policy in `index.html` permits `connect-src 'self' ws: blob: data: https: http:`.
 
 ---

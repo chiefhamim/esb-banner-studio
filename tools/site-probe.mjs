@@ -1,7 +1,8 @@
 // Look at esbpowerline.com: screenshots + the real fonts/colours it uses.
 import { chromium } from 'playwright-core'
+import { launchBrowser } from './launch-browser.mjs'
 import fs from 'node:fs'
-const b = await chromium.launch({ channel: 'msedge', headless: true })
+const b = await launchBrowser(chromium)
 const p = await (await b.newContext({ viewport: { width: 1440, height: 900 } })).newPage()
 await p.goto('https://esbpowerline.com/', { waitUntil: 'networkidle', timeout: 45000 }).catch((e) => console.log('goto', e.message))
 await p.waitForTimeout(2500)
