@@ -1901,6 +1901,19 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
   outline: none;
 }
 
+/* Intake outcome: what the fetch did, and the honest way out when it could not */
+.ed-intake-error { display: flex; align-items: flex-start; gap: 8px; }
+.ed-intake-error-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.ed-intake-error-text b { font-weight: 600; }
+.ed-intake-error-text span { color: var(--text-2); font-size: 12px; line-height: 16px; }
+.ed-intake-error-actions { display: flex; gap: 6px; flex: none; align-items: center; }
+.ed-extract-report { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 12px 8px; border-bottom: 1px solid var(--line); }
+.ed-extract-chip { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; font-size: 11px; line-height: 16px; font-weight: 500; color: var(--text-2); background: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--r-pill); white-space: nowrap; }
+.ed-extract-chip.method-structured { color: var(--success); border-color: color-mix(in srgb, var(--success) 40%, var(--line-2)); background: var(--success-soft); }
+.ed-extract-chip.method-page-data, .ed-extract-chip.method-metadata-only { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, var(--line-2)); background: var(--warning-soft); }
+.ed-extract-warn { display: flex; align-items: flex-start; gap: 4px; width: 100%; font-size: 12px; line-height: 16px; color: var(--warning); }
+.ed-extract-warn svg { flex: none; margin-top: 2px; }
+
 .ed-error-banner {
   display: flex;
   align-items: center;

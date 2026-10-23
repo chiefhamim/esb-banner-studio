@@ -17,7 +17,8 @@
     "app": "npm run build && electron .",
     "dist": "npm run build && electron-builder --win dir",
     "test": "vitest run",
-    "census": "node tools/css-census.mjs"
+    "census": "node tools/css-census.mjs",
+    "test:extract": "node tools/extract-test.mjs"
   },
   "dependencies": {
     "@fontsource/hind-siliguri": "^5.3.0",
@@ -47,7 +48,7 @@
     "vitest": "^5.0.5"
   },
   "productName": "ESB Studio",
-  "description": "ESB Studio — ESB PowerLine news banner editor",
+  "description": "ESB Studio \u2014 ESB PowerLine news banner editor",
   "author": "Hamim Ruwayfi (ESB PowerLine)",
   "main": "electron/main.cjs",
   "build": {

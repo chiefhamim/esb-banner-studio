@@ -298,6 +298,7 @@ npm run dev
 
 ### Headless & Cloud Testing Guidelines:
 - Every browser-driven script in `tools/` launches through `tools/launch-browser.mjs`, which tries Edge, then Playwright's Chromium, then a locally installed Chromium under `PLAYWRIGHT_BROWSERS_PATH` — so the suites run on the Windows box and in Linux containers alike. `tools/electron-test.mjs` picks `electron.exe`/`electron` by platform; on Linux run it under `xvfb-run -a`.
+- `npm run test:extract` (tools/extract-test.mjs) runs the article extractor against the hand-written pages in `tools/fixtures/` through the real renderer. Fixtures follow public conventions (schema.org JSON-LD, OpenGraph, `<article>` blocks, `__NEXT_DATA__`) and must never contain a publisher's real text or markup.
 - `npm run census` (tools/css-census.mjs) reports duplicate/undefined CSS custom properties and off-scale values; `--strict` fails on duplicates or undefined names.
 - The Editorial Desk's "Web Article" preview (`src/editorial/SitePreview.tsx`) is the esbpowerline.com article page itself: markup ported from the website repo's `app/(public)/articles/[slug]/page.tsx`, rendered in an iframe with `src/editorial/site-preview.css`, which is **generated** from the site's `app/globals.css` by `SITE_REPO=../esbpowerline node tools/site-css.mjs` (needs the `esbpowerline/esbpowerline` checkout; runs the site's Tailwind 3.4 via npx). Regenerate it whenever the site's theme tokens or article styles change; never hand-edit it.
 - Content Security Policy in `index.html` permits `connect-src 'self' ws: blob: data: https: http:`.

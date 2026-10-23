@@ -101,7 +101,14 @@ export function extractFactTable(sourceText: string): FactItem[] {
     }
   }
 
-  return facts
+  // One chip per distinct fact: the same figure in the headline and the body is one fact, at its first offset.
+  const seen = new Set<string>()
+  return facts.filter((f) => {
+    const key = `${f.kind}|${f.normalized.toLowerCase()}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /**

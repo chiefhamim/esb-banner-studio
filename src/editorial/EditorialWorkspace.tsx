@@ -14,7 +14,7 @@ import { useStore } from '../store'
 import { CATEGORIES } from '../core/tokens'
 import type { Assets } from '../core/render'
 import { loadBaseAssets } from '../core/assets'
-import { automateNewsFromUrl, importImageToBanner } from './automation'
+import { describeIntakeError, automateNewsFromUrl, importImageToBanner } from './automation'
 import { autoDesk } from './deskFlag'
 import { detectCategory, generatePlatformCaption, suggestHighlight } from '../core/newsroom'
 import { extractFactTable, type FactItem } from './facts'
@@ -29,6 +29,12 @@ import {
   buildCmsArticlePayload,
   insertArticleToSupabase,
 } from './siteApi'
+import { parseArticleDocument } from './extract'
+
+if (typeof window !== 'undefined') {
+  // Test seam: lets the Playwright extraction suite run page fixtures through the real extractor.
+  ;(window as unknown as { __esbParseArticle?: typeof parseArticleDocument }).__esbParseArticle = parseArticleDocument
+}
 
 interface FactSpan {
   text: string
@@ -141,6 +147,7 @@ export function EditorialWorkspace() {
   const [progressStatus, setProgressStatus] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [errorDetail, setErrorDetail] = useState<{ detail: string; canPaste: boolean } | null>(null)
   const [baseAssets, setBaseAssets] = useState<Assets | null>(null)
 
   // Live feed filter in intake
@@ -326,22 +333,11 @@ export function EditorialWorkspace() {
 
     setLoading(true)
     setErrorMsg(null)
+    setErrorDetail(null)
     setProgressStatus('Fetching article & translating to English…')
 
     try {
       const result = await automateNewsFromUrl(cleanUrl, (status: string) => setProgressStatus(status))
-
-      setSourceArticle(
-        {
-          title: result.originalTitle,
-          deck: result.originalDeck,
-          paragraphs: result.paragraphs,
-          images: result.images,
-          canonicalUrl: result.url,
-          rawHtmlLength: result.paragraphs.join(' ').length,
-        },
-        result.url,
-      )
 
       setDraftField('headline', result.englishHeadline)
       setDraftField('deck', result.deck)
@@ -354,9 +350,12 @@ export function EditorialWorkspace() {
       setDraftField('credit', result.credit)
 
       setProgressStatus(null)
-      showToast('Article extracted & populated in English')
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to extract article from URL')
+      const warn = result.extraction?.warnings ?? []
+      showToast(warn.length ? `Story imported with ${warn.length} note${warn.length === 1 ? '' : 's'} — see the source pane` : 'Article extracted & populated in English')
+    } catch (err: unknown) {
+      const info = describeIntakeError(err)
+      setErrorMsg(info.title)
+      setErrorDetail({ detail: info.detail, canPaste: info.canPaste })
       setProgressStatus(null)
     } finally {
       setLoading(false)
@@ -874,9 +873,20 @@ export function EditorialWorkspace() {
             )}
 
             {errorMsg && (
-              <div className="callout warn">
+              <div className="callout warn ed-intake-error" role="alert">
                 <Icon name="info" size={14} />
-                <span>{errorMsg}</span>
+                <div className="ed-intake-error-text">
+                  <b>{errorMsg}</b>
+                  {errorDetail?.detail && <span>{errorDetail.detail}</span>}
+                </div>
+                <div className="ed-intake-error-actions">
+                  {launcherTab === 'url' && (
+                    <button type="button" className="btn xs" onClick={() => void handleFetchUrl()} disabled={loading}>Try again</button>
+                  )}
+                  {errorDetail?.canPaste && launcherTab !== 'paste' && (
+                    <button type="button" className="btn xs primary" onClick={() => { setLauncherTab('paste'); setErrorMsg(null); setErrorDetail(null) }}>Paste the text instead</button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -906,6 +916,19 @@ export function EditorialWorkspace() {
                 <span>{sourceEditing ? 'Done' : 'Edit Source'}</span>
               </button>
             </div>
+            {source?.extraction && (
+              <div className="ed-extract-report" title={source.extraction.contentSelector ? `Story block: ${source.extraction.contentSelector}` : undefined}>
+                <span className={`ed-extract-chip method-${source.extraction.method}`}>
+                  {source.extraction.method === 'structured' ? 'Structured data' : source.extraction.method === 'markup' ? 'Page markup' : source.extraction.method === 'page-data' ? 'Page data' : 'Metadata only'}
+                </span>
+                <span className="ed-extract-chip">{source.extraction.language === 'bn' ? 'Bengali' : source.extraction.language === 'en' ? 'English' : source.extraction.language === 'mixed' ? 'Mixed' : 'Unknown language'}</span>
+                <span className="ed-extract-chip">{source.paragraphs.length} paragraph{source.paragraphs.length === 1 ? '' : 's'}</span>
+                <span className="ed-extract-chip">{source.images.length} photo{source.images.length === 1 ? '' : 's'}</span>
+                {source.extraction.warnings.map((w) => (
+                  <span key={w} className="ed-extract-warn"><Icon name="info" size={11} />{w}</span>
+                ))}
+              </div>
+            )}
 
             <div className="ed-pane-scroll">
               {sourceEditing ? (

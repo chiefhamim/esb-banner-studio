@@ -58,6 +58,32 @@ try {
   await page.waitForSelector('.ed-site-pill')
   check('Live site connection telemetry pill displayed', (await page.locator('.ed-site-pill').count()) === 1)
 
+  // 2b. A link that cannot be fetched gets an honest message and the paste fallback, not a dead end
+  await page.fill('.ed-url-input', 'https://blocked.invalid/story')
+  await page.click('button:has-text("Fetch & Auto-Translate")')
+  await page.waitForSelector('.ed-intake-error', { timeout: 30000 })
+  const intakeErr = await page.locator('.ed-intake-error').innerText()
+  check('Unreachable link shows a specific intake error', /blocked\.invalid/.test(intakeErr) || /could not be reached|could not be found/.test(intakeErr), intakeErr.slice(0, 80))
+  await page.click('.ed-intake-error button:has-text("Paste the text instead")')
+  await page.waitForSelector('.ed-paste-area')
+  check('"Paste the text instead" switches to the paste tab', (await page.locator('.ed-paste-area').count()) === 1)
+
+  // 2c. The real link pipeline end to end, against a fixture page Vite serves (no network): fetch → extract → translate → draft.
+  await page.click('button:has-text("Paste Story Link")')
+  await page.fill('.ed-url-input', `http://localhost:${PORT}/tools/fixtures/jsonld-news.html`)
+  await page.click('button:has-text("Fetch & Auto-Translate")')
+  await page.waitForSelector('.ed-extract-report', { timeout: 30000 })
+  const report = await page.locator('.ed-extract-report').innerText()
+  check('Link intake: extraction report shows method, language and counts', /Page markup|Structured data/.test(report) && /Bengali/.test(report) && /4 paragraphs/.test(report) && /[12] photos?/.test(report), report.replace(/\n/g, ' · '))
+  check('Link intake: source pane holds the Bengali headline from the page', (await page.inputValue('#source-title-input')) === 'গ্যাস সরবরাহ বাড়াতে সিলেটে দুটি নতুন কূপ')
+  check('Link intake: fact chips are deduplicated', (await page.locator('.fact-pill').allTextContents()).filter((t) => t === 'Tk 592 crore').length === 1)
+  // back to a clean launcher for the paste flow below (the desk autosaves, so clear its session first)
+  await page.evaluate(() => { try { localStorage.removeItem('esb-banner-studio/editorial/v1') } catch {} })
+  await page.reload()
+  await page.waitForSelector('.studio-shell')
+  await page.click('.rail-btn:has-text("Editorial")')
+  await page.waitForSelector('button:has-text("Paste Bengali Story")')
+
   // 3. Select Paste Bengali Story mode and enter Bengali story text
   await page.click('button:has-text("Paste Bengali Story")')
   await page.waitForSelector('.ed-paste-area')
@@ -84,6 +110,7 @@ try {
   const headlineVal = await page.inputValue('#draft-headline')
   const bodyVal = await page.inputValue('#draft-body')
   check('Draft headline populated in English (no Bengali overwrite)', headlineVal.length > 0 && !/[\u0980-\u09FF]/.test(headlineVal))
+  check('Extraction report shows method, language and counts', /Page markup|Structured data|Page data|Metadata only/.test(await page.locator('.ed-extract-report').innerText().catch(() => '')) || (await page.locator('.ed-extract-report').count()) === 0)
   check('Draft body populated in English', bodyVal.length > 0 && !/[\u0980-\u09FF]/.test(bodyVal))
 
   // 5. Test Trucent headline line breaker

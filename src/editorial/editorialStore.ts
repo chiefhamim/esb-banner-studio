@@ -1,7 +1,7 @@
 // Editorial Desk Zustand store with undo, fact tracking, banner coordination,
 // and full live integration with esbpowerline.com CMS.
 import { create } from 'zustand'
-import type { ExtractedArticle, ExtractedImage } from './extract'
+import type { ExtractedArticle, ExtractedImage, ExtractionMeta } from './extract'
 import { extractFactTable, verifyDraftAgainstSource } from './facts'
 import type { FactItem, DiscrepancyFlag } from './facts'
 import { detectCategory, suggestHighlight } from '../core/newsroom'
@@ -77,6 +77,8 @@ interface EditorialState {
     paragraphs: string[]
     images: ExtractedImage[]
     factTable: FactItem[]
+    /** How the story was recovered from the page (method, language, warnings); absent for pasted text. */
+    extraction?: ExtractionMeta
   } | null
 
   draft: EditorialDraft
@@ -388,6 +390,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
         paragraphs: article.paragraphs,
         images: article.images,
         factTable,
+        extraction: article.meta,
       },
       draft: nextDraft,
       discrepancies,
@@ -411,6 +414,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
         paragraphs,
         images: s.source?.images || [],
         factTable,
+        extraction: s.source?.extraction,
       },
       discrepancies: s.draft.headline
         ? verifyDraftAgainstSource(`${s.draft.headline} ${s.draft.deck} ${s.draft.body}`, rawText, factTable)

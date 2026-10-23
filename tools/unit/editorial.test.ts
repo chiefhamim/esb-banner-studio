@@ -263,3 +263,45 @@ describe('Editorial Desk — Live esbpowerline.com CMS & Supabase Bridge', () =>
     expect(cuid.startsWith('cmv')).toBe(true)
   })
 })
+
+describe('Editorial Desk — Intake robustness', () => {
+  it('keeps prose that merely mentions roads, blocks or Gulshan, and drops real address lines', async () => {
+    const { isBoilerplateParagraph } = await import('../../src/editorial/extract')
+    expect(isBoilerplateParagraph('A transmission tower near the Gulshan substation will be rebuilt as part of the work on the Mohakhali road, officials said.')).toBe(false)
+    expect(isBoilerplateParagraph('গুলশান এলাকার একটি উপকেন্দ্র থেকে নতুন লাইন টানার পরিকল্পনাও রয়েছে বলে সংশ্লিষ্ট সূত্র জানিয়েছে।')).toBe(false)
+    expect(isBoilerplateParagraph('শুক্রবার সকালে প্রকল্প এলাকা পরিদর্শন করেন পিজিসিবির ব্যবস্থাপনা পরিচালক, যিনি কাজের অগ্রগতিতে সন্তোষ প্রকাশ করেন।')).toBe(false)
+    expect(isBoilerplateParagraph('The Example Standard, House 36/1, Road 1, Block A, Mirpur, Dhaka-1216. Phone: +880 1711 000000')).toBe(true)
+    expect(isBoilerplateParagraph('বার্তা ও বাণিজ্যিক কার্যালয়: বিডিবিএল ভবন (লেভেল ১৭), ১২ কারওয়ান বাজার, ঢাকা-১২১৫')).toBe(true)
+    expect(isBoilerplateParagraph('শুক্রবার, ২৩ অক্টোবর ২০২৬')).toBe(true)
+  })
+
+  it('splits a JSON-LD articleBody into paragraphs by blank lines, line breaks, or sentence groups', async () => {
+    const { splitBodyText } = await import('../../src/editorial/extract')
+    expect(splitBodyText('প্রথম।\n\nদ্বিতীয়।')).toEqual(['প্রথম।', 'দ্বিতীয়।'])
+    expect(splitBodyText('<p>One.</p><p>Two.</p>')).toEqual(['One.', 'Two.'])
+    const long = Array.from({ length: 9 }, (_, i) => `Sentence number ${i + 1} of a long single-string body that has to be regrouped for the desk to read it comfortably.`).join(' ')
+    const parts = splitBodyText(long)
+    expect(parts.length).toBe(3)
+    expect(parts.join(' ').replace(/\s+/g, ' ')).toBe(long)
+  })
+
+  it('shows one chip per distinct fact even when the figure appears in headline and body', async () => {
+    const { extractFactTable } = await import('../../src/editorial/facts')
+    const table = extractFactTable('৫৯২ কোটি টাকায় দুটি কূপ, ৩০ এমএমসিএফডি গ্যাস\n\nপ্রকল্পে ৫৯২ কোটি টাকা ব্যয় হবে এবং ৩০ এমএমসিএফডি গ্যাস মিলবে।')
+    const keys = table.map((f) => `${f.kind}|${f.normalized}`)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(table.filter((f) => f.normalized === '30 MMCFD').length).toBe(1)
+    expect(table.find((f) => f.normalized === '30 MMCFD')?.sourceOffset).toBeLessThan(60)
+  })
+
+  it('turns net-guard codes into an honest message and offers the paste fallback where it applies', async () => {
+    const { IntakeError, describeIntakeError } = await import('../../src/editorial/automation')
+    const blocked = describeIntakeError(new IntakeError('blocked', 'HTTP 403', 'https://www.example-news.test/x'))
+    expect(blocked.title).toContain('example-news.test')
+    expect(blocked.canPaste).toBe(true)
+    expect(describeIntakeError(new IntakeError('private_address', 'rejected', 'http://10.0.0.1/')).canPaste).toBe(false)
+    expect(describeIntakeError(new IntakeError('invalid_url', 'bad', 'nope')).canPaste).toBe(false)
+    expect(describeIntakeError(new IntakeError('dns_error', 'ENOTFOUND', 'https://blocked.invalid/story')).title).toContain('could not be found')
+    expect(describeIntakeError(new Error('boom')).detail).toBe('boom')
+  })
+})

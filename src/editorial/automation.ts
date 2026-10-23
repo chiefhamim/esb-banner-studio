@@ -14,6 +14,61 @@ import { imageAssets, useStore } from '../store'
 import { useEditorialStore } from './editorialStore'
 import { autoDesk } from './deskFlag'
 
+/** A fetch/extraction failure with the net-guard code, so the desk can say what happened and offer the paste fallback. */
+export class IntakeError extends Error {
+  code: string
+  url: string
+  constructor(code: string, message: string, url: string) {
+    super(message)
+    this.name = 'IntakeError'
+    this.code = code
+    this.url = url
+  }
+}
+
+export interface IntakeErrorInfo {
+  title: string
+  detail: string
+  /** The paste tab is the honest fallback for everything except a bad URL. */
+  canPaste: boolean
+}
+
+export function describeIntakeError(err: unknown): IntakeErrorInfo {
+  const e = err instanceof IntakeError ? err : null
+  const code = e?.code ?? 'unknown'
+  let host = ''
+  try { host = e?.url ? new URL(e.url).hostname.replace(/^www\./, '') : '' } catch { host = '' }
+  const site = host || 'the site'
+  switch (code) {
+    case 'invalid_url':
+    case 'invalid_protocol':
+      return { title: 'That is not a web address the desk can open', detail: 'Paste the full http(s) link to the story.', canPaste: false }
+    case 'private_address':
+      return { title: 'Local and private addresses are not fetched', detail: 'The studio only reads public news sites.', canPaste: false }
+    case 'dns_error':
+      return { title: `${site} could not be found`, detail: 'Check the address, or paste the story text.', canPaste: true }
+    case 'timeout':
+      return { title: `${site} did not answer in time`, detail: 'Try again in a moment, or paste the story text.', canPaste: true }
+    case 'blocked':
+    case 'rate_limited':
+      return { title: `${site} refused the request`, detail: 'The publisher blocks automated readers (captcha, login or rate limit). Open the story in a browser and paste its text.', canPaste: true }
+    case 'too_large':
+    case 'bad_type':
+      return { title: `${site} returned something that is not an article page`, detail: e?.message ?? '', canPaste: true }
+    case 'empty_response':
+      return { title: `${site} returned an empty page`, detail: 'The story may load in the browser only. Paste its text instead.', canPaste: true }
+    case 'network_error':
+    case 'stream_error':
+    case 'bad_redirect':
+    case 'too_many_redirects':
+      return { title: `${site} could not be reached`, detail: e?.message ?? 'Network error.', canPaste: true }
+    case 'http_error':
+      return { title: `${site} answered with an error`, detail: e?.message ?? '', canPaste: true }
+    default:
+      return { title: 'The story could not be imported', detail: err instanceof Error ? err.message : String(err), canPaste: true }
+  }
+}
+
 export interface AutomatedNewsResult {
   url: string
   originalTitle: string
@@ -32,6 +87,7 @@ export interface AutomatedNewsResult {
   highlight: string
   paragraphs: string[]
   images: ExtractedImage[]
+  extraction?: ExtractedArticle['meta']
   factTable: FactItem[]
   discrepancies: DiscrepancyFlag[]
   socialCaptions: {
@@ -251,34 +307,31 @@ export async function automateNewsFromUrl(
     cleanUrl = `https://${cleanUrl}`
   }
 
-  // 1. Fetch HTML via Electron net-guard bridge or browser fetch
+  // 1. Fetch HTML via the Electron net-guard bridge (desktop) or, in the browser, directly / through the local dev proxy.
+  //    No third-party relay: the URL an editor is working on never leaves the machine except to the publisher.
   onProgress?.('Fetching story from URL…')
   let html = ''
   if (typeof window !== 'undefined' && window.esb?.fetchUrl) {
     const res = await window.esb.fetchUrl(cleanUrl)
     if (!res.ok || !res.html) {
-      throw new Error(res.error || `Failed to fetch URL (${res.code || 'Network error'})`)
+      throw new IntakeError(res.code || 'network_error', res.error || 'Failed to fetch the page', cleanUrl)
     }
     html = res.html
   } else {
     try {
       const res = await fetch(cleanUrl)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) throw new IntakeError(res.status === 401 || res.status === 403 ? 'blocked' : res.status === 429 ? 'rate_limited' : 'http_error', `HTTP ${res.status}`, cleanUrl)
       html = await res.text()
-    } catch {
+    } catch (err) {
+      if (err instanceof IntakeError) throw err
+      let proxyRes: Response
       try {
-        const proxyRes = await fetch(`/api/proxy?url=${encodeURIComponent(cleanUrl)}`);
-        if (!proxyRes.ok) throw new Error(`Proxy HTTP ${proxyRes.status}`);
-        html = await proxyRes.text();
+        proxyRes = await fetch(`/api/proxy?url=${encodeURIComponent(cleanUrl)}`)
       } catch {
-        try {
-          const publicRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}`);
-          if (!publicRes.ok) throw new Error(`AllOrigins HTTP ${publicRes.status}`);
-          html = await publicRes.text();
-        } catch {
-          throw new Error(`Network error fetching ${cleanUrl}. If running in browser, CORS may block foreign websites. Use the desktop app or paste the text directly.`);
-        }
+        throw new IntakeError('network_error', 'The browser could not reach the site (cross-origin fetch blocked).', cleanUrl)
       }
+      if (!proxyRes.ok) throw new IntakeError(proxyRes.status === 502 ? 'network_error' : 'http_error', `Proxy HTTP ${proxyRes.status}`, cleanUrl)
+      html = await proxyRes.text()
     }
   }
 
@@ -412,6 +465,7 @@ export async function automateNewsFromUrl(
     highlight,
     paragraphs,
     images: article.images,
+    extraction: article.meta,
     factTable,
     discrepancies,
     socialCaptions,
