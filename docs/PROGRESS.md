@@ -1,5 +1,15 @@
 # ESB PowerLine Studio — Development Progress
 
+## Session 2026-10-23 — publish with the banner, story queue, real video export
+
+* **Banner upload on publish + connection check** (`cee91d1`). Plan safety: one ≤ 4 MB JPEG per publish (Vercel body limit 4.5 MB; the site re-encodes to WebP ≤ 2560 px), Supabase Pro 100 GB storage. Fixed: a disk-loaded photo had been published as a `blob:` URL.
+* **Story queue** (`d67a3ab`). Stories tab + launcher "Continue a story"; switching restores draft and re-syncs the banner; survives reload.
+* **Video** (`f130648`). Found: exports were capped at 3 s, played at the wrong speed and had no sound. Replaced with WebCodecs/mediabunny (MP4 H.264 + AAC/Opus), native save in Electron, export sheet with Stop, story → video.
+* **Polish**: video transport icons, bin tabs that fit, quiet clips with hover trim grips, track labels; account sheet scrolls instead of overflowing.
+* **Verified**: build; unit 124/124; editorial 54/54; video 22/22 (ffprobe); UI 160/161 (the one is the container's blocked network); Electron 21/21; Electron export 5/5; golden 0.005 % / 0.030 %.
+* **Not verified here**: live esbpowerline.com/Supabase (proxy-blocked) — run the account sheet's Connection check, then publish one draft.
+
+
 ## Session 2026-10-22
 
 ### Phase 0 — Baseline & Safety Net (Complete)

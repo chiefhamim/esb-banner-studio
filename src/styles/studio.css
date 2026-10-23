@@ -295,3 +295,20 @@
 .vw-story-note { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-2); }
 .vw-story-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px; font-size: 12.5px; line-height: 18px; color: var(--text-2); background: var(--fill); border-radius: var(--r-3); }
 .vw-story-empty p { margin: 0; }
+
+/* ---------------------------------------------------------------- video desk polish: tabs that fit, a real transport, quiet clips */
+.vw-bin-tabs button { padding: 0 4px; font-size: 11.5px; }
+.vw-transport .ibtn { width: 30px; height: 30px; }
+.vw-transport .play-btn { min-width: 84px; justify-content: center; gap: 6px; }
+.vw-transport .play-btn svg path { fill: currentColor; }
+.vw-th-title { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-weight: 500; color: var(--text-2); }
+.vw-th-title b { flex: none; min-width: 20px; font-size: 10.5px; font-weight: 700; letter-spacing: .02em; color: var(--text); }
+.vw-clip-block { padding: 0 12px; border-radius: 6px; filter: saturate(0.78); background-image: linear-gradient(rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.22)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(0, 0, 0, 0.18); }
+.vw-clip-block.selected { outline: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3), 0 0 0 2px var(--bg-0), 0 0 0 4px var(--ink); }
+.vw-clip-title { font-size: 11.5px; font-weight: 600; letter-spacing: .005em; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25); }
+.vw-clip-duration { flex: none; font-size: 10px; opacity: .75; }
+.vw-trim-handle { width: 10px; background: transparent !important; border-radius: 0 !important; }
+.vw-trim-handle::after { content: ''; position: absolute; top: 50%; width: 3px; height: 16px; margin-top: -8px; background: rgba(255, 255, 255, 0.85); border-radius: 2px; opacity: 0; transition: opacity var(--t-2) var(--ease); }
+.vw-trim-handle.left::after { left: 3px; }
+.vw-trim-handle.right::after { right: 3px; }
+.vw-clip-block:hover .vw-trim-handle::after, .vw-clip-block.selected .vw-trim-handle::after { opacity: 1; }

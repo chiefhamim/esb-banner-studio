@@ -198,6 +198,10 @@ The shared project is the product's connective tissue. Editorial, Graphics and V
 - "Open the CMS" in the desktop app writes the site's `@supabase/ssr` session cookie (`sb-<ref>-auth-token`, `base64-` + base64url JSON, chunked at 3,180) into a separate `persist:esb-site` profile and opens esbpowerline.com/cms in its own window, signed in as the editor. The format was verified by having `@supabase/ssr` 0.12.4 read the cookies back. Sign-out clears that profile and calls the auth service's logout.
 - Publishing requires a signed-in staff session; the public key is never used to write, and an article is credited only to the signed-in account.
 
+- **Banner upload on publish** (`electron/site-upload.cjs`, `src/editorial/siteConnect.ts`): with the Web-banner hero, publishing from the desktop app renders the 16:9 banner (1920×1080 JPEG) and POSTs it to the site's own `/api/upload` with the session cookie; the stored Supabase URL becomes the article image. The main process checks session cookie, type, signature and a **4 MB cap (Vercel refuses bodies over 4.5 MB)**, never follows redirects, and accepts only an https `*.supabase.co`/esbpowerline.com URL back. One upload per publish — far inside Supabase Pro storage and the route's 20/min limit. A `blob:`/`data:` image is never sent as `imageUrl`.
+- **Connection check** (account sheet): site, auth health, session, role, Articles read, upload permission (an empty form the route answers 400 after auth — nothing stored), Gemini. Reads only.
+- **Story queue** (`src/editorial/storyQueue.ts`, `StoryQueue.tsx`): every story keeps its own source/draft/checklist snapshot in localStorage (≤ 40, published then oldest shed first, active never). Status follows the work (Draft → Needs check → Approved → Published) unless set by hand. An import forks a new entry only when a different source arrives, so a failed fetch never duplicates.
+
 ### Publication Gate (`src/editorial/siteApi.ts`)
 Before publishing to Supabase (`public.Article`):
 - All 3 pre-flight items must be confirmed:
@@ -248,6 +252,8 @@ Video must not destabilise working Editorial and Graphics features.
 - **Stage C — Titles & ESB Graphics:** Lower thirds, headlines, captions using approved story fields and editable graphics assets.
 - **Stage D — Audio & Delivery:** Volume, fades, waveforms, export queue with progress and cancellation.
 - *Rule:* If a capability is not yet implemented, label it **planned**, not **working**. Never render fake waveform placeholders.
+- **Export engine (`src/video/exportVideo.ts`):** WebCodecs via `mediabunny` — every frame drawn after its footage has seeked and encoded with its own timestamp (i/fps), so the file is the timeline's true length at true speed. MP4/H.264 by default (WebM/VP9 fallback); the A1 track is mixed offline at 48 kHz (AAC where the OS encodes it — Windows/macOS — else Opus). Never go back to MediaRecorder + captureStream: it ties timing to the wall clock (the old exporter played at the wrong speed and was capped at 3 s). `tools/video-test.mjs` reads the files back with ffprobe/ffmpeg: duration, frame count, a frame-exact cut, audio placement.
+- **Story → video (`src/video/storyVideo.ts`, Story tab):** a first cut from the Editorial draft — banner, photo stills with a slow move, one caption per sentence of the deck/opening paragraphs (no invented words), desk lower third, close card. Stills on V1 are `clip.still`; captions wrap to title-safe width.
 
 ---
 

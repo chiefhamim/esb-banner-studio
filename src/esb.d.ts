@@ -34,6 +34,11 @@ export interface EsbBridge {
   fetchImageData: (url: string, options?: { timeoutMs?: number }) => Promise<EsbFetchImageDataResult>
   prepareDragFile: (name: string, bytes: Uint8Array) => Promise<string | null>
   startDrag: (filePathOrName: string, bytes?: Uint8Array) => void
+  saveVideo?: (name: string, bytes: Uint8Array) => Promise<string | null>
+  openSiteAs?: (cookies: { name: string; value: string }[], sitePath: string) => Promise<boolean>
+  siteSignOut?: () => Promise<boolean>
+  siteUpload?: (cookies: { name: string; value: string }[], bytes: Uint8Array, mime: string, name: string) => Promise<{ ok: boolean; url?: string; status?: number; error?: string }>
+  siteUploadProbe?: (cookies: { name: string; value: string }[]) => Promise<{ ok: boolean; status: number; detail: string }>
 }
 
 declare global {

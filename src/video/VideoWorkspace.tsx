@@ -12,6 +12,8 @@ import {
 import { useVideoStore } from './videoStore'
 import { renderCompositeFrame } from './compositor'
 import { ExportSheet } from './ExportSheet'
+
+const TRACK_LABEL = { overlay: 'Overlays', video: 'Footage', caption: 'Captions', audio: 'Audio' } as const
 import { StoryVideoPanel } from './StoryVideoPanel'
 import { downloadVideoBlob } from './exportVideo'
 
@@ -569,7 +571,6 @@ export function VideoWorkspace() {
       <header className="vw-header">
         <WorkspaceSwitcher />
         <div className="vw-brand">
-          <Icon name="video" size={18} />
           <input
             type="text"
             className="vw-title-input"
@@ -985,19 +986,19 @@ export function VideoWorkspace() {
 
           {/* Transport Controls Bar */}
           <div className="vw-transport">
-            <IconButton icon="backward" tip="Jump to Start (Home)" onClick={() => seek(0)} />
-            <IconButton icon="backward" tip="Step Back 1 Frame (Left Arrow)" onClick={() => stepFrame(-1)} />
+            <IconButton icon="skipBack" tip="Jump to start (Home)" onClick={() => seek(0)} />
+            <IconButton icon="chevLeft" tip="Back one frame (←)" onClick={() => stepFrame(-1)} />
             <button
               type="button"
               className={`btn primary sm play-btn ${playing ? 'playing' : ''}`}
               onClick={togglePlay}
               title="Play / Pause (Space)"
             >
-              <Icon name={playing ? 'x' : 'chevRight'} size={14} />
+              <Icon name={playing ? 'pause' : 'play'} size={13} />
               {playing ? 'Pause' : 'Play'}
             </button>
-            <IconButton icon="forward" tip="Step Forward 1 Frame (Right Arrow)" onClick={() => stepFrame(1)} />
-            <IconButton icon="forward" tip="Jump to End (End)" onClick={() => seek(project.duration)} />
+            <IconButton icon="chevRight" tip="Forward one frame (→)" onClick={() => stepFrame(1)} />
+            <IconButton icon="skipForward" tip="Jump to end (End)" onClick={() => seek(project.duration)} />
 
             <div className="vw-transport-sep" />
 
@@ -1045,7 +1046,7 @@ export function VideoWorkspace() {
             <div className="vw-ruler-header">Tracks</div>
             {project.tracks.map((t) => (
               <div key={t.id} className="vw-track-head">
-                <span className="vw-th-title">{t.name}</span>
+                <span className="vw-th-title" title={t.name}><b>{t.id.toUpperCase()}</b>{TRACK_LABEL[t.kind]}</span>
                 <div className="vw-th-actions">
                   <button
                     type="button"
