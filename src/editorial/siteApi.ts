@@ -439,7 +439,8 @@ export function buildCmsArticlePayload(params: {
     readTime: Math.max(1, Math.ceil(params.body.trim().split(/\s+/).filter(Boolean).length / 200)),
     category: params.category || 'Fossil Fuels & Commodities',
     status: 'PUBLISHED',
-    imageUrl: params.imageUrl,
+    // only a link the site can serve: a photo opened from disk is a blob: URL that exists in this window alone
+    imageUrl: params.imageUrl && /^https:\/\//.test(params.imageUrl) ? params.imageUrl : undefined,
     imageCredit: params.credit || 'ESB PowerLine',
     tags: tagList,
     isFeatured: false,

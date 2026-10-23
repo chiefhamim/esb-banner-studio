@@ -315,6 +315,18 @@ try {
   await page.waitForSelector('.signin-avatar')
   const who = await page.evaluate(() => ({ name: document.querySelector('.signin-body h2').textContent, badges: document.querySelector('.signin-badges').innerText, stored: JSON.parse(localStorage.getItem('esb-banner-studio/site-session') || 'null') }))
   check('Signed in: name and role come from the site profile; the password is not stored', who.name === 'Desk Editor' && /Editor/.test(who.badges) && !!who.stored && !JSON.stringify(who.stored).includes('correct horse'), JSON.stringify({ name: who.name, badges: who.badges }))
+  // 8e. The connection check reports what each service answered (stubbed here; live in the desktop app)
+  await page.route('**/auth/v1/health**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }))
+  await page.route('**/auth/v1/user**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{"id":"u1"}' }))
+  await page.route('**/rest/v1/Article?select=id**', (r) => r.fulfill({ status: 401, contentType: 'application/json', body: '{"message":"denied"}' }))
+  await page.route('**/feed.xml', (r) => r.fulfill({ status: 200, contentType: 'application/xml', body: '<rss/>' }))
+  await page.click('.conn-run')
+  await page.waitForSelector('.conn-row[data-check="gemini"]')
+  const conn = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.conn-row')].map((r) => [r.dataset.check, r.className.split(' ').pop()])))
+  check('Connection check: each link reported as it answered; a refused table is a failure, upload is desktop-only',
+    conn.site === 'ok' && conn.auth === 'ok' && conn.session === 'ok' && conn.role === 'ok' && conn.articles === 'fail' && conn.upload === 'skip' && /1 to fix/.test(await page.locator('.conn-head em').innerText()), JSON.stringify(conn))
+  await page.unroute('**/rest/v1/Article?select=id**')
+
   await page.click('.signin-signout')
   await page.waitForSelector('.signin input[name=email]')
   await page.keyboard.press('Escape')
@@ -323,6 +335,29 @@ try {
   await page.click('button:has-text("Publish")')
   await page.waitForSelector('.ed-preflight')
   check('Publish Live is blocked until the checklist is ticked', await page.locator('button:has-text("Publish Live to CMS")').isDisabled())
+
+  // 10. Publishing from the browser preview: the banner cannot be uploaded here, so the article carries the original
+  // photo and the result says so (the desktop app uploads it — tools/unit/site-upload.test.ts, electron-test)
+  await page.keyboard.press('Escape')
+  await page.click('.editorial-workspace .pillbar [aria-label^="Staff"]')
+  await page.fill('.signin input[name=email]', 'rasel@esbpowerline.com')
+  await page.fill('.signin input[name=password]', 'correct horse')
+  await page.click('.signin-submit')
+  await page.waitForSelector('.signin-avatar')
+  await page.keyboard.press('Escape')
+  let posted = null
+  await page.route('**/rest/v1/Article', async (r) => {
+    if (r.request().method() !== 'POST') return r.continue()
+    posted = JSON.parse(r.request().postData() || '{}')
+    r.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify([{ id: 'art1', slug: posted.slug }]) })
+  })
+  await page.click('button:has-text("Publish")')
+  await page.waitForSelector('.ed-preflight')
+  for (const box of await page.locator('.ed-preflight input[type=checkbox]').all()) await box.check({ force: true })
+  await page.click('button:has-text("Publish Live to CMS")')
+  await page.waitForSelector('.callout.good, .callout.warn', { timeout: 20000 })
+  const pub = { msg: await page.locator('.callout').first().innerText(), image: posted && (Array.isArray(posted) ? posted[0] : posted).imageUrl }
+  check('Publish from the browser preview: never a blob: link as the article image, and the result says why', !!posted && !pub.image && /cannot upload the banner and the photo is a local file/.test(pub.msg), JSON.stringify(pub).slice(0, 300))
 
   await browser.close()
 } catch (err) {

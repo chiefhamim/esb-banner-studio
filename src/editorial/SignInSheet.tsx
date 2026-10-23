@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditorialStore } from './editorialStore'
 import { SITE_BASE_URL, openSiteCms } from './siteApi'
+import { runConnectionCheck } from './siteConnect'
+import type { ConnectionCheck } from './siteConnect'
 import { Icon } from '../ui/Icon'
 import siteIcon from '../assets/images/site/site-icon.png'
 
@@ -22,6 +24,9 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const [busy, setBusy] = useState(false)
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const apiKey = useEditorialStore((s) => s.apiKey)
+  const [checks, setChecks] = useState<ConnectionCheck[] | null>(null)
+  const [checking, setChecking] = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -52,6 +57,14 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
       setOpening(false)
     }
   }
+
+  // every link a publish depends on, checked live; the result is what each service actually answered
+  const check = async () => {
+    setChecking(true)
+    setChecks([])
+    try { setChecks(await runConnectionCheck(session, apiKey, setChecks)) } finally { setChecking(false) }
+  }
+  const failed = checks?.filter((c) => c.status === 'fail').length ?? 0
 
   const initials = (session?.name || session?.email || '?').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')
   const expires = session?.expiresAt ? new Date(session.expiresAt * 1000) : null
@@ -117,6 +130,26 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                 : 'This browser preview cannot share your session with the site; the CMS will ask you to sign in there. The desktop app opens it signed in.'}
               {expires && <> Session renews automatically (current token until {expires.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).</>}
             </p>
+            <div className="conn">
+              <div className="conn-head">
+                <span>Connection check</span>
+                {checks && !checking && <em className={failed ? 'bad' : 'good'}>{failed ? `${failed} to fix` : 'All clear'}</em>}
+                <button type="button" className="btn sm conn-run" onClick={() => void check()} disabled={checking}>{checking ? 'Checking…' : checks ? 'Run again' : 'Run check'}</button>
+              </div>
+              {checks && checks.length > 0 && (
+                <ul className="conn-list" aria-live="polite">
+                  {checks.map((c) => (
+                    <li key={c.id} className={'conn-row ' + c.status} data-check={c.id}>
+                      <Icon name={c.status === 'ok' ? 'check' : c.status === 'fail' ? 'x' : 'minus'} size={12} />
+                      <span className="conn-label">{c.label}</span>
+                      <span className="conn-detail">{c.detail}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!checks && <p className="conn-hint">Checks the site, sign-in, your role, the articles table, media upload and Gemini — reads only, nothing is published.</p>}
+            </div>
+
             {error && <div className="signin-error" role="alert"><Icon name="info" size={14} /><span>{error}</span></div>}
             <button type="button" className="btn ghost signin-signout" onClick={() => { logoutStaff(); onToast('Signed out of esbpowerline.com') }}>Sign out</button>
           </div>

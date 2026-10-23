@@ -18,6 +18,8 @@ import { useBannerImage } from './useBannerImage'
 import { useHeroMode } from './heroMode'
 import { SeoPanel } from './SeoPanel'
 import { SignInSheet } from './SignInSheet'
+import { canUploadToSite, uploadBannerToSite } from './siteConnect'
+import { renderBanner } from '../export'
 import { suggestKeyphrases } from './seo'
 import { FeaturedImage } from './FeaturedImage'
 import { SitePreview, SITE_THEMES, formatArticleDate } from './SitePreview'
@@ -491,6 +493,31 @@ export function EditorialWorkspace() {
     setPublishingLive(true)
     setPublishResult(null)
     try {
+      // a token older than an hour is renewed first, so a long editing session does not fail at the last step
+      const fresh = await ensureFreshSession(staffSession)
+
+      // The article's image is the 16:9 Web banner the desk made, uploaded to the site's media library — one
+      // ~1920×1080 JPEG per publish, well inside Vercel's 4.5 MB body limit. When that cannot happen (browser
+      // preview, photo hero chosen, upload refused) the original photo's link is used and the result says so.
+      let imageUrl = bannerLeadImage || undefined
+      let imageNote = ''
+      if (heroMode === 'banner' && baseAssets && fresh && canUploadToSite()) {
+        setProgressStatus('Uploading the Web banner…')
+        const blob = await renderBanner(useStore.getState().doc, 'web', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
+        const up = blob ? await uploadBannerToSite(fresh, blob, draft.slug) : { ok: false as const, error: 'The banner could not be rendered.' }
+        setProgressStatus(null)
+        if (up.ok) { imageUrl = up.url; imageNote = ' Image: the Web banner, uploaded to the media library.' }
+        else imageNote = ` Banner upload failed (${up.error}) — used the original photo instead.`
+      } else if (heroMode === 'banner' && !canUploadToSite()) {
+        imageNote = ' The browser preview cannot upload the banner, so the original photo was used.'
+      }
+      if (imageUrl && !/^https:\/\//.test(imageUrl)) {
+        imageUrl = undefined
+        imageNote = heroMode === 'banner' && !canUploadToSite()
+          ? ' The browser preview cannot upload the banner and the photo is a local file, so no image was attached — add one in the CMS.'
+          : ' The photo is a local file the site cannot reach, so no image was attached — add one in the CMS.'
+      }
+
       const payload = buildCmsArticlePayload({
         headline: draft.headline,
         deck: draft.deck,
@@ -498,12 +525,12 @@ export function EditorialWorkspace() {
         slug: draft.slug,
         category: catData.name,
         focusKeywords: draft.focusKeywords,
-      focusKeyphrase: draft.focusKeyphrase,
+        focusKeyphrase: draft.focusKeyphrase,
         metaTitle: draft.metaTitle,
         metaDescription: draft.metaDescription,
         byline: staffSession?.name || draft.byline,
         credit: draft.credit,
-        imageUrl: bannerLeadImage || undefined,
+        imageUrl,
         status: targetStatus,
       })
 
@@ -511,17 +538,15 @@ export function EditorialWorkspace() {
         await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
       } catch {}
 
-      // a token older than an hour is renewed first, so a long editing session does not fail at the last step
-      const fresh = await ensureFreshSession(staffSession)
       const result = await insertArticleToSupabase(payload, fresh)
 
       if (result.success) {
         setPublishResult({
           ok: true,
           msg:
-            targetStatus === 'PUBLISHED'
+            (targetStatus === 'PUBLISHED'
               ? `Published live to esbpowerline.com! (ID: ${result.articleId})`
-              : `Saved draft to esbpowerline.com CMS! (ID: ${result.articleId})`,
+              : `Saved draft to esbpowerline.com CMS! (ID: ${result.articleId})`) + imageNote,
           url: result.liveUrl,
         })
         showToast(
@@ -540,6 +565,7 @@ export function EditorialWorkspace() {
     } catch (err: any) {
       setPublishResult({ ok: false, msg: err.message || 'Publish error' })
     } finally {
+      setProgressStatus(null)
       setPublishingLive(false)
     }
   }

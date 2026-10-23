@@ -266,7 +266,8 @@
 @container ed (max-width: 1100px) { .seo-check { grid-template-columns: 16px minmax(0, 1fr); } .seo-check-detail { grid-column: 2; } }
 
 /* ---------------------------------------------------------------- sign in to esbpowerline.com */
-.dialog.signin { position: relative; width: min(400px, 92vw); }
+.dialog.signin { position: relative; width: min(400px, 92vw); max-height: calc(100vh - 48px); overflow-y: auto; transition: width var(--t-2) var(--ease); }
+.dialog.signin:has(.conn-list) { width: min(480px, 92vw); }
 .signin-close { position: absolute; top: 12px; right: 12px; z-index: 1; }
 .signin-body { display: flex; flex-direction: column; align-items: stretch; gap: 12px; padding: 32px 32px 24px; text-align: center; }
 .signin-mark { align-self: center; width: 52px; height: 52px; object-fit: contain; padding: 6px; background: #fff; border-radius: var(--r-3); box-shadow: var(--raised-shadow); }
@@ -296,6 +297,26 @@
 .signin-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .signin-note { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-3); }
 .signin-signout { align-self: center; color: var(--danger) !important; }
+
+/* the connection check: every link a publish uses, as the services answered it */
+.conn { display: flex; flex-direction: column; gap: 8px; padding: 12px; text-align: left; background: var(--fill); border-radius: var(--r-3); }
+.conn-head { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.conn-head > span { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text); }
+.conn-head em { height: 20px; padding: 0 8px; font-size: 11px; line-height: 20px; font-style: normal; font-weight: 600; border-radius: var(--r-pill); }
+.conn-head em.good { color: var(--success); background: var(--success-soft); }
+.conn-head em.bad { color: var(--danger); background: var(--danger-soft); }
+.conn-run { margin-left: auto; }
+.conn-hint { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-3); }
+.conn-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.conn-row { display: grid; grid-template-columns: 20px 132px minmax(0, 1fr); column-gap: 10px; align-items: center; padding: 5px 4px; border-radius: var(--r-1); animation: conn-in var(--t-2) var(--ease) both; }
+.conn-row svg { place-self: center; width: 20px; height: 20px; padding: 4px; border-radius: 50%; }
+.conn-row.ok svg { color: var(--success); background: var(--success-soft); }
+.conn-row.fail svg { color: var(--danger); background: var(--danger-soft); }
+.conn-row.skip svg { color: var(--text-3); background: var(--fill-active); }
+.conn-label { font-size: 12.5px; line-height: 17px; font-weight: 500; color: var(--text); }
+.conn-detail { font-size: 11.5px; line-height: 16px; color: var(--text-2); overflow-wrap: anywhere; }
+.conn-row.fail .conn-detail { color: var(--danger); }
+@keyframes conn-in { from { opacity: 0; transform: translateY(2px); } }
 
 /* ---------------------------------------------------------------- outputs: the preview sits in an inset well */
 .ed-outputs { gap: 10px; }

@@ -4,6 +4,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const { FsScope } = require('./fs-scope.cjs')
 const { fetchArticleHtml, fetchImageData } = require('./net-guard.cjs')
+const siteUpload = require('./site-upload.cjs')
 
 // Keep the profile folder of the earlier name so saved work, recents and export settings carry over after the rename.
 if (process.env.ESB_USER_DATA) app.setPath('userData', process.env.ESB_USER_DATA)
@@ -86,8 +87,7 @@ function createWindow() {
 // site cookies, and the window can only show esbpowerline.com; any other link goes to the system browser.
 const SITE_ORIGIN = 'https://esbpowerline.com'
 const SITE_PARTITION = 'persist:esb-site'
-const SITE_COOKIE_NAME = /^sb-[a-z0-9]{8,40}-auth-token(\.[0-5])?$/
-const SITE_COOKIE_VALUE = /^[A-Za-z0-9_-]{1,3200}$|^base64-[A-Za-z0-9_-]{1,3200}$/
+const { SITE_COOKIE_NAME, SITE_COOKIE_VALUE } = siteUpload
 let siteWin = null
 
 async function writeSiteSession(cookies) {
@@ -124,6 +124,14 @@ ipcMain.handle('esb:open-site-as', async (_e, cookies, sitePath) => {
   siteWin.loadURL(SITE_ORIGIN + target)
   return true
 })
+
+// Publish uploads the rendered Web banner to the site's media library, so the article's image is the banner the
+// desk made rather than the original photo's link. The checks and the plan limits live in site-upload.cjs.
+ipcMain.handle('esb:site-upload', async (_e, cookies, bytes, mime, name) => {
+  const buf = bytes instanceof Uint8Array ? bytes : (bytes && bytes.buffer instanceof ArrayBuffer ? new Uint8Array(bytes.buffer) : null)
+  return siteUpload.uploadBanner({ cookies, bytes: buf, mime, name })
+})
+ipcMain.handle('esb:site-upload-probe', async (_e, cookies) => siteUpload.probeUpload(cookies))
 
 // Signing out of the Studio signs the CMS window out too.
 ipcMain.handle('esb:site-sign-out', async () => {
