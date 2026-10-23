@@ -1,0 +1,167 @@
+/* ==========================================================================
+   ESB Studio — Design Tokens ("Quiet Studio")
+   Single source of truth for grid, geometry, typography, colour, and elevation.
+   ========================================================================== */
+
+:root {
+  /* ---------------------------------------------------------------- Geometry: 4 px Base Grid */
+  --s-0: 0px;
+  --s-1: 2px;
+  --s-2: 4px;
+  --s-3: 6px;   /* Allowed half-step: label to control */
+  --s-4: 8px;
+  --s-5: 12px;
+  --s-6: 16px;
+  --s-7: 20px;
+  --s-8: 24px;
+  --s-9: 32px;
+  --s-10: 40px;
+  --s-11: 48px;
+
+  /* ---------------------------------------------------------------- Control & Row Dimensions */
+  --h-control-xs: 24px;  /* Dense inline / table action */
+  --h-control-sm: 28px;  /* Compact buttons, tabs, segmented */
+  --h-control-md: 32px;  /* Standard input, button, scrub */
+  --h-control-lg: 36px;  /* Topbar actions, primary export */
+  --h-row: 36px;         /* Standard list & table row */
+  --h-panel-header: 40px;/* Standard panel section header */
+  --h-app-header: 40px;  /* Draggable app header bar */
+  --w-rail: 56px;        /* Left workspace navigation rail */
+
+  /* ---------------------------------------------------------------- Corner Radii */
+  --r-0: 0px;
+  --r-1: 4px;    /* Keys, tiny chips inside rows, inner handles */
+  --r-2: 8px;    /* Controls: buttons, inputs, cards */
+  --r-3: 12px;   /* Panels, popovers, menus */
+  --r-4: 16px;   /* Dialogs, floating windows */
+  --r-pill: 9999px; /* Tags and status pills only */
+
+  /* ---------------------------------------------------------------- Typography Scale */
+  --font-ui: "ESB Sans", "Hind Siliguri", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+  --font-serif: "Source Serif 4", Georgia, serif;
+
+  --t-caption: 600 11px/16px var(--font-ui);
+  --t-secondary: 400 12px/16px var(--font-ui);
+  --t-body: 400 13px/20px var(--font-ui);
+  --t-body-medium: 500 13px/20px var(--font-ui);
+  --t-title: 600 15px/20px var(--font-ui);
+  --t-dialog: 700 18px/24px var(--font-ui);
+  --t-hero: 700 24px/28px var(--font-ui);
+
+  /* ---------------------------------------------------------------- Motion & Easing */
+  --t-hover: 100ms;
+  --t-state: 160ms;
+  --t-surface: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---------------------------------------------------------------- Elevation */
+  --shadow-l0: none;
+  --shadow-l1: none;
+  --shadow-l2: 0 12px 32px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-l3: 0 16px 40px rgba(0, 0, 0, 0.22), 0 3px 8px rgba(0, 0, 0, 0.08);
+
+  /* ================================================================ Light Theme Palette (Default) */
+  --surface-app: #e9e9eb;
+  --surface-panel: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f6f6f7;
+  --surface-hover: #efeff1;
+
+  --border-subtle: #ececef;
+  --border-default: #dcdce0;
+  --border-strong: #c3c3ca;
+
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-tertiary: #686872;
+  --text-disabled: rgba(24, 24, 27, 0.42);
+
+  --accent: #18181b;
+  --on-accent: #ffffff;
+  --accent-soft: rgba(24, 24, 27, 0.06);
+  --focus-ring: rgba(24, 24, 27, 0.2);
+
+  --danger: #b42318;
+  --danger-soft: rgba(180, 35, 24, 0.08);
+  --warning: #9a5b00;
+  --warning-soft: rgba(154, 91, 0, 0.1);
+  --success: #1f7a45;
+  --success-soft: rgba(31, 122, 69, 0.1);
+
+  --tip-bg: #18181b;
+  --tip-fg: #f4f4f5;
+
+  /* Backward compatibility aliases */
+  --bg-0: var(--surface-app);
+  --bg-1: var(--surface-panel);
+  --bg-2: var(--surface-sunken);
+  --bg-3: var(--surface-hover);
+  --bg-4: #e3e3e6;
+  --line: var(--border-subtle);
+  --line-2: var(--border-default);
+  --line-3: var(--border-strong);
+  --text: var(--text-primary);
+  --text-2: var(--text-secondary);
+  --text-3: var(--text-tertiary);
+  --ink: var(--accent);
+  --ink-2: #3f3f46;
+  --on-ink: var(--on-accent);
+  --ink-soft: var(--accent-soft);
+  --ink-ring: var(--focus-ring);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-2: var(--shadow-l2);
+}
+
+/* ================================================================ Dark Theme Palette */
+:root[data-theme="dark"] {
+  --surface-app: #0d0d0f;
+  --surface-panel: #161619;
+  --surface-raised: #1e1e23;
+  --surface-sunken: #111114;
+  --surface-hover: #222228;
+
+  --border-subtle: #232328;
+  --border-default: #2e2e35;
+  --border-strong: #44444e;
+
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --text-disabled: rgba(244, 244, 245, 0.42);
+
+  --accent: #ffffff;
+  --on-accent: #18181b;
+  --accent-soft: rgba(255, 255, 255, 0.08);
+  --focus-ring: rgba(255, 255, 255, 0.28);
+
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.12);
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.12);
+
+  --tip-bg: #27272a;
+  --tip-fg: #f4f4f5;
+
+  /* Backward compatibility aliases */
+  --bg-0: var(--surface-app);
+  --bg-1: var(--surface-panel);
+  --bg-2: var(--surface-sunken);
+  --bg-3: var(--surface-hover);
+  --bg-4: #282830;
+  --line: var(--border-subtle);
+  --line-2: var(--border-default);
+  --line-3: var(--border-strong);
+  --text: var(--text-primary);
+  --text-2: var(--text-secondary);
+  --text-3: var(--text-tertiary);
+  --ink: var(--accent);
+  --ink-2: #d4d4d8;
+  --on-ink: var(--on-accent);
+  --ink-soft: var(--accent-soft);
+  --ink-ring: var(--focus-ring);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
+}

@@ -1,0 +1,73 @@
+{
+  "name": "esb-banner-studio",
+  "private": true,
+  "version": "1.5.4",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "test:golden": "node tools/golden-test.mjs",
+    "test:ui": "node tools/ui-test.mjs && node tools/date-test.mjs",
+    "test:editorial": "node tools/editorial-test.mjs",
+    "test:video": "node tools/video-test.mjs",
+    "test:unit": "vitest run",
+    "app": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --win dir",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource/hind-siliguri": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/oswald": "^5.3.0",
+    "@fontsource/source-serif-4": "^5.3.1",
+    "@fontsource/space-grotesk": "^5.3.0",
+    "inter-ui": "^3.19.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/pngjs": "^6.0.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
+    "oxlint": "^1.88.0",
+    "pixelmatch": "^8.0.0",
+    "playwright-core": "^1.64.1",
+    "pngjs": "^7.0.0",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  },
+  "productName": "ESB Studio",
+  "description": "ESB Studio — ESB PowerLine news banner editor",
+  "author": "Hamim Ruwayfi (ESB PowerLine)",
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.esbpowerline.bannerstudio",
+    "productName": "ESB Studio",
+    "directories": {
+      "output": "release-v1.5.4",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "electronDist": "node_modules/electron/dist",
+    "electronVersion": "45.0.0",
+    "win": {
+      "target": "dir",
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "asar": true
+  }
+}

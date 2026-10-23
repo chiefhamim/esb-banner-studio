@@ -1,0 +1,120 @@
+/* ==========================================================================
+   ESB Studio — Base & Reset Styles
+   Foundational element resets, typography baseline, scrollbars, focus rings.
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--text-primary);
+  background-color: var(--surface-app);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Ensure form elements inherit the base UI font */
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------- Text Selection */
+::selection {
+  background-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* ---------------------------------------------------------------- Bengali Typography */
+[lang="bn"],
+.bn {
+  font-family: "Hind Siliguri", var(--font-ui);
+  line-height: calc(1em + 8px);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ---------------------------------------------------------------- Focus Visible */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ---------------------------------------------------------------- Numeric Alignment */
+input[type="number"],
+.scrub input,
+.tabular-nums,
+.badge,
+.mono,
+kbd,
+code,
+pre {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---------------------------------------------------------------- Overlay Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: var(--r-1);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color var(--t-state) var(--ease);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-secondary);
+}
+
+/* ---------------------------------------------------------------- Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
