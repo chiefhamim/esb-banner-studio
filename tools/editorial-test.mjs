@@ -2,6 +2,7 @@
 import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
+import { launchBrowser } from './launch-browser.mjs'
 
 const PORT = 5194
 const root = path.resolve(import.meta.dirname, '..')
@@ -31,11 +32,7 @@ function check(name, ok, extra = '') {
 
 try {
   await waitUp()
-  try {
-    browser = await chromium.launch({ channel: 'msedge', headless: true })
-  } catch {
-    browser = await chromium.launch({ headless: true })
-  }
+  browser = await launchBrowser(chromium)
   const page = await browser.newPage({ viewport: { width: 1600, height: 950 } })
   page.setDefaultTimeout(8000)
 
@@ -66,10 +63,13 @@ try {
   const sourceTitleVal = await page.inputValue('#source-title-input')
   check('Left column preserves original Bengali headline', /[\u0980-\u09FF]/.test(sourceTitleVal))
 
+  // Generous timeout: translation races two remote services with a short internal
+  // budget each, but a slow/blocked network path (e.g. sandboxed proxy tunnels) can
+  // still take several seconds to fail before the offline fallback kicks in.
   await page.waitForFunction(() => {
     const el = document.querySelector('#draft-headline')
     return el && el.value.trim().length > 0 && !/[\u0980-\u09FF]/.test(el.value)
-  }, { timeout: 8000 })
+  }, { timeout: 20000 })
   const headlineVal = await page.inputValue('#draft-headline')
   const bodyVal = await page.inputValue('#draft-body')
   check('Draft headline populated in English (no Bengali overwrite)', headlineVal.length > 0 && !/[\u0980-\u09FF]/.test(headlineVal))

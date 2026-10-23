@@ -3,6 +3,7 @@
 
 import { polishJournalisticEnglish, translateBengaliToEnglish } from '../core/newsroom'
 import { bengaliToAsciiDigits } from './bengali'
+import { raceTranslate } from './translateNet'
 
 export interface EditorialTranslationResult {
   headline: string          // strictly <= 104 characters
@@ -14,6 +15,13 @@ export interface EditorialTranslationResult {
   body: string              // full English story body
   provider: 'gemini' | 'neural' | 'offline'
   modelUsed?: string
+  /** True when Bengali source text could not be machine-translated (no network/API reachable) and still needs a human translator's review. */
+  translationFailed?: boolean
+}
+
+/** True when the renderer has no network path at all; skip remote translation attempts immediately instead of waiting out their timeouts. */
+function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false
 }
 
 export const JOURNALISTIC_TRANSLATOR_PROMPT = `You are a professional bilingual news editor and translator specializing in Bengali-to-English journalism.
@@ -320,42 +328,14 @@ async function translateParagraph(p: string): Promise<string> {
     return polishJournalisticBody(clean)
   }
 
-  // 1. Primary fast neural translation via Google GTX endpoint with 5s timeout
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 5000)
-    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=bn&tl=en&dt=t&q=${encodeURIComponent(clean)}`
-    const gtxRes = await fetch(gtxUrl, { signal: controller.signal })
-    clearTimeout(timer)
-    if (gtxRes.ok) {
-      const gtxData = await gtxRes.json()
-      if (Array.isArray(gtxData?.[0])) {
-        const joined = gtxData[0].map((seg: unknown[]) => (typeof seg?.[0] === 'string' ? seg[0] : '')).join('')
-        if (joined.trim()) {
-          return polishJournalisticBody(joined)
-        }
-      }
-    }
-  } catch {
-    // proceed to secondary fallback
+  if (!isOffline()) {
+    // Race GTX and MyMemory under one short deadline; take whichever answers first.
+    const translated = await raceTranslate(clean)
+    if (translated) return polishJournalisticBody(translated)
   }
 
-  // 2. Secondary fallback via MyMemory with 4s timeout
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 4000)
-    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean.slice(0, 500))}&langpair=bn|en`, { signal: controller.signal })
-    clearTimeout(timer)
-    if (res.ok) {
-      const data = await res.json()
-      const tr = data.responseData?.translatedText
-      if (tr && typeof tr === 'string') return polishJournalisticBody(tr)
-    }
-  } catch {
-    // offline fallback
-  }
-
-  // 3. Offline fallback: digits and entity normalization
+  // Offline fallback: digits and entity normalization only — the Bengali prose itself
+  // is left untranslated (never fabricated); callers must flag this for human review.
   return polishJournalisticBody(bengaliToAsciiDigits(clean))
 }
 
@@ -399,19 +379,21 @@ export async function translateParagraphsBatch(paragraphs: string[]): Promise<st
   await Promise.all(
     batches.map(async (batch) => {
       let translated = ''
-      try {
-        const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 6000)
-        const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=bn&tl=en&dt=t&q=${encodeURIComponent(batch.text)}`
-        const res = await fetch(gtxUrl, { signal: controller.signal })
-        clearTimeout(timer)
-        if (res.ok) {
-          const data = await res.json()
-          if (Array.isArray(data?.[0])) {
-            translated = data[0].map((seg: unknown[]) => (typeof seg?.[0] === 'string' ? seg[0] : '')).join('')
+      if (!isOffline()) {
+        try {
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), 2200)
+          const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=bn&tl=en&dt=t&q=${encodeURIComponent(batch.text)}`
+          const res = await fetch(gtxUrl, { signal: controller.signal })
+          clearTimeout(timer)
+          if (res.ok) {
+            const data = await res.json()
+            if (Array.isArray(data?.[0])) {
+              translated = data[0].map((seg: unknown[]) => (typeof seg?.[0] === 'string' ? seg[0] : '')).join('')
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
 
       if (translated.trim()) {
         const parts = translated.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean)
@@ -914,14 +896,21 @@ export async function translateNewsArticle(
   const metaTitle = `${headline.slice(0, maxBase).trim()}${suffix}`
   const metaDescription = enforceDeckLength(deck || body.slice(0, 150), 160)
 
+  // Honest provenance: only claim the "neural" engine actually ran if it left no
+  // untranslated Bengali behind. Otherwise report "offline" and flag for human review,
+  // rather than silently presenting unconverted source text as a finished translation.
+  const stillBengali = /[ঀ-৿]/.test(`${headline} ${deck} ${body}`)
+  const translationFailed = usedNeural && stillBengali
+
   return {
     headline,
     deck,
     slug,
+    translationFailed,
     focusKeywords,
     metaTitle,
     metaDescription,
     body,
-    provider: usedNeural ? 'neural' : 'offline',
+    provider: usedNeural && !translationFailed ? 'neural' : 'offline',
   }
 }

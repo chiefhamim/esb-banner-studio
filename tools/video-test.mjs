@@ -2,6 +2,7 @@
 import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
+import { launchBrowser } from './launch-browser.mjs'
 
 const PORT = 5195
 const root = path.resolve(import.meta.dirname, '..')
@@ -31,7 +32,7 @@ function check(label, condition, info = '') {
 
 try {
   await waitUp()
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(chromium)
   const page = await browser.newPage({ viewport: { width: 1600, height: 950 } })
   page.setDefaultTimeout(20000)
 

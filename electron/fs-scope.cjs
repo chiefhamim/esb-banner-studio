@@ -9,7 +9,10 @@ class FsScope {
 
   normalize(p) {
     if (!p) return ''
-    return path.resolve(path.normalize(String(p))).toLowerCase()
+    // Accept Windows-style backslash paths even when running on a POSIX host
+    // (e.g. Linux CI/cloud sessions testing this Windows-packaged app).
+    const slashed = String(p).replace(/\\/g, '/')
+    return path.resolve(path.normalize(slashed)).toLowerCase()
   }
 
   /**

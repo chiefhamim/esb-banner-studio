@@ -2,6 +2,8 @@
 import { getCategory } from './tokens'
 import type { Content } from './types'
 import type { IconPathDef } from './tokens'
+import { bengaliToAsciiDigits } from '../editorial/bengali'
+import { raceTranslate } from '../editorial/translateNet'
 
 const CURRENCY = /(?:\$|Tk\.?\s?|BDT\s?|USD\s?)\d[\d,]*(?:\.\d+)?(?:\s?(?:billion|million|crore|lakh))?(?:\s+per\s+\w+)?/i
 const WITH_UNIT = /\d[\d,]*(?:\.\d+)?\s?(?:MMCFD|MMcf|bcf|MW|GW|kW|kWh|percent|%|billion|million|crore|lakh|Tk|BDT|USD|tonnes?|MT|days?|months?|years?)\b/i
@@ -240,40 +242,13 @@ export async function translateBengaliToEnglish(text: string): Promise<string> {
     return OFFLINE_HEADLINE_DICT[clean]
   }
 
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 5000)
-    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=bn&tl=en&dt=t&q=${encodeURIComponent(clean)}`
-    const gtxRes = await fetch(gtxUrl, { signal: controller.signal })
-    clearTimeout(timer)
-    if (gtxRes.ok) {
-      const gtxData = await gtxRes.json()
-      if (Array.isArray(gtxData?.[0])) {
-        const joined = gtxData[0].map((seg: unknown[]) => (typeof seg?.[0] === 'string' ? seg[0] : '')).join('')
-        if (joined.trim()) {
-          return polishJournalisticEnglish(joined)
-        }
-      }
-    }
-  } catch {
-    // fallback to MyMemory
+  if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+    const translated = await raceTranslate(clean)
+    if (translated) return polishJournalisticEnglish(translated)
   }
-
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 4000)
-    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean.slice(0, 500))}&langpair=bn|en`, { signal: controller.signal })
-    clearTimeout(timer)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    const tr = data.responseData?.translatedText
-    if (tr && typeof tr === 'string') {
-      return polishJournalisticEnglish(tr)
-    }
-  } catch {
-    // Offline fallback
-  }
-  return OFFLINE_HEADLINE_DICT[clean] || clean
+  // Last resort: known-headline dictionary, else digits/units normalised only
+  // (the Bengali prose is left as-is rather than fabricated — caller must flag for review).
+  return OFFLINE_HEADLINE_DICT[clean] || bengaliToAsciiDigits(clean)
 }
 
 // ---------------------------------------------------------------- Article URL Scraper / Parser

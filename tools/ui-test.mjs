@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { PNG } from 'pngjs'
+import { launchBrowser } from './launch-browser.mjs'
 
 const PORT = 5198
 const root = path.resolve(import.meta.dirname, '..')
@@ -18,7 +19,7 @@ const W = 1080 // default format: Facebook 4:5
 
 try {
   await waitUp()
-  browser = await chromium.launch({ channel: 'msedge', headless: true })
+  browser = await launchBrowser(chromium)
   const ctx = await browser.newContext({ viewport: { width: 1600, height: 950 }, acceptDownloads: true })
   const page = await ctx.newPage()
   await ctx.addInitScript(() => { try { if (!localStorage.getItem('esb-banner-studio/dock-tab')) localStorage.setItem('esb-banner-studio/dock-tab', 'layers') } catch {} })

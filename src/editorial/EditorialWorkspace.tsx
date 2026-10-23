@@ -430,7 +430,11 @@ export function EditorialWorkspace() {
       }))
 
       setProgressStatus(null)
-      showToast('Story translated and populated in English')
+      showToast(
+        translation.translationFailed
+          ? 'No translation service reachable — draft still has untranslated Bengali, review before publishing'
+          : 'Story translated and populated in English',
+      )
     } catch (err: any) {
       setErrorMsg(err.message || 'Translation failed')
       setProgressStatus(null)
@@ -464,7 +468,11 @@ export function EditorialWorkspace() {
       setDraftField('metaTitle', res.metaTitle)
       setDraftField('metaDescription', res.metaDescription)
 
-      showToast('Re-translated source story into English')
+      showToast(
+        res.translationFailed
+          ? 'No translation service reachable — draft still has untranslated Bengali, review before publishing'
+          : 'Re-translated source story into English',
+      )
     } catch (err: any) {
       setErrorMsg(err.message || 'Re-translation failed')
     } finally {
@@ -1354,7 +1362,14 @@ export function EditorialWorkspace() {
         </span>
         <div className="sep" />
         <span>
-          Engine: <b>{translationProvider === 'gemini' ? modelUsed || 'Gemini 2.5' : 'Neural GTX'}</b>
+          Engine:{' '}
+          <b>
+            {translationProvider === 'gemini'
+              ? modelUsed || 'Gemini 2.5'
+              : translationProvider === 'offline'
+                ? 'Offline — manual translation needed'
+                : 'Neural GTX'}
+          </b>
         </span>
         <div className="spacer" />
         <span>

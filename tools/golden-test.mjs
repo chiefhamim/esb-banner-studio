@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { PNG } from 'pngjs'
 import pixelmatch from 'pixelmatch'
+import { launchBrowser } from './launch-browser.mjs'
 
 const PORT = 5199
 const root = path.resolve(import.meta.dirname, '..')
@@ -22,7 +23,7 @@ function maskOut(png, [x, y, w, h]) {
 
 try {
   await waitUp()
-  const browser = await chromium.launch({ channel: 'msedge', headless: true })
+  const browser = await launchBrowser(chromium)
   const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
   page.on('pageerror', (e) => console.log('PAGE ERROR', e.message))
   for (const c of cases) {
