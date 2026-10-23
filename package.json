@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "sync": "node tools/git-sync.mjs",
     "test:golden": "node tools/golden-test.mjs",
     "test:ui": "node tools/ui-test.mjs && node tools/date-test.mjs",
     "test:editorial": "node tools/editorial-test.mjs",
