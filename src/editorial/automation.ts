@@ -266,7 +266,19 @@ export async function automateNewsFromUrl(
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       html = await res.text()
     } catch {
-      throw new Error(`Network error fetching ${cleanUrl}. If running in browser, CORS may block foreign websites. Use the desktop app or paste the text directly.`)
+      try {
+        const proxyRes = await fetch(`/api/proxy?url=${encodeURIComponent(cleanUrl)}`);
+        if (!proxyRes.ok) throw new Error(`Proxy HTTP ${proxyRes.status}`);
+        html = await proxyRes.text();
+      } catch {
+        try {
+          const publicRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}`);
+          if (!publicRes.ok) throw new Error(`AllOrigins HTTP ${publicRes.status}`);
+          html = await publicRes.text();
+        } catch {
+          throw new Error(`Network error fetching ${cleanUrl}. If running in browser, CORS may block foreign websites. Use the desktop app or paste the text directly.`);
+        }
+      }
     }
   }
 
