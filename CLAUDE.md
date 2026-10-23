@@ -1,8 +1,13 @@
-# CLAUDE.md — ESB PowerLine Studio: Master Cloud & Execution Guide
+# CLAUDE.md — ESB PowerLine Studio: Master Cloud & Engineering Guide
 
-> **Product**: ESB Studio (`esbpowerline.com`)  
-> **Mission**: A professional newsroom workstation combining an **Editorial Story Desk** and a **Graphics Banner Studio** for energy sector journalism. Takes a single Bengali news link and transforms it into a production-ready, fact-verified English news story with coordinated, broadcast-grade visual banners in one unified workflow.  
-> **Aesthetic Standard**: **Mac-Level Craftsmanship** — Quiet Studio, neutral graphite chrome, single ink accent, 4px geometrical grid, 60fps buttery micro-interactions, zero AI slop, zero boilerplate forms.
+> **Document Type:** Master Product Brief, Engineering Charter & Claude Cloud Instructions  
+> **Product:** ESB Studio  
+> **Organisation:** ESB PowerLine / Express Broadcast and Communication Ltd. (`esbpowerline.com`)  
+> **Repository:** `chiefhamim/esb-banner-studio`  
+> **Platform:** Desktop-first, Windows-compatible Electron application  
+> **Current Stack:** Electron 45, Vite 8, React 19.3, TypeScript ~6.0.3, Zustand 5, HTML Canvas 2D, Vitest and Playwright  
+> **Primary Audience:** ESB journalists, editors, graphic designers, video editors, and autonomous AI agents (Claude Code)  
+> **North Star:** One coherent, exceptionally polished creative newsroom workstation for Editorial, Graphics and Video.
 
 ---
 
@@ -12,9 +17,9 @@
 ```text
 You are acting as the Principal Software Architect and World-Class Product Designer (Apple / Linear / Mac-grade craftsmanship) for ESB PowerLine Studio.
 
-Your objective is to elevate this application into an extraordinary, Mac-level newsroom suite where Editorial and Graphics work in seamless, harmonic cohesion. The studio must deliver a zero-friction "One Link Paste to Production-Ready English Story + Broadcast Graphics" experience that feels handcrafted with deep love, care, and mathematical precision.
+Your objective is to elevate this application into an extraordinary, Mac-level newsroom suite where Editorial, Graphics, and Video work in seamless, harmonic cohesion. The studio must deliver a zero-friction "One Link Paste to Production-Ready English Story + Broadcast Graphics" experience that feels handcrafted with deep love, care, and mathematical precision.
 
-Read CLAUDE.md, docs/SPEC.md, and docs/DESIGN_NOTES.md thoroughly. Execute this transformation in disciplined, verified phases:
+Read CLAUDE.md thoroughly. Execute this transformation in disciplined, verified phases:
 
 1. CONTEXT & ARCHITECTURAL MASTERY:
    - Understand the dual-engine architecture: Zustand stores (src/store.ts for Graphics, src/editorial/editorialStore.ts for Editorial, src/shell/shellStore.ts for Workspace Shell).
@@ -45,101 +50,231 @@ Read CLAUDE.md, docs/SPEC.md, and docs/DESIGN_NOTES.md thoroughly. Execute this 
 
 ---
 
-## 1. Design Philosophy: The "Quiet Studio" (Non-AI Slop)
+## 1. Product Vision
 
-The app rejects generic, synthetic dashboards. It is built for professional energy journalists who need speed, clarity, and authority.
+ESB Studio is not simply a news translator with a banner generator attached. It is the production environment through which ESB PowerLine turns source material into accurate journalism and publication-ready media.
 
-### Core Visual Principles:
-1. **Quiet**: The chrome recedes; the news banner, story, and photo are the heroes.
-2. **Exact**: 4px base grid, 4 radii (4px, 8px, 12px, 16px), 6 type steps, zero arbitrary CSS offsets.
-3. **Dense but Calm**: Information density with comfortable click targets (≥ 28×28px).
-4. **Fast**: State feedback within 16ms, transitions ≤ 200ms using `cubic-bezier(0.16, 1, 0.3, 1)`. Zero layout thrashing.
-5. **Credible**: Editorial newsroom authority. No unnecessary neon glows, synthetic gradients, or fake progress bars.
+The application brings three disciplines into one unified desktop experience:
+1. **Editorial** — source intake, research, writing, translation, verification, editing and CMS publishing.
+2. **Graphics** — professional, editable visual composition for news banners, social media, web, print and other formats.
+3. **Video** — media organisation, timeline-based editing, motion graphics, titles, audio, preview and export.
 
-### Design Tokens (`src/styles/tokens.css`):
-- **Spacing Scale**: `--s-0: 0px`, `--s-1: 2px`, `--s-2: 4px`, `--s-3: 6px`, `--s-4: 8px`, `--s-5: 12px`, `--s-6: 16px`, `--s-7: 20px`, `--s-8: 24px`, `--s-9: 32px`, `--s-10: 40px`, `--s-11: 48px`.
-- **Radii**: `--r-1: 4px` (chips/tags), `--r-2: 8px` (controls/buttons), `--r-3: 12px` (panels/cards), `--r-4: 16px` (modals/dialogs), `--r-pill: 9999px` (status tags).
-- **Control Heights**: 24px (compact table), 28px (tabs/chips), 32px (standard buttons/inputs), 36px (toolbar headers).
-- **Typography**: 
+The application feels like a purpose-built professional Mac application: quiet, precise, responsive, restrained and easy to understand. “Mac-like” means the quality of the interaction design and visual hierarchy—not copying Apple's branding or imitating a particular application pixel-for-pixel.
+
+### The North-Star Workflow
+A journalist pastes a source URL. ESB Studio extracts the available article and source metadata, prepares a draft, preserves the original source, flags facts that need review and provides a clean editing environment. The editor checks the copy and approves the story. The same approved story populates a graphics composition and provides approved material for a video package. The user can then adapt the assets for the required channels, inspect each result and export or publish them.
+
+**One story. One project. Multiple coordinated outputs. No unnecessary re-entry.** Automation removes repetitive work, never editorial judgement.
+
+---
+
+## 2. Product Principles — Non-Negotiable
+
+### 2.1 Quiet Studio Visual Language
+- Neutral graphite application chrome; the content and canvas remain the visual focus.
+- Restrained accent colours, used to communicate selection, state or ESB category—not as decoration.
+- No generic AI-dashboard cards, gratuitous gradients, neon glows, oversized rounded containers or decorative glass effects.
+- Use consistent spacing based on a 4 px grid, with a small, documented token system (`src/styles/tokens.css`).
+- Crisp borders, controlled contrast, disciplined typography and carefully aligned controls.
+- Dense enough for real production work, but never cramped or visually noisy.
+- Use motion sparingly: fast, purposeful transitions that explain a state change (`cubic-bezier(0.16, 1, 0.3, 1)`). Respect reduced-motion preferences.
+- Support light and dark appearances only if both can be maintained to the same quality standard.
+
+### 2.2 Content First
+The story, image, design canvas or video preview is the hero. Tool chrome should be quiet and predictable. Avoid UI that competes with the work.
+
+### 2.3 Professional Density, Generous Usability
+Use compact controls and meaningful information density, while keeping important interactive targets comfortable and accessible (≥ 28×28px). Do not shrink hit targets merely to make the UI look sophisticated. Keyboard focus, contrast, tooltips and clear selected/disabled states are required.
+
+### 2.4 No “AI Slop”
+- No fake data, placeholder metrics presented as real, invented sources or synthetic attribution.
+- No generic generated layouts that ignore ESB's editorial identity.
+- AI suggestions must be editable and visibly distinguishable from verified facts.
+- Generated content is a draft until a human reviews it.
+- Do not silently overwrite a user's work.
+
+### 2.5 Accuracy Before Automation
+- Preserve the original source URL and source text wherever legally and technically possible.
+- Never invent quotes, facts, dates, figures, names, image credits or source attribution.
+- Treat translation as translation, not permission to embellish.
+- Show uncertainty and extraction failures explicitly.
+- Distinguish **source-reported**, **cross-checked**, **editor-approved**, **derived** and **unknown** information.
+- Publishing and destructive actions require clear confirmation and meaningful error handling.
+
+### 2.6 Native-Feeling Desktop Behaviour
+- Respect operating-system conventions where practical: menus, shortcuts, focus, window resizing, file dialogs and clipboard.
+- Make the app feel coherent as a desktop product, not a web page trapped in a window.
+- Support sensible window sizes and graceful layout changes.
+- Avoid blocking the entire interface during extraction, rendering or export.
+
+---
+
+## 3. Information Architecture
+
+Use one persistent application shell, with three primary workspaces and a shared project/media layer.
+
+### Global Shell
+- **Workspace switcher:** Editorial, Graphics, Video (`src/shell/WorkspaceRail.tsx`).
+- **Project control:** current project/story, save state, recent projects and project actions.
+- **Global command/search palette:** search commands, actions, projects and assets; show relevant keyboard shortcuts.
+- **Contextual toolbar:** controls relevant to the current workspace and selection.
+- **Status area:** save/sync status, background jobs, export progress and actionable errors.
+- **Inspector:** context-sensitive properties, not a permanently crowded wall of controls.
+
+### Workspace 1 — Editorial (`src/editorial/`)
+Purpose: turn source material into an accurate, publication-ready story.
+- **Source panel:** original article, source URL, publisher, extraction status, source image, captions and credits (Hind Siliguri font).
+- **Story editor:** headline (≤104 chars), standfirst/deck (≤200 chars), body (68ch measure), tags, category, author, slug (≤80 chars) and publication metadata.
+- **Verification/inspector panel:** figures, dates, entities, source attribution, unresolved checks and publication readiness.
+- **Graphics companion (`GraphicsRail.tsx`):** live preview of linked visual assets (Banner 4:5, Web Article, Facebook 1200×630).
+
+### Workspace 2 — Graphics (`src/components/`, `src/core/`)
+Purpose: create accurate, polished and fully editable newsroom graphics.
+- **Asset/layer panel:** layers, groups, lock/visibility, reorder, duplicate and rename.
+- **Central artboard (`Stage.tsx`):** the largest practical area of the window, with zoom, pan, fit-to-screen and safe-area guides.
+- **Inspector (`Panels.tsx`):** typography, text alignment, colour, image crop/position, opacity, spacing, effects and object geometry for the current selection.
+- **Format controls (`FormatPicker.tsx`):** adapt design across 6 newsroom formats while preserving editable source.
+- **Export controls (`ExportDialog.tsx`, `export.ts`):** 2x Retina PNG, WebP, custom ZIP export.
+
+### Workspace 3 — Video (`src/video/`)
+Purpose: assemble real video packages from footage, audio, graphics, titles and editorial content.
+- **Media bin/source browser:** imported footage, audio, stills, graphics, title templates and generated proxies.
+- **Preview monitor:** playback, transport controls, timecode, resolution/quality selection and safe areas.
+- **Timeline:** multiple video/audio tracks, clips, trimming, splitting, snapping, zoom, track controls and waveform display.
+- **Inspector:** selected clip, transform, crop, speed, audio level, keyframes, title settings and effect parameters.
+- **Export/render queue:** destination, resolution, frame rate, progress, cancellation and errors.
+
+---
+
+## 4. Unified Story-to-Media Project Model
+
+The shared project is the product's connective tissue. Editorial, Graphics and Video reference shared story and asset data rather than maintaining loosely synchronised copies.
+
+### Shared Entities
+- **Project:** ID, name, status, created/updated timestamps and local/CMS linkage.
+- **Story:** source references, original language, translated copy, metadata, review status and publication status.
+- **Fact/check:** extracted claim, source evidence, comparison result, reviewer and review state.
+- **Asset:** file path or managed location, type, dimensions/duration, attribution, provenance and usage rights/notes.
+- **Graphic document:** editable scene/layers, dimensions, format variants and linked story fields.
+- **Video sequence:** timeline, tracks, clips, timing, transforms, audio and linked graphic/title assets.
+- **Export job:** inputs, output settings, status, logs, destination and error details.
+- **Revision/history:** recoverable changes and clear indication of unsaved work.
+
+### One Source of Truth & Link vs. Copy
+- Audit whether `bannerLink.ts` creates lifecycle or synchronisation risks between `useEditorialStore` and `useStore`.
+- A linked headline updates dependent graphics automatically, but designers must be able to intentionally override styling or detach a field.
+- The UI indicates whether content is linked, overridden or stale. Updating a story must never silently destroy intentional design decisions.
+
+---
+
+## 5. Editorial Integrity and Workflow
+
+### One-Link Intake (`src/editorial/extract.ts`)
+1. User pastes a URL.
+2. Validate the URL via secure network/IPC guardrails (`electron/net-guard.cjs`).
+3. Fetch and extract article text and metadata.
+4. Filter out publisher self-promotion (e.g. *Bonik Barta* tagline) and office addresses (Karwan Bazar, BDBL Bhaban, Dhaka-1215).
+5. Show publisher, canonical URL, extraction quality and any limitations.
+6. Preserve source material separately from the translated draft. Allow manual paste when dynamic SPAs block raw fetch.
+
+### Translation and Editing (`src/editorial/translator.ts`)
+- Produce clear, publication-grade, active-voice English.
+- Preserve meaning, factual nuance, names, quotations and numerical values.
+- Enforce character budgets: **Headline ≤ 104**, **Standfirst / Deck ≤ 200**, **Slug ≤ 80**.
+- Keep original Bengali headline and body accessible side-by-side for comparison.
+- Visible review state for AI drafts; avoid silent fallback substitutions without indication.
+
+### Fact Verification (`src/editorial/facts.ts`)
+- Precise statuses:
+  - **Matched (`.fact-verified`):** Green underline; detected value matches source.
+  - **Mismatch (`.fact-unverified`):** Amber wavy underline; detected value differs.
+  - **Needs review:** Ambiguous extraction or comparison.
+- Bi-directional linking: Clicking a source chip smoothly scrolls to and pulses the match in the story body.
+
+### Publication Gate (`src/editorial/siteApi.ts`)
+Before publishing to Supabase (`public.Article`):
+- All 3 pre-flight items must be confirmed:
+  1. Numbers, capacities, and currencies verified against source.
+  2. Institutional names and ministries verified.
+  3. Source credit and photo attribution preserved.
+- Show destination, prevent accidental duplicates, provide recovery guidance on network errors. Never expose service keys in renderer.
+
+---
+
+## 6. Graphics Production Standards
+
+### Editable-First, Export-Perfect
+- The editable scene is the source of truth; exported images are deliverables. Preserve Canvas 2D renderer (`src/core/render.ts`).
+- Core capabilities: Select, move, resize, align, group, lock, hide, duplicate, reorder layers; non-destructive image crop and focal point; guide and safe-area snapping; undo/redo; zoom/pan independent of export DPI.
+
+### Newsroom Formats (`src/core/tokens.ts`)
+- `fb45`: Facebook / Instagram Feed (1080 × 1350, 4:5) — Default
+- `web`: Web Hero Article (1920 × 1080, 16:9)
+- `sq`: Square Social / LinkedIn (1080 × 1080, 1:1)
+- `story`: Vertical Story / Reel (1080 × 1920, 9:16)
+- `social`: High-Res Social Grid (1598 × 1431)
+- `yt`: YouTube Video Thumbnail (1280 × 720, 16:9)
+
+### ESB Visual Identity & Category Palette
+- Never redraw, recolour, stretch, or re-encode protected brand artwork:
+  - `src/assets/images/esb-logo.png`
+  - `src/assets/images/esb-avatar.png`
+  - `build/icon.png` and `build/icon.ico`
+  - `public/favicon.svg`
+- Sector Categories:
+  1. `01` Power Generation — `#00E5FF`
+  2. `02` Gas & Petroleum — `#FF9100`
+  3. `03` Transmission & Grid — `#FFEA00`
+  4. `04` Renewable Energy — `#00E676`
+  5. `05` Energy Finance & Economy — `#7C4DFF`
+  6. `06` Policy & Regulation — `#FF1744`
+  7. `07` Regional Energy Trade — `#2979FF`
+  8. `08` Technology & Efficiency — `#E040FB`
+
+---
+
+## 7. Video and Motion: Staged Roadmap
+
+Video must not destabilise working Editorial and Graphics features.
+- **Stage A — Media Foundation:** Import local media, track missing files, relinking, metadata, background proxy generation.
+- **Stage B — Functional Timeline:** Multi-track timeline, trim/split/move clips, playhead, snapping, zoom, synchronised playback.
+- **Stage C — Titles & ESB Graphics:** Lower thirds, headlines, captions using approved story fields and editable graphics assets.
+- **Stage D — Audio & Delivery:** Volume, fades, waveforms, export queue with progress and cancellation.
+- *Rule:* If a capability is not yet implemented, label it **planned**, not **working**. Never render fake waveform placeholders.
+
+---
+
+## 8. Design System and Interaction Details
+
+### Token System (`src/styles/tokens.css`, `primitives.css`, `base.css`)
+- **Spacing:** Base 4px grid (`--s-0` to `--s-11`: 0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48px).
+- **Radii:** `--r-1: 4px` (chips/tags), `--r-2: 8px` (controls), `--r-3: 12px` (panels), `--r-4: 16px` (dialogs), `--r-pill: 9999px`.
+- **Heights:** Controls 28/32/36px; Panel Headers 40px; Workspace Rail 56px wide.
+- **Typography:**
+  - Load fonts before measuring canvas text (`document.fonts.ready`).
+  - Bengali: `"Hind Siliguri"` (+2px line-height, `overflow-wrap: anywhere`).
   - English: `Inter`, `Oswald` (Banner Headings), `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`.
-  - Bengali: `"Hind Siliguri"` with +2px line-height and `overflow-wrap: anywhere`.
+  - Tabular numerals for technical/financial figures.
+- **Micro-Interactions:** Fast transitions (`cubic-bezier(0.16, 1, 0.3, 1)`), visible focus rings (2px ink with 2px offset), tooltips on icon-only controls.
+- **Responsive Layout:** Gracefully adapt between 1366×768 laptops and 1920×1080+ desktops with collapsible sidebars.
 
 ---
 
-## 2. Architecture & File Structure
+## 9. Performance, Reliability, and Security
 
-```
-C:\Users\hamim\esb-banner-studio/
-├── CLAUDE.md                    # This master execution & cloud guide
-├── src/
-│   ├── editorial/               # NEWSROOM EDITORIAL DESK
-│   │   ├── EditorialWorkspace.tsx # 3-column document workspace (Reader, Story, Rail)
-│   │   ├── GraphicsRail.tsx     # Companion rail (Banner, Web, FB previews, sector picker)
-│   │   ├── editorialStore.ts    # Zustand store for newsroom drafts, facts, and intake
-│   │   ├── extract.ts           # Offline DOMParser & regex cleaner (anti-noise/addresses)
-│   │   ├── translator.ts        # Newsroom translation engine (preserves numbers/MW/Tk)
-│   │   ├── facts.ts             # Capacity, currency, entity extraction & inline match
-│   │   ├── bannerLink.ts        # 2-way sync bridge between Editorial & Graphics
-│   │   └── siteApi.ts           # Supabase REST publisher (public.Article)
-│   ├── components/              # GRAPHICS STUDIO & CANVAS ENGINE
-│   │   ├── Stage.tsx            # Multi-layer canvas editor (snapping, rulers, overlays)
-│   │   ├── Panels.tsx           # Story, Photos, Inspector, Layers dock
-│   │   ├── PreviewPanel.tsx     # 2D Canvas render engine & Facebook mock preview
-│   │   └── FormatPicker.tsx     # Aspect ratio switcher (4:5, 1:1, 16:9, etc.)
-│   ├── core/                    # CORE RENDERING & TOKENS
-│   │   ├── tokens.ts            # Category colors (01–08), formats, defaults
-│   │   ├── render.ts            # High-res Canvas 2D scene renderer
-│   │   ├── templates.ts         # Template builder functions
-│   │   └── newsroom.ts          # Newsroom helper algorithms & caption generators
-│   ├── shell/                   # WORKSPACE SHELL
-│   │   ├── WorkspaceRail.tsx    # 56px left navigation rail (Editorial, Graphics, Video)
-│   │   └── shellStore.ts        # Active workspace & shell state
-│   └── styles/                  # DESIGN SYSTEM STYLES
-│       ├── tokens.css           # 4px geometry, radii, semantic colors
-│       ├── primitives.css       # Buttons, inputs, chips, switches
-│       └── base.css             # Base reset and typography
-├── tools/                       # AUTOMATED TEST SUITES
-│   ├── editorial-test.mjs       # Headless Playwright E2E suite for Editorial Desk
-│   ├── golden-test.mjs          # Visual regression pixelmatch suite for Graphics
-│   └── unit/                    # Vitest test specs (security, extract, video, project)
-```
+- **Performance:** Move heavy extraction and rendering to background workers. Eliminate unnecessary React re-renders during canvas drag or timeline scrubbing. Manage object URLs and listeners cleanly.
+- **Reliability:** Autosave debounced to local project folder with atomic write (write temp + rename). Keep last 5 snapshots for crash recovery.
+- **Security:**
+  - Strict Electron context isolation and preload IPC validation.
+  - Treat all extracted article HTML and external URLs as untrusted data.
+  - Never put API secrets or Supabase service-role keys in renderer code.
+  - No scripts executed from scraped pages.
 
 ---
 
-## 3. Newsroom Editorial Constraints & Guardrails
+## 10. Required Commands & Verification Standards
 
-1. **Character Budgets**:
-   - **Headline**: Max **104 characters**. Must be strong, active voice journalistic English.
-   - **Standfirst / Deck**: Max **200 characters**. Contextualizes the headline.
-   - **URL Slug**: Max **80 characters** (lowercase alphanumeric, hyphen-delimited).
-2. **Fact Verification Engine**:
-   - Entities, megawatts (MW), million cubic feet (MMCFD), currencies (Tk, Crore, Billion), dates, and ministries are extracted from Bengali source.
-   - Matches in the English story body receive `.fact-verified` (green underline).
-   - Discrepancies receive `.fact-unverified` (amber underline).
-   - Clicking a chip in the source reader smooth-scrolls and highlights its match in the story body.
-3. **Noise Exclusion in Scraper**:
-   - Discards publisher branding (e.g., Bonik Barta tagline, Daily Star promos).
-   - Discards print/web footers, social share text, and office addresses (e.g., Karwan Bazar, BDBL Bhaban, Kazi Nazrul Islam Avenue, Dhaka-1215).
-4. **Publishing Pre-Flight Gates**:
-   - `Publish Live to CMS` is strictly locked until all checklist criteria are met:
-     - [ ] Numbers, capacities, and currencies verified against Bengali source.
-     - [ ] Institutional names and ministries verified.
-     - [ ] Source credit and photo attribution preserved.
-
----
-
-## 4. Protected Brand Assets (Never Redraw or Overwrite)
-- `src/assets/images/esb-logo.png`
-- `src/assets/images/esb-avatar.png`
-- `build/icon.png` and `build/icon.ico`
-- `public/favicon.svg`
-- `tools/golden/*.png` (Golden visual baselines)
-
----
-
-## 5. Development, Build & Testing Commands
-
-Always run and verify these commands before completing any task:
+Run and verify these checks before completing any task:
 
 ```bash
 # 1. Typecheck & Production Build (Vite 8 + TS)
@@ -164,3 +299,31 @@ npm run dev
 ### Headless & Cloud Testing Guidelines:
 - Tests in `tools/` automatically detect environment capabilities and fall back from `msedge` to headless `chromium` when running on Linux containers.
 - Content Security Policy in `index.html` permits `connect-src 'self' ws: blob: data: https: http:`.
+
+---
+
+## 11. Rules for AI Coding Agents
+
+1. **Read the project instructions first:** Read `CLAUDE.md`, relevant design notes, and package scripts.
+2. **Inspect before assuming:** Verify file names, components, dependencies, scripts, and current behaviour in actual checkout.
+3. **Protect working functionality:** Do not rewrite working subsystems because a cleaner architecture is theoretically attractive.
+4. **Plan, then implement:** State intended scope, files, risks, and acceptance tests before substantial changes.
+5. **No fake implementations:** Do not create dummy buttons, mock success states, or claim planned features are working.
+6. **No silent data loss:** Protect drafts, scenes, timelines, project files, and user overrides.
+7. **Preserve ESB identity:** Never redraw or distort `esb-logo.png` or `esb-avatar.png`.
+8. **Protect factual integrity:** Never invent article details, facts, numbers, or attributions.
+9. **Respect security boundaries:** No secrets in renderer, no bypassed IPC validation.
+10. **Test what changed:** Run relevant checks and report exact commands, results, and known failures.
+11. **Inspect results visually:** Exercise the workflow and inspect screenshots; compilation alone is insufficient.
+12. **Be transparent:** Clearly separate completed work, partial implementation, known limitations, and next steps.
+
+---
+
+## 12. Required Format for AI Implementation Reports
+
+After each meaningful task, report:
+- **What Changed:** User-visible outcome, relevant files, and architectural impact.
+- **Why:** Problem being solved and evidence supporting change.
+- **Verification:** Exact commands run, pass/fail outcomes, manual workflows tested, and screenshots inspected.
+- **Remaining Issues:** Known bugs, edge cases, incomplete requirements, and trade-offs.
+- **Next Recommended Step:** One high-value next task, not an unfocused wishlist.
