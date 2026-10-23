@@ -235,7 +235,7 @@ export function StoryPanel() {
         </div>
       </Panel>
 
-      <Panel title="Date" focusKey="date" sub="Shown on the banner" icon="calendar">
+      <Panel defaultOpen={false} title="Date" focusKey="date" sub="Shown on the banner" icon="calendar">
         <div className="row">
           <IconButton icon="chevRight" tip="Previous day" className="flip" onClick={() => shiftDay(-1)} />
           <DatePicker value={content.date} onChange={(d) => setContent({ date: d })} />
@@ -245,7 +245,7 @@ export function StoryPanel() {
       </Panel>
 
       {cardType === 'quote' && (
-        <Panel title="Quote Statement" focusKey="headline" sub="Speaker & Quote" icon="quote">
+        <Panel defaultOpen={false} title="Quote Statement" focusKey="headline" sub="Speaker & Quote" icon="quote">
           <Field label="Quote Statement">
             <textarea
               rows={4}
@@ -278,7 +278,7 @@ export function StoryPanel() {
       )}
 
       {cardType === 'stat' && (
-        <Panel title="Data & Stat Callout" focusKey="headline" sub="Metric & Label" icon="sparkle">
+        <Panel defaultOpen={false} title="Data & Stat Callout" focusKey="headline" sub="Metric & Label" icon="sparkle">
           <Field label="Key Number / Metric">
             <input
               type="text"
@@ -320,7 +320,7 @@ export function StoryPanel() {
       )}
 
       {cardType === 'standard' && (
-        <Panel title="Headline" focusKey="headline" sub="Auto-sized" icon="newspaper" actions={<span className={'count' + (len > 90 ? ' bad' : len > 70 ? ' warn' : '')}>{len} / 90</span>}>
+        <Panel defaultOpen={false} title="Headline" focusKey="headline" sub="Auto-sized" icon="newspaper" actions={<span className={'count' + (len > 90 ? ' bad' : len > 70 ? ' warn' : '')}>{len} / 90</span>}>
           <textarea ref={area} rows={4} className="input" value={content.headline} placeholder="Type the exact article title…" onChange={(e) => setContent({ headline: e.target.value })} />
           <div className="row" style={{ marginTop: 6, marginBottom: 8, gap: 6 }}>
             <button
@@ -438,7 +438,7 @@ export function StoryPanel() {
         </Panel>
       )}
 
-      <Panel title="Label pill" focusKey="label" sub="Tag on the photo" icon="sparkle" defaultOpen={false}
+      <Panel defaultOpen={false} title="Label pill" focusKey="label" sub="Tag on the photo" icon="sparkle"
         actions={content.label !== 'none' ? <span className="chip-note" style={{ ['--c' as string]: content.label === 'custom' ? content.labelColor : LABEL_PRESETS[content.label].bg }}>{(content.labelText.trim() || (content.label === 'custom' ? 'LABEL' : LABEL_PRESETS[content.label].text)).toUpperCase()}</span> : undefined}>
         <div className="label-presets">
           <button type="button" className={'lp lp-none' + (content.label === 'none' ? ' on' : '')} onClick={() => setContent({ label: 'none' })}>None</button>
@@ -469,7 +469,7 @@ export function StoryPanel() {
         )}
       </Panel>
 
-      <Panel title="Photo credit" focusKey="credit" sub="Printed on the picture" icon="image" defaultOpen={false}
+      <Panel defaultOpen={false} title="Photo credit" focusKey="credit" sub="Printed on the picture" icon="image"
         actions={content.credit.trim() ? <span className="count" title={content.credit.trim()}>{content.credit.trim().slice(0, 16)}</span> : undefined}>
         <input type="text" className="input" value={content.credit} placeholder="e.g. Photo: PID" onChange={(e) => setContent({ credit: e.target.value })} />
         <Field label="Placement">
@@ -488,7 +488,7 @@ export function StoryPanel() {
         <p className="hint">Appears on every format. It is also a normal layer — select it to drag, resize or restyle it anywhere.</p>
       </Panel>
 
-      <Panel title="Post caption" sub="Social media publishing" icon="newspaper" defaultOpen={false}>
+      <Panel defaultOpen={false} title="Post caption" sub="Social media publishing" icon="newspaper">
         <div className="caption-platform-tabs">
           {(['facebook', 'linkedin', 'twitter', 'telegram'] as SocialPlatform[]).map((p) => (
             <button
@@ -541,7 +541,7 @@ export function PhotosPanel({ addPhotos }: { addPhotos: () => void }) {
 
   return (
     <>
-      <Panel title="Optimal image dimensions" icon="image" sub={fmt.name} defaultOpen={true}>
+      <Panel defaultOpen={false} title="Optimal image dimensions" icon="image" sub={fmt.name}>
         <div className="opt-space-card">
           <div className="opt-space-hero">
             <b>{opt.w} × {opt.h} px</b>
@@ -582,7 +582,7 @@ export function PhotosPanel({ addPhotos }: { addPhotos: () => void }) {
         )}
       </Panel>
 
-      <Panel title="Collage" icon="photos">
+      <Panel defaultOpen={false} title="Collage" icon="photos">
         <div className="collages">
           {COLLAGES.map((c) => {
             const rects = c.layout(100, 70, 5)
@@ -599,7 +599,7 @@ export function PhotosPanel({ addPhotos }: { addPhotos: () => void }) {
         </div>
       </Panel>
 
-      <Panel title="Slots & framing" icon="sliders">
+      <Panel defaultOpen={false} title="Slots & framing" icon="sliders">
         <div className="slots">
           {slots.map((s, i) => {
             const im = s.src ? images.find((x) => x.id === s.src) : null
@@ -791,7 +791,7 @@ export function Inspector() {
 
   if (!sel.length) {
     return (
-      <Panel title="Inspector" icon="sliders">
+      <Panel accordion={false} title="Inspector" icon="sliders">
         <div className="empty">
           <Icon name="select" size={22} />
           <b>Nothing selected</b>
@@ -803,7 +803,7 @@ export function Inspector() {
 
   if (!el) {
     return (
-      <Panel title={`${sel.length} layers`} icon="layers" actions={<>
+      <Panel accordion={false} title={`${sel.length} layers`} icon="layers" actions={<>
         <IconButton icon="copy" tip="Duplicate (Ctrl+D)" onClick={() => st().duplicateSelected()} />
         <IconButton icon="trash" tip="Delete / hide (Del)" onClick={() => st().deleteSelected()} />
       </>}>
@@ -830,7 +830,7 @@ export function Inspector() {
 
   return (
     <>
-      <Panel title={el.name} icon={KIND_ICON[el.kind]} id="insp-main">
+      <Panel accordion={false} title={el.name} icon={KIND_ICON[el.kind]} id="insp-main">
         <div className="insp-actions">
           <IconButton icon={el.visible ? 'eye' : 'eyeOff'} tip={el.visible ? 'Hide' : 'Show'} onClick={() => set({ visible: !el.visible })} />
           <IconButton icon={el.locked ? 'lock' : 'unlock'} tip={el.locked ? 'Unlock' : 'Lock (protects it from accidental moves)'} active={el.locked} onClick={() => set({ locked: !el.locked })} />
@@ -842,7 +842,7 @@ export function Inspector() {
       </Panel>
 
       {el.kind === 'watermark' && (
-        <Panel title="Icon" sub="Drag · resize corners" icon="watermark" id="insp-icon">
+        <Panel accordion={false} title="Icon" sub="Drag · resize corners" icon="watermark" id="insp-icon">
           <div className="grid2">
             <Scrub label="Size" value={el.size} min={40} max={3000} decimals={0} unit="px" onChange={(v) => set({ iconSize: v })} />
             <Scrub label="Stroke" value={el.strokeWidth} min={1} max={400} decimals={0} unit="px" onChange={(v) => set({ iconStroke: v })} />
@@ -856,7 +856,7 @@ export function Inspector() {
         </Panel>
       )}
 
-      <Panel title={el.kind === 'watermark' ? 'Clip area' : 'Transform'} icon="fit" id="insp-transform"
+      <Panel accordion={false} title={el.kind === 'watermark' ? 'Clip area' : 'Transform'} icon="fit" id="insp-transform"
         actions={hasTransformOv ? <IconButton icon="reset" tip="Reset position & size to default" size={13} onClick={() => clear(['dx', 'dy', 'w', 'h'])} /> : undefined}>
         <div className="grid2">
           <Scrub label="X" value={el.x} onChange={(v) => place({ x: v })} />
@@ -872,7 +872,7 @@ export function Inspector() {
         <ArrangeBar id={el.id} />
       </Panel>
 
-      <Panel title="Appearance" icon="droplet" id="insp-appearance"
+      <Panel accordion={false} title="Appearance" icon="droplet" id="insp-appearance"
         actions={hasAppOv ? <IconButton icon="reset" tip="Reset appearance to default" size={13} onClick={() => clear(['opacity', 'fill', 'radius', ...(el.kind === 'icon' ? ['color' as const] : [])])} /> : undefined}>
         <Field label={`Opacity · ${Math.round(el.opacity * 100)}%`}><Slider value={Math.round(el.opacity * 100)} min={0} max={100} onChange={(v) => set({ opacity: v / 100 })} /></Field>
         {el.kind === 'rect' && typeof el.fill === 'string' && (
@@ -888,7 +888,7 @@ export function Inspector() {
       </Panel>
 
       {text && (
-        <Panel title="Character" icon="type" id="insp-char"
+        <Panel accordion={false} title="Character" icon="type" id="insp-char"
           actions={hasCharOv ? <IconButton icon="reset" tip="Reset character styling to default" size={13} onClick={() => clear(['font', 'weight', 'size', 'ls', 'lh', 'align', 'color'])} /> : undefined}>
           <Field label="Font">
             <Select value={text.font ?? 'inter'} options={FONTS.map((f) => ({ value: f.id, label: f.name, hint: f.note }))} onChange={(v) => set({ font: v as FontId })} title="Font family" />
@@ -913,7 +913,7 @@ export function Inspector() {
       )}
 
       {canStyleFx && (
-        <Panel title="Effects" icon="sparkle" id="insp-fx" defaultOpen={false}
+        <Panel accordion={false} title="Effects" icon="sparkle" id="insp-fx" defaultOpen={false}
           actions={hasFxOv ? <IconButton icon="reset" tip="Reset effects to default" size={13} onClick={() => clear(['shadow', 'stroke'])} /> : undefined}>
           <Switch checked={!!el.dropShadow} onChange={(on) => set({ shadow: on ? DEFAULT_SHADOW : undefined })} label="Drop shadow" />
           {el.dropShadow && (

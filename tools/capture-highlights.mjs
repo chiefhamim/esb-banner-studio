@@ -36,7 +36,7 @@ await page.keyboard.press('Escape')
 await page.waitForTimeout(200)
 
 // 3. Switch to Video Studio
-await page.click('.rail-btn:has-text("Video")')
+await page.click('.ws-btn[data-ws="video"]')
 await page.waitForSelector('.video-workspace')
 await page.screenshot({ path: path.join(outDir, 'screenshot-video-studio.png') })
 

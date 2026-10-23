@@ -114,7 +114,7 @@ Use compact controls and meaningful information density, while keeping important
 Use one persistent application shell, with three primary workspaces and a shared project/media layer.
 
 ### Global Shell
-- **Workspace switcher:** Editorial, Graphics, Video (`src/shell/WorkspaceRail.tsx`).
+- **Workspace switcher:** Home · Editorial · Graphics · Video as one segmented control at the start of every workspace header (`WorkspaceSwitcher` in `src/shell/WorkspaceRail.tsx`). There is no side rail. The ESB logo appears only on Home and in About.
 - **Project control:** current project/story, save state, recent projects and project actions.
 - **Global command/search palette:** search commands, actions, projects and assets; show relevant keyboard shortcuts.
 - **Contextual toolbar:** controls relevant to the current workspace and selection.
@@ -125,7 +125,7 @@ Use one persistent application shell, with three primary workspaces and a shared
 Purpose: turn source material into an accurate, publication-ready story.
 The desk mirrors the esbpowerline.com CMS article editor (`components/editor/ArticleForm.tsx` in the site repo) inside the Graphics shell (same `.topbar`, `.left`/`.right` panels, `Seg`/`Tabs`/`Panel` controls).
 - **Source column (left):** original article — link with Open / Re-fetch, extraction report chips, Bengali headline & deck, facts to check, numbered paragraphs (Hind Siliguri); a "New link" tab loads the next story. Slides over the editor under 1180 px.
-- **Story editor (centre):** "Headline & deck" panel (headline ≤104, deck ≤200), then a standalone "Story" panel with Body (verified view / edit) · SEO (meta title, meta description, `/articles/` slug ≤80) · Social captions · Preview (the site article page).
+- **Story editor (centre):** "Headline & deck" panel (headline ≤104, deck ≤200), then a standalone "Story" panel with Body (verified view / edit) · SEO (`SeoPanel.tsx` over `seo.ts`: focus keyphrase picked from the story's own keyphrases, Google result preview, title/description/slug builders, 15 checks) · Social captions · Preview (the site article page; hero = the rendered 16:9 Web banner or the bare photo).
 - **CMS sidebar (right):** Publish (status, destination, dateline, pre-flight count, Review & publish), Featured image (`FeaturedImage.tsx`: the banner's photo slot 0 — reframe, zoom, tone, credit, **Edit in Graphics** round trip), Organize (category, tag pills, byline), Outputs (`GraphicsRail.tsx` → `OutputsPanel`: Banner · Web article · Facebook).
 
 ### Workspace 2 — Graphics (`src/components/`, `src/core/`)
@@ -179,6 +179,8 @@ The shared project is the product's connective tissue. Editorial, Graphics and V
 
 ### Translation and Editing (`src/editorial/translator.ts`)
 - Produce clear, publication-grade, active-voice English.
+- Free services: text is split at sentence ends (`translateNet.ts` `chunkForTranslation`) so neither GTX nor MyMemory (500-char limit) ever receives or returns a cut-off paragraph; an untranslated chunk stays in Bengali and the desk says so.
+- Gemini: the model is the editor's choice from the models their AI Studio key lists (`listGeminiModels`; Auto = newest Flash). A reply that stops early (`finishReason` ≠ STOP) is an error, and a reply with far fewer paragraphs than the source raises a visible coverage warning.
 - Preserve meaning, factual nuance, names, quotations and numerical values.
 - Enforce character budgets: **Headline ≤ 104**, **Standfirst / Deck ≤ 200**, **Slug ≤ 80**.
 - Keep original Bengali headline and body accessible side-by-side for comparison.
@@ -249,7 +251,8 @@ Video must not destabilise working Editorial and Graphics features.
 ### Token System (`src/styles/tokens.css`, `primitives.css`, `base.css`)
 - **Spacing:** Base 4px grid (`--s-0` to `--s-11`: 0, 2, 4, 6, 8, 12, 16, 20, 24, 32, 40, 48px).
 - **Radii:** `--r-1: 4px` (chips/tags), `--r-2: 8px` (controls), `--r-3: 12px` (panels), `--r-4: 16px` (dialogs), `--r-pill: 9999px`.
-- **Heights:** Controls 28/32/36px; Panel Headers 40px; Workspace Rail 56px wide.
+- **Heights:** Controls 28/32/36px; every control inside a 40px workspace header is 32px with an 8px radius; Panel Headers 40px.
+- **Panels:** side-column `Panel`s are an accordion (opening one closes its siblings and scrolls it to the top; the open header carries an ink bar). Every launch starts with only Category (Graphics) / Organize (Editorial) open in the sidebar; open state lasts for the session only. The Graphics Inspector opts out (`accordion={false}`).
 - **Typography:**
   - Load fonts before measuring canvas text (`document.fonts.ready`).
   - Bengali: `"Hind Siliguri"` (+2px line-height, `overflow-wrap: anywhere`).

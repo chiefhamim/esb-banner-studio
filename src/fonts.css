@@ -5,3 +5,17 @@
 @font-face { font-family: 'ESB Sans'; font-weight: 700; font-display: block; src: url('./assets/fonts/ui-inter-700.woff2') format('woff2'); }
 @font-face { font-family: 'Hind Siliguri'; font-weight: 600; font-display: swap; src: url('./assets/fonts/bengali-600.woff2') format('woff2'); }
 @font-face { font-family: 'Hind Siliguri'; font-weight: 700; font-display: swap; src: url('./assets/fonts/bengali-700.woff2') format('woff2'); }
+
+/* Bengali reading fonts for the Editorial source column (View → Bengali font). Bengali subsets only, from Fontsource,
+   SIL Open Font License 1.1 — licences beside the files in assets/fonts/bn/. Loaded on first use. */
+@font-face { font-family: 'Hind Siliguri'; font-weight: 400; font-display: swap; src: url('./assets/fonts/bn/hind-siliguri-bengali-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Hind Siliguri'; font-weight: 500; font-display: swap; src: url('./assets/fonts/bn/hind-siliguri-bengali-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Noto Sans Bengali'; font-weight: 400; font-display: swap; src: url('./assets/fonts/bn/noto-sans-bengali-bengali-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Noto Sans Bengali'; font-weight: 600; font-display: swap; src: url('./assets/fonts/bn/noto-sans-bengali-bengali-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Noto Serif Bengali'; font-weight: 400; font-display: swap; src: url('./assets/fonts/bn/noto-serif-bengali-bengali-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Noto Serif Bengali'; font-weight: 600; font-display: swap; src: url('./assets/fonts/bn/noto-serif-bengali-bengali-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Tiro Bangla'; font-weight: 400; font-display: swap; src: url('./assets/fonts/bn/tiro-bangla-bengali-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Anek Bangla'; font-weight: 400; font-display: swap; src: url('./assets/fonts/bn/anek-bangla-bengali-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Anek Bangla'; font-weight: 600; font-display: swap; src: url('./assets/fonts/bn/anek-bangla-bengali-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Baloo Da 2'; font-weight: 400; font-display: swap; src: url('./assets/fonts/bn/baloo-da-2-bengali-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Baloo Da 2'; font-weight: 600; font-display: swap; src: url('./assets/fonts/bn/baloo-da-2-bengali-600-normal.woff2') format('woff2'); }

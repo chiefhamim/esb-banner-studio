@@ -371,6 +371,7 @@ export function buildCmsArticlePayload(params: {
   metaTitle?: string
   metaDescription?: string
   focusKeywords?: string
+  focusKeyphrase?: string
   imageUrl?: string
   credit?: string
   byline?: string
@@ -404,7 +405,7 @@ export function buildCmsArticlePayload(params: {
     seo: {
       metaTitle: params.metaTitle || cleanHeadline,
       metaDescription: params.metaDescription || cleanDeck,
-      focusKeyword: tagList[0] || '',
+      focusKeyword: params.focusKeyphrase?.trim() || tagList[0] || '',
       heroImage: {
         alt: cleanHeadline,
         caption: cleanDeck,

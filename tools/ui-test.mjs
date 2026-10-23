@@ -31,6 +31,30 @@ try {
   await page.waitForSelector('.topbar')
   await page.waitForTimeout(500)
 
+  // A fresh launch shows one open section on the Story tab — Category — and no logo in the header
+  const fresh = await page.evaluate(() => ({ open: [...document.querySelectorAll('.left .pnl.open')].map((p) => p.dataset.panel), logo: document.querySelectorAll('.topbar img[src*="esb-logo"]').length, sw: document.querySelectorAll('.topbar .ws-switch').length }))
+  check('fresh launch: only Category is open, header has the workspace switcher and no logo', fresh.open.join() === 'Category' && fresh.logo === 0 && fresh.sw === 1, JSON.stringify(fresh))
+  // The rest of this suite exercises the canvas through the panels it was written against: open those for every load.
+  // (seeded once per tab, so a panel the suite closes stays closed across its own reloads)
+  await ctx.addInitScript(() => {
+    try {
+      if (sessionStorage.getItem('esb-test/panels-seeded')) return
+      sessionStorage.setItem('esb-test/panels-seeded', '1')
+      for (const t of ['Date', 'Quote Statement', 'Data & Stat Callout', 'Headline', 'Optimal image dimensions', 'Collage', 'Slots & framing']) sessionStorage.setItem('esb-banner-studio/panel/' + t, '1')
+    } catch {}
+  })
+  await page.reload()
+  await page.waitForSelector('.topbar')
+  await page.waitForTimeout(500)
+
+  // Side panels are an accordion: open the section a step needs, as a user would
+  const openPanel = async (title) => {
+    const sel = `.left [data-panel="${title}"]`
+    if (!(await page.locator(`${sel}.open`).count())) await page.click(`${sel} > header`)
+    await page.waitForSelector(`${sel}.open > .pnl-body`)
+  }
+  const HL = '.left [data-panel="Headline"] textarea.input'
+  const headlineValue = async () => { await openPanel('Headline'); return page.inputValue(HL) }
   const stageBox = async () => page.evaluate(() => { const r = document.querySelector('.stage-overlay').getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height } })
   const propVal = async (label) => parseFloat(await page.inputValue(`.right .scrub:has(.scrub-label:text-is("${label}")) input`))
   const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -46,8 +70,10 @@ try {
   check('default format is Facebook 4:5 (1080 x 1350)', (await page.textContent('.statusbar')).includes('1080 × 1350'))
   await page.setInputFiles('input[type=file]', path.join(root, 'src/assets/images/sample-photo.jpg'))
   await page.waitForTimeout(300)
+  await openPanel('Category')
   await page.click('.cat:has-text("Renewables")')
-  await page.fill('.pnl-body textarea.input', "Solar-Powered Irrigation Systems Transforming Bangladesh's Agricultural Sector")
+  await openPanel('Headline'); await page.fill(HL, "Solar-Powered Irrigation Systems Transforming Bangladesh's Agricultural Sector")
+  await openPanel('Date')
   await page.click('.datefield')
   await page.click('.cal-day:not(.out):text-is("19")')
   await page.keyboard.press('Escape')
@@ -198,6 +224,7 @@ try {
   await page.mouse.click(pc.x, pc.y)
   await page.mouse.wheel(0, -400)
   await page.waitForTimeout(150)
+  await openPanel('Slots & framing')
   const zoomTxt = await page.textContent('.frame-controls .field:first-child label')
   check('wheel zooms photo', parseFloat(zoomTxt.split('·')[1]) > 1.2, zoomTxt)
   await drag(pc, { x: pc.x + 90, y: pc.y + 40 })
@@ -210,7 +237,9 @@ try {
   check('a photo can zoom out below 1x', zoomOut < 0.6, 'zoom ' + zoomOut)
   await page.setInputFiles('input[type=file]', path.join(root, 'src/assets/images/sample-photo.jpg'))
   await page.waitForTimeout(300)
+  await openPanel('Slots & framing')
   check('2nd photo switches to a 2-slot collage', (await page.locator('.slot').count()) >= 2)
+  await openPanel('Collage')
   await page.click('.collage-btn[title="Big left + 2 right"]')
 
   // ---- menu bar + Edit menu shortcuts
@@ -224,7 +253,7 @@ try {
 
   // ---- project save + open (.esb)
   await page.click('.side-tabs button:has-text("Story")')
-  await page.fill('.pnl-body textarea.input', 'PROJECT ROUND TRIP HEADLINE')
+  await openPanel('Headline'); await page.fill(HL, 'PROJECT ROUND TRIP HEADLINE')
   const dl = []
   page.on('download', (d) => dl.push(d))
   await page.keyboard.press('Control+s')
@@ -236,13 +265,13 @@ try {
     await proj.saveAs(pPath)
     const j = JSON.parse(fs.readFileSync(pPath, 'utf8'))
     check('project embeds the photos', j.app === 'esb-banner-studio' && j.images.length >= 1 && j.images[0].dataUrl.startsWith('data:image'), `${j.images.length} image(s)`)
-    await page.fill('.pnl-body textarea.input', 'something else entirely')
+    await openPanel('Headline'); await page.fill(HL, 'something else entirely')
     const chooser = page.waitForEvent('filechooser')
     await page.click('.mb-item:has-text("File")')
     await page.click('.popover .menu-item:has-text("Open project")')
     await (await chooser).setFiles(pPath)
     await page.waitForTimeout(800)
-    check('opening a project restores it', (await page.inputValue('.pnl-body textarea.input')) === 'PROJECT ROUND TRIP HEADLINE')
+    check('opening a project restores it', (await headlineValue()) === 'PROJECT ROUND TRIP HEADLINE')
     check('title shows the project name', (await page.title()).includes('test-project'))
   }
 
@@ -269,15 +298,18 @@ try {
   check('Inspector reset restores the template too', (await propVal('Size')) === hSize)
 
   // ---- everyday features
-  await page.fill('.pnl-body textarea.input', 'Midnight Power Demand Hits 3,000 MW Amid Surge in Battery Rickshaws')
+  await openPanel('Headline'); await page.fill(HL, 'Midnight Power Demand Hits 3,000 MW Amid Surge in Battery Rickshaws')
   await page.click('button:has-text("Suggest")')
+  await openPanel('Headline')
   check('Suggest picks the figure to highlight', (await page.inputValue('input[placeholder="Phrase to highlight"]')) === '3,000 MW')
   await page.click('.pnl > header:has-text("Photo credit")')
+  await openPanel('Photo credit')
   await page.fill('input[placeholder="e.g. Photo: PID"]', 'Photo: PID')
   await page.waitForTimeout(200)
   check('photo credit becomes a layer', (await layerRow('Photo credit').count()) === 1)
   await page.click('.pnl > header:has-text("Post caption")')
-  const cap = await page.inputValue('.pnl-body textarea.input >> nth=1')
+  await openPanel('Post caption')
+  const cap = await page.inputValue('.left [data-panel="Post caption"] textarea.input')
   check('caption is generated from the headline and category', cap.includes('Midnight Power Demand') && cap.includes('#ESBPowerLine') && cap.includes('esbpowerline.com'), cap.slice(0, 30))
   await page.click('[aria-label^="Crop guides"]')
   check('crop guides overlay shows the other ratios', (await page.locator('.crop-guide').count()) >= 2, (await page.locator('.crop-guide').count()) + ' guides')
@@ -289,11 +321,11 @@ try {
   await page.keyboard.press('Control+0')
   await page.keyboard.press('Control+Shift+n')
   await page.waitForTimeout(250)
-  check('Next story keeps the layout but clears headline and credit', (await page.inputValue('.pnl-body textarea.input')) === '' && (await layerRow('Photo credit').count()) === 0)
+  check('Next story keeps the layout but clears headline and credit', (await headlineValue()) === '' && (await layerRow('Photo credit').count()) === 0)
   await page.keyboard.press('Control+e'); await page.waitForSelector('.dialog')
   check('export preflight flags the empty headline', (await page.locator('.ex-checks .callout.warn').count()) >= 1)
   await page.keyboard.press('Escape')
-  await page.fill('.pnl-body textarea.input', 'PROJECT ROUND TRIP HEADLINE')
+  await openPanel('Headline'); await page.fill(HL, 'PROJECT ROUND TRIP HEADLINE')
 
   // ---- tooltips live in the top layer (never clipped by a card)
   await layerRow('Headline').click()
@@ -324,6 +356,7 @@ try {
   await page.click('.popover .menu-item:has-text("Space Grotesk")')
   check('font family can be changed per text layer', (await page.textContent('.right .field:has(label:text-is("Font")) .select-label')).includes('Space Grotesk'))
   await page.keyboard.press('Control+z')
+  await openPanel('Photo credit')
   await page.fill('input[placeholder="e.g. Photo: PID"]', 'Photo: PID')
   await page.click('.pnl-body .field:has(label:text-is("Placement")) .select')
   await page.click('.popover .menu-item:has-text("Top right")')
@@ -334,6 +367,7 @@ try {
   await cfont.click()
   await page.click('.popover .menu-item:has-text("Source Serif 4")')
   check('credit font can be chosen', (await cfont.textContent()).includes('Source Serif 4'))
+  await openPanel('Photo credit')
   await page.fill('input[placeholder="e.g. Photo: PID"]', '')
 
   // ---- selection never sticks: bare canvas clears it, even inside the headline icon's area
@@ -361,6 +395,7 @@ try {
   await page.click('.lp:has-text("FEATURED")')
   await layerRow('Label text').click()
   check('Featured pill uses the website label text', (await page.inputValue('.right textarea.input')) === 'FEATURED')
+  await openPanel('Label pill')
   await page.fill('input[placeholder="FEATURED"]', 'Exclusive')
   await page.waitForTimeout(150)
   await layerRow('Label text').click()
@@ -373,6 +408,7 @@ try {
   const lib = page.locator('.left .pnl', { has: page.locator('h3', { hasText: 'Photo library' }) })
   if ((await lib.getAttribute('class')).includes('open')) await lib.locator('> header').click()
   check('the Photo library panel can be collapsed', !(await lib.getAttribute('class')).includes('open'))
+  await openPanel('Photo library')
   const thumbsBefore = await page.locator('.thumb').count()
   const fchoose = page.waitForEvent('filechooser')
   await page.click('.pnl-actions button:has-text("Add")')
@@ -407,7 +443,7 @@ try {
   check('preview is realistic size (banner ~390 px wide on the phone)', imgBox.width >= 380, `${Math.round(imgBox.width)}x${Math.round(imgBox.height)}`)
   const pxv = await page.evaluate(() => { const c = document.querySelector('.pvw .fb-img'); return [...c.getContext('2d').getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data] })
   check('the preview banner is actually painted', pxv[3] > 0 && !(pxv[0] === 223 && pxv[1] === 227 && pxv[2] === 232), pxv.join(','))
-  await page.fill('.pnl-body textarea.input', 'LIVE PREVIEW FOLLOWS EDITS')
+  await openPanel('Headline'); await page.fill(HL, 'LIVE PREVIEW FOLLOWS EDITS')
   await page.waitForTimeout(200)
   check('the preview updates live while you edit', (await page.textContent('.pvw .fb-text')).includes('LIVE PREVIEW FOLLOWS EDITS'))
   await page.click('.pvw .seg-ctl button:has-text("Link post")')
@@ -432,12 +468,12 @@ try {
   check('P shows it again', (await page.locator('.pvw').count()) === 1)
   await page.click('.pvw [aria-label^="Close preview"]')
   check('close button hides the preview', (await page.locator('.pvw').count()) === 0)
-  await page.fill('.pnl-body textarea.input', 'PROJECT ROUND TRIP HEADLINE')
+  await openPanel('Headline'); await page.fill(HL, 'PROJECT ROUND TRIP HEADLINE')
 
   // ---- theme + shortcuts + export
   await page.click('[aria-label="Dark theme"]')
   check('dark theme toggles', (await page.getAttribute('html', 'data-theme')) === 'dark')
-  check('dark-mode logo section is white', (await page.evaluate(() => getComputedStyle(document.querySelector('.logo-wrap')).backgroundColor)) === 'rgb(255, 255, 255)')
+  check('no logo in the header (it lives on Home and in About)', (await page.locator('.topbar .logo-wrap, .topbar img[src*="esb-logo"]').count()) === 0)
   check('no product text beside the menu bar', (await page.locator('.brand-name').count()) === 0)
   await page.screenshot({ path: path.join(out, 'ui-dark.png') })
   await page.click('[aria-label="Light theme"]')
@@ -516,9 +552,11 @@ try {
   check('UI chrome is neutral grey (no coloured fills or text)', ds.chroma.length === 0, ds.chroma.join(' | '))
 
   // ---- tab switch: one thumb glides, content fades, nothing on the category cards moves
+  await openPanel('Category')
   await page.locator('.cat').nth(1).scrollIntoViewIfNeeded()
   const rel = () => page.evaluate(() => { const g = document.querySelector('.cat-grid').getBoundingClientRect(), c = document.querySelectorAll('.cat')[1].getBoundingClientRect(); return { x: c.x - g.x, y: c.y - g.y, w: c.width, h: c.height } })
   const catBox0 = await rel()
+  await openPanel('Category')
   await page.hover('.cat >> nth=1'); await page.waitForTimeout(250)
   const catBox1 = await rel()
   const icoT = await page.locator('.cat-ico').nth(1).evaluate((e) => getComputedStyle(e).transform)
@@ -694,11 +732,11 @@ try {
   await page.evaluate(() => { window.__store.getState().setContent({ categoryId: '01' }); window.__store.getState().select(null) })
 
   // panels tell you where you are
-  await page.click('.left .pnl:has(h3:has-text("Headline")) textarea'); await page.waitForTimeout(350)
+  await openPanel('Headline'); await page.click('.left .pnl:has(h3:has-text("Headline")) textarea'); await page.waitForTimeout(350)
   const pf = await page.evaluate(() => { const p = [...document.querySelectorAll('.left .pnl')].find((x) => x.querySelector('h3')?.textContent.startsWith('Headline')); return { bar: '1', tint: getComputedStyle(p).backgroundColor } })
   check('the panel being edited is marked with a soft desk-colour tint', pf.bar === '1' && pf.tint !== 'rgba(0, 0, 0, 0)', JSON.stringify(pf))
   check('and the banner highlights the element that panel edits', (await page.locator('.el-box.linked').count()) >= 1)
-  await page.click('.left .pnl:has(h3:has-text("Date")) .select'); await page.keyboard.press('Escape')
+  await openPanel('Date'); await page.click('.left .pnl:has(h3:has-text("Date")) .select'); await page.keyboard.press('Escape')
   // click an empty spot of the chrome (never a fixed coordinate — the header layout is responsive)
   { const pt = await page.evaluate(() => { const sp = [...document.querySelectorAll('.topbar .spacer')].map((e) => e.getBoundingClientRect()).find((r) => r.width > 12); const r = sp || document.querySelector('.statusbar .spacer').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } }); await page.mouse.click(pt.x, pt.y) }
   await page.waitForTimeout(200)
@@ -781,6 +819,7 @@ try {
 
   // ---- Body Section Optimal Dimensions for each template
   await page.click('.side-tabs button:has-text("Photos")')
+  await openPanel('Optimal image dimensions')
   await page.waitForSelector('.opt-space-card')
   const optPhotosText = await page.textContent('.opt-space-card')
   check('photos panel displays optimal body image space (1080 × 719 px for Facebook)', optPhotosText.includes('1080 × 719 px') && optPhotosText.includes('3:2'), optPhotosText)

@@ -6,17 +6,23 @@
 //          Organize (category, tags, byline), and Outputs (Banner · Web article · Facebook).
 //   Empty desk: a centred intake card (link / pasted Bengali / site CMS posts).
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import type { CSSProperties } from 'react'
-import logoUrl from '../assets/images/esb-logo.png'
 import './editorial.css'
 import { useEditorialStore } from './editorialStore'
 import { OutputsPanel } from './GraphicsRail'
 import { useWidth } from '../ui/useWidth'
+import { Splitter } from '../ui/layout'
+import { BN_FONTS, useBnFont } from './bnFont'
+import { useBannerImage } from './useBannerImage'
+import { useHeroMode } from './heroMode'
+import { SeoPanel } from './SeoPanel'
+import { suggestKeyphrases } from './seo'
 import { FeaturedImage } from './FeaturedImage'
 import { SitePreview, SITE_THEMES, formatArticleDate } from './SitePreview'
 import type { SiteDevice, SiteTheme } from './SitePreview'
 import { useShellStore } from '../shell/shellStore'
+import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
 import { Field, Select, Check, Dialog, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
@@ -31,9 +37,12 @@ import { extractFactTable, type FactItem } from './facts'
 import { bengaliToAsciiDigits } from './bengali'
 import {
   translateNewsArticle,
-  extractFocusKeywords,
   testGeminiApiKey,
+  listGeminiModels,
+  getPreferredGeminiModel,
+  setPreferredGeminiModel,
 } from './translator'
+import type { GeminiModelInfo } from './translator'
 import {
   SITE_BASE_URL,
   buildCmsArticlePayload,
@@ -105,6 +114,8 @@ function parseParagraphWithFacts(text: string, factTable: FactItem[], sourceAsci
 
 type StoryTab = 'body' | 'seo' | 'social' | 'preview'
 const SOURCE_OPEN_KEY = 'esb-banner-studio/editorial/source-open'
+const COLS_KEY = 'esb-banner-studio/editorial/columns'
+const COLS_DEFAULT = { src: 312, side: 340 }
 
 export function EditorialWorkspace() {
   const source = useEditorialStore((s) => s.source)
@@ -139,6 +150,9 @@ export function EditorialWorkspace() {
 
   // Graphics Studio Banner Store Companion
   const bannerContent = useStore((s) => s.doc.content)
+  const theme = useStore((s) => s.theme)
+  const bnFont = useBnFont((s) => s.id)
+  const setBnFont = useBnFont((s) => s.set)
   const bannerImages = useStore((s) => s.images)
   const catData = CATEGORIES.find((c) => c.id === bannerContent.categoryId) || CATEGORIES[0]
   const leadSlotSrc = useStore((s) => s.doc.photos.slots[s.format][0]?.src ?? null)
@@ -153,12 +167,26 @@ export function EditorialWorkspace() {
   const [storyTab, setStoryTab] = useState<StoryTab>('body')
   const [leftTab, setLeftTab] = useState<'source' | 'intake'>('source')
   const [tagInput, setTagInput] = useState('')
+  // A translation problem worth more than a 3-second toast: shown on the Headline & deck panel until dismissed.
+  const [draftNotice, setDraftNotice] = useState<string | null>(null)
+  const [geminiModels, setGeminiModels] = useState<GeminiModelInfo[]>([])
+  const [geminiModel, setGeminiModel] = useState(getPreferredGeminiModel)
   // The source column: open by default where there is room for three columns, remembered once chosen.
   const [sourceOpen, setSourceOpenState] = useState<boolean>(() => {
     try { const v = localStorage.getItem(SOURCE_OPEN_KEY); if (v !== null) return v === '1' } catch { /* ignore */ }
     return typeof window === 'undefined' || window.innerWidth >= 1280
   })
   const setSourceOpen = (v: boolean) => { setSourceOpenState(v); try { localStorage.setItem(SOURCE_OPEN_KEY, v ? '1' : '0') } catch { /* ignore */ } }
+  // Column widths, dragged like Graphics' side panels and remembered between launches.
+  const [cols, setCols] = useState<{ src: number; side: number }>(() => {
+    try { const v = JSON.parse(localStorage.getItem(COLS_KEY) ?? 'null'); if (v && typeof v.src === 'number' && typeof v.side === 'number') return v } catch { /* ignore */ }
+    return COLS_DEFAULT
+  })
+  const wsRef = useRef<HTMLDivElement>(null)
+  const deskRef = useRef<HTMLDivElement>(null)
+  const liveCol = (k: 'src' | 'side') => (v: number) => deskRef.current?.style.setProperty(k === 'src' ? '--ed-src-px' : '--ed-side-px', v + 'px')
+  const commitCol = (k: 'src' | 'side') => (v: number) => setCols((c) => { const n = { ...c, [k]: v }; try { localStorage.setItem(COLS_KEY, JSON.stringify(n)) } catch { /* ignore */ } return n })
+  const [heroMode, setHeroMode] = useHeroMode()
   const [previewDevice, setPreviewDevice] = useState<SiteDevice>('desktop')
   const [previewTheme, setPreviewTheme] = useState<SiteTheme>('white')
   const [previewHostRef, previewHostW] = useWidth<HTMLDivElement>(720)
@@ -176,6 +204,7 @@ export function EditorialWorkspace() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [errorDetail, setErrorDetail] = useState<{ detail: string; canPaste: boolean } | null>(null)
   const [baseAssets, setBaseAssets] = useState<Assets | null>(null)
+  const webBannerUrl = useBannerImage(storyTab === 'preview' && heroMode === 'banner' ? baseAssets : null, 'web')
 
   // Live feed filter in intake
   const [searchQuery, setSearchQuery] = useState('')
@@ -197,6 +226,14 @@ export function EditorialWorkspace() {
   const [inputApiKey, setInputApiKey] = useState(apiKey || '')
   const [testingApiKey, setTestingApiKey] = useState(false)
   const [apiKeyStatus, setApiKeyStatus] = useState<{ ok?: boolean; msg?: string } | null>(null)
+
+  // Opening the Gemini dialog with a saved key lists that key's models straight away.
+  useEffect(() => {
+    if (!showApiKeyModal || !apiKey || geminiModels.length) return
+    let live = true
+    listGeminiModels(apiKey).then((m) => { if (live) setGeminiModels(m) }).catch(() => {})
+    return () => { live = false }
+  }, [showApiKeyModal, apiKey, geminiModels.length])
 
   // Load Base Assets for Mock Renderers
   useEffect(() => {
@@ -312,6 +349,7 @@ export function EditorialWorkspace() {
       setDraftField('body', result.body)
       setDraftField('slug', result.slug)
       setDraftField('focusKeywords', result.focusKeywords)
+      setDraftField('focusKeyphrase', (result.focusKeywords || '').split(',')[0]?.trim() ?? '')
       setDraftField('metaTitle', result.metaTitle)
       setDraftField('metaDescription', result.metaDescription)
       setDraftField('byline', result.byline)
@@ -319,6 +357,7 @@ export function EditorialWorkspace() {
 
       setProgressStatus(null)
       const warn = result.extraction?.warnings ?? []
+      setDraftNotice(result.translationNote ?? null)
       showToast(warn.length ? `Story imported with ${warn.length} note${warn.length === 1 ? '' : 's'} — see the source pane` : 'Article extracted & populated in English')
     } catch (err: unknown) {
       const info = describeIntakeError(err)
@@ -372,6 +411,7 @@ export function EditorialWorkspace() {
       setDraftField('body', translation.body)
       setDraftField('slug', translation.slug)
       setDraftField('focusKeywords', translation.focusKeywords)
+      setDraftField('focusKeyphrase', (translation.focusKeywords || '').split(',')[0]?.trim() ?? '')
       setDraftField('metaTitle', translation.metaTitle)
       setDraftField('metaDescription', translation.metaDescription)
 
@@ -397,6 +437,7 @@ export function EditorialWorkspace() {
       }))
 
       setProgressStatus(null)
+      setDraftNotice(translation.translationFailed ? 'Part of the story could not be translated — the Bengali is left in place for you to translate.' : translation.coverageWarning ?? null)
       showToast(
         translation.translationFailed
           ? 'No translation service reachable — draft still has untranslated Bengali, review before publishing'
@@ -432,9 +473,11 @@ export function EditorialWorkspace() {
       setDraftField('body', res.body)
       setDraftField('slug', res.slug)
       setDraftField('focusKeywords', res.focusKeywords)
+      setDraftField('focusKeyphrase', (res.focusKeywords || '').split(',')[0]?.trim() ?? '')
       setDraftField('metaTitle', res.metaTitle)
       setDraftField('metaDescription', res.metaDescription)
 
+      setDraftNotice(res.translationFailed ? 'Part of the story could not be translated — the Bengali is left in place for you to translate.' : res.coverageWarning ?? null)
       showToast(
         res.translationFailed
           ? 'No translation service reachable — draft still has untranslated Bengali, review before publishing'
@@ -460,6 +503,7 @@ export function EditorialWorkspace() {
         slug: draft.slug,
         category: catData.name,
         focusKeywords: draft.focusKeywords,
+      focusKeyphrase: draft.focusKeyphrase,
         metaTitle: draft.metaTitle,
         metaDescription: draft.metaDescription,
         byline: staffSession?.name || draft.byline || 'Mehedi Hasan Hamim',
@@ -518,6 +562,7 @@ export function EditorialWorkspace() {
       slug: draft.slug,
       category: catData.name,
       focusKeywords: draft.focusKeywords,
+      focusKeyphrase: draft.focusKeyphrase,
       metaTitle: draft.metaTitle,
       metaDescription: draft.metaDescription,
       byline: staffSession?.name || draft.byline || 'Mehedi Hasan Hamim',
@@ -558,7 +603,7 @@ export function EditorialWorkspace() {
       .map((a) => ({ slug: a.slug, title: a.title, excerpt: a.description, category: a.category, imageUrl: a.imageUrl, date: a.publishedAt })),
     [liveArticles, catData.name, draft.slug],
   )
-  const suggestTags = () => extractFocusKeywords(draft.headline, `${draft.deck} ${draft.body}`).split(',').map((t) => t.trim()).filter(Boolean)
+  const suggestTags = () => suggestKeyphrases(draft.headline, draft.deck, draft.body, 6).map((k) => k.phrase)
   const openPublish = () => { setPublishResult(null); setShowPublishModal(true) }
 
   // Intake form: the empty-desk launcher and the source column's "New link" tab are the same form.
@@ -699,20 +744,23 @@ export function EditorialWorkspace() {
       { label: 'SEO', checked: storyTab === 'seo', disabled: !hasStory, onClick: () => setStoryTab('seo') },
       { label: 'Social captions', checked: storyTab === 'social', disabled: !hasStory, onClick: () => setStoryTab('social') },
       { label: 'Article preview', checked: storyTab === 'preview', disabled: !hasStory, onClick: () => setStoryTab('preview') },
+      { label: 'Open the banner in Graphics', icon: 'layers', onClick: () => useShellStore.getState().openGraphicsFrom('editorial', null) },
       { divider: true },
-      { label: 'Graphics', icon: 'layers', onClick: () => useShellStore.getState().openGraphicsFrom('editorial', null) },
+      { heading: 'Appearance' },
+      { label: 'Light', icon: 'sun', checked: theme !== 'dark', onClick: () => useStore.getState().setTheme('light') },
+      { label: 'Dark', icon: 'moon', checked: theme === 'dark', onClick: () => useStore.getState().setTheme('dark') },
+      { divider: true },
+      { heading: 'Bengali reading font' },
+      ...BN_FONTS.map((f) => ({ label: f.label, hint: f.note, checked: bnFont === f.id, onClick: () => setBnFont(f.id) })),
     ] },
   ]
 
   return (
-    <div className={'editorial-workspace' + (hasStory && sourceOpen ? ' source-open' : '')} style={{ ['--cat' as string]: catData.accent } as CSSProperties}>
+    <div ref={wsRef} className={'editorial-workspace' + (hasStory && sourceOpen ? ' source-open' : '')} style={{ ['--cat' as string]: catData.accent } as CSSProperties}>
       {/* Header: the same bar Graphics uses — brand, menus, a centred tool group, quiet icon pills, one primary action. */}
       <header className="topbar ed-head">
-        <div className="brand">
-          <span className="logo-wrap"><img src={logoUrl} alt="ESB PowerLine" /></span>
-        </div>
+        <WorkspaceSwitcher />
         <MenuBar menus={menus} />
-        <span className="ed-topbar-title">Editorial Desk</span>
         <div className="spacer" />
         <div className="fmtgroup ed-head-group">
           {hasStory && (
@@ -766,7 +814,7 @@ export function EditorialWorkspace() {
           {toastMsg && <div className="toast" onClick={() => setToastMsg(null)}><Icon name="info" size={15} />{toastMsg}</div>}
         </div>
       ) : (
-        <div className="ed-desk">
+        <div ref={deskRef} className="ed-desk" style={{ ['--ed-src-px' as string]: cols.src + 'px', ['--ed-side-px' as string]: cols.side + 'px' } as CSSProperties}>
           {/* LEFT — the original article, untouched, beside the copy made from it */}
           <aside className="left ed-src" aria-label="Original source">
             <Tabs<'source' | 'intake'>
@@ -779,7 +827,7 @@ export function EditorialWorkspace() {
                 <div className="ed-src-intake">{intakeForm(true)}</div>
               ) : (
                 <>
-                  <Panel id="ed-src-link" title="Original link" sub={sourceHost} persist={false} actions={
+                  <Panel id="ed-src-link" defaultOpen={false} title="Original link" sub={sourceHost} persist={false} actions={
                     <button type="button" className={'btn xs' + (sourceEditing ? ' primary' : ' ghost')} onClick={() => setSourceEditing(!sourceEditing)} title="Correct the extracted source text by hand">
                       <Icon name="edit" size={12} />
                       <span>{sourceEditing ? 'Done' : 'Edit'}</span>
@@ -828,7 +876,7 @@ export function EditorialWorkspace() {
                     </Panel>
                   ) : (
                     <>
-                      <Panel id="ed-src-head" title="Headline & deck" sub={languageLabel ?? undefined}>
+                      <Panel id="ed-src-head" defaultOpen={false} title="Headline & deck" sub={languageLabel ?? undefined}>
                         <div className="ed-source-reader">
                           <textarea id="source-title-input" className="source-reader-title-input" readOnly rows={2} value={source?.title || ''} title="Original headline" />
                           {source?.deck && <p className="source-reader-deck">{source.deck}</p>}
@@ -836,7 +884,7 @@ export function EditorialWorkspace() {
                       </Panel>
 
                       {factTable.length > 0 && (
-                        <Panel id="ed-src-facts" title="Facts to check" sub={`${factTable.length}`}>
+                        <Panel id="ed-src-facts" defaultOpen={false} title="Facts to check" sub={`${factTable.length}`}>
                           <div className="fact-strip">
                             {factTable.map((f) => (
                               <span
@@ -866,6 +914,7 @@ export function EditorialWorkspace() {
                 </>
               )}
             </div>
+            <Splitter axis="vert" side="r" label="Resize the source column" value={cols.src} min={264} max={520} reset={COLS_DEFAULT.src} onLive={liveCol('src')} onCommit={commitCol('src')} root={() => wsRef.current} />
           </aside>
           {sourceOpen && <div className="ed-src-scrim" onClick={() => setSourceOpen(false)} aria-hidden />}
 
@@ -884,6 +933,13 @@ export function EditorialWorkspace() {
                   </span>
                 </header>
                 <div className="ed-card-body">
+                  {draftNotice && (
+                    <div className="callout warn ed-draft-notice" role="status">
+                      <Icon name="info" size={14} />
+                      <span>{draftNotice}</span>
+                      <button type="button" className="btn-link" onClick={() => setDraftNotice(null)}>Dismiss</button>
+                    </div>
+                  )}
                   <div className="ed-field">
                     <div className="ed-field-row">
                       <label htmlFor="draft-headline">Headline</label>
@@ -962,27 +1018,7 @@ export function EditorialWorkspace() {
                 )}
 
                 {storyTab === 'seo' && (
-                  <div className="ed-card-body">
-                    <div className="ed-field">
-                      <div className="ed-field-row"><label htmlFor="draft-meta-title">Meta title</label><span className="ed-budget-counter">{(draft.metaTitle || draft.headline).length} / 60</span></div>
-                      <input id="draft-meta-title" type="text" className="ed-input" value={draft.metaTitle || ''} placeholder={draft.headline || 'Defaults to the headline'} onChange={(e) => setDraftField('metaTitle', e.target.value)} />
-                    </div>
-                    <div className="ed-field">
-                      <div className="ed-field-row"><label htmlFor="draft-meta-desc">Meta description</label><span className="ed-budget-counter">{(draft.metaDescription || '').length} / 155</span></div>
-                      <textarea id="draft-meta-desc" className="ed-input" rows={3} value={draft.metaDescription || ''} placeholder={draft.deck || 'About 155 characters for search snippets'} onChange={(e) => setDraftField('metaDescription', e.target.value)} />
-                    </div>
-                    <div className="ed-field">
-                      <div className="ed-field-row"><label htmlFor="draft-slug">URL slug</label><span className={`ed-budget-counter ${draft.slug.length > 80 ? 'over' : ''}`}>{draft.slug.length} / 80</span></div>
-                      <div className="ed-slug">
-                        <span className="ed-slug-prefix">/articles/</span>
-                        <input id="draft-slug" type="text" className="ed-slug-input mono" value={draft.slug} onChange={(e) => setDraftField('slug', e.target.value)} />
-                        <button type="button" className="btn sm" onClick={() => void checkSlug(draft.slug)} disabled={slugStatus === 'checking' || !draft.slug}>
-                          {slugStatus === 'checking' ? 'Checking…' : slugStatus === 'available' ? '✓ Available' : slugStatus === 'taken' ? 'Taken' : 'Check'}
-                        </button>
-                      </div>
-                      <span className="hint">Generated from the headline. Edit it to customise.</span>
-                    </div>
-                  </div>
+                  <SeoPanel hasImage={!!bannerLeadImage} slugStatus={slugStatus} onCheckSlug={() => void checkSlug(draft.slug)} />
                 )}
 
                 {storyTab === 'social' && (
@@ -1010,6 +1046,7 @@ export function EditorialWorkspace() {
                     <div className="ed-body-tools">
                       <Seg<SiteDevice> value={previewDevice} onChange={setPreviewDevice} options={[{ value: 'desktop', label: 'Desktop' }, { value: 'tablet', label: 'Tablet' }, { value: 'mobile', label: 'Phone' }]} />
                       <Seg<SiteTheme> value={previewTheme} onChange={setPreviewTheme} options={SITE_THEMES.map((t) => ({ value: t.id, label: t.label }))} />
+                      <Seg<'banner' | 'photo'> value={heroMode} onChange={setHeroMode} options={[{ value: 'banner', label: 'Hero: Web banner' }, { value: 'photo', label: 'Hero: photo' }]} />
                     </div>
                     <SitePreview
                       theme={previewTheme}
@@ -1022,7 +1059,7 @@ export function EditorialWorkspace() {
                       author={staffSession?.name || draft.byline || 'ESB PowerLine'}
                       date={previewDate}
                       readTime={readTimeMin}
-                      heroUrl={bannerLeadImage}
+                      heroUrl={heroMode === 'banner' ? webBannerUrl : bannerLeadImage}
                       heroCredit={draft.credit || 'ESB PowerLine'}
                       paragraphs={draft.body.split(/\n{2,}/).map((t) => t.trim()).filter(Boolean)}
                       tags={tagList}
@@ -1038,7 +1075,9 @@ export function EditorialWorkspace() {
 
           {/* RIGHT — the CMS sidebar: publish, featured image, organise; then the outputs Graphics shares */}
           <aside className="right ed-side" aria-label="Publishing and image">
-            <Panel id="ed-publish" title="Publish" sub={publishResult?.ok ? 'Published' : 'Draft'}>
+            <Splitter axis="vert" side="l" label="Resize the sidebar" value={cols.side} min={280} max={560} reset={COLS_DEFAULT.side} onLive={liveCol('side')} onCommit={commitCol('side')} root={() => wsRef.current} />
+            <div className="scroll ed-side-scroll">
+            <Panel id="ed-publish" defaultOpen={false} title="Publish" sub={publishResult?.ok ? 'Published' : 'Draft'}>
               <dl className="ed-kv">
                 <dt>Status</dt>
                 <dd><span className={'ed-status ' + (publishResult?.ok ? 'live' : 'draft')}>{publishResult?.ok ? 'Published' : 'Draft · not on the site yet'}</span></dd>
@@ -1070,7 +1109,7 @@ export function EditorialWorkspace() {
               </div>
             </Panel>
 
-            <Panel id="ed-image" title="Featured image" sub={bannerLeadImage ? 'Set' : 'None'}>
+            <Panel id="ed-image" defaultOpen={false} title="Featured image" sub={bannerLeadImage ? 'Set' : 'None'}>
               <FeaturedImage onToast={showToast} />
             </Panel>
 
@@ -1115,9 +1154,10 @@ export function EditorialWorkspace() {
               </Field>
             </Panel>
 
-            <Panel id="ed-outputs" title="Outputs" sub="Banner · Web · Facebook">
+            <Panel id="ed-outputs" defaultOpen={false} title="Outputs" sub="Banner · Web · Facebook">
               {baseAssets ? <OutputsPanel base={baseAssets} onToast={showToast} /> : <p className="hint">Loading the banner…</p>}
             </Panel>
+            </div>
           </aside>
         </div>
       )}
@@ -1257,9 +1297,9 @@ export function EditorialWorkspace() {
       {/* Gemini API Key Dialog */}
       {showApiKeyModal && (
         <Dialog
-          title="Google Gemini AI Engine"
-          kicker="API CONFIGURATION"
-          width={480}
+          title="Gemini translation"
+          kicker="AI MODEL"
+          width={520}
           onClose={() => setShowApiKeyModal(false)}
           footer={
             <>
@@ -1270,11 +1310,12 @@ export function EditorialWorkspace() {
                   setTestingApiKey(true)
                   const res = await testGeminiApiKey(inputApiKey.trim())
                   setTestingApiKey(false)
-                  setApiKeyStatus(res)
+                  if (res.models) setGeminiModels(res.models)
+                  setApiKeyStatus(res.ok ? { ok: true, msg: `Key works — ${res.models?.length ?? 0} models available.` } : { ok: false, msg: res.error || 'The key did not work.' })
                 }}
                 disabled={testingApiKey || !inputApiKey.trim()}
               >
-                {testingApiKey ? 'Testing…' : 'Test Key'}
+                {testingApiKey ? 'Checking…' : 'Check key & load models'}
               </button>
               <div className="spacer" />
               <button
@@ -1282,8 +1323,10 @@ export function EditorialWorkspace() {
                 className="btn primary"
                 onClick={() => {
                   setApiKey(inputApiKey.trim())
+                  setPreferredGeminiModel(geminiModel)
                   setShowApiKeyModal(false)
-                  showToast(inputApiKey.trim() ? 'Gemini 2.5 API key saved' : 'Switched to Neural GTX fallback')
+                  const label = geminiModel === 'auto' ? 'best available Flash model' : geminiModels.find((m) => m.id === geminiModel)?.label ?? geminiModel
+                  showToast(inputApiKey.trim() ? `Gemini key saved · ${label}` : 'Gemini off — using the free translation services')
                 }}
               >
                 Save
@@ -1291,23 +1334,30 @@ export function EditorialWorkspace() {
             </>
           }
         >
-          <div className="stack" style={{ gap: 10 }}>
-            <p className="sub">
-              Enter your Gemini API key for high-speed bilingual translations via Gemini 2.5 Flash.
-            </p>
-            <input
-              type="password"
-              className="ed-url-input"
-              placeholder="AIzaSy..."
-              value={inputApiKey}
-              onChange={(e) => setInputApiKey(e.target.value)}
-            />
+          <div className="stack" style={{ gap: 12 }}>
+            <p className="sub">Paste an API key from Google AI Studio (aistudio.google.com → Get API key). The app lists the models that key can use; pick a Pro model for the most careful translation, or Flash for speed.</p>
+            <Field label="API key">
+              <input type="password" className="input" placeholder="AIza…" value={inputApiKey} onChange={(e) => { setInputApiKey(e.target.value); setGeminiModels([]); setApiKeyStatus(null) }} />
+            </Field>
+            <Field label="Model">
+              <Select
+                value={geminiModel}
+                options={[
+                  { value: 'auto', label: 'Auto — newest Flash (fast)' },
+                  ...geminiModels.map((m) => ({ value: m.id, label: m.label + (m.pro ? ' — most careful' : '') })),
+                  ...(geminiModel !== 'auto' && !geminiModels.some((m) => m.id === geminiModel) ? [{ value: geminiModel, label: geminiModel }] : []),
+                ]}
+                onChange={(v) => setGeminiModel(String(v))}
+              />
+            </Field>
+            {!geminiModels.length && <p className="hint">Check the key to load the list of models it can use.</p>}
             {apiKeyStatus && (
               <div className={`callout ${apiKeyStatus.ok ? 'good' : 'warn'}`}>
                 <Icon name={apiKeyStatus.ok ? 'check' : 'info'} size={14} />
                 <span>{apiKeyStatus.msg}</span>
               </div>
             )}
+            <p className="hint">A Google One / Google AI Pro subscription covers the Gemini app, not this API: the key is billed or rate-limited on its own AI Studio tier. Pro models are slower (up to a minute or two per article) and may have low free-tier limits.</p>
           </div>
         </Dialog>
       )}

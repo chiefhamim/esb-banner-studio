@@ -30,6 +30,13 @@ function check(name, ok, extra = '') {
   }
 }
 
+// Open a collapsible panel by id (they start closed except Category / Organize, and close each other).
+async function openPanel(page, id) {
+  const sel = `[data-panel="${id}"]`
+  if (!(await page.locator(`${sel}.open`).count())) await page.click(`${sel} > header`)
+  await page.waitForSelector(`${sel}.open > .pnl-body`)
+}
+
 try {
   await waitUp()
   browser = await launchBrowser(chromium)
@@ -53,9 +60,9 @@ try {
   await page.waitForSelector('.studio-shell')
 
   // 1. Switch to Editorial Desk via Workspace Rail
-  await page.click('.rail-btn:has-text("Editorial")')
+  await page.click('.ws-btn[data-ws="editorial"]')
   await page.waitForSelector('.editorial-workspace')
-  check('Editorial Desk workspace opened', (await page.locator('.ed-topbar-title').textContent()).includes('Editorial Desk'))
+  check('Editorial Desk workspace opened', (await page.getAttribute('.editorial-workspace .ws-btn.on', 'data-ws')) === 'editorial')
 
   // 2. Verify connection telemetry and live posts list
   await page.waitForSelector('.ed-site-pill')
@@ -75,16 +82,20 @@ try {
   await page.click('button:has-text("Paste Story Link")')
   await page.fill('.ed-url-input', `http://localhost:${PORT}/tools/fixtures/jsonld-news.html`)
   await page.click('button:has-text("Fetch & Auto-Translate")')
+  await page.waitForSelector('.ed-card-story', { timeout: 30000 })
+  await openPanel(page, 'ed-src-link')
   await page.waitForSelector('.ed-extract-report', { timeout: 30000 })
   const report = await page.locator('.ed-extract-report').innerText()
   check('Link intake: extraction report shows method, language and counts', /Page markup|Structured data/.test(report) && /Bengali/.test(report) && /4 paragraphs/.test(report) && /[12] photos?/.test(report), report.replace(/\n/g, ' · '))
+  await openPanel(page, 'ed-src-head')
   check('Link intake: source pane holds the Bengali headline from the page', (await page.inputValue('#source-title-input')) === 'গ্যাস সরবরাহ বাড়াতে সিলেটে দুটি নতুন কূপ')
+  await openPanel(page, 'ed-src-facts')
   check('Link intake: fact chips are deduplicated', (await page.locator('.fact-pill').allTextContents()).filter((t) => t === 'Tk 592 crore').length === 1)
   // back to a clean launcher for the paste flow below (the desk autosaves, so clear its session first)
-  await page.evaluate(() => { try { localStorage.removeItem('esb-banner-studio/editorial/v1') } catch {} })
+  await page.evaluate(() => { try { localStorage.removeItem('esb-banner-studio/editorial/v1'); sessionStorage.clear() } catch {} })
   await page.reload()
   await page.waitForSelector('.studio-shell')
-  await page.click('.rail-btn:has-text("Editorial")')
+  await page.click('.ws-btn[data-ws="editorial"]')
   await page.waitForSelector('button:has-text("Paste Bengali Story")')
 
   // 3. Select Paste Bengali Story mode and enter Bengali story text
@@ -98,7 +109,11 @@ try {
   await page.click('button:has-text("Auto-Translate & Populate")')
 
   // 4. Verify Left Column keeps Original Bengali and Right Column populates English Translation
-  await page.waitForSelector('#source-title-input')
+  await page.waitForSelector('.ed-card-story', { timeout: 30000 })
+  // 5b. Panels: a fresh session opens one section per column — Organize (category) on the right, the story on the left
+  const openNow = await page.evaluate(() => ({ right: [...document.querySelectorAll('.ed-side-scroll > .pnl.open')].map((p) => p.dataset.panel), left: [...document.querySelectorAll('.ed-src-scroll > .pnl.open')].map((p) => p.dataset.panel) }))
+  check('Only Organize starts open in the sidebar, only the story in the source column', openNow.right.join() === 'ed-organize' && openNow.left.join() === 'ed-src-body', JSON.stringify(openNow))
+  await openPanel(page, 'ed-src-head')
   const sourceTitleVal = await page.inputValue('#source-title-input')
   check('Left column preserves original Bengali headline', /[\u0980-\u09FF]/.test(sourceTitleVal))
 
@@ -124,15 +139,58 @@ try {
   })
   check('Centre is the CMS editor: Headline & deck panel, then a standalone Story panel', layout.head && layout.story && !layout.nested && layout.details === 0, JSON.stringify(layout))
   check('Banner line-break strip is gone from the editor', layout.breaker === 0)
+
+  // 5a. Shell: one workspace switcher in the header, no side rail, no logo outside Home / About
+  const shell = await page.evaluate(() => ({ sw: document.querySelectorAll('.editorial-workspace .topbar .ws-switch').length, rail: document.querySelectorAll('.workspace-rail').length, logo: document.querySelectorAll('.editorial-workspace img[src*="esb-logo"]').length, on: document.querySelector('.ws-btn.on')?.dataset.ws }))
+  check('Header carries the workspace switcher; no rail, no logo', shell.sw === 1 && shell.rail === 0 && shell.logo === 0 && shell.on === 'editorial', JSON.stringify(shell))
+
+  await page.click('[data-panel="ed-image"] > header')
+  await page.waitForTimeout(250)
+  const acc = await page.evaluate(() => [...document.querySelectorAll('.ed-side-scroll > .pnl.open')].map((p) => p.dataset.panel))
+  check('Opening a section closes the other one in that column', acc.join() === 'ed-image', acc.join())
+  await openPanel(page, 'ed-organize')
+
+  // 5c. View menu: appearance and Bengali reading font
+  await page.click('.editorial-workspace .mb-item:has-text("View")')
+  await page.click('.menu-item:has-text("Dark")')
+  check('View → Dark switches the theme from the Editorial desk', (await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark')
+  await page.click('.editorial-workspace .mb-item:has-text("View")')
+  await page.click('.menu-item:has-text("Light")')
+  await page.click('.editorial-workspace .mb-item:has-text("View")')
+  await page.click('.menu-item:has-text("Noto Serif Bengali")')
+  await openPanel(page, 'ed-src-body')
+  const bnFace = await page.evaluate(async () => { await document.fonts.ready; const p = document.querySelector('.source-reader-p'); return { family: getComputedStyle(p).fontFamily, loaded: document.fonts.check('16px "Noto Serif Bengali"', 'সিলেট') } })
+  check('View → Bengali font changes the source column typeface', /Noto Serif Bengali/.test(bnFace.family) && bnFace.loaded, JSON.stringify(bnFace))
+  await page.click('.editorial-workspace .mb-item:has-text("View")')
+  await page.click('.menu-item:has-text("Hind Siliguri")')
+
+  // 5d. Columns resize by dragging their edge, like Graphics
+  const sideW0 = await page.evaluate(() => document.querySelector('.ed-side').getBoundingClientRect().width)
+  const sp = await page.locator('.ed-side > .splitter').boundingBox()
+  await page.mouse.move(sp.x + sp.width / 2, sp.y + 200); await page.mouse.down(); await page.mouse.move(sp.x - 60, sp.y + 200, { steps: 6 }); await page.mouse.up()
+  const sideW1 = await page.evaluate(() => document.querySelector('.ed-side').getBoundingClientRect().width)
+  check('Dragging the sidebar edge widens it', sideW1 > sideW0 + 40, `${Math.round(sideW0)} → ${Math.round(sideW1)}`)
+  await page.dblclick('.ed-side > .splitter')
   await page.click('.ed-story-tabs button:has-text("SEO")')
   check('Story → SEO holds the slug with the /articles/ prefix', (await page.locator('.ed-card-story #draft-slug').count()) === 1 && (await page.locator('.ed-slug-prefix').innerText()) === '/articles/')
+  const chips = await page.locator('.seo-chip').allTextContents()
+  check('SEO suggests keyphrases from the story, with no amounts', chips.length >= 2 && !chips.some((c) => /\d/.test(c)), chips.join(' · '))
+  await page.click('.seo-chip >> nth=0')
+  await page.click('button:has-text("Build from headline")')
+  await page.click('button:has-text("Build from story")')
+  const seo = await page.evaluate(() => ({ kp: document.querySelector('#draft-keyphrase').value, title: document.querySelector('#draft-meta-title').value, serp: document.querySelector('.seo-serp-title').textContent, checks: document.querySelectorAll('.seo-check').length, titleCheck: document.querySelector('[data-check="kp-title"]').className }))
+  check('SEO: keyphrase, built title in the Google preview, and the checks run', seo.kp === chips[0] && seo.title.includes(seo.kp) && seo.serp.length > 10 && seo.checks === 15 && /good/.test(seo.titleCheck), JSON.stringify(seo))
   await page.click('.ed-story-tabs button:has-text("Preview")')
   await page.waitForSelector('.ed-card-story .esb-site-mock iframe')
   check('Story → Preview shows the esbpowerline.com article page', (await page.locator('.ed-card-story .esb-site-mock').count()) === 1)
+  await page.waitForFunction(() => document.querySelector('.ed-card-story .esb-site-mock iframe')?.contentDocument?.querySelector('figure img')?.src?.startsWith('blob:'), null, { timeout: 10000 }).catch(() => {})
+  const hero = await page.evaluate(() => { const img = document.querySelector('.ed-card-story .esb-site-mock iframe').contentDocument.querySelector('figure img'); return img ? { src: img.src.slice(0, 5), w: img.naturalWidth, h: img.naturalHeight } : null })
+  check('The article hero is the rendered 16:9 Web banner', !!hero && hero.src === 'blob:' && Math.abs(hero.w / hero.h - 16 / 9) < 0.01, JSON.stringify(hero))
   await page.click('.ed-story-tabs button:has-text("Body")')
 
   // 6. Send Headline to Banner
   await page.fill('#draft-headline', 'Official: Two New Wells to Add 30 MMCFD Gas to Grid for Tk 592 Crore')
+  await openPanel(page, 'ed-outputs')
   await page.click('.ed-outputs button:has-text("Send to Banner")')
 
   // Asserts switch to Graphics workspace, with the way back offered
@@ -190,12 +248,15 @@ try {
   await page.evaluate(() => window.__store.getState().setContent({ headline: 'Edited from Graphics' }))
   await page.waitForTimeout(250)
   check('Editing the banner updates the draft headline', (await page.inputValue('#draft-headline')) === 'Edited from Graphics')
+  await openPanel(page, 'ed-organize')
   await page.click('.ed-desk-select')
   await page.click('.menu-item:has-text("Consumers & Tariffs")')
+  await openPanel(page, 'ed-outputs')
   await page.click('.ed-outputs button:has-text("Send to Banner")')
   check('A hand-picked category survives Send to Banner', (await page.evaluate(() => window.__store.getState().doc.content.categoryId)) === '07')
 
   // 8b. Featured image: add one from disk (this story was pasted, so it has no photos), reframe, round-trip through Graphics
+  await openPanel(page, 'ed-image')
   await page.setInputFiles('.fi input[type=file]', fixturePhoto)
   await page.waitForSelector('.fi-canvas', { timeout: 15000 })
   await page.waitForTimeout(400)

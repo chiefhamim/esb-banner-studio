@@ -2,46 +2,48 @@ import { useShellStore } from './shellStore'
 import type { WorkspaceId } from './shellStore'
 import { Icon } from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
+import { useSlidingThumb } from '../ui/controls'
 
-interface RailItem {
-  id: WorkspaceId
-  label: string
-  icon: IconName
-  title: string
-}
+interface WorkspaceItem { id: WorkspaceId; label: string; icon: IconName; title: string }
 
-// Only workspaces that are implemented appear on the rail
-const WORKSPACES: RailItem[] = [
-  { id: 'home', label: 'Home', icon: 'home', title: 'Home · Studio Hub' },
-  { id: 'editorial', label: 'Editorial', icon: 'newspaper', title: 'Editorial · Newsroom Fact Desk' },
-  { id: 'graphics', label: 'Graphics', icon: 'layers', title: 'Graphics · News Banner Studio' },
-  { id: 'video', label: 'Video', icon: 'video', title: 'Video · Video Timeline Editor' },
+// Only workspaces that are implemented appear here
+const WORKSPACES: WorkspaceItem[] = [
+  { id: 'home', label: 'Home', icon: 'home', title: 'Home — projects and recent work' },
+  { id: 'editorial', label: 'Editorial', icon: 'newspaper', title: 'Editorial — source, translation, CMS' },
+  { id: 'graphics', label: 'Graphics', icon: 'layers', title: 'Graphics — banners and social images' },
+  { id: 'video', label: 'Video', icon: 'video', title: 'Video — timeline editor' },
 ]
 
-export function WorkspaceRail() {
+/**
+ * The workspace switcher: one segmented control at the start of every workspace's header, so "where am I" is always
+ * answered in the same place, in the same words, with the same sliding highlight. It replaced a 56 px icon rail down
+ * the left edge, which spent a column of the window on four buttons and looked unlike the rest of the chrome.
+ */
+export function WorkspaceSwitcher() {
   const current = useShellStore((s) => s.workspace)
   const setWorkspace = useShellStore((s) => s.setWorkspace)
-
+  const { wrap, thumb } = useSlidingThumb(current)
   return (
-    <nav className="workspace-rail" aria-label="Studio workspaces">
-      <div className="rail-top">
-        {WORKSPACES.map((w) => {
-          const active = current === w.id
-          return (
-            <button
-              key={w.id}
-              type="button"
-              className={`rail-btn ${active ? 'active' : ''}`}
-              title={w.title}
-              onClick={() => setWorkspace(w.id)}
-              aria-current={active ? 'page' : undefined}
-            >
-              <Icon name={w.icon} size={19} strokeWidth={1.8} />
-              <span className="rail-label">{w.label}</span>
-            </button>
-          )
-        })}
-      </div>
+    <nav ref={wrap} className="seg-ctl ws-switch" aria-label="Workspaces">
+      {thumb}
+      {WORKSPACES.map((w) => {
+        const on = current === w.id
+        return (
+          <button
+            key={w.id}
+            type="button"
+            className={'ws-btn' + (on ? ' on' : '') + (w.id === 'home' ? ' ws-home' : '')}
+            data-ws={w.id}
+            data-tip={w.title}
+            aria-label={w.label}
+            aria-current={on ? 'page' : undefined}
+            onClick={() => setWorkspace(w.id)}
+          >
+            <Icon name={w.icon} size={15} />
+            <span className="ws-label">{w.label}</span>
+          </button>
+        )
+      })}
     </nav>
   )
 }

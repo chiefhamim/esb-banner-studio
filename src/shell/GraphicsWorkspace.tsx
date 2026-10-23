@@ -19,6 +19,7 @@ import { Icon } from '../ui/Icon'
 import { DEFAULT_LAYOUT, LIMITS, Splitter, loadLayout, saveLayout } from '../ui/layout'
 import type { LayoutState } from '../ui/layout'
 import { useShellStore } from './shellStore'
+import { WorkspaceSwitcher } from './WorkspaceRail'
 import { WelcomeModal } from '../ui/WelcomeModal'
 
 type Tab = 'story' | 'photos'
@@ -440,9 +441,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   return (
     <div className="app" ref={appRef} style={{ gridTemplateColumns: gridCols(layout.lw, layout.rw), ['--dock']: layout.dock + 'px', ['--cat']: catAccent } as CSSProperties}>
       <header className="topbar">
-        <div className="brand">
-          <span className="logo-wrap" data-tip="About ESB Studio" onClick={() => setShowAbout(true)} style={{ cursor: 'pointer' }}><img src={logoUrl} alt="ESB PowerLine" /></span>
-        </div>
+        <WorkspaceSwitcher />
         <MenuBar menus={menus} />
         {returnTo === 'editorial' && (
           <button type="button" className="pv-btn back-to-desk" aria-label="Back to the Editorial desk" onClick={() => useShellStore.getState().setWorkspace('editorial')} title="Back to the Editorial desk — your photo edits are already there">

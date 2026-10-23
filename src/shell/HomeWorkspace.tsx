@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { WorkspaceSwitcher } from './WorkspaceRail'
 import logoUrl from '../assets/images/esb-logo.png'
 import { readRecent, openProject, openRecent } from '../project'
 import type { RecentProject } from '../project'
@@ -72,6 +73,11 @@ export function HomeWorkspace() {
   }
 
   return (
+    <div className="home-shell">
+    <header className="topbar home-topbar">
+      <WorkspaceSwitcher />
+      <div className="spacer" />
+    </header>
     <main className="home-workspace" aria-label="Home dashboard">
       <div className="home-container">
         {/* Crash recovery banner if available */}
@@ -173,5 +179,6 @@ export function HomeWorkspace() {
         </footer>
       </div>
     </main>
+    </div>
   )
 }

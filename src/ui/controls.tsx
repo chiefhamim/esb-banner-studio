@@ -244,7 +244,7 @@ export function IconButton({ icon, tip, onClick, active, disabled, size = 15, ti
 }
 
 /** Measures the active button so a single "thumb" can glide between options instead of the highlight jumping. */
-function useSlidingThumb(value: unknown) {
+export function useSlidingThumb(value: unknown) {
   const wrap = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ x: number; w: number } | null>(null)
   const [ready, setReady] = useState(false)
@@ -562,21 +562,54 @@ export function Dialog({ title, kicker, onClose, children, footer, width = 760 }
 }
 
 // ------------------------------------------------------------------ Collapsible panel
-export function Panel({ title, sub, icon, actions, children, defaultOpen = true, id, persist = true, focusKey }: { title: string; sub?: string; icon?: IconName; actions?: ReactNode; children: ReactNode; defaultOpen?: boolean; id?: string; persist?: boolean; focusKey?: string }) {
+// Panels in a side column behave as one accordion: opening a section closes its open siblings and brings its header
+// to the top of the column, so there is always one obvious "where am I" — the highlighted header with its content
+// directly under it. Several sections open at once, each scrolled half out of view, is what made the columns feel
+// like a maze. Open/closed state lasts for the session only: every launch starts from the defaults (Category open,
+// everything else closed) rather than from wherever the last session left things.
+// The Inspector opts out (`accordion={false}`): its sections describe one selection and are read together.
+function sessionGet(key: string): string | null { try { return sessionStorage.getItem(key) } catch { return null } }
+function sessionSet(key: string, v: string) { try { sessionStorage.setItem(key, v) } catch { /* ignore */ } }
+
+export function Panel({ title, sub, icon, actions, children, defaultOpen = true, id, persist = true, focusKey, accordion = true }: { title: string; sub?: string; icon?: IconName; actions?: ReactNode; children: ReactNode; defaultOpen?: boolean; id?: string; persist?: boolean; focusKey?: string; accordion?: boolean }) {
   const key = 'esb-banner-studio/panel/' + (id ?? title)
-  const [open, setOpen] = useState(() => { if (!persist) return defaultOpen; try { const s = localStorage.getItem(key); return s === null ? defaultOpen : s === '1' } catch { return defaultOpen } })
-  useEffect(() => { if (!persist) return; try { localStorage.setItem(key, open ? '1' : '0') } catch { /* ignore */ } }, [open, key, persist])
+  const [open, setOpen] = useState(() => { if (!persist) return defaultOpen; const s = sessionGet(key); return s === null ? defaultOpen : s === '1' })
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => { if (persist) sessionSet(key, open ? '1' : '0') }, [open, key, persist])
+
+  /** Open this panel: close its accordion siblings and bring it into view. */
+  const reveal = useCallback(() => {
+    setOpen(true)
+    const el = ref.current
+    if (!el) return
+    if (accordion) window.dispatchEvent(new CustomEvent('esb:panel-reveal', { detail: el }))
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const scroller = el.closest('.scroll, .ed-side, .ed-src-scroll') as HTMLElement | null
+      if (!scroller) return
+      const top = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
+      scroller.scrollTo({ top: Math.max(0, top), behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+    }))
+  }, [accordion])
+
   useEffect(() => {
-    const onOpen = (e: Event) => { if ((e as CustomEvent).detail === (id ?? title)) setOpen(true) }
+    const onReveal = (e: Event) => {
+      const other = (e as CustomEvent<HTMLElement>).detail
+      const el = ref.current
+      if (accordion && el && other !== el && other.parentElement === el.parentElement) setOpen(false)
+    }
+    const onOpen = (e: Event) => { if ((e as CustomEvent).detail === (id ?? title)) reveal() }
+    window.addEventListener('esb:panel-reveal', onReveal)
     window.addEventListener('esb:open-panel', onOpen)
-    return () => window.removeEventListener('esb:open-panel', onOpen)
-  }, [id, title])
+    return () => { window.removeEventListener('esb:panel-reveal', onReveal); window.removeEventListener('esb:open-panel', onOpen) }
+  }, [id, title, accordion, reveal])
+
   return (
-    <section className={'pnl' + (open ? ' open' : '')}
+    <section ref={ref} className={'pnl' + (open ? ' open' : '')} data-panel={id ?? title}
       // tells the banner which element this panel edits, so it can show where you are
       onFocus={focusKey ? () => window.dispatchEvent(new CustomEvent('esb:panel-focus', { detail: focusKey })) : undefined}
       onBlur={focusKey ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) window.dispatchEvent(new CustomEvent('esb:panel-focus', { detail: null })) } : undefined}>
-      <header onClick={() => setOpen((o) => !o)}>
+      <header onClick={() => (open ? setOpen(false) : reveal())} role="button" aria-expanded={open} tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (open) setOpen(false); else reveal() } }}>
         <Icon name="chevRight" size={13} className="pnl-chev" />
         {icon && <Icon name={icon} size={14} className="pnl-icon" />}
         <h3><span className="t">{title}</span>{sub && <small>{sub}</small>}</h3>

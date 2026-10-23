@@ -3,7 +3,7 @@ import { getCategory } from './tokens'
 import type { Content } from './types'
 import type { IconPathDef } from './tokens'
 import { bengaliToAsciiDigits } from '../editorial/bengali'
-import { raceTranslate } from '../editorial/translateNet'
+import { translateComplete } from '../editorial/translateNet'
 
 const CURRENCY = /(?:\$|Tk\.?\s?|BDT\s?|USD\s?)\d[\d,]*(?:\.\d+)?(?:\s?(?:billion|million|crore|lakh))?(?:\s+per\s+\w+)?/i
 const WITH_UNIT = /\d[\d,]*(?:\.\d+)?\s?(?:MMCFD|MMcf|bcf|MW|GW|kW|kWh|percent|%|billion|million|crore|lakh|Tk|BDT|USD|tonnes?|MT|days?|months?|years?)\b/i
@@ -243,7 +243,7 @@ export async function translateBengaliToEnglish(text: string): Promise<string> {
   }
 
   if (typeof navigator === 'undefined' || navigator.onLine !== false) {
-    const translated = await raceTranslate(clean)
+    const translated = await translateComplete(clean)
     if (translated) return polishJournalisticEnglish(translated)
   }
   // Last resort: known-headline dictionary, else digits/units normalised only

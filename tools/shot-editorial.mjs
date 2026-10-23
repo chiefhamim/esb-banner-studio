@@ -28,7 +28,7 @@ try {
     await page.screenshot({ path: path.join(out, `${label}-graphics-${w}.png`) })
   }
   await page.setViewportSize({ width: 1920, height: 1080 })
-  await page.click('.rail-btn:has-text("Editorial")')
+  await page.click('.ws-btn[data-ws="editorial"]')
   await page.waitForSelector('.editorial-workspace')
   if (await page.locator('.ed-url-input').count()) {
     await page.screenshot({ path: path.join(out, `${label}-launcher-1920.png`) })
@@ -44,6 +44,7 @@ try {
   }
   // featured image: pick the first story photo, drag to reframe, then round-trip through Graphics
   await page.setViewportSize({ width: 1600, height: 1000 })
+  await page.click('[data-panel="ed-image"] > header'); await page.waitForTimeout(300)
   await page.click('.fi-thumb >> nth=0')
   await page.waitForSelector('.fi-canvas', { timeout: 15000 })
   await page.waitForTimeout(600)
@@ -64,11 +65,12 @@ try {
     await page.screenshot({ path: path.join(out, `${label}-story-${t.toLowerCase()}-1600.png`) })
   }
   await page.click('.ed-story-tabs button:has-text("Body")')
-  await page.evaluate(() => document.querySelector('.ed-side').scrollTo(0, 99999))
+  await page.click('[data-panel="ed-outputs"] > header'); await page.waitForTimeout(300)
+  await page.evaluate(() => document.querySelector('.ed-side-scroll').scrollTo(0, 99999))
   for (const t of ['Banner', 'Web article', 'Facebook']) {
     await page.click(`.ed-outputs-tabs button:has-text("${t}")`)
     await page.waitForTimeout(800)
-    await page.evaluate(() => document.querySelector('.ed-side').scrollTo(0, 99999))
+    await page.evaluate(() => document.querySelector('.ed-side-scroll').scrollTo(0, 99999))
     await page.screenshot({ path: path.join(out, `${label}-out-${t.split(' ')[0].toLowerCase()}-1600.png`) })
   }
   await page.setViewportSize({ width: 1100, height: 720 })

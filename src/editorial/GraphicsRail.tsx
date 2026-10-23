@@ -4,6 +4,8 @@
 
 import { useMemo, useState } from 'react'
 import { useWidth } from '../ui/useWidth'
+import { useBannerImage } from './useBannerImage'
+import { useHeroMode } from './heroMode'
 import type { CSSProperties } from 'react'
 import { useStore } from '../store'
 import { useEditorialStore } from './editorialStore'
@@ -51,6 +53,8 @@ export function OutputsPanel({ base, onToast }: { base: Assets; onToast: (msg: s
   const [hostRef, hostW] = useWidth<HTMLDivElement>(300)
   const [previewDate] = useState(() => new Date())
   const [busy, setBusy] = useState<null | 'export' | 'copy'>(null)
+  const [heroMode, setHeroMode] = useHeroMode()
+  const webBanner = useBannerImage(tab === 'article' && heroMode === 'banner' ? base : null, 'web')
 
   const fmt = getFormat(format)
   const ratio = FORMATS[format].w / FORMATS[format].h
@@ -159,6 +163,7 @@ export function OutputsPanel({ base, onToast }: { base: Assets; onToast: (msg: s
             <div className="ed-outputs-row">
               <Seg<SiteDevice> value={device} onChange={setDevice} options={[{ value: 'desktop', label: 'Desktop' }, { value: 'tablet', label: 'Tablet' }, { value: 'mobile', label: 'Phone' }]} />
               <Seg<SiteTheme> value={theme} onChange={setTheme} options={SITE_THEMES.map((t) => ({ value: t.id, label: t.label }))} />
+              <Seg<'banner' | 'photo'> value={heroMode} onChange={setHeroMode} options={[{ value: 'banner', label: 'Hero: Web banner' }, { value: 'photo', label: 'Hero: photo' }]} />
             </div>
             <SitePreview
               theme={theme}
@@ -171,7 +176,7 @@ export function OutputsPanel({ base, onToast }: { base: Assets; onToast: (msg: s
               author={staffSession?.name || draft.byline || 'ESB PowerLine'}
               date={previewDate}
               readTime={Math.max(1, Math.ceil(wordCount / 200))}
-              heroUrl={slotImage?.url || null}
+              heroUrl={heroMode === 'banner' ? webBanner : slotImage?.url || null}
               heroCredit={draft.credit || 'ESB PowerLine'}
               paragraphs={draft.body.split(/\n{2,}/).map((t) => t.trim()).filter(Boolean)}
               tags={draft.focusKeywords.split(',').map((t) => t.trim()).filter(Boolean)}

@@ -43,7 +43,7 @@ try {
   await page.waitForSelector('.topbar')
 
   // 1. Switch to Video Studio via Workspace Rail
-  await page.click('.rail-btn:has-text("Video")')
+  await page.click('.ws-btn[data-ws="video"]')
   await page.waitForSelector('.video-workspace')
   check('Video Studio workspace mounted', (await page.locator('.video-workspace').count()) === 1)
 
@@ -119,7 +119,7 @@ try {
   await page.waitForTimeout(300)
 
   // 11. Switch back to Graphics workspace
-  await page.click('.rail-btn:has-text("Graphics")')
+  await page.click('.ws-btn[data-ws="graphics"]')
   await page.waitForSelector('.topbar')
   check('Switched back to Graphics workspace', (await page.locator('.topbar').count()) === 1)
 

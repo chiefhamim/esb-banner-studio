@@ -52,23 +52,23 @@ try {
   const canvasOk = await page.evaluate(() => { const c = document.querySelector('.stage-canvas'); return !!c && c.width > 300 })
   console.log(canvasOk ? 'PASS' : 'FAIL', 'stage canvas rendered')
 
-  // Workspace rail navigation
-  await page.click('.rail-btn:has-text("Home")')
+  // Workspace switcher navigation
+  await page.click('.ws-btn[data-ws="home"]')
   await page.waitForSelector('.home-workspace')
   const homeOk = await page.evaluate(() => !!document.querySelector('.home-workspace h1')?.textContent.includes('ESB PowerLine Studio'))
   console.log(homeOk ? 'PASS' : 'FAIL', 'switched to Home workspace')
 
-  await page.click('.rail-btn:has-text("Editorial")')
+  await page.click('.ws-btn[data-ws="editorial"]')
   await page.waitForSelector('.editorial-workspace')
-  const editorialOk = await page.evaluate(() => !!document.querySelector('.editorial-workspace .ed-topbar-title')?.textContent.includes('Editorial Desk'))
+  const editorialOk = await page.waitForSelector('.editorial-workspace .ws-btn.on[data-ws="editorial"]', { timeout: 8000 }).then(() => true, () => false)
   console.log(editorialOk ? 'PASS' : 'FAIL', 'switched to Editorial workspace')
 
-  await page.click('.rail-btn:has-text("Video")')
+  await page.click('.ws-btn[data-ws="video"]')
   await page.waitForSelector('.video-workspace')
   const videoOk = await page.evaluate(() => !!document.querySelector('.video-workspace canvas'))
   console.log(videoOk ? 'PASS' : 'FAIL', 'switched to Video workspace')
 
-  await page.click('.rail-btn:has-text("Graphics")')
+  await page.click('.ws-btn[data-ws="graphics"]')
   await page.waitForSelector('.stage-canvas')
   const graphicsOk = await page.evaluate(() => !!document.querySelector('.stage-canvas'))
   console.log(graphicsOk ? 'PASS' : 'FAIL', 'switched back to Graphics workspace')

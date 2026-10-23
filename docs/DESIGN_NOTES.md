@@ -43,7 +43,8 @@ Only the following spacing steps are permitted:
 * **Control Heights**: 24 (inline table), 28 (compact/tabs), 32 (standard input/button), 36 (toolbar/header buttons).
 * **Row Heights**: 36 px (standard table/list rows), 28 px (compact rows).
 * **Panel Headers**: 40 px.
-* **App Header**: 40 px (`--h-app-header`) in every workspace — Graphics and Editorial both use `.topbar` (logo, menu bar, centred `.pv-btn` group, `.pillbar`, one primary button); Video `.vw-header` shares the same height, surface gradient and hairline.
+* **App Header**: 40 px (`--h-app-header`) in every workspace, starting with the workspace switcher (segmented, sliding thumb; under 1500 px only the current workspace keeps its label). Graphics, Editorial and Home use `.topbar`; Video `.vw-header` shares height, surface and hairline. Every control in a header is 32 px tall with an 8 px radius ("header control system" at the end of `App.css`). No logo in headers — Home and About only.
+* **Panels and wayfinding**: one open section per side column (accordion), revealed at the top of the column; the open header has a 2 px ink bar and full-strength title, closed headers are a quiet table of contents with icons.
 * **Editorial desk**: same `.left` / `.right` side panels and `.pnl` sections as Graphics; the centre is CMS-style cards (`.ed-card`, `--r-3`, `--shadow-1`) on the `--bg-0` canvas well. Segmented choices always use `Seg`/`Tabs` (sliding thumb), never underline tabs. The Graphics tool rail inside the editor is 52 px; the status bar is 28 px.
 * **Workspace Rail**: 56 px wide (`--w-rail`); 48 × 48 px tiles with a 19 px icon and an 11 px label; 3 px ink indicator on the left edge of the active tile.
 * **Narrow windows**: below 1500 px the header format pill drops its dimensions; below 1400 px the header hides key caps and the drag-chip tag and tightens menu padding, so every control stays inside the bar at 1366 px.

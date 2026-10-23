@@ -71,6 +71,8 @@ export function describeIntakeError(err: unknown): IntakeErrorInfo {
 
 export interface AutomatedNewsResult {
   url: string
+  /** Why the draft needs extra checking (untranslated text left in, or fewer paragraphs than the source). */
+  translationNote?: string
   originalTitle: string
   originalDeck: string
   englishHeadline: string
@@ -447,7 +449,11 @@ export async function automateNewsFromUrl(
 
   bannerStore.setNotice(`Auto-generated news for: “${englishHeadline.slice(0, 36)}…”`)
 
+  const translationNote = translation.translationFailed
+    ? 'Part of the story could not be translated (no translation service answered) — the Bengali is left in place for you to translate.'
+    : translation.coverageWarning
   return {
+    translationNote,
     url: cleanUrl,
     originalTitle,
     originalDeck,

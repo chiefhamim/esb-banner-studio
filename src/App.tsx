@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import './App.css'
 import { loadBaseAssets } from './core/assets'
 import type { Assets } from './core/render'
-import { WorkspaceRail } from './shell/WorkspaceRail'
 import { HomeWorkspace } from './shell/HomeWorkspace'
 import { GraphicsWorkspace } from './shell/GraphicsWorkspace'
 import { EditorialWorkspace } from './editorial/EditorialWorkspace'
@@ -34,7 +33,6 @@ export default function App() {
 
   return (
     <div className="studio-shell">
-      <WorkspaceRail />
       <div className="workspace-main">
         {workspace === 'home' && <HomeWorkspace />}
         {workspace === 'editorial' && <EditorialWorkspace />}

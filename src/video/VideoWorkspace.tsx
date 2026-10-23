@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
 import { Dialog, IconButton, Select } from '../ui/controls'
 import type { AspectRatio, Clip, MediaAsset, OverlayTemplate } from './timeline'
@@ -585,6 +586,7 @@ export function VideoWorkspace() {
 
       {/* 1. Header Toolbar */}
       <header className="vw-header">
+        <WorkspaceSwitcher />
         <div className="vw-brand">
           <Icon name="video" size={18} />
           <input

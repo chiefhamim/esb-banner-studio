@@ -3,7 +3,8 @@
 
 import { polishJournalisticEnglish, translateBengaliToEnglish } from '../core/newsroom'
 import { bengaliToAsciiDigits } from './bengali'
-import { raceTranslate } from './translateNet'
+import { GTX_MAX, translateComplete } from './translateNet'
+import { suggestKeyphrases } from './seo'
 
 export interface EditorialTranslationResult {
   headline: string          // strictly <= 104 characters
@@ -17,6 +18,8 @@ export interface EditorialTranslationResult {
   modelUsed?: string
   /** True when Bengali source text could not be machine-translated (no network/API reachable) and still needs a human translator's review. */
   translationFailed?: boolean
+  /** Set when the translation looks shorter than the source (paragraphs missing), so the desk can say so. */
+  coverageWarning?: string
 }
 
 /** True when the renderer has no network path at all; skip remote translation attempts immediately instead of waiting out their timeouts. */
@@ -192,111 +195,13 @@ export function polishJournalisticBody(text: string): string {
   return t
 }
 
-/** Extract top focus keywords & high-value keyphrases from headline, deck, and English body. */
+/**
+ * Tags for the story: the keyphrases it is actually about (organisations, places, projects, sector topics), from
+ * seo.ts. The previous picker returned money amounts and any capitalised pair in the headline, which read as random.
+ */
 export function extractFocusKeywords(headline: string, bodyText: string): string {
-  const candidates: string[] = []
-  const seen = new Set<string>()
-  const addCandidate = (kw: string) => {
-    const clean = kw.trim().replace(/^[,.;:!?]+|[,.;:!?]+$/g, '')
-    if (!clean || clean.length < 3) return
-    const key = clean.toLowerCase()
-    if (!seen.has(key)) {
-      seen.add(key)
-      candidates.push(clean)
-    }
-  }
-
-  const text = `${headline} ${bodyText}`
-
-  const knownEntities = [
-    'Petrobangla',
-    'BAPEX',
-    'BPDB',
-    'BERC',
-    'PGCB',
-    'Power Division',
-    'EMRD',
-    'BREB',
-    'DESCO',
-    'DPDC',
-    'NESCO',
-    'WZPDCO',
-    'BPC',
-    'RPGCL',
-    'SREDA',
-    'Sylhet Gas Field',
-    'SGFL',
-    'BGFCL',
-    'Titas Gas',
-    'Bakhrabad Gas',
-    'Jalalabad Gas',
-    'Karnaphuli Gas',
-    'Bibiyana Gas Field',
-    'Rashidpur Gas Field',
-    'Kailashtila Gas Field',
-    'Bhola Gas Field',
-    'Rooppur Nuclear Power Plant',
-    'Matarbari Power Plant',
-    'Payra Power Plant',
-    'Rampal Power Plant',
-    'Kaptai Hydroelectric',
-    'Barapukuria Coal',
-    'Adani Power',
-    'Summit Power',
-    'Chevron Bangladesh',
-    'QatarEnergy',
-    'National Grid',
-    'Gas Exploration',
-    'Well Drilling',
-    'Power Generation',
-    'Electricity Tariff',
-    'Power Import',
-    'Cross-Border Energy Trade',
-    'Renewable Energy',
-    'Solar Power',
-    'Rooftop Solar',
-    'Wind Energy',
-    'Spot LNG',
-    'LNG Terminal',
-    'FSRU',
-    'LPG Market',
-    'Fuel Oil',
-    'Energy Security',
-    'Load Shedding',
-    'Peak Electricity Demand',
-  ]
-
-  for (const ent of knownEntities) {
-    if (new RegExp(`\\b${ent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text)) {
-      addCandidate(ent)
-    }
-  }
-
-  // Extract monetary and capacity phrases
-  const currencyMatches = text.matchAll(/(?:Tk|BDT|\$|USD)\s*\d[\d,.]*\s*(?:crore|lakh|billion|million)?/gi)
-  for (const m of currencyMatches) addCandidate(m[0])
-
-  const capacityMatches = text.matchAll(/\d[\d,.]*\s*(?:MMCFD(?:\s+Gas)?|MW|GW|kWh|kV|metric\s+tons?)/gi)
-  for (const m of capacityMatches) addCandidate(m[0])
-
-  // Extract capitalized multi-word proper noun phrases from headline
-  const properPhrases = headline.matchAll(/\b([A-Z][a-zA-Z0-9]+(?:\s+[A-Z][a-zA-Z0-9]+){1,2})\b/g)
-  for (const m of properPhrases) {
-    if (!/^(The|In|On|At|For|With|From|Into|Over|Under|After|Before)\b/.test(m[1])) {
-      addCandidate(m[1])
-    }
-  }
-
-  if (candidates.length < 4) {
-    const stopWords = new Set(['the', 'about', 'under', 'after', 'their', 'which', 'there', 'would', 'could', 'should', 'between', 'through', 'during', 'before', 'around'])
-    const words = headline
-      .replace(/[^\w\s-]/g, '')
-      .split(/\s+/)
-      .filter((w) => w.length > 4 && !stopWords.has(w.toLowerCase()))
-    for (const w of words) addCandidate(w)
-  }
-
-  return candidates.slice(0, 6).join(', ')
+  const paras = bodyText.split(/\n\s*\n/)
+  return suggestKeyphrases(headline, '', paras.join('\n\n'), 6).map((k) => k.phrase).join(', ')
 }
 
 /** Strictly generates SEO metadata (slug, keywords, meta title, meta desc) ONLY from the translated English story. */
@@ -339,8 +244,8 @@ async function translateParagraph(p: string): Promise<string> {
   if (injected) return polishJournalisticBody(await injected(clean))
 
   if (!isOffline()) {
-    // Race GTX and MyMemory under one short deadline; take whichever answers first.
-    const translated = await raceTranslate(clean)
+    // Sentence-sized chunks, each raced across GTX and MyMemory, so no service ever gets (or returns) a cut-off paragraph.
+    const translated = await translateComplete(clean)
     if (translated) return polishJournalisticBody(translated)
   }
 
@@ -366,7 +271,9 @@ export async function translateParagraphsBatch(paragraphs: string[]): Promise<st
     return Promise.all(cleanList.map((p) => translateParagraph(p)))
   }
 
-  // Group into batches of <= 3,500 characters
+  // Group into batches GTX accepts in one GET (see GTX_MAX); a paragraph longer than that goes alone and is chunked
+  // by translateParagraph. 3,500 characters used to be the limit here: as a URL that is ~31 kB, which Google refuses,
+  // so every long story silently fell through to per-paragraph requests.
   const batches: { indices: number[]; text: string }[] = []
   let curIdxs: number[] = []
   let curText = ''
@@ -374,7 +281,7 @@ export async function translateParagraphsBatch(paragraphs: string[]): Promise<st
   for (let i = 0; i < cleanList.length; i++) {
     const p = cleanList[i]
     const addedLen = p.length + (curText ? 2 : 0)
-    if (curText && curText.length + addedLen > 3500) {
+    if (curText && curText.length + addedLen > GTX_MAX) {
       batches.push({ indices: curIdxs, text: curText })
       curIdxs = [i]
       curText = p
@@ -395,7 +302,7 @@ export async function translateParagraphsBatch(paragraphs: string[]): Promise<st
       if (!isOffline()) {
         try {
           const controller = new AbortController()
-          const timer = setTimeout(() => controller.abort(), 2200)
+          const timer = setTimeout(() => controller.abort(), 4000)
           const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=bn&tl=en&dt=t&q=${encodeURIComponent(batch.text)}`
           const res = await fetch(gtxUrl, { signal: controller.signal })
           clearTimeout(timer)
@@ -430,266 +337,179 @@ export async function translateParagraphsBatch(paragraphs: string[]): Promise<st
   return results.filter(Boolean)
 }
 
+// ---------------------------------------------------------------- Gemini (Google AI Studio key)
+// Which model translates is the editor's choice, from the models their key can actually call — a key on a paid
+// AI Studio tier sees Gemini Pro; a free-tier key sees what Google grants it. "Auto" prefers the newest Flash model,
+// which is the fast default. Nothing is hard-coded to a retired model.
+
+export const AI_MODEL_KEY = 'esb-banner-studio/ai-model'
+export interface GeminiModelInfo { id: string; label: string; pro: boolean }
+
+export function getPreferredGeminiModel(): string {
+  try { return localStorage.getItem(AI_MODEL_KEY) || 'auto' } catch { return 'auto' }
+}
+export function setPreferredGeminiModel(id: string) {
+  try { localStorage.setItem(AI_MODEL_KEY, id) } catch { /* ignore */ }
+}
+
+/** Newest first: version number, then Pro over Flash over Flash-Lite, stable over preview. */
+function rankModel(id: string): number {
+  const v = Number(/gemini-(\d+(?:\.\d+)?)/.exec(id)?.[1] ?? 0)
+  const tier = /pro/.test(id) ? 3 : /flash-lite/.test(id) ? 1 : /flash/.test(id) ? 2 : 0
+  const stable = /preview|exp|latest/.test(id) ? 0 : 0.5
+  return v * 10 + tier + stable
+}
+
+function labelFor(id: string): string {
+  return id.replace(/^gemini-/, 'Gemini ').replace(/-/g, ' ').replace(/\bpro\b/, 'Pro').replace(/\bflash\b/, 'Flash').replace(/\blite\b/, 'Lite').replace(/\bpreview\b/, '(preview)')
+}
+
+/** Text models this key can call with generateContent, best first. */
+export async function listGeminiModels(apiKey: string): Promise<GeminiModelInfo[]> {
+  const key = apiKey.trim()
+  if (!key) return []
+  if (cachedDiscoveredModels && cachedDiscoveredModels.key === key) return cachedDiscoveredModels.models.map((id) => ({ id, label: labelFor(id), pro: /pro/.test(id) }))
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 8000)
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}&pageSize=200`, { signal: controller.signal })
+    if (!res.ok) {
+      const err = await res.json().catch(() => null)
+      throw new Error(err?.error?.message || `HTTP ${res.status}`)
+    }
+    const data = await res.json()
+    const ids: string[] = (Array.isArray(data?.models) ? data.models : [])
+      .filter((m: { name?: string; supportedGenerationMethods?: string[] }) => !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'))
+      .map((m: { name?: string }) => (m.name ?? '').replace(/^models\//, ''))
+      // text-in/text-out Gemini models only: no embeddings, image, audio, TTS or live variants
+      .filter((id: string) => /^gemini-\d/.test(id) && !/(embedding|image|vision|audio|tts|live|native|thinking-exp|learnlm|aqa)/.test(id))
+    const unique = Array.from(new Set(ids)).sort((x, y) => rankModel(y) - rankModel(x))
+    cachedDiscoveredModels = { key, models: unique }
+    return unique.map((id) => ({ id, label: labelFor(id), pro: /pro/.test(id) }))
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /**
- * Quick validation helper to test if an API key connects to Google AI Studio.
- * Queries the active models on the key first, then tests prompt generation on the latest active Flash model.
+ * Quick validation helper to test if an API key connects to Google AI Studio: lists the key's models and makes one
+ * tiny call on the preferred (or best available Flash) model.
  */
-export async function testGeminiApiKey(apiKey: string): Promise<{ ok: boolean; model?: string; error?: string }> {
+export async function testGeminiApiKey(apiKey: string): Promise<{ ok: boolean; model?: string; error?: string; models?: GeminiModelInfo[] }> {
   const clean = apiKey.trim()
   if (!clean) return { ok: false, error: 'Please enter an API key.' }
+  cachedDiscoveredModels = null
   try {
-    // 1. Check models endpoint to validate API key permissions
-    const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${clean}`)
-    if (!modelsRes.ok) {
-      const errJson = await modelsRes.json().catch(() => null)
-      const msg = errJson?.error?.message || `HTTP ${modelsRes.status} (${modelsRes.statusText})`
-      return { ok: false, error: msg }
+    const models = await listGeminiModels(clean)
+    if (!models.length) return { ok: false, error: 'This key lists no Gemini text models.' }
+    const pref = getPreferredGeminiModel()
+    const probe = models.find((m) => m.id === pref)?.id ?? models.find((m) => /flash/.test(m.id) && !/lite/.test(m.id))?.id ?? models[0].id
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${probe}:generateContent?key=${encodeURIComponent(clean)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: 'Reply with OK.' }] }], generationConfig: { maxOutputTokens: 256 } }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => null)
+      return { ok: false, error: err?.error?.message || `HTTP ${res.status} on ${probe}`, models }
     }
-
-    const modelsData = await modelsRes.json()
-    const activeModels: string[] = Array.isArray(modelsData?.models)
-      ? modelsData.models
-          .map((m: { name?: string; supportedGenerationMethods?: string[] }) => {
-            const name = (typeof m?.name === 'string' ? m.name.replace(/^models\//, '') : '')
-            const canGen = !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent')
-            return canGen ? name : ''
-          })
-          .filter(Boolean)
-      : []
-
-    // Try available models dynamically so deprecated models never block the user
-    const candidateList = [
-      ...activeModels.filter((m) => m.includes('flash') && !m.includes('thinking')),
-      ...activeModels.filter((m) => m.includes('flash')),
-      ...activeModels,
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-2.5-flash',
-    ].filter((v, i, a) => a.indexOf(v) === i)
-
-    let lastError = ''
-    for (const modelToTest of candidateList.slice(0, 4)) {
-      try {
-        const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 5000)
-        const pingRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToTest}:generateContent?key=${clean}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: 'Ping' }] }],
-            generationConfig: { maxOutputTokens: 5 },
-          }),
-          signal: controller.signal,
-        })
-        clearTimeout(timer)
-
-        if (pingRes.ok) {
-          cachedWorkingGeminiModel = modelToTest
-          return { ok: true, model: modelToTest }
-        }
-        const pingErr = await pingRes.json().catch(() => null)
-        lastError = pingErr?.error?.message || `HTTP ${pingRes.status} on model ${modelToTest}`
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : String(err)
-      }
-    }
-
-    if (activeModels.length > 0) {
-      cachedWorkingGeminiModel = activeModels[0]
-      return { ok: true, model: activeModels[0] }
-    }
-    return { ok: false, error: lastError || 'No active generative models found on this key.' }
+    cachedWorkingGeminiModel = probe
+    return { ok: true, model: probe, models }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
 
-/** Helper to query active Google AI Studio models available for this user's key. */
-async function getAvailableGeminiModels(apiKey: string): Promise<string[]> {
-  if (cachedDiscoveredModels && cachedDiscoveredModels.key === apiKey) {
-    return cachedDiscoveredModels.models
-  }
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 4000)
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, { signal: controller.signal })
-    clearTimeout(timer)
-    if (res.ok) {
-      const data = await res.json()
-      if (Array.isArray(data?.models)) {
-        const names: string[] = data.models
-          .map((m: { name?: string; supportedGenerationMethods?: string[] }) => {
-            const n = m.name?.replace(/^models\//, '') || ''
-            const canGen = !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent')
-            return canGen ? n : ''
-          })
-          .filter(Boolean)
-        const flash = names.filter((n) => n.includes('flash'))
-        const others = names.filter((n) => !n.includes('flash') && n.startsWith('gemini'))
-        const list = [...flash, ...others]
-        cachedDiscoveredModels = { key: apiKey, models: list }
-        return list
-      }
-    }
-  } catch {}
-  return []
+/** Order of models to try for one translation: the editor's choice first, then the best Flash as a fallback. */
+async function modelsToTry(apiKey: string): Promise<string[]> {
+  let available: string[] = []
+  try { available = (await listGeminiModels(apiKey)).map((m) => m.id) } catch { /* fall through to defaults */ }
+  const pref = getPreferredGeminiModel()
+  const bestFlash = available.find((id) => /flash/.test(id) && !/lite/.test(id)) ?? 'gemini-2.5-flash'
+  const first = pref !== 'auto' ? pref : (cachedWorkingGeminiModel && available.includes(cachedWorkingGeminiModel) ? cachedWorkingGeminiModel : bestFlash)
+  return Array.from(new Set([first, bestFlash]))
+}
+
+const TRANSLATION_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    headline: { type: 'STRING', description: 'Clear, natural, professional international English news headline strictly under 104 characters.' },
+    deck: { type: 'STRING', description: 'One-sentence standfirst strictly under 200 characters.' },
+    slug: { type: 'STRING', description: 'kebab-case URL slug under 80 characters from the English headline.' },
+    focusKeywords: { type: 'STRING', description: '4 to 6 comma-separated search phrases a reader would type to find this story: named organisations, projects, places and the topic, most important first. No bare numbers, no generic words.' },
+    metaTitle: { type: 'STRING', description: 'Search result title under 60 characters, leading with the main keyphrase, ending with | ESB PowerLine.' },
+    metaDescription: { type: 'STRING', description: 'Search snippet of 120 to 158 characters that states the news and contains the main keyphrase.' },
+    body: { type: 'STRING', description: 'The COMPLETE English article: every paragraph and every sentence of the source, in order, paragraphs separated by blank lines. Never summarise or drop the ending.' },
+  },
+  required: ['headline', 'deck', 'slug', 'focusKeywords', 'metaTitle', 'metaDescription', 'body'],
 }
 
 /**
- * Call Gemini API with Structured JSON Schema output for direct, exact newsroom CMS field extraction.
- * Dynamically queries available models, cascading through latest Gemini Flash models with strict 6s timeout.
+ * Call Gemini with structured JSON output. A reply that stopped early (MAX_TOKENS, safety) is an error, never a
+ * shorter article: the old path returned whatever JSON it could parse, so a cut-off reply became a story without its
+ * last paragraphs.
  */
 async function translateWithGemini(
   articleText: string,
   apiKey: string,
+  onProgress?: (status: string) => void,
 ): Promise<Partial<EditorialTranslationResult> & { modelUsed?: string }> {
-  // Use cached model if verified, otherwise fast default flash models
-  const initialCandidates = cachedWorkingGeminiModel
-    ? [cachedWorkingGeminiModel, 'gemini-2.0-flash', 'gemini-1.5-flash']
-    : ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash']
-
-  let models = Array.from(new Set(initialCandidates))
+  const models = await modelsToTry(apiKey)
   let lastError = ''
-  let attempted = 0
-
   for (const model of models) {
-    attempted++
-    if (attempted > 2) break // Cap attempts to 2 models to prevent slow cascades
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-
-    // 1. Try Structured JSON Schema mode with 6s timeout
+    const pro = /pro/.test(model)
+    onProgress?.(`Translating with ${labelFor(model)}…`)
+    const controller = new AbortController()
+    // A full article in structured JSON takes Flash 10–30 s and Pro up to a minute or two.
+    const timer = setTimeout(() => controller.abort(), pro ? 150_000 : 75_000)
     try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 6500)
-      const res = await fetch(url, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
-          systemInstruction: {
-            parts: [{
-              text: `${JOURNALISTIC_TRANSLATOR_PROMPT}\n\nStrict Rule: You must generate the response strictly conforming to the requested JSON schema. All facts, numbers, dates, quotes, and names must remain 100% faithful to the source article. Provide a complete, natural, multi-paragraph journalistic translation without summarizing or omitting any details.`,
-            }],
-          },
-          contents: [{
-            parts: [{
-              text: `Bengali News Article that will have the above instructions applied:\n\n${articleText}`,
-            }],
-          }],
+          systemInstruction: { parts: [{ text: `${JOURNALISTIC_TRANSLATOR_PROMPT}\n\nStrict Rule: answer only with the requested JSON. All facts, numbers, dates, quotes and names stay faithful to the source. Translate the whole article; do not summarise, merge or omit paragraphs, including the final ones.` }] },
+          contents: [{ parts: [{ text: `Bengali news article to translate:\n\n${articleText}` }] }],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 8192,
+            // 2.5-generation models spend part of this on thinking; leave plenty for a long article
+            maxOutputTokens: 32768,
             responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'OBJECT',
-              properties: {
-                headline: {
-                  type: 'STRING',
-                  description: 'Clear, natural, professional international English news headline strictly under 104 characters.',
-                },
-                deck: {
-                  type: 'STRING',
-                  description: 'Catchy, punchy sub-headline or lead summary sentence strictly under 200 characters.',
-                },
-                slug: {
-                  type: 'STRING',
-                  description: 'Clean kebab-case URL permalink slug under 80 characters derived strictly from the English headline.',
-                },
-                focusKeywords: {
-                  type: 'STRING',
-                  description: '5 to 7 high-value comma-separated SEO focus keywords and keyphrases (entities, projects, capacities, sector topics).',
-                },
-                metaTitle: {
-                  type: 'STRING',
-                  description: 'High-CTR SEO meta headline under 60 characters ending with | ESB PowerLine.',
-                },
-                metaDescription: {
-                  type: 'STRING',
-                  description: 'Compelling SEO meta description between 120 and 158 characters for search results.',
-                },
-                body: {
-                  type: 'STRING',
-                  description: 'Full, complete English news article body with paragraphs separated by double newlines, preserving all quotes, facts, and paragraph structure.',
-                },
-              },
-              required: ['headline', 'deck', 'slug', 'focusKeywords', 'metaTitle', 'metaDescription', 'body'],
-            },
+            responseSchema: TRANSLATION_SCHEMA,
           },
         }),
       })
-      clearTimeout(timer)
-
-      if (res.ok) {
-        const data = await res.json()
-        const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text
-        if (candidateText) {
-          try {
-            const parsed = JSON.parse(candidateText)
-            if (parsed.headline && parsed.body) {
-              cachedWorkingGeminiModel = model
-              return {
-                headline: parsed.headline.trim(),
-                deck: parsed.deck?.trim(),
-                slug: parsed.slug?.trim(),
-                focusKeywords: parsed.focusKeywords?.trim(),
-                metaTitle: parsed.metaTitle?.trim(),
-                metaDescription: parsed.metaDescription?.trim(),
-                body: parsed.body?.trim(),
-                modelUsed: model,
-              }
-            }
-          } catch {
-            const out = parsePastedAiOutput(candidateText)
-            cachedWorkingGeminiModel = model
-            return { ...out, modelUsed: model }
-          }
-        }
-      } else {
-        const errJson = await res.json().catch(() => null)
-        const msg = errJson?.error?.message || `HTTP ${res.status}`
-        lastError = `${model}: ${msg}`
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        lastError = `${labelFor(model)}: ${err?.error?.message || `HTTP ${res.status}`}`
+        continue
+      }
+      const data = await res.json()
+      const cand = data.candidates?.[0]
+      const finish = cand?.finishReason
+      if (finish && finish !== 'STOP') { lastError = `${labelFor(model)} stopped early (${finish})`; continue }
+      const text = (cand?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? '').join('')
+      let parsed: Partial<EditorialTranslationResult>
+      try { parsed = JSON.parse(text) } catch { parsed = parsePastedAiOutput(text) }
+      if (!parsed.headline || !parsed.body) { lastError = `${labelFor(model)} returned no article`; continue }
+      cachedWorkingGeminiModel = model
+      return {
+        headline: parsed.headline.trim(),
+        deck: parsed.deck?.trim(),
+        slug: parsed.slug?.trim(),
+        focusKeywords: parsed.focusKeywords?.trim(),
+        metaTitle: parsed.metaTitle?.trim(),
+        metaDescription: parsed.metaDescription?.trim(),
+        body: parsed.body.trim(),
+        modelUsed: model,
       }
     } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err)
+      lastError = controller.signal.aborted ? `${labelFor(model)} took too long` : (err instanceof Error ? err.message : String(err))
+    } finally {
+      clearTimeout(timer)
     }
   }
-
-  // If primary candidates failed and we haven't discovered yet, try active discovered models
-  if (!cachedDiscoveredModels) {
-    const discovered = await getAvailableGeminiModels(apiKey)
-    if (discovered.length > 0 && !models.includes(discovered[0])) {
-      const topDiscovered = discovered[0]
-      try {
-        const controller = new AbortController()
-        const timer = setTimeout(() => controller.abort(), 6500)
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${topDiscovered}:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: `${JOURNALISTIC_TRANSLATOR_PROMPT}\n\nBengali News Article:\n\n${articleText}` }],
-            }],
-            generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
-          }),
-        })
-        clearTimeout(timer)
-        if (res.ok) {
-          const fallbackData = await res.json()
-          const textOutput = fallbackData.candidates?.[0]?.content?.parts?.[0]?.text
-          if (textOutput) {
-            cachedWorkingGeminiModel = topDiscovered
-            return { ...parsePastedAiOutput(textOutput), modelUsed: topDiscovered }
-          }
-        }
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : String(err)
-      }
-    }
-  }
-
-  throw new Error(`Gemini API Error: ${lastError || 'Service temporarily unreachable'}`)
+  throw new Error(lastError || 'Gemini unreachable')
 }
 
 /** Builds the complete prompt for web chat interfaces (gemini.google.com, chatgpt.com, claude.ai) */
@@ -827,9 +647,13 @@ export async function translateNewsArticle(
   if (apiKey) {
     try {
       onProgress?.('Translating with Gemini Studio AI (Structured JSON Mode)…')
-      const parsed = await translateWithGemini(combinedBengaliText, apiKey)
+      const parsed = await translateWithGemini(combinedBengaliText, apiKey, onProgress)
 
       if (parsed.headline && parsed.body) {
+        // Completeness guard: a reply with far fewer paragraphs than the source has dropped part of the story.
+        const outParas = parsed.body.split(/\n\s*\n/).filter((p) => p.trim()).length
+        const srcParas = input.paragraphs.filter((p) => p.trim()).length
+        const incomplete = srcParas >= 4 && outParas < Math.ceil(srcParas * 0.6)
         const headline = enforceHeadlineLength(parsed.headline, 104)
         const deck = enforceDeckLength(parsed.deck || input.deck || '', 200)
         const slug = generateSlug(parsed.slug || headline, 80)
@@ -848,7 +672,8 @@ export async function translateNewsArticle(
           metaDescription,
           body,
           provider: 'gemini',
-          modelUsed: parsed.modelUsed || 'gemini-2.0-flash',
+          modelUsed: parsed.modelUsed,
+          coverageWarning: incomplete ? `The AI returned ${outParas} paragraphs for a ${srcParas}-paragraph source — check the ending against the original.` : undefined,
         }
       }
     } catch (err) {

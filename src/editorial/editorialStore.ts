@@ -28,7 +28,9 @@ export interface EditorialDraft {
   headline: string          // strictly <= 104 characters
   deck: string              // strictly <= 200 characters
   slug: string              // strictly <= 80 characters
-  focusKeywords: string     // comma-separated SEO focus keyphrases
+  focusKeywords: string     // comma-separated tags (sent to the CMS as tags)
+  /** The one phrase this story should rank for (CMS "Focus keyword"); the SEO checks measure against it. */
+  focusKeyphrase: string
   metaTitle: string         // SEO meta title
   metaDescription: string   // SEO meta description
   body: string              // full English story body
@@ -140,6 +142,7 @@ const DEFAULT_DRAFT: EditorialDraft = {
   deck: '',
   slug: '',
   focusKeywords: '',
+  focusKeyphrase: '',
   metaTitle: '',
   metaDescription: '',
   body: '',
@@ -351,6 +354,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
         deck: article.deck ? article.deck.slice(0, 200) : '',
         slug: seo.slug,
         focusKeywords: seo.focusKeywords,
+        focusKeyphrase: seo.focusKeywords.split(',')[0]?.trim() ?? '',
         metaTitle: seo.metaTitle,
         metaDescription: seo.metaDescription,
         body: bodyStr,

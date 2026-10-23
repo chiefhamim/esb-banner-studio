@@ -58,8 +58,8 @@ button:disabled { cursor: default; }
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
-/* ---------------------------------------------------------------- studio shell & workspace rail
-   48 px slim left rail with Home · Editorial · Graphics · Video · Audio */
+/* ---------------------------------------------------------------- studio shell
+   Workspaces fill the window; each one's header starts with the workspace switcher (WorkspaceSwitcher). */
 .studio-shell {
   display: flex;
   flex-direction: row;
@@ -75,84 +75,6 @@ button:disabled { cursor: default; }
   height: 100%;
   position: relative;
   overflow: hidden;
-}
-
-.workspace-rail {
-  width: 56px;
-  min-width: 56px;
-  height: 100%;
-  background: var(--surface-sunken);
-  border-right: 1px solid var(--border-subtle);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 0;
-  z-index: 20;
-  user-select: none;
-  transition: background-color var(--t-surface) var(--ease), border-color var(--t-surface) var(--ease);
-}
-
-.rail-top {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.rail-btn {
-  width: 48px;
-  height: 48px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  background: transparent;
-  border: none;
-  border-radius: var(--r-2);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  transition: color var(--t-state) var(--ease), background-color var(--t-state) var(--ease);
-  padding: 0;
-  outline: none;
-}
-
-.rail-btn:hover {
-  background: var(--surface-hover);
-  color: var(--text-primary);
-}
-
-.rail-btn.active {
-  background: var(--surface-hover);
-  color: var(--text-primary);
-}
-
-/* Subtle, pro active indicator: quiet vertical accent bar on the left edge */
-.rail-btn.active::before {
-  content: "";
-  position: absolute;
-  left: -4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
-  border-radius: 0 var(--r-1) var(--r-1) 0;
-  background: var(--accent);
-}
-
-.rail-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.rail-label {
-  font-size: 11px;
-  line-height: 12px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  text-transform: none;
 }
 
 /* ---------------------------------------------------------------- graphics workspace (banner editor)
@@ -4314,3 +4236,52 @@ html[data-theme="dark"] .fb-action-btn:hover {
 
 /* 8. Companion Preview Rail */
 
+
+/* ---------------------------------------------------------------- header control system
+   Every control in a 40 px workspace header is 32 px tall with an 8 px radius and 13 px text, leaving 4 px of air above
+   and below. The format picker, quick switch, Preview, the icon group and Export used to be 34-36 px boxes in three
+   shapes that nearly touched the bar's edges. */
+.topbar, .vw-header { gap: 8px; }
+.topbar .fmtpick, .topbar .dual-toggle-btn, .topbar .pv-btn, .topbar .btn, .topbar .select,
+.vw-header .btn, .vw-header .select { height: var(--h-md); border-radius: var(--r-2); font-size: 13px; }
+.topbar .btn { padding: 0 14px; }
+.topbar .split .split-caret { padding: 0 8px; }
+.topbar .fmtpick { gap: 6px; padding: 0 8px 0 4px; }
+.topbar .fmtpick .ratio-glyph { width: 24px !important; height: 24px !important; border-radius: 6px; }
+.topbar .dual-toggle-btn { padding: 0 10px; font-weight: 500; transform: none; }
+.topbar .dual-toggle-btn:hover, .topbar .dual-toggle-btn:active { transform: none; }
+.topbar .pv-btn { padding: 0 10px; gap: 6px; }
+.topbar .pv-btn kbd { height: 18px; min-width: 18px; padding: 0 4px; font-size: 11px; line-height: 16px; border-radius: 4px; }
+.topbar .pillbar, .vw-header .pillbar { height: var(--h-md); padding: 2px; gap: 2px; border: 0; border-radius: var(--r-2); }
+.topbar .pillbar .ibtn, .vw-header .pillbar .ibtn { width: 28px; height: 28px; border-radius: 6px; }
+.topbar .pillbar .pill-sep { height: 16px; }
+.topbar .drag-post-chip { height: 28px; border: 0; border-radius: 6px; box-shadow: none; background: transparent; }
+.topbar .drag-post-chip:hover { transform: none; box-shadow: none; background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.topbar .menubar { margin-left: 0; }
+.topbar .mb-item { height: 28px; }
+
+/* workspace switcher: the same sliding segmented control as everywhere else */
+.ws-switch { flex: none; height: var(--h-md); padding: 2px; }
+.ws-switch .ws-btn { height: 28px; padding: 0 10px; gap: 6px; font-size: 13px; }
+.ws-switch .ws-home { padding: 0 8px; }
+.ws-switch .ws-home:not(.on) .ws-label { display: none; }
+/* narrower windows: only the current workspace keeps its name; the others are icons with tooltips */
+@media (max-width: 1500px) {
+  .ws-switch .ws-btn:not(.on) { padding: 0 8px; }
+  .ws-switch .ws-btn:not(.on) .ws-label { display: none; }
+}
+
+/* Home gets the same header as every workspace; the page scrolls under it */
+.home-shell { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.home-topbar { flex: none; }
+.home-shell .home-workspace { flex: 1; height: auto; min-height: 0; }
+
+/* ---------------------------------------------------------------- panels: where am I
+   The open section's header carries an ink bar and full-strength text and stays pinned while its content scrolls;
+   closed sections read as a quiet table of contents with their icon, so a column can be scanned at a glance. */
+.pnl-icon { display: inline-block; flex: none; color: var(--text-3); transition: color var(--t-1) var(--ease); }
+.pnl > header:hover .pnl-icon, .pnl.open .pnl-icon { color: var(--text); }
+.pnl:not(.open) > header h3 .t { font-weight: 500; color: var(--text-2); }
+.pnl:not(.open) > header:hover h3 .t { color: var(--text); }
+.pnl.open > header { box-shadow: inset 2px 0 0 var(--ink), 0 1px 0 var(--line); }
+.pnl > header:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
