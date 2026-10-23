@@ -359,6 +359,43 @@ try {
   const pub = { msg: await page.locator('.callout').first().innerText(), image: posted && (Array.isArray(posted) ? posted[0] : posted).imageUrl }
   check('Publish from the browser preview: never a blob: link as the article image, and the result says why', !!posted && !pub.image && /cannot upload the banner and the photo is a local file/.test(pub.msg), JSON.stringify(pub).slice(0, 300))
 
+  // 11. Story queue: the published story is marked, a new story gets its own entry, switching swaps the editor and
+  // the banner, and the queue survives a reload
+  await page.keyboard.press('Escape')
+  const firstHead = await page.inputValue('#draft-headline')
+  await page.click('.editorial-workspace .pillbar [aria-label="New story"]')
+  await page.waitForSelector('.ed-launcher-queue .sq-row')
+  const launch = await page.evaluate(() => [...document.querySelectorAll('.ed-launcher-queue .sq-row')].map((r) => r.innerText.replace(/\s+/g, ' ')))
+  check('New story keeps the last one: launcher lists it as Published', launch.length === 1 && launch[0].includes(firstHead) && /Published/.test(launch[0]), JSON.stringify(launch))
+  await page.fill('.ed-url-input', `http://localhost:${PORT}/tools/fixtures/next-data.html`)
+  await page.click('button:has-text("Fetch & Auto-Translate")')
+  await page.waitForSelector('.ed-card-story', { timeout: 30000 })
+  await page.waitForTimeout(1200)
+  const secondHead = await page.inputValue('#draft-headline')
+  await page.click('.ed-src button:has-text("Stories")')
+  await page.waitForSelector('.sq-row')
+  await page.waitForFunction(() => document.querySelectorAll('.sq-row').length === 2)
+  const rows = await page.evaluate(() => [...document.querySelectorAll('.sq-row')].map((r) => ({ on: r.classList.contains('on'), t: r.querySelector('.sq-title').textContent })))
+  check('Stories tab: two stories, the one on the desk marked', rows.length === 2 && rows[0].on && rows[0].t === secondHead && rows[1].t === firstHead && secondHead !== firstHead, JSON.stringify(rows))
+  await page.locator('.sq-row:not(.on) .sq-main').click()
+  await page.waitForTimeout(400)
+  const swapped = { head: await page.inputValue('#draft-headline'), banner: await page.evaluate(() => window.__store.getState().doc.content.headline) }
+  check('Switching restores that story\'s draft and re-syncs the banner', swapped.head === firstHead && swapped.banner === firstHead, JSON.stringify(swapped))
+  await page.click('.ed-src button:has-text("New link")')
+  await page.fill('.ed-src .ed-url-input', 'https://blocked.invalid/another')
+  await page.click('.ed-src button:has-text("Fetch & Auto-Translate")')
+  await page.waitForTimeout(2500)
+  await page.fill('#draft-headline', firstHead + ' (edited)')
+  await page.waitForTimeout(900)
+  const afterFail = await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/editorial/queue/v1')).stories.length)
+  check('A failed import does not duplicate the story on the desk', afterFail === 2, String(afterFail))
+  await page.reload()
+  await page.waitForSelector('.studio-shell')
+  await page.click('.ws-btn[data-ws="editorial"]').catch(() => {})
+  await page.waitForSelector('#draft-headline')
+  const after = { head: await page.inputValue('#draft-headline'), n: await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/editorial/queue/v1')).stories.length) }
+  check('The queue and the edit survive a reload', after.head === firstHead + ' (edited)' && after.n === 2, JSON.stringify(after))
+
   await browser.close()
 } catch (err) {
   console.error('Test error:', err)

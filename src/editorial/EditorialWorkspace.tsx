@@ -18,6 +18,8 @@ import { useBannerImage } from './useBannerImage'
 import { useHeroMode } from './heroMode'
 import { SeoPanel } from './SeoPanel'
 import { SignInSheet } from './SignInSheet'
+import { StoryQueueList } from './StoryQueue'
+import { useStoryQueue } from './storyQueue'
 import { canUploadToSite, uploadBannerToSite } from './siteConnect'
 import { renderBanner } from '../export'
 import { suggestKeyphrases } from './seo'
@@ -144,7 +146,6 @@ export function EditorialWorkspace() {
   const toggleChecklist = useEditorialStore((s) => s.toggleChecklist)
   const setApiKey = useEditorialStore((s) => s.setApiKey)
   const setTranslationMeta = useEditorialStore((s) => s.setTranslationMeta)
-  const clear = useEditorialStore((s) => s.clear)
   const bannerLink = useEditorialStore((s) => s.bannerLink)
   const deskAuto = useEditorialStore((s) => s.deskAuto)
   const setDesk = useEditorialStore((s) => s.setDesk)
@@ -167,7 +168,8 @@ export function EditorialWorkspace() {
   const [activeFactId, setActiveFactId] = useState<string | null>(null)
   const [activeSocialTab, setActiveSocialTab] = useState<'facebook' | 'x' | 'linkedin' | 'telegram'>('facebook')
   const [storyTab, setStoryTab] = useState<StoryTab>('body')
-  const [leftTab, setLeftTab] = useState<'source' | 'intake'>('source')
+  const [leftTab, setLeftTab] = useState<'source' | 'intake' | 'stories'>('source')
+  const storyCount = useStoryQueue((s) => s.stories.length)
   const [tagInput, setTagInput] = useState('')
   // A translation problem worth more than a 3-second toast: shown on the Headline & deck panel until dismissed.
   const [draftNotice, setDraftNotice] = useState<string | null>(null)
@@ -303,12 +305,13 @@ export function EditorialWorkspace() {
   }
 
   const handleNewStory = () => {
-    clear()
+    // the story on the desk stays in the queue; the editor opens empty
+    useStoryQueue.getState().newStory()
     if (bannerLink) useStore.getState().newBanner(true)
     setUrlInput('')
     setRawBengaliInput('')
     setErrorMsg(null)
-    showToast('Clean editorial desk opened')
+    showToast('New story — the previous one is kept under Stories')
   }
 
   const handleSyncFeed = async () => {
@@ -333,6 +336,7 @@ export function EditorialWorkspace() {
       setUrlInput(cleanUrl)
     }
 
+    useStoryQueue.getState().beginStory()
     setLoading(true)
     setErrorMsg(null)
     setErrorDetail(null)
@@ -370,6 +374,7 @@ export function EditorialWorkspace() {
   const handleTranslateRawBengali = async () => {
     const raw = rawBengaliInput.trim()
     if (!raw) return
+    useStoryQueue.getState().beginStory()
     setTranslating(true)
     setErrorMsg(null)
     setProgressStatus('Translating story to English…')
@@ -554,6 +559,7 @@ export function EditorialWorkspace() {
             ? 'Story published live to esbpowerline.com!'
             : 'Story draft saved to Supabase!'
         )
+        if (targetStatus === 'PUBLISHED') useStoryQueue.getState().markPublished(result.liveUrl)
         syncFromLiveFeed().catch(() => {})
       } else {
         setPublishResult({
@@ -697,7 +703,7 @@ export function EditorialWorkspace() {
                     <b>{art.title}</b>
                     <span>{art.category} · {art.publishedAt || 'Published'}</span>
                   </div>
-                  <button type="button" className="btn sm" onClick={() => void loadLiveArticleForEdit(art)}>Load Story</button>
+                  <button type="button" className="btn sm" onClick={() => { useStoryQueue.getState().newStory(); void loadLiveArticleForEdit(art) }}>Load Story</button>
                 </div>
               ))
             )}
@@ -831,20 +837,28 @@ export function EditorialWorkspace() {
             </div>
             {intakeForm(false)}
           </div>
+          {storyCount > 0 && (
+            <div className="ed-launcher-card ed-launcher-queue">
+              <div className="ed-launcher-qhead"><h3>Continue a story</h3><span>{storyCount} on the desk</span></div>
+              <StoryQueueList compact />
+            </div>
+          )}
           {toastMsg && <div className="toast" onClick={() => setToastMsg(null)}><Icon name="info" size={15} />{toastMsg}</div>}
         </div>
       ) : (
         <div ref={deskRef} className="ed-desk" style={{ ['--ed-src-px' as string]: cols.src + 'px', ['--ed-side-px' as string]: cols.side + 'px' } as CSSProperties}>
           {/* LEFT — the original article, untouched, beside the copy made from it */}
           <aside className="left ed-src" aria-label="Original source">
-            <Tabs<'source' | 'intake'>
+            <Tabs<'source' | 'intake' | 'stories'>
               value={leftTab}
               onChange={setLeftTab}
-              options={[{ value: 'source', icon: 'newspaper', label: 'Source' }, { value: 'intake', icon: 'link', label: 'New link' }]}
+              options={[{ value: 'source', icon: 'newspaper', label: 'Source' }, { value: 'stories', icon: 'layers', label: storyCount > 1 ? `Stories · ${storyCount}` : 'Stories' }, { value: 'intake', icon: 'link', label: 'New link' }]}
             />
             <div className="scroll ed-src-scroll">
               {leftTab === 'intake' ? (
                 <div className="ed-src-intake">{intakeForm(true)}</div>
+              ) : leftTab === 'stories' ? (
+                <div className="ed-src-intake"><StoryQueueList /></div>
               ) : (
                 <>
                   <Panel id="ed-src-link" icon="link" defaultOpen={false} title="Original link" sub={sourceHost} persist={false} actions={
