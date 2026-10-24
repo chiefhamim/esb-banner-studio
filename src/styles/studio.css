@@ -555,3 +555,4 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 }
 .home-shell .format-card:hover, .home-shell .recent-card:hover { background: color-mix(in srgb, var(--card, var(--bg-1)) 92%, transparent); }
 .home-shell .btn.secondary, .home-shell .btn.subtle, .home-shell .footer-meta .status-badge { background: color-mix(in srgb, var(--card, var(--bg-1)) 80%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.home-head-btn .home-head-label { white-space: nowrap; }
