@@ -4,6 +4,8 @@
 import { useMemo } from 'react'
 import { useEditorialStore } from './editorialStore'
 import { Icon } from '../ui/Icon'
+import { providerMeta } from './aiProviders'
+import type { AiProviderId } from './aiProviders'
 import { DESCRIPTION_MAX, analyzeSeo, buildMetaDescription, buildMetaTitle, buildSlug, effectiveDescription, effectiveTitle, suggestKeyphrases, visibleTitle } from './seo'
 import type { SeoCheck } from './seo'
 // the site's own app icon (esbpowerline repo app/icon.png), as Google shows it beside the result
@@ -11,11 +13,12 @@ import siteIcon from '../assets/images/site/site-icon.png'
 
 const GROUPS: SeoCheck['group'][] = ['Keyphrase', 'Search snippet', 'Content']
 
-export function SeoPanel({ hasImage, onCheckSlug, slugStatus, onAiSeo, aiBusy = false, aiName = null }: {
+export function SeoPanel({ hasImage, onCheckSlug, slugStatus, onAiSeo, aiBusy = false, aiProvider = null }: {
   hasImage: boolean; onCheckSlug: () => void; slugStatus: string
   /** Ask the editor's AI provider for keyphrase, tags, title, description and slug (held to the site's rules after). */
-  onAiSeo?: () => void; aiBusy?: boolean; aiName?: string | null
+  onAiSeo?: () => void; aiBusy?: boolean; aiProvider?: AiProviderId | null
 }) {
+  const aiName = aiProvider ? providerMeta(aiProvider).name : null
   const draft = useEditorialStore((s) => s.draft)
   const setDraftField = useEditorialStore((s) => s.setDraftField)
   const liveArticles = useEditorialStore((s) => s.liveArticles)
@@ -47,8 +50,8 @@ export function SeoPanel({ hasImage, onCheckSlug, slugStatus, onAiSeo, aiBusy = 
     <div className="ed-card-body seo">
       {onAiSeo && (
         <div className="seo-ai">
-          <span className="seo-ai-text"><b>SEO by AI</b><span className="hint">{aiName ? `${aiName} writes the keyphrase, tags, title, description and slug from the story — kept within the site's limits.` : 'Add an AI key to write these fields from the story.'}</span></span>
-          <button type="button" className="btn sm ai-btn" onClick={onAiSeo} disabled={aiBusy || !draft.headline.trim()} data-tip={aiName ? `Replace the five fields below with ${aiName}'s suggestions` : 'Open AI settings'}>
+          <span className="seo-ai-text"><b>SEO by AI</b><span className="hint">{aiName ? `${aiName} writes the keyphrase, tags, title, description and slug from the story — kept within the site's limits.` : 'Add a key for the SEO provider to write these fields from the story.'}</span></span>
+          <button type="button" className="btn sm ai-btn" data-provider={aiProvider ?? undefined} onClick={onAiSeo} disabled={aiBusy || !draft.headline.trim()} data-tip={aiName ? `Replace the five fields below with ${aiName}'s suggestions` : 'Open AI settings'}>
             <Icon name="sparkle" size={13} className={aiBusy ? 'spin' : ''} />
             <span>{aiBusy ? 'Writing…' : 'Write with AI'}</span>
           </button>

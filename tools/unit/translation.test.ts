@@ -36,7 +36,7 @@ describe('Translation completeness', () => {
   })
 
   it('a Gemini reply cut off by the token limit is not accepted as the article', async () => {
-    vi.stubGlobal('localStorage', { getItem: () => 'gemini-2.5-flash', setItem: () => {} })
+    vi.stubGlobal('localStorage', { getItem: (k: string) => (k.endsWith('ai-settings') ? JSON.stringify({ provider: 'gemini', keys: { gemini: 'test-key' }, models: { gemini: 'gemini-2.5-flash' } }) : null), setItem: () => {} })
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
       if (url.includes('/models?')) return new Response(JSON.stringify({ models: [{ name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] }] }), { status: 200 })
       if (url.includes(':generateContent')) {
@@ -46,6 +46,6 @@ describe('Translation completeness', () => {
       // the free services are unreachable in this test
       return new Response('', { status: 503 })
     }))
-    await expect(translateNewsArticle({ title: 'শিরোনাম', paragraphs: ['প্রথম অনুচ্ছেদ।'], apiKey: 'test-key', throwOnAiFailure: true })).rejects.toThrow(/stopped early/)
+    await expect(translateNewsArticle({ title: 'শিরোনাম', paragraphs: ['প্রথম অনুচ্ছেদ।'], throwOnAiFailure: true })).rejects.toThrow(/stopped early/)
   })
 })

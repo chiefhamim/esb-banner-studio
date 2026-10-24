@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { aiJson, loadAiSettings, saveAiSettings, activeAi, resolveModel, rankOpenAi } from '../../src/editorial/aiProviders'
+import { aiJson, loadAiSettings, saveAiSettings, aiFor, resolveModel, rankOpenAi } from '../../src/editorial/aiProviders'
+import { translateNewsArticle } from '../../src/editorial/translator'
 import type { AiSchema } from '../../src/editorial/aiProviders'
 import { sanitizeSeo, sanitizeCaptions, xLength, articleUrl, relinkCaptions, storyCaptions } from '../../src/editorial/aiDesk'
 
@@ -27,27 +28,40 @@ function claudeStream(text: string, stop = 'end_turn') {
 }
 
 describe('AI settings', () => {
-  it('a Gemini key saved by an older build carries over as the active provider', () => {
-    vi.stubGlobal('localStorage', memoryStorage({ 'esb-banner-studio/ai-key': 'AIzaOLD', 'esb-banner-studio/ai-model': 'gemini-2.5-pro' }))
+  it('a fresh install has no keys, so no AI job runs', () => {
+    vi.stubGlobal('localStorage', memoryStorage())
     const s = loadAiSettings()
-    expect(s.provider).toBe('gemini')
-    expect(s.keys.gemini).toBe('AIzaOLD')
-    expect(activeAi(s)).toEqual({ provider: 'gemini', key: 'AIzaOLD', model: 'gemini-2.5-pro' })
+    expect(s.keys).toEqual({ gemini: '', anthropic: '', openai: '', openrouter: '' })
+    for (const role of ['main', 'seo', 'social'] as const) expect(aiFor(role, s)).toBeNull()
   })
 
-  it('keys are kept per provider, and only the chosen provider is active', () => {
-    const store = memoryStorage()
-    vi.stubGlobal('localStorage', store)
+  it('settings saved before roles existed load with SEO and Social following the main provider', () => {
+    vi.stubGlobal('localStorage', memoryStorage({ 'esb-banner-studio/ai-settings': JSON.stringify({ provider: 'anthropic', keys: { anthropic: 'sk-ant-1' } }) }))
+    const s = loadAiSettings()
+    expect(s).toMatchObject({ provider: 'anthropic', seo: '', social: '' })
+    expect(aiFor('seo', s)).toEqual({ provider: 'anthropic', key: 'sk-ant-1', model: 'auto' })
+  })
+
+  it('keys are kept per provider', () => {
+    vi.stubGlobal('localStorage', memoryStorage())
     const s = loadAiSettings()
     saveAiSettings({ ...s, provider: 'anthropic', keys: { ...s.keys, gemini: ' AIza ', anthropic: 'sk-ant-1 ' } })
-    const back = loadAiSettings()
-    expect(back.keys).toMatchObject({ gemini: 'AIza', anthropic: 'sk-ant-1' })
-    expect(activeAi(back)?.provider).toBe('anthropic')
-    expect(activeAi({ ...back, provider: 'openai' })).toBeNull()
+    expect(loadAiSettings().keys).toMatchObject({ gemini: 'AIza', anthropic: 'sk-ant-1' })
+  })
+
+  it('each job calls only the provider chosen for it — never a substitute', () => {
+    const s = { ...loadAiSettings(), provider: 'anthropic' as const, seo: 'gemini' as const, social: '' as const, keys: { gemini: 'AIza', anthropic: 'sk-ant-1', openai: 'sk-oa', openrouter: '' } }
+    expect(aiFor('main', s)?.provider).toBe('anthropic')
+    expect(aiFor('seo', s)?.provider).toBe('gemini')
+    expect(aiFor('social', s)?.provider).toBe('anthropic')
+    // SEO's provider loses its key: SEO is off, it does not borrow the main provider's
+    expect(aiFor('seo', { ...s, keys: { ...s.keys, gemini: '' } })).toBeNull()
+    // main has no key: nothing else translates, even though other providers have keys
+    expect(aiFor('main', { ...s, keys: { ...s.keys, anthropic: '' } })).toBeNull()
   })
 
   it('"auto" picks a real default per provider', () => {
-    expect(resolveModel('anthropic', 'auto', [])).toBe('claude-opus-5-5')
+    expect(resolveModel('anthropic', 'auto', [])).toBe('claude-sonnet-5-5')
     expect(resolveModel('gemini', 'auto', [{ id: 'gemini-3-pro', label: '' }, { id: 'gemini-3-flash', label: '' }])).toBe('gemini-3-flash')
     expect(resolveModel('openrouter', 'auto', [])).toBe('openrouter/auto')
     expect(resolveModel('openai', 'gpt-x', [])).toBe('gpt-x')
@@ -59,7 +73,7 @@ describe('One structured call, four providers', () => {
   it('Claude: official SDK, browser header, strict schema, no sampling parameters', async () => {
     const fetch = vi.fn(async () => claudeStream('{"headline":"Petrobangla to drill two wells"}'))
     vi.stubGlobal('fetch', fetch)
-    const r = await aiJson<{ headline: string }>({ provider: 'anthropic', key: 'sk-ant-test', model: 'claude-opus-5-5', system: 'sys', user: 'story', schema })
+    const r = await aiJson<{ headline: string }>({ provider: 'anthropic', key: 'sk-ant-test', model: 'claude-sonnet-5-5', system: 'sys', user: 'story', schema })
     expect(r.data.headline).toBe('Petrobangla to drill two wells')
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
     expect(String(url)).toBe('https://api.anthropic.com/v1/messages')
@@ -71,11 +85,24 @@ describe('One structured call, four providers', () => {
     expect(body.output_config.format).toEqual({ type: 'json_schema', schema: { ...schema, additionalProperties: false } })
     expect(body).not.toHaveProperty('temperature')
     expect(body).not.toHaveProperty('thinking')
+    // the system prompt is a cache breakpoint; effort is medium unless a short job asks for low
+    expect(body.system).toEqual([{ type: 'text', text: 'sys', cache_control: { type: 'ephemeral' } }])
+    expect(body.output_config.effort).toBe('medium')
+  })
+
+  it('Claude: short jobs run at low effort, and models that take no effort setting are not sent one', async () => {
+    const fetch = vi.fn(async () => claudeStream('{"headline":"x"}'))
+    vi.stubGlobal('fetch', fetch)
+    await aiJson({ provider: 'anthropic', key: 'k', model: 'claude-sonnet-5-5', system: 's', user: 'u', schema, effort: 'low' })
+    await aiJson({ provider: 'anthropic', key: 'k', model: 'claude-haiku-4-5', system: 's', user: 'u', schema, effort: 'low' })
+    const bodies = fetch.mock.calls.map((c) => JSON.parse(String((c as unknown as [string, RequestInit])[1].body)))
+    expect(bodies[0].output_config.effort).toBe('low')
+    expect(bodies[1].output_config).not.toHaveProperty('effort')
   })
 
   it('Claude: a reply cut off at max_tokens is an error, not a shorter answer', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => claudeStream('{"headline":"Petro', 'max_tokens')))
-    await expect(aiJson({ provider: 'anthropic', key: 'k', model: 'claude-opus-5-5', system: 's', user: 'u', schema })).rejects.toThrow(/ran out of room/)
+    await expect(aiJson({ provider: 'anthropic', key: 'k', model: 'claude-sonnet-5-5', system: 's', user: 'u', schema })).rejects.toThrow(/ran out of room/)
   })
 
   it('OpenAI: strict json_schema, and a length stop is refused', async () => {
@@ -105,6 +132,40 @@ describe('One structured call, four providers', () => {
     await expect(aiJson({ provider: 'gemini', key: 'AIza', model: 'gemini-3-flash', system: 's', user: 'u', schema })).rejects.toThrow(/stopped early \(SAFETY\)/)
     const body = JSON.parse(String((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body))
     expect(body.generationConfig.responseSchema).toEqual({ type: 'OBJECT', properties: { headline: { type: 'STRING', description: 'h' } }, required: ['headline'] })
+  })
+})
+
+describe('The translation prompt is followed', () => {
+  const reply = JSON.stringify({ headline: 'Grid expansion', deck: 'Two new lines.', slug: 'grid-expansion', focusKeywords: 'grid expansion', metaTitle: 'Grid expansion', metaDescription: 'x'.repeat(130), body: 'Officials will dig into the numbers at Rs. 40 crore.\n\nSecond paragraph.' })
+
+  it("sends the editor's own prompt as the system prompt, ahead of the reply format, and rewrites none of the answer", async () => {
+    const custom = 'Translate like a wire-service sub-editor. Spell out every acronym on first use.'
+    vi.stubGlobal('localStorage', memoryStorage({ 'esb-banner-studio/ai-settings': JSON.stringify({ provider: 'anthropic', keys: { anthropic: 'sk-ant-1' }, prompt: custom }) }))
+    const calls: { url: string; body: Record<string, unknown> }[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (String(url).includes('/v1/models')) return new Response(JSON.stringify({ error: { message: 'no' } }), { status: 404 })
+      calls.push({ url: String(url), body: JSON.parse(String(init?.body)) })
+      return claudeStream(reply)
+    }))
+    const r = await translateNewsArticle({ title: 'শিরোনাম', paragraphs: ['এক', 'দুই'] })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe('https://api.anthropic.com/v1/messages')
+    const system = (calls[0].body.system as { text: string }[])[0].text
+    expect(system.startsWith(custom)).toBe(true)
+    expect(system).toContain('Reply format')
+    expect(system).not.toContain('professional bilingual news editor') // the built-in prompt is not mixed in
+    // the model's wording reaches the desk exactly as written: no "dig" to "drill", no "Rs." to "Tk"
+    expect(r.body).toBe('Officials will dig into the numbers at Rs. 40 crore.\n\nSecond paragraph.')
+    expect(r.provider).toBe('anthropic')
+  })
+
+  it('with no key for the main provider, no AI provider is called at all', async () => {
+    vi.stubGlobal('localStorage', memoryStorage({ 'esb-banner-studio/ai-settings': JSON.stringify({ provider: 'anthropic', seo: 'gemini', keys: { gemini: 'AIza' } }) }))
+    const hosts: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => { hosts.push(new URL(String(url)).host); return new Response('{}', { status: 500 }) }))
+    await translateNewsArticle({ title: 'শিরোনাম', paragraphs: ['এক'] }).catch(() => {})
+    expect(hosts).not.toContain('api.anthropic.com')
+    expect(hosts).not.toContain('generativelanguage.googleapis.com')
   })
 })
 

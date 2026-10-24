@@ -361,7 +361,6 @@ export async function automateNewsFromUrl(
     title: originalTitle,
     deck: originalDeck,
     paragraphs,
-    apiKey: useEditorialStore.getState().apiKey,
   }, onProgress)
 
   const englishHeadline = translation.headline

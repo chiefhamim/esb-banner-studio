@@ -5,7 +5,8 @@
 
 import { SITE_BASE_URL, SUPABASE_ANON_KEY, SUPABASE_URL, CMS_ROLES, ensureFreshSession, siteFetch, siteSessionCookies } from './siteApi'
 import type { StaffSession } from './siteApi'
-import { activeAi, listModels, providerMeta } from './aiProviders'
+import { aiFor, listModels, loadAiSettings, providerMeta, roleProvider } from './aiProviders'
+import type { AiRole } from './aiProviders'
 
 type Cookie = { name: string; value: string }
 interface UploadBridge {
@@ -56,7 +57,7 @@ async function timed(url: string, init: RequestInit = {}, ms = 8000): Promise<Re
  * Every link between this desk and the live site, checked in the order a publish uses them. Each step reports what
  * it actually saw; a step that cannot run says why rather than passing.
  */
-export async function runConnectionCheck(session: StaffSession | null, geminiKey: string, onStep?: (c: ConnectionCheck[]) => void): Promise<ConnectionCheck[]> {
+export async function runConnectionCheck(session: StaffSession | null, onStep?: (c: ConnectionCheck[]) => void): Promise<ConnectionCheck[]> {
   const out: ConnectionCheck[] = []
   const push = (c: ConnectionCheck) => { out.push(c); onStep?.([...out]) }
 
@@ -113,17 +114,20 @@ export async function runConnectionCheck(session: StaffSession | null, geminiKey
     for (const [id, label] of [['role', 'Newsroom role'], ['articles', 'Articles table'], ['upload', 'Media upload']] as const) push({ id, label, status: 'skip', detail: 'Needs a signed-in session' })
   }
 
-  // the AI provider the desk translates with — the key it holds, not the one passed in by older callers
-  const ai = activeAi() ?? (geminiKey.trim() ? { provider: 'gemini' as const, key: geminiKey.trim(), model: 'auto' } : null)
-  if (!ai) {
-    push({ id: 'ai', label: 'AI translation', status: 'skip', detail: 'No API key set' })
-  } else {
-    const label = `${providerMeta(ai.provider).name} translation`
+  // each AI provider a job is given — the key it holds, and whether it still answers
+  const settings = loadAiSettings()
+  const jobs: [AiRole, string][] = [['main', 'Main'], ['seo', 'SEO'], ['social', 'Social']]
+  const providers = [...new Set(jobs.map(([role]) => roleProvider(settings, role)))]
+  for (const provider of providers) {
+    const name = providerMeta(provider).name
+    const used = jobs.filter(([role]) => roleProvider(settings, role) === provider).map(([, label]) => label).join(' · ')
+    const ai = aiFor(jobs.find(([role]) => roleProvider(settings, role) === provider)![0], settings)
+    if (!ai) { push({ id: 'ai-' + provider, label: `${name} (${used})`, status: 'skip', detail: 'No API key set' }); continue }
     try {
       const models = await listModels(ai.provider, ai.key)
-      push({ id: 'ai', label, status: models.length ? 'ok' : 'fail', detail: models.length ? `${models.length} models — e.g. ${models[0].label}` : 'The key lists no text models' })
+      push({ id: 'ai-' + provider, label: `${name} (${used})`, status: models.length ? 'ok' : 'fail', detail: models.length ? `${models.length} models — e.g. ${models[0].label}` : 'The key lists no text models' })
     } catch (e) {
-      push({ id: 'ai', label, status: 'fail', detail: (e as Error).message || 'Key rejected' })
+      push({ id: 'ai-' + provider, label: `${name} (${used})`, status: 'fail', detail: (e as Error).message || 'Key rejected' })
     }
   }
   return out

@@ -43,7 +43,7 @@ import { bengaliToAsciiDigits } from './bengali'
 import { translateNewsArticle } from './translator'
 import { AiSettingsDialog } from './AiSettingsDialog'
 import { TranslateProgress } from './TranslateProgress'
-import { activeAi, providerMeta } from './aiProviders'
+import { aiFor, providerMeta, roleProvider } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
 import { aiCaptions, aiSeo, articleUrl, storyCaptions, xLength } from './aiDesk'
 import {
@@ -125,7 +125,6 @@ export function EditorialWorkspace() {
   const source = useEditorialStore((s) => s.source)
   const draft = useEditorialStore((s) => s.draft)
   const checklist = useEditorialStore((s) => s.checklist)
-  const apiKey = useEditorialStore((s) => s.apiKey)
   const siteStatus = useEditorialStore((s) => s.siteStatus)
   const staffSession = useEditorialStore((s) => s.staffSession)
   const liveArticles = useEditorialStore((s) => s.liveArticles)
@@ -218,6 +217,10 @@ export function EditorialWorkspace() {
   // AI settings dialog (provider, key, model, prompt)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
   const ai = useEditorialStore((s) => s.ai)
+  // each job calls only the provider chosen for it, and only when that provider has a key
+  const mainAi = aiFor('main', ai)
+  const seoAi = aiFor('seo', ai)
+  const socialAi = aiFor('social', ai)
   const aiName = providerMeta(ai.provider).name
   const aiModelLabel = ai.models[ai.provider] === 'auto' ? providerMeta(ai.provider).autoLabel.replace(/^Auto — /, '') : ai.models[ai.provider]
   const isAiProvider = (p: string | null): p is AiProviderId => !!p && p !== 'neural' && p !== 'offline'
@@ -225,8 +228,9 @@ export function EditorialWorkspace() {
 
   // SEO and captions by the chosen provider — sanitised in aiDesk.ts to the same rules the hand-built fields follow
   const runAi = async (job: 'seo' | 'social') => {
-    const active = activeAi(ai)
+    const active = job === 'seo' ? seoAi : socialAi
     if (!active) { setShowApiKeyModal(true); return }
+    const who = providerMeta(active.provider).name
     setAiBusy(job)
     try {
       const d = useEditorialStore.getState().draft
@@ -238,15 +242,15 @@ export function EditorialWorkspace() {
         setDraftField('metaTitle', r.metaTitle)
         setDraftField('metaDescription', r.metaDescription)
         setDraftField('slug', r.slug)
-        showToast(`SEO written by ${aiName} · ${r.model} — review it before publishing`)
+        showToast(`SEO written by ${who} · ${r.model} — review it before publishing`)
       } else {
         const desk = CATEGORIES.find((c) => c.id === useStore.getState().doc.content.categoryId)?.name ?? 'Energy'
         const r = await aiCaptions(active, { ...story, slug: d.slug, desk })
         for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, r[k])
-        showToast(`Captions written by ${aiName} · ${r.model} — each links to the article`)
+        showToast(`Captions written by ${who} · ${r.model} — each links to the article`)
       }
     } catch (e) {
-      showToast(`${aiName} could not finish: ${(e as Error).message}`)
+      showToast(`${who} could not finish: ${(e as Error).message}`)
     } finally {
       setAiBusy(null)
     }
@@ -379,7 +383,7 @@ export function EditorialWorkspace() {
       setDraftField('metaDescription', result.metaDescription)
       setDraftField('byline', result.byline)
       setDraftField('credit', result.credit)
-      if (isAiProvider(useEditorialStore.getState().translationProvider)) void runAi('social')
+      if (socialAi && isAiProvider(useEditorialStore.getState().translationProvider)) void runAi('social')
 
       setProgressStatus(null)
       const warn = result.extraction?.warnings ?? []
@@ -427,7 +431,6 @@ export function EditorialWorkspace() {
           title,
           deck,
           paragraphs,
-          apiKey,
         },
         (status) => setProgressStatus(status),
       )
@@ -448,7 +451,7 @@ export function EditorialWorkspace() {
       const templated = storyCaptions({ headline: translation.headline, deck: translation.deck, categoryId: detectedCat, slug: translation.slug })
       for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, templated[k])
       // the provider that translated the story writes its captions too, in the background
-      if (isAiProvider(translation.provider)) void runAi('social')
+      if (socialAi && isAiProvider(translation.provider)) void runAi('social')
 
       useEditorialStore.getState().setDeskAuto(true)
       autoDesk(() => useStore.getState().setContent({
@@ -483,7 +486,6 @@ export function EditorialWorkspace() {
           title: source.title,
           deck: source.deck,
           paragraphs: source.paragraphs,
-          apiKey,
         },
         (status) => setProgressStatus(status),
       )
@@ -786,7 +788,7 @@ export function EditorialWorkspace() {
       { label: 'Open the site CMS', icon: 'externalLink', onClick: handleOpenInSiteCms },
       { divider: true },
       { label: staffSession ? `Signed in as ${staffSession.name}` : 'Staff sign-in', icon: 'user', onClick: () => setShowLoginModal(true) },
-      { label: apiKey ? `AI: ${aiName} (on)` : 'AI translation key', icon: 'sparkle', onClick: () => setShowApiKeyModal(true) },
+      { label: mainAi ? `AI: ${aiName} (on)` : 'AI keys and roles', icon: 'sparkle', onClick: () => setShowApiKeyModal(true) },
     ] },
     { label: 'View', items: [
       { label: 'Source column', checked: sourceOpen, disabled: !hasStory, onClick: () => setSourceOpen(!sourceOpen) },
@@ -827,7 +829,7 @@ export function EditorialWorkspace() {
             <span className="site-state">{siteStatus.connected ? `${siteStatus.latencyMs} ms` : 'offline'}</span>
           </button>
           {hasStory && source && (
-            <button type="button" className="pv-btn" onClick={handleRetranslateSource} disabled={translating} aria-label="Re-translate" data-tip={apiKey ? `Translate the original story again with ${aiName} · ${aiModelLabel}` : 'Translate the original story again (free machine translation — add an AI key for better results)'}>
+            <button type="button" className="pv-btn" onClick={handleRetranslateSource} disabled={translating} aria-label="Re-translate" data-tip={mainAi ? `Translate the original story again with ${aiName} · ${aiModelLabel}` : 'Translate the original story again (free machine translation — add an AI key for better results)'}>
               <Icon name="refresh" size={14} />
               <span className="ed-retranslate-label">{translating ? 'Translating…' : 'Re-translate'}</span>
             </button>
@@ -840,9 +842,9 @@ export function EditorialWorkspace() {
           <IconButton icon="plus" tip="New story — the current one stays under Stories" onClick={handleNewStory} />
           <IconButton icon="refresh" tip={syncing ? 'Syncing…' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
         </div>
-        <button type="button" className={'ed-ai-chip' + (apiKey ? ' on' : '')} data-provider={ai.provider} onClick={() => setShowApiKeyModal(true)} aria-label="AI translation" data-tip={apiKey ? `${aiName} · ${aiModelLabel} — change the provider, model or prompt` : 'AI is off — add a Gemini, Claude, OpenAI or OpenRouter key'}>
-          <Icon name={apiKey ? 'sparkle' : 'link'} size={14} />
-          <span className="ed-ai-label">{apiKey ? aiName : 'Connect AI'}</span>
+        <button type="button" className={'ed-ai-chip' + (mainAi ? ' on' : '')} data-provider={ai.provider} onClick={() => setShowApiKeyModal(true)} aria-label="AI keys and roles" data-tip={mainAi ? `Main: ${aiName} · ${aiModelLabel}${seoAi ? ` — SEO: ${providerMeta(seoAi.provider).name}` : ''}${socialAi ? ` — Social: ${providerMeta(socialAi.provider).name}` : ''}. Click to change` : 'AI is off — add a Gemini, Claude, OpenAI or OpenRouter key'}>
+          <Icon name={mainAi ? 'sparkle' : 'link'} size={14} />
+          <span className="ed-ai-label">{mainAi ? aiName : 'Connect AI'}</span>
         </button>
         <button type="button" className={'ed-account' + (staffSession ? ' in' : '')} onClick={() => setShowLoginModal(true)} aria-label={staffSession ? 'Staff sign-in' : 'Staff sign-in'} data-tip={staffSession ? `${staffSession.name} · ${staffSession.email} — account and connection check` : 'Sign in with your esbpowerline.com newsroom account'}>
           {staffSession
@@ -1079,7 +1081,7 @@ export function EditorialWorkspace() {
                 )}
 
                 {storyTab === 'seo' && (
-                  <SeoPanel hasImage={!!bannerLeadImage} slugStatus={slugStatus} onCheckSlug={() => void checkSlug(draft.slug)} onAiSeo={() => void handleAiSeo()} aiBusy={aiBusy === 'seo'} aiName={apiKey ? aiName : null} />
+                  <SeoPanel hasImage={!!bannerLeadImage} slugStatus={slugStatus} onCheckSlug={() => void checkSlug(draft.slug)} onAiSeo={() => void handleAiSeo()} aiBusy={aiBusy === 'seo'} aiProvider={seoAi?.provider ?? null} />
                 )}
 
                 {storyTab === 'social' && (
@@ -1102,7 +1104,7 @@ export function EditorialWorkspace() {
                         {activeSocialTab === 'x' ? `${xLength(draft.social.x || '')} / 280` : `${(draft.social[activeSocialTab] || '').length} chars`}
                       </span>
                       <div className="spacer" />
-                      <button type="button" className="btn sm ai-btn" onClick={() => void handleAiCaptions()} disabled={!!aiBusy || !draft.headline.trim()} data-tip={apiKey ? `Write all four captions with ${aiName}, from the story, each ending with the article link` : 'Add an AI key to write captions from the story'}>
+                      <button type="button" className="btn sm ai-btn" data-provider={socialAi?.provider} onClick={() => void handleAiCaptions()} disabled={!!aiBusy || !draft.headline.trim()} data-tip={socialAi ? `Write all four captions with ${providerMeta(socialAi.provider).name}, from the story, each ending with the article link` : `Add a ${providerMeta(roleProvider(ai, 'social')).name} key to write captions from the story`}>
                         <Icon name="sparkle" size={13} className={aiBusy === 'social' ? 'spin' : ''} />
                         <span>{aiBusy === 'social' ? 'Writing…' : 'Write with AI'}</span>
                       </button>

@@ -7,7 +7,7 @@ import type { FactItem, DiscrepancyFlag } from './facts'
 import { detectCategory, suggestHighlight } from '../core/newsroom'
 import { CATEGORIES } from '../core/tokens'
 import { generateSlug, buildSeoFromEnglishStory, stripSiteSuffix } from './translator'
-import { activeAi, loadAiSettings, saveAiSettings } from './aiProviders'
+import { loadAiSettings, saveAiSettings } from './aiProviders'
 import { relinkCaptions } from './aiDesk'
 import type { AiProviderId, AiSettings } from './aiProviders'
 import { syncArticlePhotosToBanner, importImageToBanner } from './automation'
@@ -95,9 +95,7 @@ interface EditorialState {
   draft: EditorialDraft
   discrepancies: DiscrepancyFlag[]
   checklist: EditorialChecklist
-  /** The active AI provider's key ('' when no provider has one): the desk's "AI is on" switch. */
-  apiKey: string
-  /** Provider, per-provider keys and models, and the editor's translation prompt (aiProviders.ts). */
+  /** Per-provider keys and models, which provider does which job, and the editor's translation prompt (aiProviders.ts). */
   ai: AiSettings
   /** Live link: headline / credit / caption stay identical in the Editorial draft and the Graphics banner, both ways. */
   bannerLink: boolean
@@ -136,7 +134,6 @@ interface EditorialState {
   setDraftField: <K extends keyof EditorialDraft>(key: K, value: EditorialDraft[K]) => void
   setSocialCaption: (platform: keyof EditorialDraft['social'], text: string) => void
   toggleChecklist: (key: keyof EditorialChecklist) => void
-  setApiKey: (key: string) => void
   setAiSettings: (s: AiSettings) => void
   setBannerLink: (on: boolean) => void
   setDeskAuto: (on: boolean) => void
@@ -220,7 +217,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
   checklist: restored.checklist ?? DEFAULT_CHECKLIST,
   bannerLink: restored.bannerLink ?? true,
   deskAuto: restored.deskAuto ?? true,
-  ...(() => { const ai = loadAiSettings(); return { ai, apiKey: activeAi(ai)?.key ?? '' } })(),
+  ai: loadAiSettings(),
   translationProvider: restored.translationProvider ?? null,
   modelUsed: restored.modelUsed ?? null,
 
@@ -496,12 +493,9 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
     }))
   },
 
-  // a bare key is a Gemini key (the only provider older builds knew)
-  setApiKey: (key) => get().setAiSettings({ ...get().ai, provider: 'gemini', keys: { ...get().ai.keys, gemini: key.trim() } }),
   setAiSettings: (ai) => {
     saveAiSettings(ai)
-    const saved = loadAiSettings()
-    set({ ai: saved, apiKey: activeAi(saved)?.key ?? '' })
+    set({ ai: loadAiSettings() })
   },
 
   setBannerLink: (on) => set({ bannerLink: on }),

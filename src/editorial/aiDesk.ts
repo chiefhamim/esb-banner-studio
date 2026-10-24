@@ -76,7 +76,7 @@ export function sanitizeSeo(story: Story, raw: Partial<Record<keyof typeof SEO_S
 
 export async function aiSeo(ai: Ai, story: Story): Promise<SeoResult & { model: string }> {
   const model = await modelFor(ai)
-  const { data, model: used } = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model, system: SEO_SYSTEM, user: storyText(story), schema: SEO_SCHEMA, maxTokens: 8000, timeoutMs: 120_000 })
+  const { data, model: used } = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model, system: SEO_SYSTEM, user: storyText(story), schema: SEO_SCHEMA, maxTokens: 8000, timeoutMs: 120_000, effort: 'low' })
   return { ...sanitizeSeo(story, data), model: used }
 }
 
@@ -162,7 +162,7 @@ export async function aiCaptions(ai: Ai, story: Story & { slug: string; desk: st
   const { data, model: used } = await aiJson<Record<string, string>>({
     provider: ai.provider, key: ai.key, model, system: SOCIAL_SYSTEM,
     user: `${storyText(story)}\n\nDesk: ${story.desk}\nArticle link: ${url}`,
-    schema: SOCIAL_SCHEMA, maxTokens: 8000, timeoutMs: 120_000,
+    schema: SOCIAL_SCHEMA, maxTokens: 8000, timeoutMs: 120_000, effort: 'low',
   })
   return { ...sanitizeCaptions(data, url), model: used }
 }

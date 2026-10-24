@@ -4,7 +4,7 @@
 import { polishJournalisticEnglish, translateBengaliToEnglish } from '../core/newsroom'
 import { bengaliToAsciiDigits } from './bengali'
 import { GTX_MAX, translateComplete } from './translateNet'
-import { activeAi, aiJson, geminiLabel, listModels, loadAiSettings, providerMeta, resolveModel } from './aiProviders'
+import { aiFor, aiJson, geminiLabel, listModels, loadAiSettings, providerMeta, resolveModel } from './aiProviders'
 import type { AiProviderId, AiSchema, AiSettings } from './aiProviders'
 import { DESCRIPTION_MAX, buildMetaDescription, buildMetaTitle, buildSlug, countPhrase, suggestKeyphrases } from './seo'
 
@@ -359,7 +359,13 @@ export function translationPrompt(s: AiSettings = loadAiSettings()): string {
   return s.prompt.trim() || JOURNALISTIC_TRANSLATOR_PROMPT
 }
 
-const JSON_RULE = 'Strict Rule: answer only with the requested JSON fields (no HEADLINE:/BODY: labels, no commentary). All facts, numbers, dates, quotes and names stay faithful to the source. Translate the whole article; do not summarise, merge or omit paragraphs, including the final ones. No site name in any field.'
+// Where each part of the answer goes. The editor's prompt (or the newsroom default) decides how to translate and write;
+// this only maps the answer onto the desk's fields — and says so, because the built-in prompt still describes a labelled
+// text layout and a meta block "at the end", which the structured reply replaces.
+const REPLY_RULES = 'Reply format (this replaces any "Output Format" or labelled layout in the instructions above): answer only with the requested JSON fields, with no HEADLINE:/BODY: labels and no commentary. The meta title, meta description and keywords go in their own fields, never at the end of the body; the body is the complete article and nothing else. Follow every instruction above exactly: the field descriptions only add the site\'s character limits. Translate the whole article without summarising, merging or omitting any paragraph, including the last ones. No site name in any field.'
+
+/** The model's body as written: trailing spaces and runs of blank lines tidied, no word of it rewritten. */
+const tidyBody = (t: string) => t.replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim()
 
 export const TRANSLATION_SCHEMA: AiSchema = {
   type: 'object',
@@ -373,16 +379,6 @@ export const TRANSLATION_SCHEMA: AiSchema = {
     body: { type: 'string', description: 'The COMPLETE English article: every paragraph and every sentence of the source, in order, paragraphs separated by blank lines. Never summarise or drop the ending.' },
   },
   required: ['headline', 'deck', 'slug', 'focusKeywords', 'metaTitle', 'metaDescription', 'body'],
-}
-
-/** Which provider/key/model a translation uses: the active provider, or — for a bare key handed in — Gemini. */
-export function aiFor(apiKey?: string): { provider: AiProviderId; key: string; model: string } | null {
-  const s = loadAiSettings()
-  const active = activeAi(s)
-  const k = apiKey?.trim()
-  if (!k) return active
-  if (active && active.key === k) return active
-  return { provider: 'gemini', key: k, model: s.models.gemini || 'auto' }
 }
 
 async function translateWithAi(
@@ -404,10 +400,11 @@ async function translateWithAi(
       // A full article takes a fast model 10–30 s and a careful one up to a minute or two.
       const { data, model: used } = await aiJson<Record<string, string>>({
         provider: ai.provider, key: ai.key, model,
-        system: `${translationPrompt()}\n\n${JSON_RULE}`,
+        system: `${translationPrompt()}\n\n${REPLY_RULES}`,
         user: `Bengali news article to translate:\n\n${articleText}`,
         schema: TRANSLATION_SCHEMA,
         maxTokens: 32000,
+        effort: 'medium',
         timeoutMs: /pro|opus/.test(model) ? 240_000 : 150_000,
       })
       if (!data.headline || !data.body) { lastError = `${label} returned no article`; continue }
@@ -428,106 +425,6 @@ async function translateWithAi(
   throw new Error(lastError || `${name} unreachable`)
 }
 
-/** Builds the complete prompt for web chat interfaces (gemini.google.com, chatgpt.com, claude.ai) */
-export function buildWebChatPrompt(source: { title: string; deck?: string; paragraphs: string[] }): string {
-  const cleanBody = source.paragraphs.join('\n\n')
-  return `${JOURNALISTIC_TRANSLATOR_PROMPT}
-
-Bengali News Article that will have the above instructions applied:
-
-Headline: ${source.title}
-${source.deck ? `Deck: ${source.deck}\n` : ''}
-Article Body:
-${cleanBody}`
-}
-
-/** Parses raw output pasted from Gemini web, ChatGPT, or Claude into structured CMS fields. */
-export function parsePastedAiOutput(rawText: string): Partial<EditorialTranslationResult> {
-  const text = rawText.trim()
-  if (!text) return {}
-
-  // 1. Try structured tags (HEADLINE:, **Headline:**, # Headline, etc.)
-  const headlineMatch = text.match(/(?:(?:HEADLINE|\*\*Headline\*\*|Headline)\s*:\s*|^#\s+)([^\n]+)/im)
-  const deckMatch = text.match(/(?:DECK|\*\*Deck\*\*|Deck|Sub-headline)\s*:\s*([^\n]+)/im)
-  const slugMatch = text.match(/(?:SLUG|\*\*Slug\*\*|Slug|URL Slug)\s*:\s*([^\n]+)/im)
-  const keywordsMatch = text.match(/(?:FOCUS_KEYWORDS|\*\*Focus Keywords\*\*|Focus Keywords|Keywords)\s*:\s*([^\n]+)/im)
-  const metaTitleMatch = text.match(/(?:META_TITLE|\*\*Meta Title\*\*|Meta Title)\s*:\s*([^\n]+)/im)
-  const metaDescMatch = text.match(/(?:META_DESCRIPTION|\*\*Meta Description\*\*|Meta Description)\s*:\s*([^\n]+)/im)
-
-  let body = ''
-  const bodyMatch = text.match(/(?:BODY|\*\*Body\*\*|Article Body|English Article Body)\s*:\s*([\s\S]+)$/i)
-  if (bodyMatch) {
-    body = bodyMatch[1]
-      .replace(/(?:META_TITLE|Meta Title|FOCUS_KEYWORDS|Focus Keywords)[\s\S]*$/i, '')
-      .trim()
-  }
-
-  // 2. Fallback heuristic if unstructured:
-  let headline = headlineMatch ? headlineMatch[1].trim() : ''
-  let deck = deckMatch ? deckMatch[1].trim() : ''
-
-  if (!headline) {
-    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
-    if (lines.length > 0) {
-      headline = lines[0].replace(/^[#*-\s]+|[#*-\s]+$/g, '')
-      if (!body && lines.length > 1) {
-        if (!deck && lines[1].length < 200) {
-          deck = lines[1]
-          body = lines.slice(2).join('\n\n')
-        } else {
-          body = lines.slice(1).join('\n\n')
-        }
-      }
-    }
-  }
-
-  headline = enforceHeadlineLength(headline, 104)
-  deck = enforceDeckLength(deck, 200)
-  const slug = generateSlug(slugMatch ? slugMatch[1].trim() : headline, 80)
-  const focusKeywords = keywordsMatch ? keywordsMatch[1].trim() : extractFocusKeywords(headline, body)
-  const { metaTitle, metaDescription } = seoFields(headline, deck, body, focusKeywords, metaTitleMatch?.[1], metaDescMatch?.[1])
-
-  return {
-    headline,
-    deck,
-    slug,
-    focusKeywords,
-    metaTitle,
-    metaDescription,
-    body: body || text,
-  }
-}
-
-/** Parses the structured output fields from LLM response. */
-export function parseLlmOutput(output: string): Partial<EditorialTranslationResult> {
-  const result: Partial<EditorialTranslationResult> = {}
-
-  const headlineMatch = output.match(/HEADLINE:\s*([^\n]+)/i)
-  if (headlineMatch) result.headline = headlineMatch[1].trim()
-
-  const deckMatch = output.match(/DECK:\s*([^\n]+)/i)
-  if (deckMatch) result.deck = deckMatch[1].trim()
-
-  const slugMatch = output.match(/SLUG:\s*([^\n]+)/i)
-  if (slugMatch) result.slug = slugMatch[1].trim()
-
-  const keywordsMatch = output.match(/FOCUS_KEYWORDS:\s*([^\n]+)/i)
-  if (keywordsMatch) result.focusKeywords = keywordsMatch[1].trim()
-
-  const metaTitleMatch = output.match(/META_TITLE:\s*([^\n]+)/i)
-  if (metaTitleMatch) result.metaTitle = metaTitleMatch[1].trim()
-
-  const metaDescMatch = output.match(/META_DESCRIPTION:\s*([^\n]+)/i)
-  if (metaDescMatch) result.metaDescription = metaDescMatch[1].trim()
-
-  const bodyMatch = output.match(/BODY:\s*([\s\S]+)$/i)
-  if (bodyMatch) {
-    result.body = bodyMatch[1].trim()
-  }
-
-  return result
-}
-
 /**
  * Main translation & CMS story compilation pipeline.
  * Translates Bengali news article into natural, professional English.
@@ -543,13 +440,11 @@ export async function translateNewsArticle(
     title: string
     deck?: string
     paragraphs: string[]
-    apiKey?: string
     throwOnAiFailure?: boolean
   },
   onProgress?: (status: string) => void,
 ): Promise<EditorialTranslationResult> {
-  const ai = aiFor(input.apiKey)
-
+  const ai = aiFor('main')
 
   const combinedBengaliText = [
     `Title: ${input.title}`,
@@ -569,7 +464,7 @@ export async function translateNewsArticle(
         const incomplete = srcParas >= 4 && outParas < Math.ceil(srcParas * 0.6)
         const headline = enforceHeadlineLength(parsed.headline, 104)
         const deck = enforceDeckLength(parsed.deck || input.deck || '', 200)
-        const body = polishJournalisticBody(parsed.body)
+        const body = tidyBody(parsed.body)
         const focusKeywords = parsed.focusKeywords || extractFocusKeywords(headline, `${deck} ${body}`)
         const slug = cleanSlug(parsed.slug ?? '') || buildSlug(headline, firstKeyphrase(focusKeywords)) || generateSlug(headline, 80)
         const { metaTitle, metaDescription } = seoFields(headline, deck, body, focusKeywords, parsed.metaTitle, parsed.metaDescription)

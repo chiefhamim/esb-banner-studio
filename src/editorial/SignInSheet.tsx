@@ -24,7 +24,6 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const [busy, setBusy] = useState(false)
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const apiKey = useEditorialStore((s) => s.apiKey)
   const [checks, setChecks] = useState<ConnectionCheck[] | null>(null)
   const [checking, setChecking] = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
@@ -71,7 +70,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const check = async () => {
     setChecking(true)
     setChecks([])
-    try { setChecks(await runConnectionCheck(session, apiKey, setChecks)) } finally { setChecking(false) }
+    try { setChecks(await runConnectionCheck(session, setChecks)) } finally { setChecking(false) }
   }
   const failed = checks?.filter((c) => c.status === 'fail').length ?? 0
 

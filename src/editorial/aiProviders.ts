@@ -2,9 +2,11 @@
 // whichever service the editor has a key for. Gemini (Google AI Studio), Claude (Anthropic), OpenAI and OpenRouter
 // (which reaches most other model families with one key).
 //
-// Every call goes from this app straight to the provider's own API host with the editor's own key; nothing passes
-// through esbpowerline.com or a relay, and keys live only in this machine's local storage. Claude is called through
-// the official @anthropic-ai/sdk; the others through their documented REST endpoints.
+// The editor keeps a key per provider and gives each job one provider: the main one translates and writes the story,
+// and SEO and social captions can each use another. A job only ever calls the provider chosen for it — never a
+// substitute. Every call goes from this app straight to the provider's own API host with the editor's own key; nothing
+// passes through esbpowerline.com or a relay, and keys live only in this machine's local storage. Claude is called
+// through the official @anthropic-ai/sdk; the others through their documented REST endpoints.
 //
 // A reply that stopped early (token limit, safety stop) is an error, never a shorter answer: a cut-off translation
 // is a story without its last paragraphs.
@@ -16,26 +18,36 @@ export type AiProviderId = 'gemini' | 'anthropic' | 'openai' | 'openrouter'
 export interface AiProviderMeta {
   id: AiProviderId
   name: string
-  /** Where the editor gets a key. */
+  /** The page where the editor creates a key. */
   keyUrl: string
   keyPlaceholder: string
+  /** The company colour: a swatch in menus; the chip and "Write with AI" buttons are filled from it (studio.css). */
+  color: string
   help: string
   autoLabel: string
 }
 
 export const AI_PROVIDERS: AiProviderMeta[] = [
-  { id: 'gemini', name: 'Gemini', keyUrl: 'aistudio.google.com', keyPlaceholder: 'AIza…', autoLabel: 'Auto — newest Flash (fast)', help: 'Google AI Studio → Get API key. Pro models translate most carefully; Flash is fastest.' },
-  { id: 'anthropic', name: 'Claude', keyUrl: 'console.anthropic.com', keyPlaceholder: 'sk-ant-…', autoLabel: 'Auto — Claude Opus 5.5', help: 'Anthropic Console → API keys. Billed to that Console account, separate from a Claude.ai subscription.' },
-  { id: 'openai', name: 'OpenAI', keyUrl: 'platform.openai.com', keyPlaceholder: 'sk-…', autoLabel: 'Auto — newest GPT', help: 'OpenAI Platform → API keys. Billed to the Platform account, separate from ChatGPT Plus.' },
-  { id: 'openrouter', name: 'OpenRouter', keyUrl: 'openrouter.ai', keyPlaceholder: 'sk-or-…', autoLabel: 'Auto — OpenRouter picks', help: 'One key for many model families (Llama, Mistral, DeepSeek, Qwen and more). openrouter.ai → Keys.' },
+  { id: 'gemini', name: 'Gemini', keyUrl: 'https://aistudio.google.com/apikey', keyPlaceholder: 'AIza…', color: '#4285f4', autoLabel: 'Auto — newest Flash (fast)', help: 'Google AI Studio → Get API key. Pro models translate most carefully; Flash is fastest.' },
+  { id: 'anthropic', name: 'Claude', keyUrl: 'https://console.anthropic.com/settings/keys', keyPlaceholder: 'sk-ant-…', color: '#d97757', autoLabel: 'Auto — Claude Sonnet 5.5', help: 'Anthropic Console → API keys. Billed to that Console account, separate from a Claude.ai subscription.' },
+  { id: 'openai', name: 'OpenAI', keyUrl: 'https://platform.openai.com/api-keys', keyPlaceholder: 'sk-…', color: '#10a37f', autoLabel: 'Auto — newest GPT', help: 'OpenAI Platform → API keys. Billed to the Platform account, separate from ChatGPT Plus.' },
+  { id: 'openrouter', name: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', keyPlaceholder: 'sk-or-…', color: '#6467f2', autoLabel: 'Auto — OpenRouter picks', help: 'One key for many model families (Llama, Mistral, DeepSeek, Qwen and more). openrouter.ai → Keys.' },
 ]
 
 export const providerMeta = (id: AiProviderId) => AI_PROVIDERS.find((p) => p.id === id)!
 
 export interface AiModelInfo { id: string; label: string; hint?: string }
 
+/** The jobs the desk gives a provider. */
+export type AiRole = 'main' | 'seo' | 'social'
+
 export interface AiSettings {
+  /** The main provider: translation and the whole story, and the provider SEO and social use unless given their own. */
   provider: AiProviderId
+  /** A provider just for "Write with AI" on the SEO tab; '' follows the main one. */
+  seo: AiProviderId | ''
+  /** A provider just for the social captions; '' follows the main one. */
+  social: AiProviderId | ''
   keys: Record<AiProviderId, string>
   /** 'auto' or a model id, per provider. */
   models: Record<AiProviderId, string>
@@ -44,45 +56,42 @@ export interface AiSettings {
 }
 
 const SETTINGS_KEY = 'esb-banner-studio/ai-settings'
-// the Gemini-only builds stored these two; read once so an existing key keeps working
-const LEGACY_KEY = 'esb-banner-studio/ai-key'
-const LEGACY_MODEL = 'esb-banner-studio/ai-model'
 
 const emptyRecord = (v: string): Record<AiProviderId, string> => ({ gemini: v, anthropic: v, openai: v, openrouter: v })
+const isProvider = (v: unknown): v is AiProviderId => AI_PROVIDERS.some((p) => p.id === v)
 
 export function loadAiSettings(): AiSettings {
-  const base: AiSettings = { provider: 'gemini', keys: emptyRecord(''), models: emptyRecord('auto'), prompt: '' }
+  const base: AiSettings = { provider: 'gemini', seo: '', social: '', keys: emptyRecord(''), models: emptyRecord('auto'), prompt: '' }
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
       const s = JSON.parse(raw) as Partial<AiSettings>
       return {
-        provider: AI_PROVIDERS.some((p) => p.id === s.provider) ? s.provider! : 'gemini',
+        provider: isProvider(s.provider) ? s.provider : 'gemini',
+        seo: isProvider(s.seo) ? s.seo : '',
+        social: isProvider(s.social) ? s.social : '',
         keys: { ...base.keys, ...(s.keys ?? {}) },
         models: { ...base.models, ...(s.models ?? {}) },
         prompt: typeof s.prompt === 'string' ? s.prompt : '',
       }
     }
-    base.keys.gemini = localStorage.getItem(LEGACY_KEY) ?? ''
-    base.models.gemini = localStorage.getItem(LEGACY_MODEL) || 'auto'
   } catch { /* storage blocked: defaults */ }
   return base
 }
 
 export function saveAiSettings(s: AiSettings) {
   const clean: AiSettings = { ...s, keys: Object.fromEntries(Object.entries(s.keys).map(([k, v]) => [k, v.trim()])) as AiSettings['keys'] }
-  try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(clean))
-    // keep the legacy slots in step so older code paths and tests that read them see the Gemini key
-    if (clean.keys.gemini) localStorage.setItem(LEGACY_KEY, clean.keys.gemini); else localStorage.removeItem(LEGACY_KEY)
-    localStorage.setItem(LEGACY_MODEL, clean.models.gemini)
-  } catch { /* ignore */ }
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(clean)) } catch { /* ignore */ }
 }
 
-/** The provider, key and model a call should use: the chosen provider when it has a key, else nothing. */
-export function activeAi(s: AiSettings = loadAiSettings()): { provider: AiProviderId; key: string; model: string } | null {
-  const key = s.keys[s.provider]?.trim()
-  return key ? { provider: s.provider, key, model: s.models[s.provider] || 'auto' } : null
+/** The provider a job uses: its own choice, or the main one. */
+export const roleProvider = (s: AiSettings, role: AiRole): AiProviderId => (role === 'main' ? s.provider : s[role] || s.provider)
+
+/** The provider, key and model a job should call: the one chosen for it when it has a key, else nothing — no substitute. */
+export function aiFor(role: AiRole = 'main', s: AiSettings = loadAiSettings()): { provider: AiProviderId; key: string; model: string } | null {
+  const provider = roleProvider(s, role)
+  const key = s.keys[provider]?.trim()
+  return key ? { provider, key, model: s.models[provider] || 'auto' } : null
 }
 
 // ------------------------------------------------------------------ model lists
@@ -118,6 +127,11 @@ export function rankOpenAi(id: string): number {
   const dated = /-\d{4}-\d{2}-\d{2}$/.test(id) ? 0 : 0.5
   return v * 10 + size + dated
 }
+
+/** Claude's "Auto" model: Sonnet 5.5 — fast and accurate enough for a whole article, at a fraction of Opus's price. */
+const CLAUDE_AUTO = 'claude-sonnet-5-5'
+// the Claude models that take an effort setting (older ones reject it)
+const CLAUDE_EFFORT = /^claude-(sonnet-5|opus-5|haiku-5|fable-5|opus-4-[678]|sonnet-4-6)/
 
 function claudeClient(key: string) {
   // The editor's own key, in their own desktop app: the browser warning the SDK guards against (a key shipped to
@@ -180,7 +194,7 @@ export function resolveModel(provider: AiProviderId, chosen: string, listed: AiM
   if (chosen && chosen !== 'auto') return chosen
   const ids = listed.map((m) => m.id)
   if (provider === 'gemini') return ids.find((id) => /flash/.test(id) && !/lite/.test(id)) ?? 'gemini-2.5-flash'
-  if (provider === 'anthropic') return 'claude-opus-5-5'
+  if (provider === 'anthropic') return CLAUDE_AUTO
   if (provider === 'openai') return ids.find((id) => /^gpt-/.test(id) && !/mini|nano/.test(id)) ?? ids[0] ?? ''
   return 'openrouter/auto'
 }
@@ -221,6 +235,8 @@ export interface AiJsonRequest {
   schema: AiSchema
   /** Long for a whole article, short for captions and SEO. */
   maxTokens?: number
+  /** How hard Claude thinks: medium for a whole article, low for short structured jobs. Other providers ignore it. */
+  effort?: 'low' | 'medium'
   timeoutMs?: number
   signal?: AbortSignal
 }
@@ -259,13 +275,15 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
 
     if (provider === 'anthropic') {
       // Streamed so a long article never hits a request timeout; finalMessage() gives the whole reply. No sampling
-      // parameters and no thinking setting: Opus 5.5 rejects both, and adaptive thinking is its default.
+      // parameters and no thinking setting (Sonnet 5.5 rejects the former and thinks adaptively by default). The
+      // system prompt carries a cache breakpoint, so the newsroom prompt is read from cache on every call after the
+      // first within five minutes; the story sits after it, so it never disturbs the cached prefix.
       const stream = claudeClient(key).messages.stream({
         model,
         max_tokens: maxTokens,
-        system,
+        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: user }],
-        output_config: { format: { type: 'json_schema', schema: strictSchema(schema) } },
+        output_config: { ...(CLAUDE_EFFORT.test(model) ? { effort: req.effort ?? 'medium' } : {}), format: { type: 'json_schema', schema: strictSchema(schema) } },
       }, { signal: t.signal })
       const msg = await stream.finalMessage()
       if (msg.stop_reason === 'refusal') throw new Error('Claude declined this request')
@@ -319,7 +337,7 @@ export async function testAiKey(provider: AiProviderId, apiKey: string, chosen: 
   const model = resolveModel(provider, chosen, models)
   if (!model) return { ok: false, error: 'This key lists no chat models.', models }
   try {
-    await aiJson({ provider, key, model, system: 'Answer with the requested JSON only.', user: 'Reply with ok set to "yes".', schema: { type: 'object', properties: { ok: { type: 'string', description: 'yes' } }, required: ['ok'] }, maxTokens: 2048, timeoutMs: 60_000 })
+    await aiJson({ provider, key, model, system: 'Answer with the requested JSON only.', user: 'Reply with ok set to "yes".', schema: { type: 'object', properties: { ok: { type: 'string', description: 'yes' } }, required: ['ok'] }, maxTokens: 2048, timeoutMs: 60_000, effort: 'low' })
     return { ok: true, model, models }
   } catch (e) {
     return { ok: false, error: (e as Error).message, models }

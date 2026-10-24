@@ -785,8 +785,8 @@ try {
 
   await page.click('.mb-item:has-text("Help")')
   await page.click('.popover .menu-item:has-text("About ESB Studio")')
-  await page.waitForSelector('.about')
-  check('About dialog displays Hamim Ruwayfi', (await page.textContent('.about')).includes('Hamim Ruwayfi'))
+  await page.waitForSelector('.about2')
+  check('About dialog displays Hamim Ruwayfi', (await page.textContent('.about2')).includes('Hamim Ruwayfi'))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(200)
   // ---- Link to News: fetch & translate
