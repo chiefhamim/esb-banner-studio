@@ -40,14 +40,11 @@ import { autoDesk } from './deskFlag'
 import { detectCategory, generatePlatformCaption, suggestHighlight } from '../core/newsroom'
 import { extractFactTable, type FactItem } from './facts'
 import { bengaliToAsciiDigits } from './bengali'
-import {
-  translateNewsArticle,
-  testGeminiApiKey,
-  listGeminiModels,
-  getPreferredGeminiModel,
-  setPreferredGeminiModel,
-} from './translator'
-import type { GeminiModelInfo } from './translator'
+import { translateNewsArticle } from './translator'
+import { AiSettingsDialog } from './AiSettingsDialog'
+import { activeAi, providerMeta } from './aiProviders'
+import type { AiProviderId } from './aiProviders'
+import { aiCaptions, aiSeo, articleUrl, sanitizeCaptions, xLength } from './aiDesk'
 import {
   buildCmsArticlePayload,
   insertArticleToSupabase,
@@ -144,7 +141,6 @@ export function EditorialWorkspace() {
   const setDraftField = useEditorialStore((s) => s.setDraftField)
   const setSocialCaption = useEditorialStore((s) => s.setSocialCaption)
   const toggleChecklist = useEditorialStore((s) => s.toggleChecklist)
-  const setApiKey = useEditorialStore((s) => s.setApiKey)
   const setTranslationMeta = useEditorialStore((s) => s.setTranslationMeta)
   const bannerLink = useEditorialStore((s) => s.bannerLink)
   const deskAuto = useEditorialStore((s) => s.deskAuto)
@@ -173,8 +169,6 @@ export function EditorialWorkspace() {
   const [tagInput, setTagInput] = useState('')
   // A translation problem worth more than a 3-second toast: shown on the Headline & deck panel until dismissed.
   const [draftNotice, setDraftNotice] = useState<string | null>(null)
-  const [geminiModels, setGeminiModels] = useState<GeminiModelInfo[]>([])
-  const [geminiModel, setGeminiModel] = useState(getPreferredGeminiModel)
   // The source column: open by default where there is room for three columns, remembered once chosen.
   const [sourceOpen, setSourceOpenState] = useState<boolean>(() => {
     try { const v = localStorage.getItem(SOURCE_OPEN_KEY); if (v !== null) return v === '1' } catch { /* ignore */ }
@@ -220,19 +214,44 @@ export function EditorialWorkspace() {
   const [publishResult, setPublishResult] = useState<{ ok?: boolean; msg?: string; url?: string } | null>(null)
   const [copiedPayload, setCopiedPayload] = useState(false)
 
-  // Gemini API Key Modal
+  // AI settings dialog (provider, key, model, prompt)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
-  const [inputApiKey, setInputApiKey] = useState(apiKey || '')
-  const [testingApiKey, setTestingApiKey] = useState(false)
-  const [apiKeyStatus, setApiKeyStatus] = useState<{ ok?: boolean; msg?: string } | null>(null)
+  const ai = useEditorialStore((s) => s.ai)
+  const aiName = providerMeta(ai.provider).name
+  const aiModelLabel = ai.models[ai.provider] === 'auto' ? providerMeta(ai.provider).autoLabel.replace(/^Auto — /, '') : ai.models[ai.provider]
+  const isAiProvider = (p: string | null): p is AiProviderId => !!p && p !== 'neural' && p !== 'offline'
+  const [aiBusy, setAiBusy] = useState<null | 'seo' | 'social'>(null)
 
-  // Opening the Gemini dialog with a saved key lists that key's models straight away.
-  useEffect(() => {
-    if (!showApiKeyModal || !apiKey || geminiModels.length) return
-    let live = true
-    listGeminiModels(apiKey).then((m) => { if (live) setGeminiModels(m) }).catch(() => {})
-    return () => { live = false }
-  }, [showApiKeyModal, apiKey, geminiModels.length])
+  // SEO and captions by the chosen provider — sanitised in aiDesk.ts to the same rules the hand-built fields follow
+  const runAi = async (job: 'seo' | 'social') => {
+    const active = activeAi(ai)
+    if (!active) { setShowApiKeyModal(true); return }
+    setAiBusy(job)
+    try {
+      const d = useEditorialStore.getState().draft
+      const story = { headline: d.headline, deck: d.deck, body: d.body }
+      if (job === 'seo') {
+        const r = await aiSeo(active, story)
+        setDraftField('focusKeyphrase', r.focusKeyphrase)
+        setDraftField('focusKeywords', r.focusKeywords)
+        setDraftField('metaTitle', r.metaTitle)
+        setDraftField('metaDescription', r.metaDescription)
+        setDraftField('slug', r.slug)
+        showToast(`SEO written by ${aiName} · ${r.model} — review it before publishing`)
+      } else {
+        const desk = CATEGORIES.find((c) => c.id === useStore.getState().doc.content.categoryId)?.name ?? 'Energy'
+        const r = await aiCaptions(active, { ...story, slug: d.slug, desk })
+        for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, r[k])
+        showToast(`Captions written by ${aiName} · ${r.model} — each links to the article`)
+      }
+    } catch (e) {
+      showToast(`${aiName} could not finish: ${(e as Error).message}`)
+    } finally {
+      setAiBusy(null)
+    }
+  }
+  const handleAiSeo = () => runAi('seo')
+  const handleAiCaptions = () => runAi('social')
 
   // Load Base Assets for Mock Renderers
   useEffect(() => {
@@ -359,6 +378,7 @@ export function EditorialWorkspace() {
       setDraftField('metaDescription', result.metaDescription)
       setDraftField('byline', result.byline)
       setDraftField('credit', result.credit)
+      if (isAiProvider(useEditorialStore.getState().translationProvider)) void runAi('social')
 
       setProgressStatus(null)
       const warn = result.extraction?.warnings ?? []
@@ -431,10 +451,15 @@ export function EditorialWorkspace() {
         statNumber: hl || undefined,
         statLabel: translation.headline,
       }
-      setSocialCaption('facebook', generatePlatformCaption('facebook', socialContent))
-      setSocialCaption('x', generatePlatformCaption('twitter', socialContent))
-      setSocialCaption('linkedin', generatePlatformCaption('linkedin', socialContent))
-      setSocialCaption('telegram', generatePlatformCaption('telegram', socialContent))
+      const templated = sanitizeCaptions({
+        facebook: generatePlatformCaption('facebook', socialContent),
+        x: generatePlatformCaption('twitter', socialContent),
+        linkedin: generatePlatformCaption('linkedin', socialContent),
+        telegram: generatePlatformCaption('telegram', socialContent),
+      }, articleUrl(translation.slug))
+      for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, templated[k])
+      // the provider that translated the story writes its captions too, in the background
+      if (isAiProvider(translation.provider)) void runAi('social')
 
       useEditorialStore.getState().setDeskAuto(true)
       autoDesk(() => useStore.getState().setContent({
@@ -770,7 +795,7 @@ export function EditorialWorkspace() {
       { label: 'Open the site CMS', icon: 'externalLink', onClick: handleOpenInSiteCms },
       { divider: true },
       { label: staffSession ? `Signed in as ${staffSession.name}` : 'Staff sign-in…', icon: 'user', onClick: () => setShowLoginModal(true) },
-      { label: apiKey ? 'Gemini key (active)…' : 'Gemini API key…', icon: 'sparkle', onClick: () => setShowApiKeyModal(true) },
+      { label: apiKey ? `AI: ${aiName} (on)…` : 'AI translation key…', icon: 'sparkle', onClick: () => setShowApiKeyModal(true) },
     ] },
     { label: 'View', items: [
       { label: 'Source column', checked: sourceOpen, disabled: !hasStory, onClick: () => setSourceOpen(!sourceOpen) },
@@ -799,19 +824,19 @@ export function EditorialWorkspace() {
         <div className="spacer" />
         <div className="fmtgroup ed-head-group">
           {hasStory && (
-            <button type="button" className={'pv-btn' + (sourceOpen ? ' on' : '')} onClick={() => setSourceOpen(!sourceOpen)} aria-pressed={sourceOpen} title={sourceOpen ? 'Hide the source column' : 'Show the original article'}>
+            <button type="button" className={'pv-btn' + (sourceOpen ? ' on' : '')} onClick={() => setSourceOpen(!sourceOpen)} aria-pressed={sourceOpen} data-tip={sourceOpen ? `Hide the source column — ${sourceHost}` : `Show the original article — ${sourceHost}`}>
               <Icon name="newspaper" size={15} />
               <span className="ed-head-host">{sourceHost}</span>
               <span className="dpc-tag">{source?.paragraphs.length ?? paragraphCount} ¶</span>
             </button>
           )}
-          <button type="button" className="pv-btn ed-site-pill" onClick={() => setShowLoginModal(true)} title="Live site connection and staff sign-in">
+          <button type="button" className="pv-btn ed-site-pill" onClick={() => setShowLoginModal(true)} aria-label="esbpowerline.com connection" data-tip={siteStatus.connected ? `esbpowerline.com is reachable · ${siteStatus.latencyMs} ms — open sign-in and the connection check` : 'esbpowerline.com is not reachable — open sign-in and the connection check'}>
             <span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />
             <span className="site-host">esbpowerline.com</span>
             <span className="site-state">{siteStatus.connected ? `${siteStatus.latencyMs} ms` : 'offline'}</span>
           </button>
           {hasStory && source && (
-            <button type="button" className="pv-btn" onClick={handleRetranslateSource} disabled={translating} title="Translate the original story again">
+            <button type="button" className="pv-btn" onClick={handleRetranslateSource} disabled={translating} aria-label="Re-translate" data-tip={apiKey ? `Translate the original story again with ${aiName} · ${aiModelLabel}` : 'Translate the original story again (free machine translation — add an AI key for better results)'}>
               <Icon name="refresh" size={14} />
               <span className="ed-retranslate-label">{translating ? 'Translating…' : 'Re-translate'}</span>
             </button>
@@ -829,7 +854,7 @@ export function EditorialWorkspace() {
           <IconButton icon="plus" tip="New story — the current one stays under Stories" onClick={handleNewStory} />
           <IconButton icon="refresh" tip={syncing ? 'Syncing…' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
         </div>
-        <button type="button" className={'ed-ai-chip' + (apiKey ? ' on' : '')} onClick={() => setShowApiKeyModal(true)} aria-label="Gemini translation" data-tip={apiKey ? 'Gemini translation is on — change the model or key' : 'Gemini is off — add your AI Studio key for better translations'}>
+        <button type="button" className={'ed-ai-chip' + (apiKey ? ' on' : '')} onClick={() => setShowApiKeyModal(true)} aria-label="AI translation" data-tip={apiKey ? `${aiName} · ${aiModelLabel} — change the provider, model or prompt` : 'AI is off — add a Gemini, Claude, OpenAI or OpenRouter key'}>
           <Icon name="sparkle" size={14} />
           <i className="ed-ai-dot" aria-hidden />
         </button>
@@ -838,7 +863,7 @@ export function EditorialWorkspace() {
             ? <span className="ed-avatar">{(staffSession.name || staffSession.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span>
             : <><Icon name="user" size={14} /><span className="ed-account-label">Sign in</span></>}
         </button>
-        <button type="button" className="btn primary" onClick={openPublish} disabled={!draft.headline.trim()} title="Review the checklist and publish to esbpowerline.com">
+        <button type="button" className="btn primary" onClick={openPublish} disabled={!draft.headline.trim()} data-tip="Review the checklist and publish to esbpowerline.com">
           <Icon name="upload" size={15} />
           <span>Publish</span>
         </button>
@@ -979,7 +1004,7 @@ export function EditorialWorkspace() {
                     <p>English copy for esbpowerline.com — review the translation against the source.</p>
                   </div>
                   <span className={'ed-state-chip ' + (translationProvider === 'offline' ? 'warn' : '')}>
-                    {translationProvider === 'gemini' ? 'Gemini draft' : translationProvider === 'offline' ? 'Needs translation' : 'Machine draft'}
+                    {isAiProvider(translationProvider) ? `${providerMeta(translationProvider).name} draft` : translationProvider === 'offline' ? 'Needs translation' : 'Machine draft'}
                   </span>
                 </header>
                 <div className="ed-card-body">
@@ -1068,21 +1093,41 @@ export function EditorialWorkspace() {
                 )}
 
                 {storyTab === 'seo' && (
-                  <SeoPanel hasImage={!!bannerLeadImage} slugStatus={slugStatus} onCheckSlug={() => void checkSlug(draft.slug)} />
+                  <SeoPanel hasImage={!!bannerLeadImage} slugStatus={slugStatus} onCheckSlug={() => void checkSlug(draft.slug)} onAiSeo={() => void handleAiSeo()} aiBusy={aiBusy === 'seo'} aiName={apiKey ? aiName : null} />
                 )}
 
                 {storyTab === 'social' && (
-                  <div className="ed-card-body">
+                  <div className="ed-card-body ed-social">
+                    <div className="ed-social-link">
+                      <Icon name="link" size={14} />
+                      <span className="ed-social-url" title={articleUrl(draft.slug)}>{articleUrl(draft.slug)}</span>
+                      <button type="button" className="btn sm" onClick={() => { void navigator.clipboard.writeText(articleUrl(draft.slug)); showToast('Article link copied') }} data-tip="Copy the article's link on esbpowerline.com">
+                        <Icon name="copy" size={13} /><span>Copy link</span>
+                      </button>
+                    </div>
+                    {!draft.slug.trim() && <p className="hint">Set the slug under SEO first — every caption links to this address.</p>}
                     <div className="ed-body-tools">
                       <Seg<'facebook' | 'x' | 'linkedin' | 'telegram'>
                         value={activeSocialTab}
                         onChange={setActiveSocialTab}
                         options={[{ value: 'facebook', label: 'Facebook' }, { value: 'x', label: 'X' }, { value: 'linkedin', label: 'LinkedIn' }, { value: 'telegram', label: 'Telegram' }]}
                       />
-                      <span className="ed-budget-counter">{(draft.social[activeSocialTab] || '').length} chars</span>
+                      <span className={'ed-budget-counter' + (activeSocialTab === 'x' && xLength(draft.social.x || '') > 280 ? ' over' : '')}>
+                        {activeSocialTab === 'x' ? `${xLength(draft.social.x || '')} / 280` : `${(draft.social[activeSocialTab] || '').length} chars`}
+                      </span>
+                      <div className="spacer" />
+                      <button type="button" className="btn sm ai-btn" onClick={() => void handleAiCaptions()} disabled={!!aiBusy || !draft.headline.trim()} data-tip={apiKey ? `Write all four captions with ${aiName}, from the story, each ending with the article link` : 'Add an AI key to write captions from the story'}>
+                        <Icon name="sparkle" size={13} className={aiBusy === 'social' ? 'spin' : ''} />
+                        <span>{aiBusy === 'social' ? 'Writing…' : 'Write with AI'}</span>
+                      </button>
                     </div>
-                    <textarea className="ed-input ed-input-social" rows={6} value={draft.social[activeSocialTab] || ''} onChange={(e) => setSocialCaption(activeSocialTab, e.target.value)} />
+                    <textarea className="ed-input ed-input-social" rows={7} value={draft.social[activeSocialTab] || ''} onChange={(e) => setSocialCaption(activeSocialTab, e.target.value)} />
                     <div className="ed-card-actions">
+                      {!(draft.social[activeSocialTab] || '').includes(articleUrl(draft.slug)) && draft.slug.trim() && (
+                        <button type="button" className="btn sm" onClick={() => setSocialCaption(activeSocialTab, `${(draft.social[activeSocialTab] || '').trim()}\n\n${articleUrl(draft.slug)}`.trim())} data-tip="Add the article link to the end of this caption">
+                          <Icon name="link" size={13} /><span>Add link</span>
+                        </button>
+                      )}
                       <button type="button" className="btn sm" onClick={() => { void navigator.clipboard.writeText(draft.social[activeSocialTab] || ''); showToast('Caption copied') }}>
                         <Icon name="copy" size={13} />
                         <span>Copy caption</span>
@@ -1223,8 +1268,8 @@ export function EditorialWorkspace() {
         <span>
           Engine:{' '}
           <b>
-            {translationProvider === 'gemini'
-              ? modelUsed || 'Gemini 2.5'
+            {isAiProvider(translationProvider)
+              ? `${providerMeta(translationProvider).name} · ${modelUsed || 'auto'}`
               : translationProvider === 'offline'
                 ? 'Offline — manual translation needed'
                 : 'Neural GTX'}
@@ -1239,78 +1284,13 @@ export function EditorialWorkspace() {
       </footer>
 
       {/* =========================================================================
-          4. DIALOGS (Staff Login, Live Publish to CMS, Gemini Key)
+          4. DIALOGS (Staff Login, Live Publish to CMS, AI settings)
           ========================================================================= */}
 
       {/* Staff Authentication Dialog */}
       {showLoginModal && <SignInSheet onClose={() => setShowLoginModal(false)} onToast={showToast} />}
 
-      {showApiKeyModal && (
-        <Dialog
-          title="Gemini translation"
-          kicker="AI MODEL"
-          width={520}
-          onClose={() => setShowApiKeyModal(false)}
-          footer={
-            <>
-              <button
-                type="button"
-                className="btn"
-                onClick={async () => {
-                  setTestingApiKey(true)
-                  const res = await testGeminiApiKey(inputApiKey.trim())
-                  setTestingApiKey(false)
-                  if (res.models) setGeminiModels(res.models)
-                  setApiKeyStatus(res.ok ? { ok: true, msg: `Key works — ${res.models?.length ?? 0} models available.` } : { ok: false, msg: res.error || 'The key did not work.' })
-                }}
-                disabled={testingApiKey || !inputApiKey.trim()}
-              >
-                {testingApiKey ? 'Checking…' : 'Check key & load models'}
-              </button>
-              <div className="spacer" />
-              <button
-                type="button"
-                className="btn primary"
-                onClick={() => {
-                  setApiKey(inputApiKey.trim())
-                  setPreferredGeminiModel(geminiModel)
-                  setShowApiKeyModal(false)
-                  const label = geminiModel === 'auto' ? 'best available Flash model' : geminiModels.find((m) => m.id === geminiModel)?.label ?? geminiModel
-                  showToast(inputApiKey.trim() ? `Gemini key saved · ${label}` : 'Gemini off — using the free translation services')
-                }}
-              >
-                Save
-              </button>
-            </>
-          }
-        >
-          <div className="stack" style={{ gap: 12 }}>
-            <p className="sub">Paste an API key from Google AI Studio (aistudio.google.com → Get API key). The app lists the models that key can use; pick a Pro model for the most careful translation, or Flash for speed.</p>
-            <Field label="API key">
-              <input type="password" className="input" placeholder="AIza…" value={inputApiKey} onChange={(e) => { setInputApiKey(e.target.value); setGeminiModels([]); setApiKeyStatus(null) }} />
-            </Field>
-            <Field label="Model">
-              <Select
-                value={geminiModel}
-                options={[
-                  { value: 'auto', label: 'Auto — newest Flash (fast)' },
-                  ...geminiModels.map((m) => ({ value: m.id, label: m.label + (m.pro ? ' — most careful' : '') })),
-                  ...(geminiModel !== 'auto' && !geminiModels.some((m) => m.id === geminiModel) ? [{ value: geminiModel, label: geminiModel }] : []),
-                ]}
-                onChange={(v) => setGeminiModel(String(v))}
-              />
-            </Field>
-            {!geminiModels.length && <p className="hint">Check the key to load the list of models it can use.</p>}
-            {apiKeyStatus && (
-              <div className={`callout ${apiKeyStatus.ok ? 'good' : 'warn'}`}>
-                <Icon name={apiKeyStatus.ok ? 'check' : 'info'} size={14} />
-                <span>{apiKeyStatus.msg}</span>
-              </div>
-            )}
-            <p className="hint">A Google One / Google AI Pro subscription covers the Gemini app, not this API: the key is billed or rate-limited on its own AI Studio tier. Pro models are slower (up to a minute or two per article) and may have low free-tier limits.</p>
-          </div>
-        </Dialog>
-      )}
+      {showApiKeyModal && <AiSettingsDialog onClose={() => setShowApiKeyModal(false)} onToast={showToast} />}
 
       {/* Publish to CMS & Supabase Dialog */}
       {showPublishModal && (

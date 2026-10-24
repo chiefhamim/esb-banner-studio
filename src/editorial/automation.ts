@@ -10,6 +10,7 @@ import {
   suggestHighlight,
 } from '../core/newsroom'
 import { translateNewsArticle } from './translator'
+import { articleUrl, sanitizeCaptions } from './aiDesk'
 import { imageAssets, useStore } from '../store'
 import { useEditorialStore } from './editorialStore'
 import { autoDesk } from './deskFlag'
@@ -402,12 +403,13 @@ export async function automateNewsFromUrl(
     statLabel: englishHeadline,
   }
 
-  const socialCaptions = {
+  // every caption ends with the story's own link on esbpowerline.com; an AI provider rewrites them after intake
+  const socialCaptions = sanitizeCaptions({
     facebook: generatePlatformCaption('facebook', socialContent),
     x: generatePlatformCaption('twitter', socialContent),
     linkedin: generatePlatformCaption('linkedin', socialContent),
     telegram: generatePlatformCaption('telegram', socialContent),
-  }
+  }, articleUrl(slug))
 
   // 9. Sync Editorial Store with English Translation
   onProgress?.('Syncing Editorial Desk…')

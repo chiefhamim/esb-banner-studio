@@ -11,7 +11,11 @@ import siteIcon from '../assets/images/site/site-icon.png'
 
 const GROUPS: SeoCheck['group'][] = ['Keyphrase', 'Search snippet', 'Content']
 
-export function SeoPanel({ hasImage, onCheckSlug, slugStatus }: { hasImage: boolean; onCheckSlug: () => void; slugStatus: string }) {
+export function SeoPanel({ hasImage, onCheckSlug, slugStatus, onAiSeo, aiBusy = false, aiName = null }: {
+  hasImage: boolean; onCheckSlug: () => void; slugStatus: string
+  /** Ask the editor's AI provider for keyphrase, tags, title, description and slug (held to the site's rules after). */
+  onAiSeo?: () => void; aiBusy?: boolean; aiName?: string | null
+}) {
   const draft = useEditorialStore((s) => s.draft)
   const setDraftField = useEditorialStore((s) => s.setDraftField)
   const liveArticles = useEditorialStore((s) => s.liveArticles)
@@ -41,13 +45,22 @@ export function SeoPanel({ hasImage, onCheckSlug, slugStatus }: { hasImage: bool
 
   return (
     <div className="ed-card-body seo">
+      {onAiSeo && (
+        <div className="seo-ai">
+          <span className="seo-ai-text"><b>SEO by AI</b><span className="hint">{aiName ? `${aiName} writes the keyphrase, tags, title, description and slug from the story — kept within the site's limits.` : 'Add an AI key to write these fields from the story.'}</span></span>
+          <button type="button" className="btn sm ai-btn" onClick={onAiSeo} disabled={aiBusy || !draft.headline.trim()} data-tip={aiName ? `Replace the five fields below with ${aiName}'s suggestions` : 'Open AI settings'}>
+            <Icon name="sparkle" size={13} className={aiBusy ? 'spin' : ''} />
+            <span>{aiBusy ? 'Writing…' : 'Write with AI'}</span>
+          </button>
+        </div>
+      )}
       <div className="ed-field">
         <div className="ed-field-row"><label htmlFor="draft-keyphrase">Focus keyphrase</label><span className="hint">What a reader would type to find this story</span></div>
         <input id="draft-keyphrase" type="text" className="ed-input" value={kp} placeholder="e.g. Sylhet gas field" onChange={(e) => setDraftField('focusKeyphrase', e.target.value)} />
         {suggestions.length > 0 && (
           <div className="seo-suggest" aria-label="Keyphrases found in this story">
             {suggestions.map((s) => (
-              <button key={s.phrase} type="button" className={'seo-chip' + (s.phrase.toLowerCase() === kp.trim().toLowerCase() ? ' on' : '')} onClick={() => setDraftField('focusKeyphrase', s.phrase)} title={`Score ${s.score} — from where and how often the story uses it`}>
+              <button key={s.phrase} type="button" className={'seo-chip' + (s.phrase.toLowerCase() === kp.trim().toLowerCase() ? ' on' : '')} onClick={() => setDraftField('focusKeyphrase', s.phrase)} data-tip={`Score ${s.score} — from where and how often the story uses it`}>
                 {s.phrase}
               </button>
             ))}

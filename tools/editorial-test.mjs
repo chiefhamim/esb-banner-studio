@@ -330,7 +330,7 @@ try {
   await page.route('**/rest/v1/Article?select=id**', (r) => r.fulfill({ status: 401, contentType: 'application/json', body: '{"message":"denied"}' }))
   await page.route('**/feed.xml', (r) => r.fulfill({ status: 200, contentType: 'application/xml', body: '<rss/>' }))
   await page.click('.conn-run')
-  await page.waitForSelector('.conn-row[data-check="gemini"]')
+  await page.waitForSelector('.conn-row[data-check="ai"]')
   const conn = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.conn-row')].map((r) => [r.dataset.check, r.className.split(' ').pop()])))
   check('Connection check: each link reported as it answered; a refused table is a failure, upload is desktop-only',
     conn.site === 'ok' && conn.auth === 'ok' && conn.session === 'ok' && conn.role === 'ok' && conn.articles === 'fail' && conn.upload === 'skip' && /1 to fix/.test(await page.locator('.conn-head em').innerText()), JSON.stringify(conn))
@@ -339,6 +339,50 @@ try {
   await page.click('.signin-signout')
   await page.waitForSelector('.signin input[name=email]')
   await page.keyboard.press('Escape')
+
+  // 8f. AI settings: four providers, the model menu opens in front of the dialog, Esc closes the menu first
+  await page.click('.ed-ai-chip')
+  await page.waitForSelector('.ai-provider-seg')
+  const provs = await page.locator('.ai-provider-seg button').allInnerTexts()
+  await page.click('.ai-provider-seg button:has-text("OpenAI")')
+  await page.fill('.ai-settings input[type=password]', 'sk-test-openai')
+  await page.locator('.ai-settings .select').click()
+  await page.waitForSelector('.popover.menu')
+  const front = await page.evaluate(() => { const m = document.querySelector('.popover.menu').getBoundingClientRect(); const hit = document.elementFromPoint(m.left + m.width / 2, m.top + 12); return !!hit?.closest('.popover') })
+  await page.keyboard.press('Escape')
+  const stillOpen = await page.locator('.ai-settings').count()
+  check('AI settings: Gemini, Claude, OpenAI, OpenRouter; the model menu is in front of the dialog; Esc closes the menu, not the dialog', provs.join('|') === 'Gemini|Claude|OpenAI|OpenRouter' && front && stillOpen === 1, JSON.stringify({ provs, front, stillOpen }))
+  await page.click('.dialog .btn.primary:has-text("Save")')
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/ai-settings') || '{}'))
+  check('AI settings saved per provider; the chosen provider is the active one', saved.provider === 'openai' && saved.keys?.openai === 'sk-test-openai', JSON.stringify({ provider: saved.provider }))
+
+  // 8g. SEO and captions written by the provider (stubbed OpenAI), then held to the site's rules
+  await page.route('https://api.openai.com/v1/models', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'gpt-5' }, { id: 'gpt-5-mini' }] }) }))
+  let aiAuth = ''
+  await page.route('https://api.openai.com/v1/chat/completions', async (r) => {
+    aiAuth = r.request().headers()['authorization'] || ''
+    const body = r.request().postDataJSON()
+    const props = Object.keys(body.response_format.json_schema.schema.properties)
+    const answer = props.includes('facebook')
+      ? { facebook: 'Two new wells for Sylhet. Read more: https://esbpowerline.com', x: 'Two new wells. https://esbpowerline.com/news/guess', linkedin: 'Sector update.', telegram: 'Headline\nSummary.' }
+      : { focusKeyphrase: 'Sylhet gas field', tags: 'Sylhet gas field, BAPEX', metaTitle: 'Sylhet gas field: two new wells | ESB PowerLine', metaDescription: 'x', slug: 'sylhet-gas-field-two-new-wells-2026' }
+    await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ model: 'gpt-5', choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(answer) } }] }) })
+  })
+  await page.evaluate(() => { const s = window.__editorialStore.getState(); s.setDraftField('headline', 'Petrobangla to drill two new wells in Sylhet gas field'); s.setDraftField('body', 'Petrobangla will drill two new wells in the Sylhet gas field, officials said on Sunday.\n\nBAPEX will implement the project in the Sylhet gas field.') })
+  await page.evaluate(() => [...document.querySelectorAll('.ed-story-tabs button')].find((x) => /seo/i.test(x.textContent + (x.getAttribute('aria-label') || '')))?.click())
+  await page.click('.seo-ai .ai-btn')
+  await page.waitForFunction(() => window.__editorialStore.getState().draft.focusKeyphrase === 'Sylhet gas field' && !document.querySelector('.seo-ai .ai-btn')?.disabled)
+  const aiSeoOut = await page.evaluate(() => { const d = window.__editorialStore.getState().draft; return { t: d.metaTitle, d: d.metaDescription, s: d.slug, k: d.focusKeywords } })
+  check('SEO by AI: the site name is stripped, a too-short description and a dated slug are rebuilt by the site rules', aiSeoOut.t === "Sylhet gas field: two new wells" && aiSeoOut.d.length >= 60 && aiSeoOut.d.length <= 160 && !/2026/.test(aiSeoOut.s) && aiSeoOut.s.length <= 75 && aiAuth === "Bearer sk-test-openai", JSON.stringify(aiSeoOut))
+  await page.evaluate(() => [...document.querySelectorAll('.ed-story-tabs button')].find((x) => /social/i.test(x.textContent + (x.getAttribute('aria-label') || '')))?.click())
+  const shownUrl = await page.locator('.ed-social-url').innerText()
+  await page.click('.ed-social .ai-btn')
+  await page.waitForFunction(() => window.__editorialStore.getState().draft.social.telegram.startsWith('Headline'))
+  const caps = await page.evaluate(() => window.__editorialStore.getState().draft.social)
+  const artUrl = `https://esbpowerline.com/articles/${aiSeoOut.s}`
+  check('Social: the article URL from the slug is shown, and every AI caption ends with it — guessed site links replaced', shownUrl === artUrl && Object.values(caps).every((c) => c.includes(artUrl) && (c.match(/esbpowerline\.com/g) || []).length === 1), JSON.stringify({ shownUrl, x: caps.x }))
+  await page.unroute('https://api.openai.com/v1/models'); await page.unroute('https://api.openai.com/v1/chat/completions')
+  await page.evaluate(() => { const s = window.__editorialStore.getState(); s.setAiSettings({ ...s.ai, provider: 'gemini', keys: { gemini: '', anthropic: '', openai: '', openrouter: '' } }) })
 
   // 9. Publish pre-flight gates the live publish
   await page.click('button:has-text("Publish")')

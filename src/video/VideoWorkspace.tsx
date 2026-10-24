@@ -584,10 +584,11 @@ export function VideoWorkspace() {
           <Select
             value={project.aspect}
             options={[
-              { value: '16:9', label: '16:9 Broadcast · 1920×1080' },
-              { value: '9:16', label: '9:16 Reels · 1080×1920' },
-              { value: '1:1', label: '1:1 Square · 1080×1080' },
-              { value: '4:5', label: '4:5 Facebook · 1080×1350' },
+              // the pixel size is a hint in the list, so the closed picker never cuts a word at a narrow window
+              { value: '16:9', label: '16:9 Broadcast', hint: '1920×1080' },
+              { value: '9:16', label: '9:16 Reels', hint: '1080×1920' },
+              { value: '1:1', label: '1:1 Square', hint: '1080×1080' },
+              { value: '4:5', label: '4:5 Facebook', hint: '1080×1350' },
             ]}
             onChange={(v) => setAspect(v as AspectRatio)}
             className="compact"

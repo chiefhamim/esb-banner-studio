@@ -156,7 +156,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                   ))}
                 </ul>
               )}
-              {!checks && <p className="conn-hint">Checks the site, sign-in, your role, the articles table, media upload and Gemini — reads only, nothing is published.</p>}
+              {!checks && <p className="conn-hint">Checks the site, sign-in, your role, the articles table, media upload and your AI key — reads only, nothing is published.</p>}
             </div>
 
             {error && <div className="signin-error" role="alert"><Icon name="info" size={14} /><span>{error}</span></div>}

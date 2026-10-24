@@ -7,6 +7,9 @@ import type { FactItem, DiscrepancyFlag } from './facts'
 import { detectCategory, suggestHighlight } from '../core/newsroom'
 import { CATEGORIES } from '../core/tokens'
 import { generateSlug, buildSeoFromEnglishStory, stripSiteSuffix } from './translator'
+import { activeAi, loadAiSettings, saveAiSettings } from './aiProviders'
+import { relinkCaptions } from './aiDesk'
+import type { AiProviderId, AiSettings } from './aiProviders'
 import { syncArticlePhotosToBanner, importImageToBanner } from './automation'
 import { useStore } from '../store'
 import { useShellStore } from '../shell/shellStore'
@@ -90,12 +93,15 @@ interface EditorialState {
   draft: EditorialDraft
   discrepancies: DiscrepancyFlag[]
   checklist: EditorialChecklist
+  /** The active AI provider's key ('' when no provider has one): the desk's "AI is on" switch. */
   apiKey: string
+  /** Provider, per-provider keys and models, and the editor's translation prompt (aiProviders.ts). */
+  ai: AiSettings
   /** Live link: headline / credit / caption stay identical in the Editorial draft and the Graphics banner, both ways. */
   bannerLink: boolean
   /** True while the sector desk is auto-detected from the story; picking a desk by hand turns it off. */
   deskAuto: boolean
-  translationProvider: 'gemini' | 'neural' | 'offline' | null
+  translationProvider: AiProviderId | 'neural' | 'offline' | null
   modelUsed: string | null
 
   // Live site communication & staff session
@@ -129,13 +135,14 @@ interface EditorialState {
   setSocialCaption: (platform: keyof EditorialDraft['social'], text: string) => void
   toggleChecklist: (key: keyof EditorialChecklist) => void
   setApiKey: (key: string) => void
+  setAiSettings: (s: AiSettings) => void
   setBannerLink: (on: boolean) => void
   setDeskAuto: (on: boolean) => void
   /** Pick the sector desk by hand (updates the banner chip and stops auto-detection). */
   setDesk: (categoryId: string) => void
   /** Re-detect the desk from the current story. */
   autoDetectDesk: () => string
-  setTranslationMeta: (provider: 'gemini' | 'neural' | 'offline' | null, modelUsed?: string | null) => void
+  setTranslationMeta: (provider: AiProviderId | 'neural' | 'offline' | null, modelUsed?: string | null) => void
   reverify: () => void
   applyDraftToBanner: () => void
   clear: () => void
@@ -210,7 +217,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
   checklist: restored.checklist ?? DEFAULT_CHECKLIST,
   bannerLink: restored.bannerLink ?? true,
   deskAuto: restored.deskAuto ?? true,
-  apiKey: typeof localStorage !== 'undefined' ? (localStorage.getItem('esb-banner-studio/ai-key') || '') : '',
+  ...(() => { const ai = loadAiSettings(); return { ai, apiKey: activeAi(ai)?.key ?? '' } })(),
   translationProvider: restored.translationProvider ?? null,
   modelUsed: restored.modelUsed ?? null,
 
@@ -449,6 +456,9 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
       if (key === 'focusKeywords' && typeof value === 'string') {
         nextDraft.tags = value.split(',').map((k) => k.trim()).filter(Boolean)
       }
+      // captions link the article by its slug: a new slug moves every caption's link with it, or the posts would
+      // point at an address the story was never published under
+      if (nextDraft.slug !== s.draft.slug) nextDraft.social = relinkCaptions(nextDraft.social, nextDraft.slug)
       let nextDiscrepancies = s.discrepancies
       if (s.source) {
         nextDiscrepancies = verifyDraftAgainstSource(
@@ -482,12 +492,12 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
     }))
   },
 
-  setApiKey: (key) => {
-    const cleanKey = key.trim()
-    try {
-      localStorage.setItem('esb-banner-studio/ai-key', cleanKey)
-    } catch {}
-    set({ apiKey: cleanKey })
+  // a bare key is a Gemini key (the only provider older builds knew)
+  setApiKey: (key) => get().setAiSettings({ ...get().ai, provider: 'gemini', keys: { ...get().ai.keys, gemini: key.trim() } }),
+  setAiSettings: (ai) => {
+    saveAiSettings(ai)
+    const saved = loadAiSettings()
+    set({ ai: saved, apiKey: activeAi(saved)?.key ?? '' })
   },
 
   setBannerLink: (on) => set({ bannerLink: on }),

@@ -472,3 +472,59 @@
 /* Home's header has the room, and it is where you choose a desk: name all three */
 .home-topbar .ws-switch .ws-btn .ws-label { display: inline; }
 .home-topbar .ws-switch .ws-btn { padding: 0 10px; }
+
+/* ---------------------------------------------------------------- menus over dialogs; tooltips in the theme's own surface */
+/* a Select inside a dialog opened its list under the dialog's backdrop (menus sat at 1000, dialogs at 2000) */
+.popover { z-index: 2600; }
+.tooltip { box-shadow: 0 0 0 1px color-mix(in srgb, var(--tip-fg) 11%, transparent), 0 12px 28px -10px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.08); }
+:root[data-theme=dark] .tooltip { box-shadow: 0 0 0 1px color-mix(in srgb, var(--tip-fg) 12%, transparent), 0 12px 28px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3); }
+svg.icon.spin { animation: ed-spin 900ms linear infinite; }
+@media (prefers-reduced-motion: reduce) { svg.icon.spin { animation: none; } }
+
+/* ---------------------------------------------------------------- Editorial header pills: one family, a raised hover */
+/* source, site and Re-translate share height, type and icon size; hover lifts the pill to a raised chip and tints its
+   icon in the desk colour; the site pill reads as status — dot, host, latency chip — not as a line of code */
+.ed-head .ed-head-group .pv-btn { height: 30px; padding: 0 12px; gap: 7px; font: 500 13px/1 var(--ui); color: var(--text-2); background: var(--fill); border-radius: 9px; }
+.ed-head .ed-head-group .pv-btn > svg { color: var(--text-3); transition: color var(--t-1) var(--ease), transform var(--t-2) var(--spring); }
+.ed-head .ed-head-group .pv-btn:hover:not(:disabled) { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow), 0 6px 14px -8px rgba(0, 0, 0, 0.22); }
+.ed-head .ed-head-group .pv-btn:hover:not(:disabled) > svg { color: var(--cat, var(--text)); }
+.ed-head .ed-head-group .pv-btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+.ed-head .ed-head-group .pv-btn.on > svg { color: var(--cat, var(--text)); }
+.ed-head .ed-head-group .pv-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--cat, var(--ink)) 70%, transparent); outline-offset: 1px; }
+.ed-head .ed-site-pill { border: 0; }
+.ed-head .ed-site-pill .site-host { font: 500 13px/1 var(--ui); letter-spacing: -.005em; }
+.ed-head .ed-site-pill .site-state { padding: 2px 6px; font: 500 10.5px/14px var(--mono); color: var(--text-3); background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 999px; }
+.ed-head .ed-site-pill .site-dot { width: 7px; height: 7px; transition: box-shadow var(--t-2) var(--ease); }
+.ed-head .ed-site-pill .site-dot.online { box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent); }
+.ed-head .ed-site-pill .site-dot.offline { box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent); }
+.ed-head .ed-head-group .dpc-tag { padding: 2px 6px; font: 500 10.5px/14px var(--mono); color: var(--text-3); background: color-mix(in srgb, var(--text) 6%, transparent); border: 0; border-radius: 999px; }
+
+/* ---------------------------------------------------------------- AI settings dialog */
+.ai-settings .ai-provider-seg { display: flex; width: 100%; }
+.ai-settings .ai-provider-seg button { flex: 1 1 0; min-width: 0; justify-content: center; }
+.ai-settings .sub { margin: 0; }
+.ai-key-host { display: inline-block; padding: 0 6px; font: 500 11.5px/18px var(--mono); color: var(--text-2); background: var(--fill); border-radius: 6px; white-space: nowrap; }
+.ai-label { display: inline-flex; align-items: center; gap: 6px; }
+.ai-key-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 20%, transparent); }
+.ai-prompt-field > label { display: block; }
+.ai-prompt-label { display: flex; width: 100%; align-items: center; gap: 10px; }
+.ai-prompt-label .hint { margin: 0 0 0 auto; font-weight: 400; }
+.ai-settings textarea.ai-prompt { min-height: 180px; max-height: 42vh; resize: vertical; font: 400 12px/18px var(--mono); }
+
+/* ---------------------------------------------------------------- AI buttons, SEO by AI, the article link on Social */
+.ai-btn > svg { color: var(--cat, currentColor); }
+.seo-ai { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--cat, var(--ink)) 6%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat, var(--ink)) 16%, transparent); }
+.seo-ai-text { display: flex; flex: 1 1 240px; min-width: 0; flex-direction: column; gap: 2px; font-size: 13px; line-height: 18px; }
+.seo-ai-text .hint { margin: 0; }
+.seo-ai .btn { flex: none; margin-left: auto; }
+.ed-social { display: flex; flex-direction: column; gap: 12px; }
+.ed-social-link { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 6px 6px 12px; background: var(--fill); border-radius: 10px; }
+.ed-social-link > svg { flex: none; color: var(--text-3); }
+.ed-social-url { flex: 1 1 auto; min-width: 0; overflow: hidden; font: 500 12px/18px var(--mono); color: var(--text-2); text-overflow: ellipsis; white-space: nowrap; }
+.ed-social-link .btn { flex: none; }
+.ed-social .ed-body-tools .spacer { flex: 1 1 0; min-width: 0; }
+.ed-social .ed-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* a select's label is one line that ends in an ellipsis when its box is narrow — it was an inline-flex box, where
+   text-overflow does nothing, so a long label ran out of the control (the Video aspect picker at 900 px) */
+.select .select-label { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select .select-label small { margin-right: 6px; }

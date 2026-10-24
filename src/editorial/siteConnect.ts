@@ -5,7 +5,7 @@
 
 import { SITE_BASE_URL, SUPABASE_ANON_KEY, SUPABASE_URL, CMS_ROLES, ensureFreshSession, siteFetch, siteSessionCookies } from './siteApi'
 import type { StaffSession } from './siteApi'
-import { listGeminiModels } from './translator'
+import { activeAi, listModels, providerMeta } from './aiProviders'
 
 type Cookie = { name: string; value: string }
 interface UploadBridge {
@@ -113,14 +113,17 @@ export async function runConnectionCheck(session: StaffSession | null, geminiKey
     for (const [id, label] of [['role', 'Newsroom role'], ['articles', 'Articles table'], ['upload', 'Media upload']] as const) push({ id, label, status: 'skip', detail: 'Needs a signed-in session' })
   }
 
-  if (!geminiKey.trim()) {
-    push({ id: 'gemini', label: 'Gemini translation', status: 'skip', detail: 'No API key set' })
+  // the AI provider the desk translates with — the key it holds, not the one passed in by older callers
+  const ai = activeAi() ?? (geminiKey.trim() ? { provider: 'gemini' as const, key: geminiKey.trim(), model: 'auto' } : null)
+  if (!ai) {
+    push({ id: 'ai', label: 'AI translation', status: 'skip', detail: 'No API key set' })
   } else {
+    const label = `${providerMeta(ai.provider).name} translation`
     try {
-      const models = await listGeminiModels(geminiKey)
-      push({ id: 'gemini', label: 'Gemini translation', status: models.length ? 'ok' : 'fail', detail: models.length ? `${models.length} models — best: ${models[0].label}` : 'The key lists no text models' })
+      const models = await listModels(ai.provider, ai.key)
+      push({ id: 'ai', label, status: models.length ? 'ok' : 'fail', detail: models.length ? `${models.length} models — e.g. ${models[0].label}` : 'The key lists no text models' })
     } catch (e) {
-      push({ id: 'gemini', label: 'Gemini translation', status: 'fail', detail: (e as Error).message || 'Key rejected' })
+      push({ id: 'ai', label, status: 'fail', detail: (e as Error).message || 'Key rejected' })
     }
   }
   return out

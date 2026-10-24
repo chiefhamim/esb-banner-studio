@@ -27,8 +27,13 @@ export function Popover({ anchor, onClose, children, align = 'start', gap = 6, c
     if ('el' in anchor) {
       const r = anchor.el.getBoundingClientRect()
       left = align === 'end' ? r.right - pw : align === 'center' ? Math.round(r.left + r.width / 2 - pw / 2) : r.left
-      top = r.bottom + gap
-      if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - gap)
+      // open below unless there is more room above; either way the list scrolls inside the room it has, so a
+      // long menu (a provider's 40 models) never runs off the window or pins itself to the top edge
+      const below = window.innerHeight - r.bottom - gap - 8, above = r.top - gap - 8
+      const up = ph > below && above > below
+      const room = Math.min(540, up ? above : below)
+      pop.style.maxHeight = Math.max(96, room) + 'px'
+      top = up ? r.top - gap - Math.min(ph, room) : r.bottom + gap
       if (minWidth === undefined) pop.style.minWidth = r.width + 'px'
     } else {
       left = align === 'center' ? Math.round(anchor.x - pw / 2) : align === 'end' ? anchor.x - pw : anchor.x
@@ -91,6 +96,16 @@ export function Tooltips() {
     let cur: HTMLElement | null = null
     const hide = () => { window.clearTimeout(timer); cur = null; setTip(null); setAt(null) }
     const over = (e: PointerEvent) => {
+      // A plain title="" shows the operating system's own grey tooltip — the generic hover on the site pill and
+      // Re-translate. Any title met under the pointer becomes this tooltip instead (aria-label keeps it for readers).
+      const titled = (e.target as Element | null)?.closest?.('[title]:not(iframe):not(svg *)') as HTMLElement | null
+      if (titled && titled.title) {
+        if (!titled.dataset.tip) {
+          if (!titled.hasAttribute('aria-label') && !titled.textContent?.trim()) titled.setAttribute('aria-label', titled.title)
+          titled.dataset.tip = titled.title
+        }
+        titled.removeAttribute('title')
+      }
       const el = (e.target as HTMLElement | null)?.closest?.('[data-tip]') as HTMLElement | null
       if (el === cur) return
       hide()
@@ -547,7 +562,8 @@ export function Chip({ on, onClick, children, title }: { on?: boolean; onClick?:
 
 export function Dialog({ title, kicker, onClose, children, footer, width = 760 }: { title: string; kicker?: string; onClose: () => void; children: ReactNode; footer?: ReactNode; width?: number }) {
   useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
+    // Esc closes an open menu inside the dialog first, not the dialog under it
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.popover')) { e.stopPropagation(); onClose() } }
     window.addEventListener('keydown', key, true)
     return () => window.removeEventListener('keydown', key, true)
   }, [onClose])

@@ -89,8 +89,9 @@
   --success: #1f7a45;
   --success-soft: rgba(31, 122, 69, 0.1);
 
-  --tip-bg: #18181b;
-  --tip-fg: #f4f4f5;
+  /* tooltips take the theme's own surface: light on light, dark on dark */
+  --tip-bg: #ffffff;
+  --tip-fg: #18181b;
   --scrim: rgba(24, 24, 27, 0.42);
 
   /* Chrome surfaces: grey sidebars with white controls, hairline control rings, translucent menus */
@@ -188,8 +189,8 @@
   --success: #34d399;
   --success-soft: rgba(52, 211, 153, 0.12);
 
-  --tip-bg: #f4f4f5;
-  --tip-fg: #18181b;
+  --tip-bg: #2c2c31;
+  --tip-fg: #f4f4f5;
   --scrim: rgba(0, 0, 0, 0.6);
 
   --side: #1b1b1e;
