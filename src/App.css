@@ -4263,11 +4263,9 @@ html[data-theme="dark"] .fb-action-btn:hover {
 /* workspace switcher: the same sliding segmented control as everywhere else */
 .ws-switch { flex: none; height: var(--h-md); padding: 2px; }
 .ws-switch .ws-btn { height: 28px; padding: 0 10px; gap: 6px; font-size: 13px; }
-/* narrower windows: only the current workspace keeps its name; the others are icons with tooltips */
-@media (max-width: 1500px) {
-  .ws-switch .ws-btn:not(.on) { padding: 0 8px; }
-  .ws-switch .ws-btn:not(.on) .ws-label { display: none; }
-}
+/* only the current workspace keeps its name, to save top-bar space; the others are icons with tooltips */
+.ws-switch .ws-btn:not(.on) { padding: 0 8px; }
+.ws-switch .ws-btn:not(.on) .ws-label { display: none; }
 
 /* Home gets the same header as every workspace; the page scrolls under it */
 .home-shell { display: flex; flex-direction: column; height: 100%; min-height: 0; }

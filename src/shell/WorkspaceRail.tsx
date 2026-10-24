@@ -46,6 +46,7 @@ export function WorkspaceSwitcher() {
       >
         <Icon name={HOME.icon} size={15} />
       </button>
+      <span className="pill-sep ws-sep" />
       <nav ref={wrap} className="seg-ctl ws-switch" aria-label="Workspaces">
         {thumb}
         {DESKS.map((w) => {
