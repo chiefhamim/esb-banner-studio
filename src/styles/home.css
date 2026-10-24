@@ -614,3 +614,6 @@
 .home-shell .recovery-card .recent-info { flex: 1 1 calc(100% - 56px); min-width: 0; }
 .home-shell .recovery-card .recent-name, .home-shell .recovery-card .recent-path { white-space: normal; overflow: visible; text-overflow: clip; }
 .home-shell .recovery-actions { margin-left: 52px; width: auto; }
+
+/* "Studio" in Black weight (bundled Inter 900) */
+.home-shell .home-title-accent { font-weight: 900; letter-spacing: -.035em; }
