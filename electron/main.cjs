@@ -56,7 +56,7 @@ function createWindow() {
     minHeight: 680,
     backgroundColor: '#15171c',
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
-    title: 'ESB Studio',
+    title: 'ESB AI Studio',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

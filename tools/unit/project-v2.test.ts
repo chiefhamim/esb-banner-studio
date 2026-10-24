@@ -81,6 +81,6 @@ describe('Project Format v1 & v2', () => {
 
   it('rejects foreign or corrupted project files', async () => {
     const foreign = JSON.stringify({ app: 'other-app', version: 1 })
-    await expect(applyProject(foreign, null, null)).rejects.toThrow('This is not an ESB Studio project file.')
+    await expect(applyProject(foreign, null, null)).rejects.toThrow('This is not an ESB AI Studio project file.')
   })
 })

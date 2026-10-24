@@ -146,7 +146,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
     void restoreSessionPhotos()
   }, [])
   useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
-  useEffect(() => { document.title = `${projectName ?? 'Untitled banner'}${dirty ? ' •' : ''} — ESB Studio` }, [projectName, dirty])
+  useEffect(() => { document.title = `${projectName ?? 'Untitled banner'}${dirty ? ' •' : ''} — ESB AI Studio` }, [projectName, dirty])
 
   const addPhotos = useCallback(() => file.current?.click(), [])
   useEffect(() => {
@@ -431,7 +431,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       { label: 'Welcome screen', icon: 'home', onClick: () => setShowWelcome(true) },
       { label: 'Keyboard shortcuts', icon: 'keyboard', shortcut: '?', onClick: () => setShowKeys(true) },
       { divider: true },
-      { label: 'About ESB Studio', icon: 'info', onClick: () => setShowAbout(true) },
+      { label: 'About ESB AI Studio', icon: 'info', onClick: () => setShowAbout(true) },
     ] },
   ]
 
@@ -564,12 +564,12 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       )}
 
       {showAbout && (
-        <Dialog title="About ESB Studio" kicker="ESB PowerLine" onClose={() => setShowAbout(false)} width={480}>
+        <Dialog title="About ESB AI Studio" kicker="ESB PowerLine" onClose={() => setShowAbout(false)} width={480}>
           <div className="about2">
             <div className="about2-hero">
               <span className="logo-wrap big"><img src={logoUrl} alt="ESB PowerLine" /></span>
               <div className="about2-stripe" aria-hidden><i /><i /><i /></div>
-              <h3>ESB PowerLine <span>Studio</span></h3>
+              <h3>ESB AI <span>Studio</span></h3>
               <p>Where stories are written, imagination is designed and reality is cut.</p>
               <span className="about2-ver">Version {__APP_VERSION__}</span>
             </div>

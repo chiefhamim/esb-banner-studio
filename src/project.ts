@@ -73,9 +73,9 @@ export async function serializeProject(): Promise<string> {
 
 export async function applyProject(text: string, name: string | null, path: string | null): Promise<void> {
   const file = JSON.parse(text) as any
-  if (file?.app !== MAGIC) throw new Error('This is not an ESB Studio project file.')
+  if (file?.app !== MAGIC) throw new Error('This is not an ESB AI Studio project file.')
   const rawDoc = file.graphics?.doc || file.doc
-  if (!rawDoc?.photos) throw new Error('This is not an ESB Studio project file.')
+  if (!rawDoc?.photos) throw new Error('This is not an ESB AI Studio project file.')
   const activeFormat = (file.graphics?.format || file.format || 'fb45') as FormatId
 
   // replace the photo library with the photos stored in the file

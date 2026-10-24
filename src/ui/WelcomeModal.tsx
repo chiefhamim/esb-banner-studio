@@ -51,7 +51,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
   }
 
   return (
-    <Dialog title="Welcome to ESB PowerLine Studio" kicker="NEWSROOM PRODUCTION WORKSTATION" onClose={onClose} width={820}>
+    <Dialog title="Welcome to ESB AI Studio" kicker="NEWSROOM PRODUCTION WORKSTATION" onClose={onClose} width={820}>
       <div className="welcome-modal-content">
         <div className="welcome-hero-banner">
           <img src={logoUrl} alt="Energy Sector Bangladesh" className="welcome-hero-logo" />

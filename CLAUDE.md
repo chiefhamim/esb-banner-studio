@@ -1,7 +1,7 @@
-# CLAUDE.md — ESB PowerLine Studio: Master Cloud & Engineering Guide
+# CLAUDE.md — ESB AI Studio: Master Cloud & Engineering Guide
 
 > **Document Type:** Master Product Brief, Engineering Charter & Claude Cloud Instructions  
-> **Product:** ESB Studio  
+> **Product:** ESB AI Studio  
 > **Organisation:** ESB PowerLine / Express Broadcast and Communication Ltd. (`esbpowerline.com`)  
 > **Repository:** `chiefhamim/esb-banner-studio`  
 > **Platform:** Desktop-first, Windows-compatible Electron application  

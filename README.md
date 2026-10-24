@@ -1,4 +1,4 @@
-# ESB Studio
+# ESB AI Studio
 
 Desktop editor that reproduces the ESB PowerLine news banner templates exactly (10 categories ×
 Facebook 1598×1431 and Web 1920×1080), then lets you pick the date, headline and photos and export both sizes.
@@ -47,7 +47,7 @@ Everything runs locally and offline (fonts and artwork are bundled). The UI foll
 npm install
 npm run dev          # browser dev server
 npm run app          # build + open in Electron
-npm run dist         # package to release-v1.3.0/win-unpacked/ESB Studio.exe
+npm run dist         # package to release-v1.3.0/win-unpacked/ESB AI Studio.exe
 npm run test:golden  # pixel-diff templates against Figma exports (tools/golden)
 npm run test:ui      # end-to-end UI test in Edge
 ```

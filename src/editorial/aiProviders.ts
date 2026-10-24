@@ -302,7 +302,7 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
     // OpenAI and OpenRouter share the chat-completions shape
     const url = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
     const headers: Record<string, string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }
-    if (provider === 'openrouter') { headers['X-Title'] = 'ESB Studio'; headers['HTTP-Referer'] = 'https://esbpowerline.com' }
+    if (provider === 'openrouter') { headers['X-Title'] = 'ESB AI Studio'; headers['HTTP-Referer'] = 'https://esbpowerline.com' }
     const send = (format: Record<string, unknown> | null) => fetch(url, {
       method: 'POST',
       headers,

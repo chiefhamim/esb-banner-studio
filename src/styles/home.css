@@ -629,3 +629,6 @@
 .home-shell .format-glyph i::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 14%; min-height: 2px; background: linear-gradient(90deg, #0aa37a 0 34%, #f4c20d 34% 67%, #e53935 67%); }
 .home-shell .format-glyph i::after { content: ''; position: absolute; left: 14%; right: 22%; bottom: 16%; height: 26%; background: linear-gradient(var(--text) 0 0) 0 0 / 100% 36% no-repeat, linear-gradient(var(--text) 0 0) 0 100% / 62% 36% no-repeat; opacity: .5; border-radius: 1px; }
 @media (max-width: 1100px) { .home-shell .formats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .home-shell .format-card, .home-shell .format-card:nth-child(n + 4) { grid-column: auto; } }
+
+/* the shorter name sits centred over the tagline, so the stripe beside the block reads as part of it */
+.home-shell .home-title-group { align-items: center; text-align: center; }

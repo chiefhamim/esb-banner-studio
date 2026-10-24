@@ -151,7 +151,7 @@ export function HomeWorkspace() {
         </button>
         {canQuit && <i className="home-head-sep" aria-hidden />}
         {canQuit && (
-          <button type="button" className="home-head-btn quit" data-tip="Quit ESB Studio (Ctrl+Q)" onClick={() => void window.esb?.quit?.()}>
+          <button type="button" className="home-head-btn quit" data-tip="Quit ESB AI Studio (Ctrl+Q)" onClick={() => void window.esb?.quit?.()}>
             <Icon name="x" size={14} />
             <span>Quit</span>
           </button>
@@ -199,7 +199,7 @@ export function HomeWorkspace() {
         <header className="home-header">
           <div className="home-header-brand">
             <div className="home-title-group">
-              <h1 className="home-title">ESB PowerLine <span className="home-title-accent">Studio</span></h1>
+              <h1 className="home-title">ESB AI <span className="home-title-accent">Studio</span></h1>
               <p className="home-subtitle">Where stories are written, imagination is designed and reality is cut</p>
             </div>
           </div>

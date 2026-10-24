@@ -4,7 +4,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 const root = path.resolve(import.meta.dirname, '..')
-const exe = path.join(root, 'release-v1.5.4', 'win-unpacked', 'ESB Studio.exe')
+const exe = path.join(root, 'release-v1.5.4', 'win-unpacked', 'ESB AI Studio.exe')
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'esb-pk-'))
 const results = []
 const check = (n, ok, d = '') => { results.push(!!ok); console.log((ok ? 'PASS ' : 'FAIL ') + n + (d ? ' — ' + d : '')) }

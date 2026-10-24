@@ -74,14 +74,14 @@ try {
   const menuGone = await app.evaluate(({ Menu }) => Menu.getApplicationMenu() === null)
   console.log(menuGone ? 'PASS' : 'FAIL', 'native menu removed (Alt cannot pop it up)')
   const title = await page.title()
-  console.log(title.includes('ESB Studio') ? 'PASS' : 'FAIL', 'window title is ESB Studio:', title)
+  console.log(title.includes('ESB AI Studio') ? 'PASS' : 'FAIL', 'window title is ESB AI Studio:', title)
   const canvasOk = await page.evaluate(() => { const c = document.querySelector('.stage-canvas'); return !!c && c.width > 300 })
   console.log(canvasOk ? 'PASS' : 'FAIL', 'stage canvas rendered')
 
   // Workspace switcher navigation
   await page.click('[data-ws="home"]')
   await page.waitForSelector('.home-workspace')
-  const homeOk = await page.evaluate(() => !!document.querySelector('.home-workspace h1')?.textContent.includes('ESB PowerLine Studio'))
+  const homeOk = await page.evaluate(() => !!document.querySelector('.home-workspace h1')?.textContent.includes('ESB AI Studio'))
   console.log(homeOk ? 'PASS' : 'FAIL', 'switched to Home workspace')
 
   await page.click('.ws-btn[data-ws="editorial"]')
