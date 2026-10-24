@@ -179,7 +179,7 @@ try {
   await page.click('button:has-text("Build from headline")')
   await page.click('button:has-text("Build from story")')
   const seo = await page.evaluate(() => ({ kp: document.querySelector('#draft-keyphrase').value, title: document.querySelector('#draft-meta-title').value, serp: document.querySelector('.seo-serp-title').textContent, checks: document.querySelectorAll('.seo-check').length, titleCheck: document.querySelector('[data-check="kp-title"]').className }))
-  check('SEO: keyphrase, built title in the Google preview, and the checks run', seo.kp === chips[0] && seo.title.includes(seo.kp) && seo.serp.length > 10 && seo.checks === 15 && /good/.test(seo.titleCheck), JSON.stringify(seo))
+  check('SEO: keyphrase, built title in the Google preview, and the checks run', seo.kp === chips[0] && seo.title.includes(seo.kp) && seo.serp.length > 10 && seo.checks === 17 && /good/.test(seo.titleCheck) && !/ESB PowerLine/.test(seo.title + seo.serp), JSON.stringify(seo))
   await page.click('.ed-story-tabs button:has-text("Preview")')
   await page.waitForSelector('.ed-card-story .esb-site-mock iframe')
   check('Story → Preview shows the esbpowerline.com article page', (await page.locator('.ed-card-story .esb-site-mock').count()) === 1)
@@ -305,12 +305,21 @@ try {
   await page.waitForSelector('.signin')
   const sheet = await page.evaluate(() => ({ bypass: /bypass/i.test(document.querySelector('.signin').innerText), emailType: document.querySelector('.signin input[name=email]')?.type, pwAuto: document.querySelector('.signin input[name=password]')?.autocomplete }))
   check('Sign-in sheet: real email/password fields, no bypass option', !sheet.bypass && sheet.emailType === 'email' && sheet.pwAuto === 'current-password', JSON.stringify(sheet))
+  // typing the password while the desk re-renders (status refresh, toasts) must not move the cursor back to the email
+  // field — the sheet used to re-run its focus effect on every parent render
+  await page.waitForTimeout(150)
+  await page.focus('.signin input[name=password]')
+  for (const ch of 'abc def') { await page.evaluate(() => window.__editorialStore.setState({ siteStatus: { ...window.__editorialStore.getState().siteStatus, latencyMs: Math.random() * 100 } })); await page.keyboard.type(ch) }
+  const typed = await page.evaluate(() => ({ email: document.querySelector('.signin input[name=email]').value, pw: document.querySelector('.signin input[name=password]').value }))
+  check('Typing the password while the desk re-renders keeps focus in the password field', typed.pw === 'abc def' && !typed.email.includes('abc'), JSON.stringify(typed))
   await page.fill('.signin input[name=email]', 'editor@esbpowerline.com')
   await page.fill('.signin input[name=password]', 'wrong')
+  await page.waitForFunction(() => !document.querySelector('.signin-submit')?.disabled) // the sheet focuses its field 60 ms after opening; a fill before that can be re-rendered away
   await page.click('.signin-submit')
   await page.waitForSelector('.signin-error')
   check('A wrong password gets the site\'s wording', /Invalid email or password/.test(await page.locator('.signin-error').innerText()))
   await page.fill('.signin input[name=password]', 'correct horse')
+  await page.waitForFunction(() => !document.querySelector('.signin-submit')?.disabled) // the sheet focuses its field 60 ms after opening; a fill before that can be re-rendered away
   await page.click('.signin-submit')
   await page.waitForSelector('.signin-avatar')
   const who = await page.evaluate(() => ({ name: document.querySelector('.signin-body h2').textContent, badges: document.querySelector('.signin-badges').innerText, stored: JSON.parse(localStorage.getItem('esb-banner-studio/site-session') || 'null') }))
@@ -342,6 +351,7 @@ try {
   await page.click('.editorial-workspace .pillbar [aria-label^="Staff"]')
   await page.fill('.signin input[name=email]', 'rasel@esbpowerline.com')
   await page.fill('.signin input[name=password]', 'correct horse')
+  await page.waitForFunction(() => !document.querySelector('.signin-submit')?.disabled) // the sheet focuses its field 60 ms after opening; a fill before that can be re-rendered away
   await page.click('.signin-submit')
   await page.waitForSelector('.signin-avatar')
   await page.keyboard.press('Escape')

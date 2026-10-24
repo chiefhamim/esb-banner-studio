@@ -176,10 +176,12 @@ describe('Editorial Desk — Newsroom Boilerplate Filtering & CMS Constraints', 
     const englishBody = 'Petrobangla and BAPEX confirmed the investment.'
 
     const seo = buildSeoFromEnglishStory(englishHeadline, englishDeck, englishBody)
-    expect(seo.slug).toBe('bapex-to-drill-two-new-development-wells-for-tk-592-crore')
-    expect(seo.slug.length).toBeLessThanOrEqual(80)
+    // keyphrase-led and free of grammar words and amounts, like the SEO panel's own slug builder
+    expect(seo.slug).toBe('petrobangla-bapex-drill-two-new-development-wells')
+    expect(seo.slug.length).toBeLessThanOrEqual(75)
     expect(seo.metaTitle).toContain('BAPEX')
-    expect(seo.metaTitle).toContain('| ESB PowerLine')
+    // esbpowerline.com renders the meta title as <title> with no site name; the Studio must not add one
+    expect(seo.metaTitle).not.toMatch(/ESB PowerLine/)
     expect(seo.metaTitle.length).toBeLessThanOrEqual(60)
     expect(seo.metaDescription.length).toBeLessThanOrEqual(160)
     expect(seo.focusKeywords).toContain('Petrobangla')

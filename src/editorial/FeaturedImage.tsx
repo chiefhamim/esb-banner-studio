@@ -26,6 +26,8 @@ export function FeaturedImage({ onToast }: { onToast: (msg: string) => void }) {
   const doc = useStore((s) => s.doc)
   const source = useEditorialStore((s) => s.source)
   const credit = useEditorialStore((s) => s.draft.credit)
+  const imageAlt = useEditorialStore((s) => s.draft.imageAlt)
+  const imageCaption = useEditorialStore((s) => s.draft.imageCaption)
   const setDraftField = useEditorialStore((s) => s.setDraftField)
 
   // The banner's photo element for this format: its first slot is the featured photo and sets the preview's shape.
@@ -244,13 +246,19 @@ export function FeaturedImage({ onToast }: { onToast: (msg: string) => void }) {
       <Field label="Image credit">
         <input type="text" className="input" value={credit} placeholder="e.g. Reuters / Jane Doe" onChange={(e) => setDraftField('credit', e.target.value)} />
       </Field>
+      <Field label="Alt text">
+        <textarea className="input fi-text" rows={2} maxLength={160} value={imageAlt} placeholder="What the photo shows — e.g. Drilling rig at a Sylhet gas field well site" onChange={(e) => setDraftField('imageAlt', e.target.value)} />
+      </Field>
+      <Field label="Caption">
+        <textarea className="input fi-text" rows={2} maxLength={240} value={imageCaption} placeholder="Printed under the photo on the site — leave empty for none" onChange={(e) => setDraftField('imageCaption', e.target.value)} />
+      </Field>
 
       <button type="button" className="btn block fi-open" onClick={editInGraphics} disabled={!hasPhoto} title="Open this photo in Graphics: layers, collage, vignette and the full banner">
         <Icon name="layers" size={14} />
         <span>Edit in Graphics</span>
         <Icon name="chevRight" size={13} />
       </button>
-      <p className="hint">Framing and tone apply to the banner and social images. The article on esbpowerline.com uses the original photo file.</p>
+      <p className="hint">Framing and tone shape the banner. Publishing from the desktop app uploads the Web banner as the article image; alt text and caption go with it.</p>
     </div>
   )
 }

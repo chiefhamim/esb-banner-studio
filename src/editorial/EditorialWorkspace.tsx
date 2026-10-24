@@ -260,6 +260,10 @@ export function EditorialWorkspace() {
 
   // Check whether desk is empty or active
   const hasStory = !!(source?.title || draft.headline.trim() || draft.body.trim())
+  // a story with no source yet (a headline typed in Graphics, a draft written by hand) opens the left column on the
+  // link intake rather than on an empty "Original story"
+  const hasSource = !!source
+  useEffect(() => { if (hasStory && !hasSource) setLeftTab((t) => (t === 'source' ? 'intake' : t)) }, [hasStory, hasSource])
 
   // Text statistics
   const wordCount = useMemo(() => {
@@ -535,6 +539,8 @@ export function EditorialWorkspace() {
         metaDescription: draft.metaDescription,
         byline: staffSession?.name || draft.byline,
         credit: draft.credit,
+        imageAlt: draft.imageAlt,
+        imageCaption: draft.imageCaption,
         imageUrl,
         status: targetStatus,
       })
@@ -593,6 +599,8 @@ export function EditorialWorkspace() {
       metaDescription: draft.metaDescription,
       byline: staffSession?.name || draft.byline || 'Mehedi Hasan Hamim',
       credit: draft.credit,
+      imageAlt: draft.imageAlt,
+      imageCaption: draft.imageCaption,
       imageUrl: bannerLeadImage || undefined,
     })
     navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
@@ -614,7 +622,8 @@ export function EditorialWorkspace() {
 
   // Extract source host for source chip
   const sourceHost = useMemo(() => {
-    if (!source?.url || source.url === 'pasted-text') return 'Bengali Copy'
+    if (!source) return 'No source yet'
+    if (!source.url || source.url === 'pasted-text') return 'Pasted text'
     try {
       return new URL(source.url).hostname.replace(/^www\./, '')
     } catch {
@@ -804,7 +813,7 @@ export function EditorialWorkspace() {
           {hasStory && source && (
             <button type="button" className="pv-btn" onClick={handleRetranslateSource} disabled={translating} title="Translate the original story again">
               <Icon name="refresh" size={14} />
-              <span>{translating ? 'Translating…' : 'Re-translate'}</span>
+              <span className="ed-retranslate-label">{translating ? 'Translating…' : 'Re-translate'}</span>
             </button>
           )}
         </div>

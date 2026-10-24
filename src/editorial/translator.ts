@@ -4,7 +4,7 @@
 import { polishJournalisticEnglish, translateBengaliToEnglish } from '../core/newsroom'
 import { bengaliToAsciiDigits } from './bengali'
 import { GTX_MAX, translateComplete } from './translateNet'
-import { suggestKeyphrases } from './seo'
+import { DESCRIPTION_MAX, buildMetaDescription, buildMetaTitle, buildSlug, countPhrase, suggestKeyphrases } from './seo'
 
 export interface EditorialTranslationResult {
   headline: string          // strictly <= 104 characters
@@ -205,27 +205,32 @@ export function extractFocusKeywords(headline: string, bodyText: string): string
 }
 
 /** Strictly generates SEO metadata (slug, keywords, meta title, meta desc) ONLY from the translated English story. */
+const firstKeyphrase = (focusKeywords: string) => focusKeywords.split(',')[0]?.trim() ?? ''
+/** A " | ESB PowerLine" (or " - ESB PowerLine") a model or an old draft added: the site prints no site name. */
+export const stripSiteSuffix = (t: string) => t.replace(/\s*[|–—-]\s*ESB\s*PowerLine\s*$/i, '').trim()
+
+/**
+ * The SEO title and description every path produces: a model's own suggestion when it fits the site's limits (60
+ * characters, 160 for the description) and names the keyphrase, else the seo.ts builders — so a translated story
+ * arrives with fields the SEO panel already grades as good, and none carries a site-name suffix.
+ */
+export function seoFields(headline: string, deck: string, body: string, focusKeywords: string, modelTitle?: string, modelDesc?: string) {
+  const kp = firstKeyphrase(focusKeywords)
+  const t = stripSiteSuffix(modelTitle?.trim() ?? '')
+  const d = (modelDesc ?? '').replace(/\s+/g, ' ').trim()
+  const named = (x: string) => !kp || countPhrase(x, kp) > 0
+  const metaTitle = t && t.length <= 60 && named(t) ? t : buildMetaTitle(headline, kp)
+  const metaDescription = d && d.length >= 100 && d.length <= DESCRIPTION_MAX && named(d) ? d : buildMetaDescription(deck, body, kp)
+  return { metaTitle, metaDescription }
+}
+
 export function buildSeoFromEnglishStory(headline: string, deck = '', bodyText = '') {
   const cleanHeadline = enforceHeadlineLength(headline, 104)
   const cleanDeck = enforceDeckLength(deck, 200)
-  const slug = generateSlug(cleanHeadline, 80)
   const focusKeywords = extractFocusKeywords(cleanHeadline, `${cleanDeck} ${bodyText}`)
+  const slug = buildSlug(cleanHeadline, firstKeyphrase(focusKeywords)) || generateSlug(cleanHeadline, 80)
 
-  const suffix = ' | ESB PowerLine'
-  const maxBase = 60 - suffix.length // 44 chars
-  let baseTitle = cleanHeadline
-  if (baseTitle.length > maxBase) {
-    const sub = baseTitle.slice(0, maxBase)
-    const lastSpace = sub.lastIndexOf(' ')
-    baseTitle = (lastSpace > 22 ? sub.slice(0, lastSpace) : sub).replace(/[,:;–—-]+$/, '').trim()
-  }
-  const metaTitle = `${baseTitle}${suffix}`
-
-  const rawDescSource = cleanDeck && cleanDeck.length >= 50
-    ? cleanDeck
-    : [cleanDeck, bodyText.split(/\n+/)[0] || ''].filter(Boolean).join(' — ')
-  const metaDescription = enforceDeckLength(rawDescSource || cleanHeadline, 158)
-
+  const { metaTitle, metaDescription } = seoFields(cleanHeadline, cleanDeck, bodyText, focusKeywords)
   return { slug, focusKeywords, metaTitle, metaDescription }
 }
 
@@ -437,8 +442,8 @@ const TRANSLATION_SCHEMA = {
     deck: { type: 'STRING', description: 'One-sentence standfirst strictly under 200 characters.' },
     slug: { type: 'STRING', description: 'kebab-case URL slug under 80 characters from the English headline.' },
     focusKeywords: { type: 'STRING', description: '4 to 6 comma-separated search phrases a reader would type to find this story: named organisations, projects, places and the topic, most important first. No bare numbers, no generic words.' },
-    metaTitle: { type: 'STRING', description: 'Search result title under 60 characters, leading with the main keyphrase, ending with | ESB PowerLine.' },
-    metaDescription: { type: 'STRING', description: 'Search snippet of 120 to 158 characters that states the news and contains the main keyphrase.' },
+    metaTitle: { type: 'STRING', description: 'Search result title of at most 60 characters that names the main keyphrase early. No site name: esbpowerline.com prints none.' },
+    metaDescription: { type: 'STRING', description: 'Search snippet of 120 to 160 characters that states the news and contains the main keyphrase.' },
     body: { type: 'STRING', description: 'The COMPLETE English article: every paragraph and every sentence of the source, in order, paragraphs separated by blank lines. Never summarise or drop the ending.' },
   },
   required: ['headline', 'deck', 'slug', 'focusKeywords', 'metaTitle', 'metaDescription', 'body'],
@@ -569,10 +574,7 @@ export function parsePastedAiOutput(rawText: string): Partial<EditorialTranslati
   deck = enforceDeckLength(deck, 200)
   const slug = generateSlug(slugMatch ? slugMatch[1].trim() : headline, 80)
   const focusKeywords = keywordsMatch ? keywordsMatch[1].trim() : extractFocusKeywords(headline, body)
-  const suffix = ' | ESB PowerLine'
-  const maxBase = Math.max(20, 60 - suffix.length)
-  const metaTitle = metaTitleMatch ? metaTitleMatch[1].trim() : `${headline.slice(0, maxBase).trim()}${suffix}`
-  const metaDescription = metaDescMatch ? metaDescMatch[1].trim() : enforceDeckLength(deck || body.slice(0, 150), 160)
+  const { metaTitle, metaDescription } = seoFields(headline, deck, body, focusKeywords, metaTitleMatch?.[1], metaDescMatch?.[1])
 
   return {
     headline,
@@ -658,10 +660,8 @@ export async function translateNewsArticle(
         const deck = enforceDeckLength(parsed.deck || input.deck || '', 200)
         const slug = generateSlug(parsed.slug || headline, 80)
         const body = polishJournalisticBody(parsed.body)
-        const seo = buildSeoFromEnglishStory(headline, deck, body)
-        const focusKeywords = parsed.focusKeywords || seo.focusKeywords
-        const metaTitle = parsed.metaTitle || seo.metaTitle
-        const metaDescription = parsed.metaDescription || seo.metaDescription
+        const focusKeywords = parsed.focusKeywords || extractFocusKeywords(headline, `${deck} ${body}`)
+        const { metaTitle, metaDescription } = seoFields(headline, deck, body, focusKeywords, parsed.metaTitle, parsed.metaDescription)
 
         return {
           headline,
@@ -724,15 +724,10 @@ export async function translateNewsArticle(
 
   const body = translatedParagraphs.join('\n\n') || headline
 
-  // Generate Slug (< 80 chars)
-  const slug = generateSlug(headline, 80)
-
-  // Generate SEO Meta Fields
+  // SEO fields, built the way the SEO panel grades them
   const focusKeywords = extractFocusKeywords(headline, body)
-  const suffix = ' | ESB PowerLine'
-  const maxBase = Math.max(20, 60 - suffix.length)
-  const metaTitle = `${headline.slice(0, maxBase).trim()}${suffix}`
-  const metaDescription = enforceDeckLength(deck || body.slice(0, 150), 160)
+  const slug = buildSlug(headline, firstKeyphrase(focusKeywords)) || generateSlug(headline, 80)
+  const { metaTitle, metaDescription } = seoFields(headline, deck, body, focusKeywords)
 
   // Honest provenance: only claim the "neural" engine actually ran if it left no
   // untranslated Bengali behind. Otherwise report "offline" and flag for human review,

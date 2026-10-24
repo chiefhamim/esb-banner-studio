@@ -162,8 +162,8 @@ export function renderCompositeFrame(
     renderCaptionClip(ctx, captionClip, w, h)
   }
 
-  // 5. Watermark Bug (Top Right)
-  renderStationBug(ctx, w, h, time)
+  // 5. Watermark Bug (Top Right) — not over a banner still, whose own masthead and date sit exactly there
+  if (!videoClip?.branded) renderStationBug(ctx, w, h, time)
 
   ctx.restore()
 }

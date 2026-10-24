@@ -584,10 +584,10 @@ export function VideoWorkspace() {
           <Select
             value={project.aspect}
             options={[
-              { value: '16:9', label: '16:9 Broadcast (1920×1080)' },
-              { value: '9:16', label: '9:16 Shorts/Reels (1080×1920)' },
-              { value: '1:1', label: '1:1 Square (1080×1080)' },
-              { value: '4:5', label: '4:5 Facebook (1080×1350)' },
+              { value: '16:9', label: '16:9 Broadcast · 1920×1080' },
+              { value: '9:16', label: '9:16 Reels · 1080×1920' },
+              { value: '1:1', label: '1:1 Square · 1080×1080' },
+              { value: '4:5', label: '4:5 Facebook · 1080×1350' },
             ]}
             onChange={(v) => setAspect(v as AspectRatio)}
             className="compact"
@@ -618,7 +618,7 @@ export function VideoWorkspace() {
             onClick={() => projectInputRef.current?.click()}
             title="Open Video Project"
           >
-            <Icon name="folder" size={13} /> Open
+            <Icon name="folder" size={13} /><span className="vw-lbl">Open</span>
           </button>
 
           <button
@@ -627,7 +627,7 @@ export function VideoWorkspace() {
             onClick={handleSaveProject}
             title="Save Project (.esbvideo)"
           >
-            <Icon name="download" size={13} /> Save
+            <Icon name="download" size={13} /><span className="vw-lbl">Save</span>
           </button>
 
           {isRecordingVoiceover ? (
@@ -647,7 +647,7 @@ export function VideoWorkspace() {
               onClick={handleStartVoiceover}
               title="Record Microphone Voiceover"
             >
-              <Icon name="mic" size={13} /> Record
+              <Icon name="mic" size={13} /><span className="vw-lbl">Record</span>
             </button>
           )}
 
@@ -657,7 +657,7 @@ export function VideoWorkspace() {
             onClick={resetToDemo}
             title="Load Broadcast Demo Template"
           >
-            <Icon name="reset" size={13} /> Demo
+            <Icon name="reset" size={13} /><span className="vw-lbl">Demo</span>
           </button>
 
           <button type="button" className="btn primary sm" onClick={handleStartExport} disabled={exporting}>

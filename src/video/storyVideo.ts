@@ -60,7 +60,7 @@ export function buildStoryTimeline(input: StoryVideoInput): VideoProject {
   // 1. title: the banner carries the headline itself
   const titleHold = Math.max(4, Math.min(7, holdFor(input.headline)))
   const banner = still(input.bannerUrl ?? input.photoUrl, t, titleHold, 'Banner')
-  if (banner) clips.push(banner)
+  if (banner) clips.push(input.bannerUrl ? { ...banner, branded: true } : banner)
   if (!input.bannerUrl) clips.push({ id: id('h'), trackId: 'v2', title: 'Headline', kind: 'overlay', start: t, duration: titleHold, in: 0, out: titleHold, color: '#dc2626', overlayType: 'headline', overlayText: input.headline })
   t += titleHold
 

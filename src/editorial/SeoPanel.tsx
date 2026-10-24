@@ -4,7 +4,7 @@
 import { useMemo } from 'react'
 import { useEditorialStore } from './editorialStore'
 import { Icon } from '../ui/Icon'
-import { analyzeSeo, buildMetaDescription, buildMetaTitle, buildSlug, effectiveDescription, effectiveTitle, suggestKeyphrases } from './seo'
+import { DESCRIPTION_MAX, analyzeSeo, buildMetaDescription, buildMetaTitle, buildSlug, effectiveDescription, effectiveTitle, suggestKeyphrases, visibleTitle } from './seo'
 import type { SeoCheck } from './seo'
 // the site's own app icon (esbpowerline repo app/icon.png), as Google shows it beside the result
 import siteIcon from '../assets/images/site/site-icon.png'
@@ -21,15 +21,18 @@ export function SeoPanel({ hasImage, onCheckSlug, slugStatus }: { hasImage: bool
   const suggestions = useMemo(() => suggestKeyphrases(draft.headline, draft.deck, draft.body, 6), [draft.headline, draft.deck, draft.body])
   const checks = useMemo(() => analyzeSeo({
     headline: draft.headline, deck: draft.deck, body: draft.body, slug: draft.slug,
-    metaTitle: draft.metaTitle, metaDescription: draft.metaDescription, keyphrase: kp, tags, hasImage,
+    metaTitle: draft.metaTitle, metaDescription: draft.metaDescription, keyphrase: kp, tags, hasImage, imageAlt: draft.imageAlt,
     publishedTitles: liveArticles.filter((a) => a.slug !== draft.slug).map((a) => a.title),
   }), [draft, kp, tags.join('|'), hasImage, liveArticles]) // eslint-disable-line react-hooks/exhaustive-deps
   const good = checks.filter((c) => c.status === 'good').length
 
+  // exactly what esbpowerline.com puts in <title> and the description, cut where Google cuts them
   const title = effectiveTitle(draft)
   const desc = effectiveDescription(draft)
-  const shownTitle = title.length > 60 ? title.slice(0, 58).replace(/\s+\S*$/, '') + ' …' : title
-  const shownDesc = desc.length > 158 ? desc.slice(0, 155).replace(/\s+\S*$/, '') + ' …' : desc
+  const shownTitle = visibleTitle(title)
+  const titleCut = shownTitle !== title
+  const typedDesc = (draft.metaDescription.trim() || draft.deck.trim()).replace(/\s+/g, ' ')
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   const bold = (text: string) => {
     if (!kp.trim()) return text
     const parts = text.split(new RegExp(`(${kp.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
@@ -58,28 +61,29 @@ export function SeoPanel({ hasImage, onCheckSlug, slugStatus }: { hasImage: bool
           <div><b>ESB PowerLine</b><span>esbpowerline.com › articles › {draft.slug || 'story-slug'}</span></div>
         </div>
         <div className="seo-serp-title">{shownTitle || 'Your headline'}</div>
-        <div className="seo-serp-desc">{shownDesc ? bold(shownDesc) : 'Write a meta description — otherwise Google picks a sentence from the page.'}</div>
+        <div className="seo-serp-desc">{desc ? <><span className="seo-serp-date">{today} — </span>{bold(desc)}</> : 'Write a meta description — otherwise Google picks a sentence from the page.'}</div>
+        <div className="seo-serp-note">{draft.metaTitle.trim() ? 'Title: your SEO title' : 'Title: the headline (no SEO title yet)'} · {draft.metaDescription.trim() ? 'description: your meta description' : 'description: the deck'} · the site adds no site name</div>
       </div>
 
       <div className="ed-field">
         <div className="ed-field-row">
           <label htmlFor="draft-meta-title">SEO title</label>
           <span className="seo-row-end">
-            <span className={`ed-budget-counter ${title.length > 60 ? 'over' : ''}`}>{title.length} / 60</span>
+            <span className={`ed-budget-counter ${titleCut ? 'over' : ''}`} title={titleCut ? 'Google will cut this title' : 'Fits in the result'}>{title.length} / 60</span>
             <button type="button" className="btn-link" onClick={() => setDraftField('metaTitle', buildMetaTitle(draft.headline, kp))}>Build from headline</button>
           </span>
         </div>
-        <input id="draft-meta-title" type="text" className="ed-input" value={draft.metaTitle} placeholder={`${draft.headline || 'Headline'} | ESB PowerLine`} onChange={(e) => setDraftField('metaTitle', e.target.value)} />
+        <input id="draft-meta-title" type="text" className="ed-input" value={draft.metaTitle} placeholder={draft.headline || 'Headline'} onChange={(e) => setDraftField('metaTitle', e.target.value)} />
       </div>
       <div className="ed-field">
         <div className="ed-field-row">
           <label htmlFor="draft-meta-desc">Meta description</label>
           <span className="seo-row-end">
-            <span className={`ed-budget-counter ${desc.length > 158 ? 'over' : ''}`}>{desc.length} / 158</span>
+            <span className={`ed-budget-counter ${typedDesc.length > DESCRIPTION_MAX ? 'over' : ''}`}>{typedDesc.length} / {DESCRIPTION_MAX}</span>
             <button type="button" className="btn-link" onClick={() => setDraftField('metaDescription', buildMetaDescription(draft.deck, draft.body, kp))}>Build from story</button>
           </span>
         </div>
-        <textarea id="draft-meta-desc" className="ed-input" rows={3} value={draft.metaDescription} placeholder={draft.deck || '120–158 characters that state the news'} onChange={(e) => setDraftField('metaDescription', e.target.value)} />
+        <textarea id="draft-meta-desc" className="ed-input" rows={3} value={draft.metaDescription} placeholder={draft.deck || `120–${DESCRIPTION_MAX} characters that state the news`} onChange={(e) => setDraftField('metaDescription', e.target.value)} />
       </div>
       <div className="ed-field">
         <div className="ed-field-row">

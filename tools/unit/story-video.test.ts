@@ -33,6 +33,7 @@ describe('story → video', () => {
     const v1 = tl.clips.filter((c) => c.trackId === 'v1').sort((a, b) => a.start - b.start)
     expect(v1.map((c) => c.sourceUrl)).toEqual(['blob:banner', 'blob:photo', 'blob:photo'])
     expect(v1.every((c) => c.still)).toBe(true)
+    expect(v1.map((c) => !!c.branded)).toEqual([true, false, false]) // no station bug over the banner's own masthead
     for (let i = 1; i < v1.length; i++) expect(v1[i].start).toBeCloseTo(v1[i - 1].start + v1[i - 1].duration, 5)
     const end = Math.max(...tl.clips.map((c) => c.start + c.duration))
     expect(tl.duration).toBeGreaterThanOrEqual(end - 1e-9)

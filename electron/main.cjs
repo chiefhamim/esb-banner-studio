@@ -41,7 +41,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1600,
     height: 940,
-    minWidth: 1100,
+    minWidth: 900, // a 1366 × 768 laptop at 150 % scaling is 911 px wide; every workspace header fits at 900
     minHeight: 680,
     backgroundColor: '#15171c',
     icon: path.join(__dirname, '..', 'build', 'icon.png'),

@@ -417,6 +417,8 @@ export function buildCmsArticlePayload(params: {
   focusKeywords?: string
   focusKeyphrase?: string
   imageUrl?: string
+  imageAlt?: string
+  imageCaption?: string
   credit?: string
   byline?: string
   status?: 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'SCHEDULED' | 'ARCHIVED'
@@ -451,9 +453,12 @@ export function buildCmsArticlePayload(params: {
       metaTitle: params.metaTitle || cleanHeadline,
       metaDescription: params.metaDescription || cleanDeck,
       focusKeyword: params.focusKeyphrase?.trim() || tagList[0] || '',
+      // The site prints heroImage.caption under the photo, right below the deck — so the deck must never be used as
+      // the caption (it printed every Studio story's deck twice). Alt describes the photo; the headline is only the
+      // site's own fallback when there is none.
       heroImage: {
-        alt: cleanHeadline,
-        caption: cleanDeck,
+        alt: params.imageAlt?.trim() || cleanHeadline,
+        ...(params.imageCaption?.trim() ? { caption: params.imageCaption.trim() } : {}),
       },
     },
   }

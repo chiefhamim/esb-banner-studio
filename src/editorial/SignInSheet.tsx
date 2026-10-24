@@ -29,12 +29,21 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const [checking, setChecking] = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
 
+  // Focus the email field once, when the sheet opens. This used to sit in an effect keyed on `onClose` — a new function
+  // on every parent render — so a status refresh or a toast moved the cursor back to the email field while the editor
+  // was typing the password.
+  const closeRef = useRef(onClose)
+  useEffect(() => { closeRef.current = onClose }, [onClose])
   useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); closeRef.current() } }
     window.addEventListener('keydown', key, true)
-    if (!session) setTimeout(() => emailRef.current?.focus(), 60)
     return () => window.removeEventListener('keydown', key, true)
-  }, [onClose, session])
+  }, [])
+  useEffect(() => {
+    if (session) return
+    const t = setTimeout(() => { if (!document.activeElement?.closest('.signin')) emailRef.current?.focus() }, 60)
+    return () => clearTimeout(t)
+  }, [session])
 
   const submit = async () => {
     if (busy) return

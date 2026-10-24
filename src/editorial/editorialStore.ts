@@ -6,7 +6,7 @@ import { extractFactTable, verifyDraftAgainstSource } from './facts'
 import type { FactItem, DiscrepancyFlag } from './facts'
 import { detectCategory, suggestHighlight } from '../core/newsroom'
 import { CATEGORIES } from '../core/tokens'
-import { generateSlug, buildSeoFromEnglishStory } from './translator'
+import { generateSlug, buildSeoFromEnglishStory, stripSiteSuffix } from './translator'
 import { syncArticlePhotosToBanner, importImageToBanner } from './automation'
 import { useStore } from '../store'
 import { useShellStore } from '../shell/shellStore'
@@ -36,6 +36,10 @@ export interface EditorialDraft {
   body: string              // full English story body
   byline: string
   credit: string
+  /** Alt text for the featured image (seo.heroImage.alt): what the photo shows, in English. */
+  imageAlt: string
+  /** Caption printed under the photo on the site (seo.heroImage.caption); empty prints none. */
+  imageCaption: string
   tags: string[]
   social: {
     facebook: string
@@ -148,6 +152,8 @@ const DEFAULT_DRAFT: EditorialDraft = {
   body: '',
   byline: '',
   credit: '',
+  imageAlt: '',
+  imageCaption: '',
   tags: [],
   social: {
     facebook: '',
@@ -184,6 +190,8 @@ function loadPersisted(): Partial<Persisted> {
     if (!raw) return {}
     const p = JSON.parse(raw) as Partial<Persisted>
     if (p.draft) p.draft = { ...DEFAULT_DRAFT, ...p.draft, social: { ...DEFAULT_DRAFT.social, ...(p.draft.social || {}) } }
+    // drafts saved before the site dropped the title suffix still carry " | ESB PowerLine"
+    if (p.draft) p.draft.metaTitle = stripSiteSuffix(p.draft.metaTitle)
     if (p.checklist) p.checklist = { ...DEFAULT_CHECKLIST, ...p.checklist }
     return p
   } catch {
@@ -363,6 +371,9 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
         body: bodyStr,
         byline: article.byline || currentDraft.byline || '',
         credit: article.images[0]?.credit || article.publisher || currentDraft.credit || '',
+        // an English source's own alt text and caption describe its photo; a Bengali one would need translating first
+        imageAlt: article.images[0]?.alt && article.images[0].alt.trim() !== article.title.trim() ? article.images[0].alt.trim().slice(0, 160) : '',
+        imageCaption: article.images[0]?.caption?.trim().slice(0, 240) || '',
         tags: seo.focusKeywords ? seo.focusKeywords.split(',').map((k) => k.trim()).filter(Boolean) : [],
         social: {
           facebook: `${article.title}\n\n${article.deck || ''}`,

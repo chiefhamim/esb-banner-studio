@@ -52,6 +52,8 @@ export interface Clip {
   still?: boolean
   /** Direction of the still's slow move: push in (default) or pull out. */
   kenBurns?: 'in' | 'out'
+  /** The picture already carries the ESB masthead (a rendered banner), so the station bug is not drawn over it. */
+  branded?: boolean
 }
 
 export interface VideoProject {

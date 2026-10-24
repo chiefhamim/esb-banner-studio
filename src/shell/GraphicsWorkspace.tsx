@@ -451,7 +451,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
             <Icon name="swap" size={13} />
             <span>{format === 'fb45' ? 'Web 16:9' : 'FB 4:5'}</span>
           </button>
-          <button className={'pv-btn' + (showPreview ? ' on' : '')} onClick={() => setShowPreview((v) => !v)} aria-pressed={showPreview} title="Live Facebook preview — stays open while you edit"><Icon name="eye" size={16} />Preview<kbd>P</kbd></button>
+          <button className={'pv-btn' + (showPreview ? ' on' : '')} onClick={() => setShowPreview((v) => !v)} aria-pressed={showPreview} title="Live Facebook preview — stays open while you edit"><Icon name="eye" size={16} /><span className="pv-label">Preview</span><kbd>P</kbd></button>
         </div>
         <div className="spacer" />
         <div className="pillbar">

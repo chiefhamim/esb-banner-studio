@@ -312,3 +312,62 @@
 .vw-trim-handle.left::after { left: 3px; }
 .vw-trim-handle.right::after { right: 3px; }
 .vw-clip-block:hover .vw-trim-handle::after, .vw-clip-block.selected .vw-trim-handle::after { opacity: 1; }
+
+/* ---------------------------------------------------------------- video header: gives up space instead of pushing Export off the edge */
+.vw-header { container: vwh / inline-size; gap: 8px; }
+.vw-header > .vw-brand { flex: 1 1 auto; min-width: 96px; }
+.vw-title-input { width: 100%; min-width: 0; max-width: 300px; text-overflow: ellipsis; }
+.vw-header-actions { gap: 6px; }
+.vw-header-actions .btn { gap: 6px; }
+@container vwh (max-width: 1360px) {
+  .vw-header-actions .vw-lbl { display: none; }
+  .vw-header-actions .btn.subtle { width: 32px; padding: 0; justify-content: center; }
+}
+@container vwh (max-width: 1080px) {
+  .vw-aspect .select { max-width: 150px; }
+  .vw-aspect .select-label { overflow: hidden; text-overflow: ellipsis; }
+}
+.vw-metrics { flex-wrap: wrap; gap: 4px 12px; justify-content: flex-start; }
+
+/* ---------------------------------------------------------------- panel headers: the name never gives way; the hint and the value do */
+.pnl > header h3 { min-width: 0; }
+.pnl > header h3 .t { flex: none; overflow: visible; }
+.pnl > header h3 small { flex: 0 1 auto; min-width: 0; max-width: none; }
+.pnl > header .pnl-actions { flex: 0 1 auto; min-width: 0; }
+.pnl > header .pnl-actions .count { display: inline-block; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+/* a hex value is 7 characters and must show all 7; the field's own label gives way first */
+.colorfield { gap: 6px; }
+.colorfield input { min-width: 7.2ch; letter-spacing: -.01em; }
+.colorfield > span:not(.swatch), .colorfield > label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------------------------------------------------------------- Graphics header under ~1180 px (a 1366 laptop at 125%): Export stays on screen */
+.topbar { container: topbar / inline-size; }
+@container topbar (max-width: 1180px) {
+  .topbar .fmtgroup .pv-btn .pv-label, .topbar .fmtgroup .pv-btn kbd { display: none; }
+  .topbar .fmtgroup .dual-toggle-btn { display: none; }
+}
+@container topbar (max-width: 1000px) {
+  .topbar .back-to-desk .back-label { display: none; }
+}
+/* the aspect picker drops its pixel size before anything is cut mid-word */
+@container vwh (max-width: 1180px) { .vw-aspect .select { max-width: 132px; } }
+.vw-aspect .select-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* under 1000 px: undo, redo and copy-image live on in the Edit/File menus and their shortcuts; Drag to Post has no
+   other home, so it stays */
+@container topbar (max-width: 1000px) {
+  .topbar:not(.ed-head) .pillbar > .ibtn, .topbar:not(.ed-head) .pillbar > .pill-sep { display: none; }
+}
+@container topbar (max-width: 920px) { .topbar .menubar .mb-item { padding-left: 7px; padding-right: 7px; } }
+@container vwh (max-width: 920px) { .vw-aspect .select { max-width: 108px; } .vw-timecode { padding: 3px 6px; font-size: 13px; } }
+
+/* ---------------------------------------------------------------- empty photo slot: say only what fits at this zoom */
+.slot-box.empty { container: slot / size; }
+@container slot (max-width: 260px) or (max-height: 170px) {
+  .slot-empty-card { gap: 6px; padding: 8px; }
+  .slot-empty-dim, .slot-action-hint, .slot-deduct-spec { display: none; }
+}
+@container slot (max-width: 170px) or (max-height: 110px) {
+  .slot-empty-header, .slot-choose-btn span { display: none; }
+  .slot-choose-btn { width: 28px; height: 28px; padding: 0; justify-content: center; }
+}
+@container slot (max-width: 90px) or (max-height: 64px) { .slot-choose-btn { display: none; } }
