@@ -214,8 +214,10 @@ export function Stage({ base }: { base: Assets }) {
   const rulerColors = useRef<{ key: string; bg1: string; bg2: string; t2: string; t3: string; sel: string } | null>(null)
 
   const { w: W, h: H } = FORMATS[format]
-  const fit = Math.max(0.05, Math.min((avail.w - 72) / W, (avail.h - 72) / H))
+  const fit = Math.max(0.05, Math.min((avail.w - 80) / W, (avail.h - 80) / H))
   const scale = zoom === 'fit' ? fit : zoom
+  // no scrollbars while the banner (plus its 40 px margin) fits the window
+  const fitsWindow = W * scale + 80 <= avail.w + 0.5 && H * scale + 80 <= avail.h + 0.5
   const scene = useMemo(() => useStore.getState().scene(format), [format, doc])
   const guides = doc.guides[format]
   // centre-crop rectangles for the other ratios Facebook / link previews cut this banner to
@@ -971,7 +973,7 @@ export function Stage({ base }: { base: Assets }) {
           <div ref={curY} className="ruler-cursor y" aria-hidden />
         </>
       )}
-      <div className="stage-scroll" ref={scroller} onScroll={() => setScrollTick((t) => t + 1)}>
+      <div className={'stage-scroll' + (fitsWindow ? ' fits' : '')} ref={scroller} onScroll={() => setScrollTick((t) => t + 1)}>
         <div className="stage-wrap" ref={wrapRef} style={{ width: px(W), height: px(H) }}>
           <canvas ref={canvas} style={{ width: px(W), height: px(H) }} className="stage-canvas" />
           <div

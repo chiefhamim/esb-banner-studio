@@ -536,15 +536,13 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 .home-shell { position: relative; isolation: isolate; overflow: hidden; }
 .home-shell > .home-topbar, .home-shell > .home-workspace { position: relative; z-index: 1; }
 .home-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.home-bg-img { position: absolute; inset: -20%; background: center / cover no-repeat; transform-origin: 50% 50%; animation: home-drift 90s ease-in-out infinite alternate; will-change: transform; }
-.home-bg::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--bg-0) 52%, transparent); }
-:root[data-theme=dark] .home-bg::after { background: color-mix(in srgb, var(--bg-0) 74%, transparent); }
-:root[data-theme=dark] .home-bg-img { filter: saturate(.85); }
+.home-bg-img { position: absolute; inset: -6%; background: center / cover no-repeat; transform-origin: 50% 50%; animation: home-drift 40s ease-in-out infinite alternate; will-change: transform; }
+.home-bg::after { content: ''; position: absolute; inset: 0; background: color-mix(in srgb, var(--bg-0) 18%, transparent); }
+:root[data-theme=dark] .home-bg::after { background: color-mix(in srgb, var(--bg-0) 40%, transparent); }
 @keyframes home-drift {
-  0%   { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
-  33%  { transform: translate3d(-4%, 3%, 0) rotate(6deg) scale(1.08); }
-  66%  { transform: translate3d(3%, -2%, 0) rotate(-4deg) scale(1.12); }
-  100% { transform: translate3d(-2%, -4%, 0) rotate(3deg) scale(1.04); }
+  0%   { transform: translate3d(-3%, -2%, 0) scale(1); }
+  50%  { transform: translate3d(1%, 2.5%, 0) scale(1.04); }
+  100% { transform: translate3d(3%, -1.5%, 0) scale(1.02); }
 }
 @media (prefers-reduced-motion: reduce) { .home-bg-img { animation: none; } }
 .home-shell .home-workspace { background: transparent; }
@@ -556,3 +554,16 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 .home-shell .format-card:hover, .home-shell .recent-card:hover { background: color-mix(in srgb, var(--card, var(--bg-1)) 92%, transparent); }
 .home-shell .btn.secondary, .home-shell .btn.subtle, .home-shell .footer-meta .status-badge { background: color-mix(in srgb, var(--card, var(--bg-1)) 80%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
 .home-head-btn .home-head-label { white-space: nowrap; }
+
+/* One size for every icon button in the Graphics/Video chrome: the tool rail and the top bar share 32 x 32 with an 8 px radius */
+.toolbar .ibtn, .topbar .pillbar .ibtn, .vw-header .pillbar .ibtn { width: 32px; height: 32px; border-radius: 8px; }
+
+/* AI service slider: the chosen provider wears its own brand colour, white text, in both themes */
+.ai-settings .ai-provider-seg button.on { color: #fff !important; font-weight: 600; }
+.ai-settings .ai-provider-seg .pill-slide { box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform 280ms var(--spring), width 280ms var(--spring), background 200ms ease; }
+.ai-settings[data-provider=gemini] .ai-provider-seg .pill-slide { background: linear-gradient(110deg, #4285f4 0%, #9b72cb 55%, #d96570 100%) !important; }
+.ai-settings[data-provider=anthropic] .ai-provider-seg .pill-slide { background: #d97757 !important; }
+.ai-settings[data-provider=openai] .ai-provider-seg .pill-slide { background: #10a37f !important; }
+.ai-settings[data-provider=openrouter] .ai-provider-seg .pill-slide { background: #6467f2 !important; }
+
+.stage-scroll.fits { overflow: hidden; }

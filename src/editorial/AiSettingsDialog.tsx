@@ -67,7 +67,7 @@ export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; on
         </>
       }
     >
-      <div className="stack ai-settings" style={{ gap: 14 }}>
+      <div className="stack ai-settings" data-provider={p} style={{ gap: 14 }}>
         <Seg<AiProviderId>
           className="ai-provider-seg"
           value={p}
