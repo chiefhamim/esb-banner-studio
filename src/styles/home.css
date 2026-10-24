@@ -632,3 +632,8 @@
 
 /* the shorter name sits centred over the tagline, so the stripe beside the block reads as part of it */
 .home-shell .home-title-group { align-items: center; text-align: center; }
+
+/* "PL" as a stacked mark: P over L, each half the height of "ESB", so the pair is exactly as tall as the capitals beside it.
+   Inter's capitals are 0.727em tall, so a line-height of 0.727 puts each letter's top and baseline on its line box. */
+.home-shell .home-pl { display: inline-block; margin: 0 .04em; font-size: .5em; line-height: .727; font-weight: 700; letter-spacing: 0; text-align: center; vertical-align: baseline; }
+.home-shell .home-pl > span { display: block; }
