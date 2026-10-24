@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { aiJson, loadAiSettings, saveAiSettings, aiFor, resolveModel, rankOpenAi } from '../../src/editorial/aiProviders'
+import { aiSeo } from '../../src/editorial/aiDesk'
 import { translateNewsArticle } from '../../src/editorial/translator'
 import type { AiSchema } from '../../src/editorial/aiProviders'
 import { sanitizeSeo, sanitizeCaptions, xLength, articleUrl, relinkCaptions, storyCaptions } from '../../src/editorial/aiDesk'
@@ -166,6 +167,60 @@ describe('The translation prompt is followed', () => {
     await translateNewsArticle({ title: 'শিরোনাম', paragraphs: ['এক'] }).catch(() => {})
     expect(hosts).not.toContain('api.anthropic.com')
     expect(hosts).not.toContain('generativelanguage.googleapis.com')
+  })
+})
+
+describe('Every provider receives the prompt, and each job reaches only its own provider', () => {
+  const prompt = 'You are the desk. Follow this exact style: sentence case headlines.'
+  const bodyOf = (init?: RequestInit) => JSON.parse(String(init?.body))
+
+  it('the system prompt arrives in each provider\'s own system field, unaltered and first', async () => {
+    const calls: Record<string, Record<string, any>> = {}
+    vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const u = String(url)
+      if (u.includes('anthropic.com')) { calls.anthropic = bodyOf(init); return claudeStream('{"headline":"h"}') }
+      if (u.includes('generativelanguage')) { calls.gemini = bodyOf(init); return new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"headline":"h"}' }] } }] }), { status: 200 }) }
+      const which = u.includes('openai.com') ? 'openai' : 'openrouter'
+      calls[which] = bodyOf(init)
+      return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: '{"headline":"h"}' } }] }), { status: 200 })
+    }))
+    for (const [provider, model] of [['anthropic', 'claude-sonnet-5-5'], ['gemini', 'gemini-3-flash'], ['openai', 'gpt-5'], ['openrouter', 'x/y']] as const) {
+      await aiJson({ provider, key: 'k', model, system: prompt, user: 'story text', schema })
+    }
+    expect(calls.anthropic.system[0].text).toBe(prompt)
+    expect(calls.gemini.systemInstruction.parts[0].text).toBe(prompt)
+    expect(calls.openai.messages[0]).toEqual({ role: 'system', content: prompt })
+    expect(calls.openrouter.messages[0]).toEqual({ role: 'system', content: prompt })
+    // the story is the user turn, never mixed into the instructions
+    expect(calls.anthropic.messages[0].content).toBe('story text')
+    expect(calls.gemini.contents[0].parts[0].text).toBe('story text')
+  })
+
+  it('main on Claude and SEO on Gemini: the translation never touches Gemini, the SEO call never touches Claude', async () => {
+    vi.stubGlobal('localStorage', memoryStorage({ 'esb-banner-studio/ai-settings': JSON.stringify({ provider: 'anthropic', seo: 'gemini', keys: { anthropic: 'sk-ant-1', gemini: 'AIza-1' } }) }))
+    const hosts: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => {
+      const u = new URL(String(url))
+      hosts.push(u.host)
+      if (u.host === 'api.anthropic.com') return u.pathname === '/v1/models' ? new Response(JSON.stringify({ data: [], has_more: false }), { status: 200 }) : claudeStream(JSON.stringify({ headline: 'Grid expansion', deck: 'd', slug: 'grid', focusKeywords: 'grid', metaTitle: 'Grid', metaDescription: 'x'.repeat(130), body: 'One.\n\nTwo.' }))
+      if (u.pathname.endsWith('/models')) return new Response(JSON.stringify({ models: [{ name: 'models/gemini-3-flash', supportedGenerationMethods: ['generateContent'] }] }), { status: 200 })
+      return new Response(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ focusKeyphrase: 'grid expansion', tags: 'grid expansion', metaTitle: 'Grid expansion', metaDescription: 'x'.repeat(130), slug: 'grid-expansion' }) }] } }] }), { status: 200 })
+    }))
+    await translateNewsArticle({ title: 'শিরোনাম', paragraphs: ['এক', 'দুই'] })
+    expect(new Set(hosts)).toEqual(new Set(['api.anthropic.com']))
+    hosts.length = 0
+    const seo = aiFor('seo')!
+    await aiSeo(seo, { headline: 'Grid expansion', deck: 'Two new lines.', body: 'Grid expansion will add two lines.' })
+    expect(new Set(hosts)).toEqual(new Set(['generativelanguage.googleapis.com']))
+  })
+
+  it('OpenAI GPT-4 class models are not asked for more output than they can give', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: '{"headline":"h"}' } }] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetch)
+    await aiJson({ provider: 'openai', key: 'k', model: 'gpt-4o', system: 's', user: 'u', schema, maxTokens: 32000 })
+    await aiJson({ provider: 'openai', key: 'k', model: 'gpt-5', system: 's', user: 'u', schema, maxTokens: 32000 })
+    const sent = fetch.mock.calls.map((c) => JSON.parse(String((c as unknown as [string, RequestInit])[1].body)).max_completion_tokens)
+    expect(sent).toEqual([16000, 32000])
   })
 })
 

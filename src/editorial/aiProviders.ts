@@ -303,7 +303,7 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
       body: JSON.stringify({
         model,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        ...(provider === 'openai' ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
+        ...(provider === 'openai' ? { max_completion_tokens: /^gpt-4/.test(model) ? Math.min(maxTokens, 16000) : maxTokens } : { max_tokens: maxTokens }),
         ...(format ? { response_format: format } : {}),
       }),
     })
