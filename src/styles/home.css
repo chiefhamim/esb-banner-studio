@@ -617,10 +617,11 @@
 
 /* "Studio" in Black weight (bundled Inter 900) */
 .home-shell .home-title-accent { font-weight: 900; letter-spacing: -.035em; }
-/* Dark: "Studio" was sinking into the dark picture. The title's through-glyph shadow is dropped for the word itself, the
-   colours are lifted, and only a soft halo is kept so it still reads as smoky glass. */
-:root[data-theme=dark] .home-shell .home-title-accent {
-  background-image: linear-gradient(in oklch 100deg, #46eaa6 0%, #4fe6dc 28%, #8fb4ff 56%, #4fe6dc 78%, #46eaa6 100%);
-  text-shadow: none;
-  filter: drop-shadow(0 1px 10px rgba(0, 0, 14, .35)) drop-shadow(0 0 14px rgba(79, 230, 220, .18));
+/* Dark: the original smoky-glass "Studio" — dark glass rim from the title's shadow — with a brighter core. The core is a copy of
+   the word (data-text) laid over it with a soft white highlight in the middle of the letters, so the shadow cannot bury it. */
+:root[data-theme=dark] .home-shell .home-title-accent { position: relative; }
+:root[data-theme=dark] .home-shell .home-title-accent::after {
+  content: attr(data-text); position: absolute; left: 0; top: 0; pointer-events: none; text-shadow: none;
+  background-image: radial-gradient(ellipse 62% 52% at 50% 46%, rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .6) 48%, rgba(255, 255, 255, 0) 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
 }

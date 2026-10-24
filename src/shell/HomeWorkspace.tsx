@@ -195,7 +195,7 @@ export function HomeWorkspace() {
         <header className="home-header">
           <div className="home-header-brand">
             <div className="home-title-group">
-              <h1 className="home-title">ESB Power Line <span className="home-title-accent">Studio</span></h1>
+              <h1 className="home-title">ESB Power Line <span className="home-title-accent" data-text="Studio">Studio</span></h1>
               <p className="home-subtitle">Where stories are written, imagination is designed and reality is cut</p>
             </div>
           </div>
