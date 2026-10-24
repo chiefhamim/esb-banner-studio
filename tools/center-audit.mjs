@@ -4,9 +4,10 @@
 // content that leaves its box. Usage: node tools/center-audit.mjs   (W=1024,1366 to choose widths)
 import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { launchBrowser } from './launch-browser.mjs'
-const PORT = 5217, root = new URL('..', import.meta.url).pathname
-const vite = spawn(process.execPath, [root + '/node_modules/vite/bin/vite.js', '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
+const PORT = 5217, root = fileURLToPath(new URL('..', import.meta.url))
+const vite = spawn(process.execPath, [root + 'node_modules/vite/bin/vite.js', '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
 const widths = (process.env.W || '900,1280,1920').split(',').map(Number)
 const measure = () => {

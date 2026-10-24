@@ -14,6 +14,9 @@ try {
   const page = await (await browser.newContext({ viewport: { width: Number(process.env.W ?? 1600), height: 950 } })).newPage()
   page.setDefaultTimeout(8000)
   await page.goto(`http://localhost:${PORT}/`)
+  // a fresh profile opens on Home; this script works in Graphics
+  await page.evaluate(() => localStorage.setItem('esb-banner-studio/shell', JSON.stringify({ workspace: 'graphics' })))
+  await page.reload()
   await page.waitForSelector('.topbar'); await page.waitForTimeout(600)
   const audit = async (label) => {
     const list = await page.evaluate(() => {
@@ -40,6 +43,7 @@ try {
   }
   const ph = path.join(root, 'src/assets/images/sample-photo.jpg')
   await page.setInputFiles('input[type=file]', [ph, ph, ph]); await page.waitForTimeout(500)
+  await page.locator('.pnl > header', { hasText: 'Headline' }).first().click()
   await page.fill('.pnl-body textarea.input', 'Review Meeting Held on Progress of Power Division Development Projects')
   for (const theme of ['light', 'dark']) {
     if (theme === 'dark') await page.click('[aria-label="Dark theme"]')

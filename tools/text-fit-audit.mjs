@@ -132,7 +132,8 @@ try {
     // ---- Home
     await tryStep('home', async () => { await page.click('[data-ws="home"]') })
     // ---- Graphics, with a long headline, credit and caption
-    await page.click('.ws-btn[data-ws="graphics"]')
+    // Home has no workspace switcher: its launch tile opens Graphics
+    await page.evaluate(() => [...document.querySelectorAll('.launch-tile')].find((e) => /Graphics/.test(e.textContent))?.click())
     await page.waitForTimeout(400)
     await page.evaluate((L) => window.__store.getState().setContent({ headline: L.headline, credit: L.credit, caption: L.deck }), LONG)
     await page.setInputFiles('.left input[type=file]', path.join(root, 'tools/fixtures/media/synthetic-rig.jpg')).catch(() => {})
