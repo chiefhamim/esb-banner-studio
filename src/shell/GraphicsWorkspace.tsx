@@ -27,7 +27,7 @@ type Tab = 'story' | 'photos'
 const gridCols = (lw: number, rw: number) => `46px clamp(264px, ${lw}px, 38vw) minmax(0, 1fr) clamp(264px, ${rw}px, 38vw)`
 
 const SHORTCUTS: { group: string; rows: [string, string][] }[] = [
-  { group: 'File', rows: [['Ctrl + N', 'New banner'], ['Ctrl + Shift + N', 'Next story — keep this layout'], ['Ctrl + O', 'Open project'], ['Ctrl + S', 'Save project'], ['Ctrl + Shift + S', 'Save project as…'], ['Ctrl + I', 'Import photos'], ['Ctrl + E', 'Export…'], ['Ctrl + Shift + C', 'Copy banner as image']] },
+  { group: 'File', rows: [['Ctrl + N', 'New banner'], ['Ctrl + Shift + N', 'Next story — keep this layout'], ['Ctrl + O', 'Open project'], ['Ctrl + S', 'Save project'], ['Ctrl + Shift + S', 'Save project as'], ['Ctrl + I', 'Import photos'], ['Ctrl + E', 'Export'], ['Ctrl + Shift + C', 'Copy banner as image']] },
   { group: 'Edit', rows: [['Ctrl + Z', 'Undo'], ['Ctrl + Y  /  Ctrl + Shift + Z', 'Redo'], ['Ctrl + X / C / V', 'Cut / copy / paste layers'], ['Ctrl + Shift + V', 'Paste in place'], ['Ctrl + D', 'Duplicate'], ['Del', 'Delete layer / hide template element'], ['Ctrl + A', 'Select all'], ['Esc', 'Deselect']] },
   { group: 'Tools', rows: [['P', 'Show / hide the live Facebook preview'], ['V', 'Select'], ['H  /  hold Space', 'Hand (pan)'], ['T', 'Add text'], ['R', 'Add rectangle']] },
   { group: 'Moving & resizing', rows: [['Arrow keys', 'Nudge 1 px (Shift = 10 px)'], ['Shift + drag', 'Lock the axis'], ['Alt + drag', 'Move without snapping'], ['Shift + resize', 'Keep proportions'], ['Alt + resize', 'Resize from the centre'], ['Shift + Alt + resize', 'Proportional, from the centre'], ['Alt + drag a photo', 'Move the whole photo block']] },
@@ -355,18 +355,18 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
     { label: 'File', items: [
       { label: 'New banner', icon: 'filePlus', shortcut: 'Ctrl+N', onClick: () => newBanner(false) },
       { label: 'Next story — keep this layout', hint: 'clears headline + photos', shortcut: 'Ctrl+Shift+N', onClick: () => newBanner(true) },
-      { label: 'Open project…', icon: 'folder', shortcut: 'Ctrl+O', onClick: () => void openProject() },
+      { label: 'Open project', icon: 'folder', shortcut: 'Ctrl+O', onClick: () => void openProject() },
       ...(recent.length && window.esb ? [{ heading: 'Recent' } as const, ...recent.slice(0, 5).map((r) => ({ label: r.name, icon: 'newspaper' as const, onClick: () => void openRecent(r) }))] : []),
       { divider: true },
       { label: 'Save project', icon: 'download', shortcut: 'Ctrl+S', onClick: () => void saveProject(false) },
-      { label: 'Save project as…', shortcut: 'Ctrl+Shift+S', onClick: () => void saveProject(true) },
+      { label: 'Save project as', shortcut: 'Ctrl+Shift+S', onClick: () => void saveProject(true) },
       { divider: true },
-      { label: 'Import photos…', icon: 'image', shortcut: 'Ctrl+I', onClick: addPhotos },
-      { label: 'Export…', icon: 'sliders', shortcut: 'Ctrl+E', onClick: () => setShowExport(true) },
+      { label: 'Import photos', icon: 'image', shortcut: 'Ctrl+I', onClick: addPhotos },
+      { label: 'Export', icon: 'sliders', shortcut: 'Ctrl+E', onClick: () => setShowExport(true) },
       { divider: true },
       { label: 'Copy image to clipboard', icon: 'copy', shortcut: 'Ctrl+Shift+C', onClick: copyCurrent },
       { divider: true },
-      { label: 'Welcome screen…', icon: 'home', onClick: () => setShowWelcome(true) },
+      { label: 'Welcome screen', icon: 'home', onClick: () => setShowWelcome(true) },
       { label: 'Quit and start new', icon: 'reset', shortcut: 'Ctrl+Alt+Q', danger: true, onClick: cleanAndStartNew },
       ...(window.esb ? [{ label: 'Exit studio', icon: 'x' as const, danger: true, onClick: () => window.close() }] : []),
     ] },
@@ -388,7 +388,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       { label: 'Text', icon: 'text', shortcut: 'T', onClick: () => st().addText() },
       { label: 'Rectangle', icon: 'square', shortcut: 'R', onClick: () => st().addRect() },
       { divider: true },
-      { label: 'Photos…', icon: 'image', shortcut: 'Ctrl+I', onClick: addPhotos },
+      { label: 'Photos', icon: 'image', shortcut: 'Ctrl+I', onClick: addPhotos },
       ...(images.length ? [{ heading: 'Add a library photo as a layer' } as const, ...images.slice(0, 6).map((im) => ({ label: im.name, icon: 'image' as const, onClick: () => st().addImageLayer(im.id) }))] : []),
     ] },
     { label: 'Arrange', items: [
@@ -428,7 +428,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       { label: 'Dark theme', checked: theme === 'dark', onClick: () => st().setTheme(theme === 'dark' ? 'light' : 'dark') },
     ] },
     { label: 'Help', items: [
-      { label: 'Welcome screen…', icon: 'home', onClick: () => setShowWelcome(true) },
+      { label: 'Welcome screen', icon: 'home', onClick: () => setShowWelcome(true) },
       { label: 'Keyboard shortcuts', icon: 'keyboard', shortcut: '?', onClick: () => setShowKeys(true) },
       { divider: true },
       { label: 'About ESB Studio', icon: 'info', onClick: () => setShowAbout(true) },
@@ -478,7 +478,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
         <div className="split">
           <button className="btn primary" disabled={busy} onClick={() => setShowExport(true)}><Icon name="download" size={15} />{busy ? 'Exporting…' : 'Export'}</button>
           <MenuButton className="primary split-caret" align="end" title="Quick export" items={[
-            { label: 'Export options…', icon: 'sliders', shortcut: 'Ctrl+E', onClick: () => setShowExport(true) },
+            { label: 'Export options', icon: 'sliders', shortcut: 'Ctrl+E', onClick: () => setShowExport(true) },
             { divider: true },
             { label: 'Quick: Newsroom Bundle (FB + Web)', icon: 'download', hint: '4:5 + 16:9', onClick: () => quickExport(['fb45', 'web']) },
             { label: 'Quick: this banner only', icon: 'download', hint: getFormat(format).name, onClick: () => quickExport([format]) },
@@ -511,7 +511,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       </nav>
       {imgMenu && (
         <ContextMenu x={imgMenu.x} y={imgMenu.y} onClose={() => setImgMenu(null)} items={[
-          { label: 'Import photos…', icon: 'folder', onClick: addPhotos },
+          { label: 'Import photos', icon: 'folder', onClick: addPhotos },
           ...(images.length ? [{ divider: true } as const] : []),
           ...images.slice(0, 8).map((im) => ({ label: im.name, icon: 'image' as const, hint: 'add as layer', onClick: () => st().addImageLayer(im.id) })),
         ]} />

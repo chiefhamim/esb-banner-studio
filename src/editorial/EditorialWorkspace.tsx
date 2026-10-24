@@ -775,18 +775,18 @@ export function EditorialWorkspace() {
   const menus: MenuDef[] = [
     { label: 'Story', items: [
       { label: 'New story', icon: 'plus', onClick: handleNewStory },
-      { label: 'Load another link…', icon: 'link', disabled: !hasStory, onClick: () => { setSourceOpen(true); setLeftTab('intake'); setLauncherTab('url') } },
+      { label: 'Load another link', icon: 'link', disabled: !hasStory, onClick: () => { setSourceOpen(true); setLeftTab('intake'); setLauncherTab('url') } },
       { label: 'Re-translate the source', icon: 'refresh', disabled: !source || translating, onClick: () => void handleRetranslateSource() },
       { divider: true },
       { label: 'Copy CMS JSON', icon: 'copy', disabled: !draft.headline.trim(), onClick: handleCopyCmsPayload },
-      { label: 'Review & publish…', icon: 'upload', disabled: !draft.headline.trim(), onClick: openPublish },
+      { label: 'Review & publish', icon: 'upload', disabled: !draft.headline.trim(), onClick: openPublish },
     ] },
     { label: 'Site', items: [
       { label: 'Sync stories from esbpowerline.com', icon: 'refresh', onClick: () => void handleSyncFeed() },
       { label: 'Open the site CMS', icon: 'externalLink', onClick: handleOpenInSiteCms },
       { divider: true },
-      { label: staffSession ? `Signed in as ${staffSession.name}` : 'Staff sign-in…', icon: 'user', onClick: () => setShowLoginModal(true) },
-      { label: apiKey ? `AI: ${aiName} (on)…` : 'AI translation key…', icon: 'sparkle', onClick: () => setShowApiKeyModal(true) },
+      { label: staffSession ? `Signed in as ${staffSession.name}` : 'Staff sign-in', icon: 'user', onClick: () => setShowLoginModal(true) },
+      { label: apiKey ? `AI: ${aiName} (on)` : 'AI translation key', icon: 'sparkle', onClick: () => setShowApiKeyModal(true) },
     ] },
     { label: 'View', items: [
       { label: 'Source column', checked: sourceOpen, disabled: !hasStory, onClick: () => setSourceOpen(!sourceOpen) },

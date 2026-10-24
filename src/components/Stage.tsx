@@ -713,7 +713,7 @@ export function Stage({ base }: { base: Assets }) {
     setMenu({ ...near, items: [
       ...(hit.id === 'headline' ? [
         { label: 'Edit headline text', icon: 'type' as const, onClick: () => startEdit(hit) },
-        { label: 'Highlight words in headline…', icon: 'sparkle' as const, onClick: () => startHighlight(hit) },
+        { label: 'Highlight words in headline', icon: 'sparkle' as const, onClick: () => startHighlight(hit) },
         ...(content.highlight.trim() ? [{ label: `Clear highlight (“${content.highlight.trim()}”)`, onClick: () => st.setContent({ highlight: '' }) }] : []),
         { divider: true } as const,
       ] : []),

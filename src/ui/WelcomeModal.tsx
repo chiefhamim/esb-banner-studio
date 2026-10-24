@@ -101,7 +101,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                   <Icon name="folder" size={18} />
                 </div>
                 <div className="wab-info">
-                  <span className="wab-title">Open Project…</span>
+                  <span className="wab-title">Open Project</span>
                   <span className="wab-desc">Load .esb or project.json from disk</span>
                 </div>
               </button>

@@ -162,8 +162,8 @@ export function HomeWorkspace() {
           <strong>Home background</strong>
           <p className="sub">{customBg ? 'Showing your own image.' : `Showing the ${theme === 'dark' ? 'dark' : 'light'} default.`} Your image is kept on this computer and used for the {theme === 'dark' ? 'dark' : 'light'} appearance only; the other keeps its own.</p>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" className="btn" onClick={() => { setShowSettings(false); setMoving(true) }}><Icon name="hand" size={14} /> Move background…</button>
-            <button type="button" className="btn" onClick={() => bgInput.current?.click()}><Icon name="image" size={14} /> Choose image…</button>
+            <button type="button" className="btn" onClick={() => { setShowSettings(false); setMoving(true) }}><Icon name="hand" size={14} /> Move background</button>
+            <button type="button" className="btn" onClick={() => bgInput.current?.click()}><Icon name="image" size={14} /> Choose image</button>
             {customBg && <button type="button" className="btn" onClick={resetBackground}><Icon name="reset" size={14} /> Use default</button>}
           </div>
         </div>
