@@ -81,7 +81,7 @@ try {
   // Workspace switcher navigation
   await page.click('[data-ws="home"]')
   await page.waitForSelector('.home-workspace')
-  const homeOk = await page.evaluate(() => !!document.querySelector('.home-workspace h1')?.textContent.includes('AI Studio'))
+  const homeOk = await page.evaluate(() => !!document.querySelector('.home-workspace h1')?.textContent.includes('Ai Studio'))
   console.log(homeOk ? 'PASS' : 'FAIL', 'switched to Home workspace')
 
   await page.click('.ws-btn[data-ws="editorial"]')

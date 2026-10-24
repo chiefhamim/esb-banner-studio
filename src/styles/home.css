@@ -664,3 +664,7 @@
 /* EXPERIMENT (own commit — revert it to undo): Studio's smoky dark look on "AI" too — its soft dark halo around the letters and the same
    shadow showing through the glyphs — with AI's own colours. */
 :root[data-theme=dark] .home-shell .home-ai { text-shadow: 0 1px 2px rgba(0, 0, 10, .75), 0 4px 26px rgba(0, 0, 14, .85); }
+
+/* "Studio" in blue, violet and magenta — the spectrum carries on from "Ai" (red to green). Same sheen, weight, glow and smoky look. */
+:root:not([data-theme=dark]) .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #2563eb 0%, #7c3aed 34%, #d946ef 62%, #7c3aed 82%, #2563eb 100%); }
+:root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #5b9bff 0%, #9a7bff 34%, #f06bff 62%, #9a7bff 82%, #5b9bff 100%); }
