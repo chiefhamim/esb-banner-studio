@@ -641,8 +641,7 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .about2-stripe { display: flex; gap: 3px; margin: 2px 0; }
 .about2-stripe i { width: 18px; height: 3px; border-radius: 2px; }
 .about2-stripe i:nth-child(1) { background: #0aa37a; } .about2-stripe i:nth-child(2) { background: #f4c20d; } .about2-stripe i:nth-child(3) { background: #e53935; }
-.about2-hero h3 { margin: 0; font: 600 22px/28px var(--ui); letter-spacing: -.02em; color: var(--text); }
-.about2-hero h3 span { color: var(--text-2); font-weight: 500; }
+.about2-hero h3 { margin: 0; font: 400 22px/28px var(--ui); letter-spacing: -.02em; color: var(--text); }
 .about2-hero p { margin: 0; max-width: 340px; font-size: 13px; line-height: 20px; color: var(--text-2); }
 .about2-ver { display: inline-flex; align-items: center; height: 22px; padding: 0 10px; font: 500 11.5px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text-2); background: var(--fill); border-radius: var(--r-pill); }
 .about2-desks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -657,7 +656,7 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .about2-link:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .about2-foot { margin: 0; font-size: 11.5px; line-height: 16px; text-align: center; color: var(--text-3); }
 /* About: "Studio" gets the Home screen's Black weight and slow green-teal-blue sheen */
-.about2-hero h3 span { font-weight: 900; letter-spacing: -.035em; padding-bottom: .08em; color: transparent; -webkit-text-fill-color: transparent; -webkit-background-clip: text; background-clip: text; background-size: 220% 100%;
+.about2-hero h3 span { font-weight: 700; padding-bottom: .08em; color: transparent; -webkit-text-fill-color: transparent; -webkit-background-clip: text; background-clip: text; background-size: 220% 100%;
   background-image: linear-gradient(in oklch 100deg, #0aa37a 0%, #0fb3c4 30%, #3b82f6 58%, #0fb3c4 80%, #0aa37a 100%); animation: home-sheen 9s ease-in-out infinite alternate; }
 :root[data-theme=dark] .about2-hero h3 span { background-image: linear-gradient(in oklch 100deg, #34e39a 0%, #3ee0d6 28%, #7aa8ff 56%, #3ee0d6 78%, #34e39a 100%); filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .5)); }
 @media (prefers-reduced-motion: reduce) { .about2-hero h3 span { animation: none; } }

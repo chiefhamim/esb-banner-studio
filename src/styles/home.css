@@ -615,13 +615,6 @@
 .home-shell .recovery-card .recent-name, .home-shell .recovery-card .recent-path { white-space: normal; overflow: visible; text-overflow: clip; }
 .home-shell .recovery-actions { margin-left: 52px; width: auto; }
 
-/* "Studio" in Black weight (bundled Inter 900) */
-.home-shell .home-title-accent { font-weight: 900; letter-spacing: -.035em; }
-/* Dark: the original smoky-glass "Studio" — dark glass rim from the title's shadow — with a brighter core. The core is a copy of
-   the word (data-text) laid over it with a soft white highlight in the middle of the letters, so the shadow cannot bury it. */
-:root[data-theme=dark] .home-shell .home-title-accent { position: relative; }
-:root[data-theme=dark] .home-shell .home-title-accent::after {
-  content: attr(data-text); position: absolute; left: 0; top: 0; pointer-events: none; text-shadow: none;
-  background-image: radial-gradient(ellipse 62% 52% at 50% 46%, rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .6) 48%, rgba(255, 255, 255, 0) 100%);
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
-}
+/* Title balance: a light "ESB Power Line" under a firmer, coloured "Studio" */
+.home-shell .home-title { font-weight: 400; }
+.home-shell .home-title-accent { font-weight: 700; }
