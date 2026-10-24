@@ -656,3 +656,7 @@
 :root:not([data-theme=dark]) .home-shell .home-ai { filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .9)) drop-shadow(0 5px 14px rgba(59, 130, 246, .3)); }
 :root[data-theme=dark] .home-shell .home-ai { filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .7)); }
 @media (prefers-reduced-motion: reduce) { .home-shell .home-ai { animation: none; } }
+
+/* The name spans the tagline edge to edge: both scale with --hs, so 3.92 x --hs makes "ESB Power/Line AI Studio" exactly as wide as
+   "Where stories are written, imagination is designed and reality is cut" at any window size. */
+.home-shell .home-title { font-size: calc(var(--hs) * 3.92); }
