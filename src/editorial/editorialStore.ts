@@ -38,6 +38,8 @@ export interface EditorialDraft {
   metaDescription: string   // SEO meta description
   body: string              // full English story body
   byline: string
+  /** Credit the story to "ESB News Desk" instead of the signed-in editor (the CMS's tick option). */
+  postAsNewsDesk: boolean
   credit: string
   /** Alt text for the featured image (seo.heroImage.alt): what the photo shows, in English. */
   imageAlt: string
@@ -158,6 +160,7 @@ const DEFAULT_DRAFT: EditorialDraft = {
   metaDescription: '',
   body: '',
   byline: '',
+  postAsNewsDesk: false,
   credit: '',
   imageAlt: '',
   imageCaption: '',
@@ -377,6 +380,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
         metaDescription: seo.metaDescription,
         body: bodyStr,
         byline: article.byline || currentDraft.byline || '',
+        postAsNewsDesk: currentDraft.postAsNewsDesk,
         credit: article.images[0]?.credit || article.publisher || currentDraft.credit || '',
         // an English source's own alt text and caption describe its photo; a Bengali one would need translating first
         imageAlt: article.images[0]?.alt && article.images[0].alt.trim() !== article.title.trim() ? article.images[0].alt.trim().slice(0, 160) : '',

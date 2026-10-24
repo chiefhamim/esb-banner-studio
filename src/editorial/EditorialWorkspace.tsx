@@ -42,6 +42,7 @@ import { extractFactTable, type FactItem } from './facts'
 import { bengaliToAsciiDigits } from './bengali'
 import { translateNewsArticle } from './translator'
 import { AiSettingsDialog } from './AiSettingsDialog'
+import { TranslateProgress } from './TranslateProgress'
 import { activeAi, providerMeta } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
 import { aiCaptions, aiSeo, articleUrl, storyCaptions, xLength } from './aiDesk'
@@ -551,6 +552,7 @@ export function EditorialWorkspace() {
         metaTitle: draft.metaTitle,
         metaDescription: draft.metaDescription,
         byline: staffSession?.name || draft.byline,
+        postAsNewsDesk: draft.postAsNewsDesk,
         credit: draft.credit,
         imageAlt: draft.imageAlt,
         imageCaption: draft.imageCaption,
@@ -611,6 +613,7 @@ export function EditorialWorkspace() {
       metaTitle: draft.metaTitle,
       metaDescription: draft.metaDescription,
       byline: staffSession?.name || draft.byline || 'Mehedi Hasan Hamim',
+      postAsNewsDesk: draft.postAsNewsDesk,
       credit: draft.credit,
       imageAlt: draft.imageAlt,
       imageCaption: draft.imageCaption,
@@ -831,12 +834,7 @@ export function EditorialWorkspace() {
           )}
         </div>
         <div className="spacer" />
-        {progressStatus && (
-          <div className="ed-topbar-progress">
-            <span className="pulse-dot" />
-            <span>{progressStatus}</span>
-          </div>
-        )}
+        <TranslateProgress status={progressStatus} />
         {/* the desk's own tools: stories, the translation engine and the editor's account — each says its state */}
         <div className="pillbar ed-tools">
           <IconButton icon="plus" tip="New story — the current one stays under Stories" onClick={handleNewStory} />
@@ -1139,7 +1137,7 @@ export function EditorialWorkspace() {
                       excerpt={draft.deck}
                       slug={draft.slug}
                       category={catData.name}
-                      author={staffSession?.name || draft.byline || 'ESB PowerLine'}
+                      author={draft.postAsNewsDesk ? 'ESB News Desk' : (staffSession?.name || draft.byline || 'ESB PowerLine')}
                       date={previewDate}
                       readTime={readTimeMin}
                       heroUrl={heroMode === 'banner' ? webBannerUrl : bannerLeadImage}
@@ -1232,6 +1230,7 @@ export function EditorialWorkspace() {
                   />
                 </div>
               </Field>
+              <Check checked={!!draft.postAsNewsDesk} onChange={(v) => setDraftField('postAsNewsDesk', v)} label="Post as ESB News Desk" hint="The article is credited to the desk instead of the signed-in editor." />
               <Field label="Byline">
                 <input type="text" className="input" value={draft.byline} placeholder={staffSession?.name || 'Reporter name'} onChange={(e) => setDraftField('byline', e.target.value)} />
               </Field>

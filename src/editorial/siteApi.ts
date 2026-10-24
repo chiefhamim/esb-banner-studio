@@ -59,6 +59,7 @@ export interface CmsArticlePayload {
   isBreaking?: boolean
   isPinned?: boolean
   isTrending?: boolean
+  postAsNewsDesk?: boolean
   seo: {
     metaTitle?: string
     metaDescription?: string
@@ -421,6 +422,7 @@ export function buildCmsArticlePayload(params: {
   imageCaption?: string
   credit?: string
   byline?: string
+  postAsNewsDesk?: boolean
   status?: 'DRAFT' | 'IN_REVIEW' | 'PUBLISHED' | 'SCHEDULED' | 'ARCHIVED'
 }): CmsArticlePayload {
   const cleanHeadline = params.headline.trim().slice(0, 104)
@@ -449,6 +451,7 @@ export function buildCmsArticlePayload(params: {
     isBreaking: false,
     isPinned: false,
     isTrending: false,
+    postAsNewsDesk: !!params.postAsNewsDesk,
     seo: {
       metaTitle: params.metaTitle || cleanHeadline,
       metaDescription: params.metaDescription || cleanDeck,
@@ -563,7 +566,7 @@ export async function insertArticleToSupabase(
       isBreaking: !!payload.isBreaking,
       isPinned: !!payload.isPinned,
       isTrending: !!payload.isTrending,
-      postAsNewsDesk: author.email === 'admin@esbpowerline.com',
+      postAsNewsDesk: !!payload.postAsNewsDesk || author.email === 'admin@esbpowerline.com',
       tags: Array.isArray(payload.tags) ? payload.tags : [],
       seo: payload.seo || {},
       locale: 'en',

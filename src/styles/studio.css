@@ -592,3 +592,21 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 
 /* the header never wears the story's category colour: picking a category in the panels recolours the panels and the canvas, not the header's buttons, focus rings or avatar */
 .topbar, .ed-head, .vw-header { --cat: var(--text-2); --cat-ink: var(--bg-0); }
+
+/* translation progress: a live clock in the header and, under it, the steps so far with the time each one took */
+.ed-tp { position: relative; flex: none; }
+.ed-tp-chip { display: inline-flex; align-items: center; gap: 8px; height: 32px; max-width: 360px; padding: 0 12px; font: 500 12.5px/1 var(--ui); color: var(--text); background: var(--fill); border: 0; border-radius: 999px; cursor: pointer; transition: background var(--t-1) var(--ease); }
+.ed-tp-chip:hover { background: var(--fill-hover); }
+.ed-tp-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-tp-time { flex: none; font-size: 11.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.ed-tp.done .ed-tp-chip { color: var(--text); }
+.ed-tp.done .ed-tp-chip svg { color: #1f9d57; }
+.ed-tp-pop { position: fixed; z-index: 3200; width: 380px; max-width: 80vw; margin: 0; padding: 10px 12px; list-style: none; background: var(--card, var(--bg-1)); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: var(--card-shadow-open, 0 12px 32px rgba(0, 0, 0, .25)); }
+.ed-tp-pop li { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 8px; padding: 6px 2px; font-size: 12.5px; color: var(--text-2); }
+.ed-tp-pop li + li { border-top: 1px solid var(--line-2); }
+.ed-tp-pop li.ok .ed-tp-mark { color: #1f9d57; }
+.ed-tp-pop li.live { color: var(--text); font-weight: 500; }
+.ed-tp-pop li.slow .ed-tp-ms { color: #e0833a; font-weight: 600; }
+.ed-tp-pop li.total { grid-template-columns: 1fr auto; color: var(--text); font-weight: 600; }
+.ed-tp-mark { display: grid; place-items: center; }
+.ed-tp-ms { font-size: 11.5px; font-variant-numeric: tabular-nums; }
