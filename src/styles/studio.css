@@ -373,7 +373,6 @@
 
 /* ---------------------------------------------------------------- workspace switcher: Home on its own, the three desks together */
 .ws-wrap { display: inline-flex; flex: none; align-items: center; gap: 6px; }
-.ws-wrap .ws-sep { margin: 0; }
 .ws-home-btn { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--text-2); background: var(--fill); border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring), border-color var(--t-1) var(--ease); }
 .ws-home-btn:hover { color: var(--text); background: var(--fill-hover); }
 .ws-home-btn:active { transform: scale(.96); }
@@ -623,3 +622,6 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 .app > .toolbar { position: relative; border-right: 0; }
 .app > .toolbar::after { content: ''; position: absolute; right: 0; top: var(--corner); bottom: 0; width: 1px; background: var(--line); pointer-events: none; }
 .app > .corner-join { position: absolute; left: 45px; top: 45px; z-index: 7; width: calc(var(--corner) + 1px); height: calc(var(--corner) + 1px); overflow: visible; pointer-events: none; fill: none; stroke: var(--line); stroke-width: 1; }
+/* Graphics: Home is centred over the rail (like Select below it) and the switcher starts on the left edge of the Story tabs */
+.app > .topbar { padding-left: 7px; }
+.app .ws-wrap { gap: 17px; }
