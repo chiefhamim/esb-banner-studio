@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { aiJson, loadAiSettings, saveAiSettings, aiFor, resolveModel, rankOpenAi } from '../../src/editorial/aiProviders'
+import { aiJson, loadAiSettings, saveAiSettings, aiFor, resolveModel, rankOpenAi, modelLabel } from '../../src/editorial/aiProviders'
 import { aiSeo } from '../../src/editorial/aiDesk'
 import { translateNewsArticle } from '../../src/editorial/translator'
 import type { AiSchema } from '../../src/editorial/aiProviders'
@@ -67,6 +67,16 @@ describe('AI settings', () => {
     expect(resolveModel('openrouter', 'auto', [])).toBe('openrouter/auto')
     expect(resolveModel('openai', 'gpt-x', [])).toBe('gpt-x')
     expect(['gpt-5-mini', 'gpt-4o', 'gpt-5'].sort((a, b) => rankOpenAi(b) - rankOpenAi(a))[0]).toBe('gpt-5')
+  })
+})
+
+describe('Model names in the activity strip', () => {
+  it('reads as people say it', () => {
+    expect(modelLabel('claude-sonnet-5-5')).toBe('Sonnet 5.5')
+    expect(modelLabel('claude-opus-5')).toBe('Opus 5')
+    expect(modelLabel('claude-haiku-4-5-20251001')).toBe('Haiku 4.5')
+    expect(modelLabel('gemini-3-flash')).toBe('Gemini 3 Flash')
+    expect(modelLabel('gpt-5')).toBe('gpt-5')
   })
 })
 

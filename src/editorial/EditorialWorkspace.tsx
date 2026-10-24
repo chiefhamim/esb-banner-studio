@@ -43,6 +43,7 @@ import { bengaliToAsciiDigits } from './bengali'
 import { translateNewsArticle } from './translator'
 import { AiSettingsDialog } from './AiSettingsDialog'
 import { TranslateProgress } from './TranslateProgress'
+import { useJobLog } from './jobLog'
 import { aiFor, providerMeta, roleProvider } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
 import { aiCaptions, aiSeo, articleUrl, storyCaptions, xLength } from './aiDesk'
@@ -232,24 +233,30 @@ export function EditorialWorkspace() {
     if (!active) { setShowApiKeyModal(true); return }
     const who = providerMeta(active.provider).name
     setAiBusy(job)
+    const log = useJobLog.getState()
+    const jobId = log.begin(job, job === 'seo' ? 'SEO' : 'Social captions', 'Choosing the model')
+    const onStep = (label: string) => log.step(jobId, label)
     try {
       const d = useEditorialStore.getState().draft
       const story = { headline: d.headline, deck: d.deck, body: d.body }
       if (job === 'seo') {
-        const r = await aiSeo(active, story)
+        const r = await aiSeo(active, story, onStep)
         setDraftField('focusKeyphrase', r.focusKeyphrase)
         setDraftField('focusKeywords', r.focusKeywords)
         setDraftField('metaTitle', r.metaTitle)
         setDraftField('metaDescription', r.metaDescription)
         setDraftField('slug', r.slug)
+        log.finish(jobId, { by: `${who} · ${r.model}` })
         showToast(`SEO written by ${who} · ${r.model} — review it before publishing`)
       } else {
         const desk = CATEGORIES.find((c) => c.id === useStore.getState().doc.content.categoryId)?.name ?? 'Energy'
-        const r = await aiCaptions(active, { ...story, slug: d.slug, desk })
+        const r = await aiCaptions(active, { ...story, slug: d.slug, desk }, onStep)
         for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, r[k])
+        log.finish(jobId, { by: `${who} · ${r.model}` })
         showToast(`Captions written by ${who} · ${r.model} — each links to the article`)
       }
     } catch (e) {
+      log.finish(jobId, { by: who, error: (e as Error).message })
       showToast(`${who} could not finish: ${(e as Error).message}`)
     } finally {
       setAiBusy(null)

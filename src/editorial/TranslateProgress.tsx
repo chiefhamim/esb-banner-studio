@@ -1,99 +1,154 @@
-// Live progress for the long jobs (fetch, translate, verify…): a running clock plus a checklist of the steps so far,
-// each with the time it took, so the editor can see exactly what is slow. Fed only by the status text the desk already emits.
+// The desk's activity: a clock chip in the header and, under it, the history of timed jobs — story translation, SEO and
+// social captions — each with the provider and model that did it, the steps it went through and the time each step took,
+// so the editor can see exactly what is slow. Story jobs are fed by the status text the desk already emits; SEO and
+// social jobs report their own steps (aiDesk.ts). The history stays until the editor clears it.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../ui/Icon'
-
-interface Step { label: string; start: number; end?: number }
-interface Run { steps: Step[]; start: number; end?: number }
+import { useEditorialStore } from './editorialStore'
+import { modelLabel, providerMeta } from './aiProviders'
+import type { AiProviderId } from './aiProviders'
+import { useJobLog } from './jobLog'
+import type { Job, JobKind } from './jobLog'
 
 const fmt = (ms: number) => (ms < 10_000 ? (ms / 1000).toFixed(1) : String(Math.round(ms / 1000))) + ' s'
+const storyJob = (first: string): { kind: JobKind; title: string } =>
+  /upload/i.test(first) ? { kind: 'publish', title: 'Publishing' } : /re-translat/i.test(first) ? { kind: 'story', title: 'Re-translation' } : { kind: 'story', title: 'Story translation' }
+// the strip beside the header's tools: the latest job of each kind, with its model and time
+const SLOTS: { kind: JobKind; label: string }[] = [{ kind: 'story', label: 'Story' }, { kind: 'seo', label: 'SEO' }, { kind: 'social', label: 'Social' }, { kind: 'publish', label: 'Publish' }]
+/** "Claude · claude-sonnet-5-5" → "Sonnet 5.5"; a job with no model ("Machine translation") shows what it has. */
+const modelOf = (by: string) => { const i = by.indexOf(' · '); return i < 0 ? by : modelLabel(by.slice(i + 3)) }
+const isAiProvider = (p: string | null): p is AiProviderId => !!p && p !== 'neural' && p !== 'offline'
 
 export function TranslateProgress({ status }: { status: string | null }) {
-  const [run, setRun] = useState<Run | null>(null)
-  const [open, setOpen] = useState(true)
+  const jobs = useJobLog((s) => s.jobs)
+  const [open, setOpen] = useState(false)
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [, tick] = useState(0)
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const chipRef = useRef<HTMLButtonElement>(null)
+  const chipRef = useRef<HTMLDivElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  const storyId = useRef<number | null>(null)
   const [at, setAt] = useState<{ top: number; right: number } | null>(null)
 
-  // status text drives the run: a new text closes the previous step and opens the next; null finishes the run
+  // the desk's status text drives the story job: a new text closes the previous step and opens the next; null finishes it
   useEffect(() => {
-    const now = Date.now()
-    setRun((r) => {
-      if (status) {
-        if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null }
-        if (!r || r.end) { setOpen(true); return { start: now, steps: [{ label: status, start: now }] } }
-        const last = r.steps[r.steps.length - 1]
-        if (last.label === status) return r
-        return { ...r, steps: [...r.steps.slice(0, -1), { ...last, end: now }, { label: status, start: now }] }
-      }
-      if (r && !r.end) {
-        const last = r.steps[r.steps.length - 1]
-        return { ...r, end: now, steps: [...r.steps.slice(0, -1), { ...last, end: now }] }
-      }
-      return r
-    })
+    const log = useJobLog.getState()
+    const live = storyId.current != null && log.jobs.some((j) => j.id === storyId.current && !j.end)
+    if (status) {
+      if (live) log.step(storyId.current!, status)
+      else { const j = storyJob(status); storyId.current = log.begin(j.kind, j.title, status) }
+    } else if (live) {
+      const st = useEditorialStore.getState()
+      const job = log.jobs.find((j) => j.id === storyId.current)
+      const by = job?.kind === 'story' ? (isAiProvider(st.translationProvider) ? `${providerMeta(st.translationProvider).name}${st.modelUsed ? ` · ${st.modelUsed}` : ''}` : 'Machine translation') : ''
+      log.finish(storyId.current!, { by })
+      storyId.current = null
+    }
   }, [status])
 
-  // the summary stays for a while after the run ends, then clears itself
+  // a job that starts opens the panel on itself; the editor closes it with Esc, a click elsewhere, or the chip
+  const newest = jobs[0]?.id
+  const seen = useRef<number | undefined>(undefined)
   useEffect(() => {
-    if (!run?.end) return
-    hideTimer.current = setTimeout(() => setRun(null), 25_000)
-    return () => { if (hideTimer.current) clearTimeout(hideTimer.current) }
-  }, [run?.end])
+    if (newest == null || newest === seen.current) return
+    seen.current = newest
+    setOpen(true)
+    setExpanded(new Set([newest]))
+  }, [newest])
 
-  // the clock only ticks while a run is live
+  const running = jobs.some((j) => !j.end)
   useEffect(() => {
-    if (!run || run.end) return
+    if (!running) return
     const id = setInterval(() => tick((n) => n + 1), 200)
     return () => clearInterval(id)
-  }, [run])
+  }, [running])
 
-  // the list floats above the whole window (portal + fixed), anchored under the chip, so no panel can cover or clip it
+  // the panel floats above the whole window (portal + fixed), anchored under the chip, so no column can cover or clip it
   useLayoutEffect(() => {
-    if (!open || !run) return
+    if (!open || !jobs.length) return
     const place = () => { const r = chipRef.current?.getBoundingClientRect(); if (r) setAt({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) }) }
     place(); window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
-  }, [open, run])
+  }, [open, jobs.length])
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node
+      if (!popRef.current?.contains(t) && !chipRef.current?.contains(t)) setOpen(false)
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onDown)
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('pointerdown', onDown) }
   }, [open])
 
-  if (!run) return null
-  const running = !run.end
+  if (!jobs.length) return null
   const now = Date.now()
-  const total = (run.end ?? now) - run.start
-  const current = run.steps[run.steps.length - 1]
-  const slowest = run.steps.reduce((m, s) => Math.max(m, (s.end ?? now) - s.start), 0)
+  const live = jobs.find((j) => !j.end)
+  const newestId = (live ?? jobs[0]).id
+  const total = (j: Job) => (j.end ?? now) - j.start
+  const toggle = (id: number) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   return (
-    <div className={'ed-topbar-progress ed-tp' + (running ? '' : ' done')}>
-      <button ref={chipRef} type="button" className="ed-tp-chip" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="Translation progress">
-        {running ? <span className="pulse-dot" /> : <Icon name="check" size={13} />}
-        <span className="ed-tp-label">{running ? current.label : `Done in ${fmt(total)}`}</span>
-        <span className="ed-tp-time mono">{fmt(total)}</span>
-      </button>
+    <div ref={chipRef} className={'ed-topbar-progress ed-tp'} role="group" aria-label="Task times">
+      {SLOTS.map(({ kind, label }) => {
+        const j = jobs.find((x) => x.kind === kind)
+        if (!j) return null
+        const isLive = !j.end
+        const model = modelOf(j.by)
+        return (
+          <button key={kind} type="button" className={'ed-tp-item ' + kind + (j.id === newestId ? ' latest' : '') + (isLive ? ' live' : j.error ? ' bad' : ' ok')}
+            onClick={() => setOpen((o) => !o)} aria-expanded={open} data-tip={`${j.title}${j.by ? ' · ' + j.by : ''} — ${isLive ? 'running' : j.error ? 'failed' : 'done'} in ${fmt(total(j))}. Click for the history`}>
+            {isLive ? <span className="pulse-dot" /> : <Icon name={j.error ? 'info' : 'check'} size={12} />}
+            <span className="ed-tp-kind">{label}</span>
+            {model && <span className="ed-tp-model">{model}</span>}
+            <span className="ed-tp-time mono">{fmt(total(j))}</span>
+          </button>
+        )
+      })}
       {open && at && createPortal(
-        <ol className="ed-tp-pop" role="status" aria-live="polite" style={{ top: at.top, right: at.right }}>
-          {run.steps.map((s, i) => {
-            const ms = (s.end ?? now) - s.start
-            const live = !s.end
-            return (
-              <li key={i} className={(live ? 'live ' : 'ok ') + (!live && ms === slowest && run.steps.length > 1 ? 'slow' : '')}>
-                <span className="ed-tp-mark">{live ? <span className="pulse-dot" /> : <Icon name="check" size={12} />}</span>
-                <span className="ed-tp-step">{s.label}</span>
-                <span className="ed-tp-ms mono">{fmt(ms)}</span>
-              </li>
-            )
-          })}
-          <li className="total"><span className="ed-tp-step">{running ? 'Elapsed' : 'Total'}</span><span className="ed-tp-ms mono">{fmt(total)}</span></li>
-        </ol>,
+        <div ref={popRef} className="ed-tp-pop" role="status" aria-live="polite" style={{ top: at.top, right: at.right }}>
+          <div className="ed-tp-head">
+            <b>Activity</b>
+            <span className="hint">{jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}</span>
+            <div className="spacer" />
+            {jobs.some((j) => j.end) && <button type="button" className="btn-link" onClick={() => useJobLog.getState().clear()}>Clear history</button>}
+          </div>
+          <div className="ed-tp-jobs">
+            {jobs.map((j) => {
+              const isLive = !j.end
+              const slowest = j.steps.reduce((m, s) => Math.max(m, (s.end ?? now) - s.start), 0)
+              const isOpen = expanded.has(j.id)
+              return (
+                <section key={j.id} className={'ed-tp-job ' + j.kind + (isLive ? ' live' : j.error ? ' bad' : ' ok')}>
+                  <button type="button" className="ed-tp-job-head" onClick={() => toggle(j.id)} aria-expanded={isOpen}>
+                    <span className="ed-tp-mark">{isLive ? <span className="pulse-dot" /> : <Icon name={j.error ? 'info' : 'check'} size={12} />}</span>
+                    <span className="ed-tp-job-title"><b>{j.title}</b>{j.by && <span className="ed-tp-by">{j.by}</span>}</span>
+                    <span className="ed-tp-ms mono">{fmt(total(j))}</span>
+                    <Icon name="chevDown" size={12} className={'ed-tp-chev' + (isOpen ? ' open' : '')} />
+                  </button>
+                  {j.error && <p className="ed-tp-err">{j.error}</p>}
+                  {isOpen && (
+                    <ol className="ed-tp-steps">
+                      {j.steps.map((s, i) => {
+                        const ms = (s.end ?? now) - s.start
+                        const stepLive = !s.end
+                        return (
+                          <li key={i} className={(stepLive ? 'live ' : 'ok ') + (!stepLive && ms === slowest && j.steps.length > 1 ? 'slow' : '')}>
+                            <span className="ed-tp-mark">{stepLive ? <span className="pulse-dot" /> : <Icon name="check" size={11} />}</span>
+                            <span className="ed-tp-step">{s.label}</span>
+                            <span className="ed-tp-ms mono">{fmt(ms)}</span>
+                          </li>
+                        )
+                      })}
+                    </ol>
+                  )}
+                </section>
+              )
+            })}
+          </div>
+        </div>,
         document.body,
       )}
     </div>

@@ -120,6 +120,13 @@ export function rankGemini(id: string): number {
 }
 export const geminiLabel = (id: string) => id.replace(/^gemini-/, 'Gemini ').replace(/-/g, ' ').replace(/\bpro\b/, 'Pro').replace(/\bflash\b/, 'Flash').replace(/\blite\b/, 'Lite').replace(/\bpreview\b/, '(preview)')
 
+/** A model id as people say it: claude-sonnet-5-5 → "Sonnet 5.5", gemini-3-flash → "Gemini 3 Flash"; anything else as is. */
+export function modelLabel(id: string): string {
+  const c = /^claude-(sonnet|opus|haiku|fable|mythos)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/.exec(id)
+  if (c) return `${c[1][0].toUpperCase()}${c[1].slice(1)} ${c[2]}${c[3] ? '.' + c[3] : ''}`
+  return /^gemini-\d/.test(id) ? geminiLabel(id) : id
+}
+
 /** OpenAI: chat models only, newest GPT first, full models ahead of mini / nano. */
 export function rankOpenAi(id: string): number {
   const v = Number(/^gpt-(\d+(?:\.\d+)?)/.exec(id)?.[1] ?? /^o(\d+)/.exec(id)?.[1] ?? 0)

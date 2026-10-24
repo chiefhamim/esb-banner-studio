@@ -4,7 +4,7 @@
 // keyphrase the story never uses, or a caption that drops the article link is corrected or replaced here, so nothing
 // the SEO panel would grade "bad" and nothing the site would print differently gets in.
 
-import { aiJson, listModels, resolveModel } from './aiProviders'
+import { aiJson, listModels, providerMeta, resolveModel } from './aiProviders'
 import type { AiProviderId, AiSchema } from './aiProviders'
 import { countPhrase, suggestKeyphrases } from './seo'
 import { buildSlug } from './seo'
@@ -19,6 +19,9 @@ type Ai = { provider: AiProviderId; key: string; model: string }
 interface Story { headline: string; deck: string; body: string }
 
 const storyText = (s: Story) => `Headline: ${s.headline}\n\nDeck: ${s.deck}\n\nStory:\n${s.body}`
+
+/** Tells the history panel which part of a job is running, so it can show where the time went. */
+type OnStep = (label: string) => void
 
 async function modelFor(ai: Ai) {
   let listed: Awaited<ReturnType<typeof listModels>> = []
@@ -74,9 +77,12 @@ export function sanitizeSeo(story: Story, raw: Partial<Record<keyof typeof SEO_S
   return { focusKeyphrase: kp, focusKeywords, metaTitle, metaDescription, slug }
 }
 
-export async function aiSeo(ai: Ai, story: Story): Promise<SeoResult & { model: string }> {
+export async function aiSeo(ai: Ai, story: Story, onStep?: OnStep): Promise<SeoResult & { model: string }> {
+  onStep?.('Choosing the model')
   const model = await modelFor(ai)
+  onStep?.(`Writing with ${providerMeta(ai.provider).name} · ${model}`)
   const { data, model: used } = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model, system: SEO_SYSTEM, user: storyText(story), schema: SEO_SCHEMA, maxTokens: 8000, timeoutMs: 120_000, effort: 'low' })
+  onStep?.("Checking it against the site's rules")
   return { ...sanitizeSeo(story, data), model: used }
 }
 
@@ -156,13 +162,16 @@ export function relinkCaptions(social: Captions, newSlug: string): Captions {
   return Object.fromEntries(Object.entries(social).map(([k, v]) => [k, (v ?? '').replace(/https:\/\/esbpowerline\.com\/articles\/[a-z0-9-]*/g, to)])) as Captions
 }
 
-export async function aiCaptions(ai: Ai, story: Story & { slug: string; desk: string }): Promise<Captions & { model: string }> {
+export async function aiCaptions(ai: Ai, story: Story & { slug: string; desk: string }, onStep?: OnStep): Promise<Captions & { model: string }> {
   const url = articleUrl(story.slug)
+  onStep?.('Choosing the model')
   const model = await modelFor(ai)
+  onStep?.(`Writing with ${providerMeta(ai.provider).name} · ${model}`)
   const { data, model: used } = await aiJson<Record<string, string>>({
     provider: ai.provider, key: ai.key, model, system: SOCIAL_SYSTEM,
     user: `${storyText(story)}\n\nDesk: ${story.desk}\nArticle link: ${url}`,
     schema: SOCIAL_SCHEMA, maxTokens: 8000, timeoutMs: 120_000, effort: 'low',
   })
+  onStep?.("Checking it against the site's rules")
   return { ...sanitizeCaptions(data, url), model: used }
 }
