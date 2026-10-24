@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import lightBgUrl from '../assets/images/home/home-light.jpg'
-import darkBgUrl from '../assets/images/home/home-dark-chrome.jpg'
+import darkBgUrl from '../assets/images/home/home-dark-gradient.jpg'
 import { readRecent, openProject, openRecent } from '../project'
 import type { RecentProject } from '../project'
 import { useShellStore } from './shellStore'

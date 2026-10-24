@@ -668,3 +668,17 @@
 /* "Studio" in blue, violet and magenta — the spectrum carries on from "Ai" (red to green). Same sheen, weight, glow and smoky look. */
 :root:not([data-theme=dark]) .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #2563eb 0%, #7c3aed 34%, #d946ef 62%, #7c3aed 82%, #2563eb 100%); }
 :root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #5b9bff 0%, #9a7bff 34%, #f06bff 62%, #9a7bff 82%, #5b9bff 100%); }
+
+/* Dark picture: a fine monochrome grain over the gradient. Smooth 8-bit gradients show banding in the dark areas; the grain dithers it away
+   and gives the picture the film-like depth of a much higher-resolution master. */
+:root[data-theme=dark] .home-bg::before {
+  display: block; content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; filter: none; opacity: .07; mix-blend-mode: overlay;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='n' x='0' y='0' width='100%' height='100%'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>") 0 0 / 320px 320px;
+}
+
+/* New dark picture (orange and cyan light in the corners, a dark band through the middle): the old vignette was built for the bright silk and dulled
+   exactly the corners that carry the colour, so the veil is gone — the middle is already dark enough for the text — and the smoke on "Ai" and
+   "Studio" is lighter, because dark glass on a dark picture sinks. */
+:root[data-theme=dark] .home-bg::after { background: none; }
+:root[data-theme=dark] .home-bg-img { filter: saturate(1.06); }
+:root[data-theme=dark] .home-shell :is(.home-ai, .home-title-accent) { text-shadow: 0 1px 2px rgba(0, 0, 10, .3), 0 4px 22px rgba(0, 0, 14, .28); }
