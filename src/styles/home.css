@@ -637,3 +637,17 @@
    Inter's capitals are 0.727em tall, so a line-height of 0.727 puts each letter's top and baseline on its line box. */
 .home-shell .home-pl { display: inline-block; margin: 0 .04em; font-size: .5em; line-height: .727; font-weight: 700; letter-spacing: 0; text-align: center; vertical-align: baseline; }
 .home-shell .home-pl > span { display: block; }
+
+/* Brand colours, sampled from the logo itself: POWER red #ED1C24, LINE green #00A651, the bolt orange #F5821F. The stacked P takes the
+   red and the L the green, exactly as in "POWER LINE". "AI" flows red → orange → yellow → green on the same slow sheen as "Studio", which
+   picks up at green and runs on to teal and blue: one spectrum across the name, anchored on the logo. */
+.home-shell .home-pl > span:first-child { color: #ED1C24; }
+.home-shell .home-pl > span:last-child { color: #00A651; }
+.home-shell .home-pl { text-shadow: none; }
+.home-shell .home-ai {
+  padding-bottom: .08em; color: transparent; -webkit-text-fill-color: transparent; -webkit-background-clip: text; background-clip: text; text-shadow: none;
+  background-image: linear-gradient(in oklch 100deg, #ED1C24 0%, #F5821F 24%, #FBB900 42%, #00A651 70%, #F5821F 88%, #ED1C24 100%); background-size: 220% 100%;
+  animation: home-sheen 9s ease-in-out infinite alternate;
+}
+:root[data-theme=dark] .home-shell .home-ai { filter: drop-shadow(0 1px 8px rgba(0, 0, 14, .4)); }
+@media (prefers-reduced-motion: reduce) { .home-shell .home-ai { animation: none; } }
