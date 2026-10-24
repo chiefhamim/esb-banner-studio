@@ -14,6 +14,7 @@
     "test:editorial": "node tools/editorial-test.mjs",
     "test:video": "node tools/video-test.mjs",
     "test:unit": "vitest run",
+    "preapp": "node tools/ensure-deps.mjs",
     "app": "npm run build && electron .",
     "dist": "npm run build && electron-builder --win dir",
     "test": "vitest run",

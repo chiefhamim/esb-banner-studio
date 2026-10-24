@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { WorkspaceSwitcher } from './WorkspaceRail'
 import logoUrl from '../assets/images/esb-logo.png'
+import auroraUrl from '../assets/images/home/home-aurora.jpg'
 import { readRecent, openProject, openRecent } from '../project'
 import type { RecentProject } from '../project'
 import { useShellStore } from './shellStore'
@@ -92,6 +93,8 @@ export function HomeWorkspace() {
         )}
       </div>
     </header>
+    {/* the background: a soft colour field that drifts slowly; a veil in the theme's own colour keeps it quiet */}
+    <div className="home-bg" aria-hidden><div className="home-bg-img" style={{ backgroundImage: `url(${auroraUrl})` }} /></div>
     <main className="home-workspace" aria-label="Home dashboard">
       <div className="home-container">
         {/* Crash recovery banner if available */}

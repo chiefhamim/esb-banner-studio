@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { aiJson, loadAiSettings, saveAiSettings, activeAi, resolveModel, rankOpenAi } from '../../src/editorial/aiProviders'
 import type { AiSchema } from '../../src/editorial/aiProviders'
-import { sanitizeSeo, sanitizeCaptions, xLength, articleUrl, relinkCaptions } from '../../src/editorial/aiDesk'
+import { sanitizeSeo, sanitizeCaptions, xLength, articleUrl, relinkCaptions, storyCaptions } from '../../src/editorial/aiDesk'
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
@@ -163,5 +163,12 @@ describe('AI captions always link the article', () => {
     const moved = relinkCaptions(c, 'new-slug')
     expect(Object.values(moved).every((v) => v.endsWith(articleUrl('new-slug')) && !v.includes('old-slug'))).toBe(true)
     expect(relinkCaptions(moved, '')).toEqual(moved)
+  })
+  it('the template captions read as news: headline, deck, a few desk hashtags, the link — no highlight posing as a figure', () => {
+    const c = storyCaptions({ headline: 'Petrobangla to drill two new wells in Sylhet gas field', deck: 'BAPEX will drill the wells.', categoryId: '03', slug: 'sylhet-gas-field-two-new-wells' })
+    expect(c.facebook).toBe(`Petrobangla to drill two new wells in Sylhet gas field\n\nBAPEX will drill the wells.\n\n#ESBPowerLine #FossilFuels #EnergyPrices\n\n${articleUrl('sylhet-gas-field-two-new-wells')}`)
+    expect(c.facebook).not.toMatch(/⚡/)
+    for (const v of Object.values(c)) expect(v.endsWith(articleUrl('sylhet-gas-field-two-new-wells'))).toBe(true)
+    expect(xLength(c.x)).toBeLessThanOrEqual(280)
   })
 })

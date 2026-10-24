@@ -37,14 +37,14 @@ import type { Assets } from '../core/render'
 import { loadBaseAssets } from '../core/assets'
 import { describeIntakeError, automateNewsFromUrl } from './automation'
 import { autoDesk } from './deskFlag'
-import { detectCategory, generatePlatformCaption, suggestHighlight } from '../core/newsroom'
+import { detectCategory, suggestHighlight } from '../core/newsroom'
 import { extractFactTable, type FactItem } from './facts'
 import { bengaliToAsciiDigits } from './bengali'
 import { translateNewsArticle } from './translator'
 import { AiSettingsDialog } from './AiSettingsDialog'
 import { activeAi, providerMeta } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
-import { aiCaptions, aiSeo, articleUrl, sanitizeCaptions, xLength } from './aiDesk'
+import { aiCaptions, aiSeo, articleUrl, storyCaptions, xLength } from './aiDesk'
 import {
   buildCmsArticlePayload,
   insertArticleToSupabase,
@@ -444,19 +444,7 @@ export function EditorialWorkspace() {
       const detectedCat = detectCategory(`${translation.headline} ${translation.deck} ${translation.body}`) || '01'
       const hl = suggestHighlight(translation.headline)
 
-      const socialContent = {
-        headline: translation.headline,
-        categoryId: detectedCat,
-        cardType: 'stat' as const,
-        statNumber: hl || undefined,
-        statLabel: translation.headline,
-      }
-      const templated = sanitizeCaptions({
-        facebook: generatePlatformCaption('facebook', socialContent),
-        x: generatePlatformCaption('twitter', socialContent),
-        linkedin: generatePlatformCaption('linkedin', socialContent),
-        telegram: generatePlatformCaption('telegram', socialContent),
-      }, articleUrl(translation.slug))
+      const templated = storyCaptions({ headline: translation.headline, deck: translation.deck, categoryId: detectedCat, slug: translation.slug })
       for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, templated[k])
       // the provider that translated the story writes its captions too, in the background
       if (isAiProvider(translation.provider)) void runAi('social')

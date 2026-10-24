@@ -61,12 +61,13 @@ export function generatePlatformCaption(platform: SocialPlatform, c: Pick<Conten
         return `*“${quote}”*${attribution ? `\n_${attribution}_` : ''}\n\n📰 *ESB PowerLine*\n🔗 https://esbpowerline.com`
       case 'facebook':
       default:
-        return `“${quote}”${attribution}\n\nRead the full coverage and analysis on ESB PowerLine: https://esbpowerline.com\n\n${tags.join(' ')}`
+        return `“${quote}”${attribution}\n\nRead the full coverage on ESB PowerLine: https://esbpowerline.com\n\n${tags.slice(0, 4).join(' ')}`
     }
   }
 
-  if (c.cardType === 'stat' && c.statNumber) {
-    const num = c.statNumber.trim()
+  // a stat card needs a figure: a highlighted phrase ("the Sylhet") read as one opened captions with "⚡ the Sylhet —"
+  if (c.cardType === 'stat' && /\d/.test(c.statNumber ?? '')) {
+    const num = (c.statNumber ?? '').trim()
     const label = (c.statLabel || head).trim()
     const delta = c.statDelta?.trim() ? ` (${c.statDelta.trim()})` : ''
     const note = c.statNote?.trim() ? `\n${c.statNote.trim()}` : ''
@@ -80,7 +81,7 @@ export function generatePlatformCaption(platform: SocialPlatform, c: Pick<Conten
         return `📊 *${num}* — ${label}${delta}${note}\n\n🔗 https://esbpowerline.com\n#ESBPowerLine`
       case 'facebook':
       default:
-        return `⚡ ${num} — ${label}${delta}${note}\n\nRead the detailed breakdown: https://esbpowerline.com\n\n${tags.join(' ')}`
+        return `${num} — ${label}${delta}${note}\n\nRead the detailed breakdown: https://esbpowerline.com\n\n${tags.slice(0, 4).join(' ')}`
     }
   }
 
@@ -96,7 +97,7 @@ export function generatePlatformCaption(platform: SocialPlatform, c: Pick<Conten
       return `📰 *${head}*\n\nRead more: https://esbpowerline.com\n\n#ESBPowerLine`
     case 'facebook':
     default:
-      return `${head}\n\nRead more: https://esbpowerline.com\n\n${tags.join(' ')}`
+      return `${head}\n\nRead more: https://esbpowerline.com\n\n${tags.slice(0, 4).join(' ')}`
   }
 }
 

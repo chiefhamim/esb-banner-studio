@@ -8,6 +8,7 @@ import { aiJson, listModels, resolveModel } from './aiProviders'
 import type { AiProviderId, AiSchema } from './aiProviders'
 import { countPhrase, suggestKeyphrases } from './seo'
 import { buildSlug } from './seo'
+import { TAGS } from '../core/newsroom'
 import { cleanSlug, seoFields, stripSiteSuffix } from './translator'
 
 export const SITE_ORIGIN = 'https://esbpowerline.com'
@@ -124,6 +125,27 @@ export function sanitizeCaptions(raw: Partial<Captions>, url: string): Captions 
     out.x = `${words.join(' ').replace(/[,;:–—-]+$/, '')}…\n\n${url}`
   }
   return out
+}
+
+/**
+ * The desk's captions before (or without) an AI provider: the headline, the deck as the one-line summary, two or
+ * three hashtags for the desk, and the article link — built only from the story's own words. The Graphics card
+ * templates (newsroom.ts) are for a card; a story is not a stat card, and reading its highlight phrase as a figure
+ * opened every Facebook post with "⚡ the Sylhet —".
+ */
+export function storyCaptions(story: { headline: string; deck: string; categoryId: string; slug: string }): Captions {
+  const head = story.headline.replace(/\s+/g, ' ').trim()
+  const deck = story.deck.replace(/\s+/g, ' ').trim()
+  const summary = deck && deck.toLowerCase() !== head.toLowerCase() ? deck : ''
+  const tags = ['ESBPowerLine', ...(TAGS[story.categoryId] ?? []).slice(0, 2)].map((t) => '#' + t).join(' ')
+  const lines = (...xs: string[]) => xs.filter(Boolean).join('\n\n')
+  const url = articleUrl(story.slug)
+  return sanitizeCaptions({
+    facebook: lines(head, summary, tags),
+    x: lines(head, '#ESBPowerLine'),
+    linkedin: lines(head, summary, 'Full report on ESB PowerLine, covering Bangladesh\'s power and energy sector.', tags),
+    telegram: lines(`📰 *${head}*`, summary),
+  }, url)
 }
 
 /** Every caption's article link pointed at the current slug. A caption only ever links this story, so any
