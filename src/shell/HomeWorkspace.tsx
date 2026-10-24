@@ -6,6 +6,10 @@ import type { RecentProject } from '../project'
 import { useShellStore } from './shellStore'
 import { useStore } from '../store'
 import { FORMAT_LIST } from '../core/tokens'
+
+// the sizes the desk reaches for every day; the others (Facebook Classic, lower third, title and end cards) stay in the
+// Graphics format picker
+const HOME_FORMATS = ['fb45', 'story', 'sq', 'web', 'yt'].map((id) => FORMAT_LIST.find((f) => f.id === id)!)
 import type { FormatId } from '../core/types'
 import { Icon } from '../ui/Icon'
 import { Dialog } from '../ui/controls'
@@ -195,7 +199,7 @@ export function HomeWorkspace() {
         <header className="home-header">
           <div className="home-header-brand">
             <div className="home-title-group">
-              <h1 className="home-title">ESB Power Line <span className="home-title-accent">Studio</span></h1>
+              <h1 className="home-title">ESB PowerLine <span className="home-title-accent">Studio</span></h1>
               <p className="home-subtitle">Where stories are written, imagination is designed and reality is cut</p>
             </div>
           </div>
@@ -232,16 +236,16 @@ export function HomeWorkspace() {
         <section className="home-section" style={{ ['--s' as string]: 2 }}>
           <h2 className="section-title">New graphic</h2>
           <div className="formats-grid">
-            {FORMAT_LIST.map((f) => (
+            {HOME_FORMATS.map((f) => (
               <button
                 key={f.id}
                 type="button"
                 className="format-card"
-                style={{ ['--i' as string]: FORMAT_LIST.indexOf(f) }}
+                style={{ ['--i' as string]: HOME_FORMATS.indexOf(f) }}
                 onClick={() => handleNewProject(f.id)}
                 title={`Create new banner with ${f.name} format`}
               >
-                <span className="format-glyph" aria-hidden><i style={{ width: Math.round(f.w >= f.h ? 28 : 28 * f.w / f.h), height: Math.round(f.w >= f.h ? 28 * f.h / f.w : 28) }} /></span>
+                <span className="format-glyph" aria-hidden><i style={{ width: Math.round(f.w >= f.h ? 34 : 34 * f.w / f.h), height: Math.round(f.w >= f.h ? 34 * f.h / f.w : 34) }} /></span>
                 <div className="format-body">
                   <div className="format-head">
                     <span className="format-name">{f.name}</span>
