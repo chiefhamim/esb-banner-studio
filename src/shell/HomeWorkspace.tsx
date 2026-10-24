@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { WorkspaceSwitcher } from './WorkspaceRail'
 import lightBgUrl from '../assets/images/home/home-light.jpg'
 import darkBgUrl from '../assets/images/home/home-dark-chrome.jpg'
 import { readRecent, openProject, openRecent } from '../project'
@@ -139,8 +138,6 @@ export function HomeWorkspace() {
   return (
     <div className="home-shell">
     <header className="topbar home-topbar">
-      <WorkspaceSwitcher />
-      <div className="spacer" />
       <div className="home-head-actions">
         <button type="button" className="home-head-btn" data-tip="Settings" aria-label="Settings" onClick={() => setShowSettings(true)}>
           <Icon name="sliders" size={15} />
@@ -195,26 +192,6 @@ export function HomeWorkspace() {
     )}
     <main className="home-workspace" aria-label="Home dashboard">
       <div className="home-container">
-        {/* Crash recovery banner if available */}
-        {recoverySnapshot && (
-          <div className="home-alert recovery-alert" role="alert">
-            <div className="alert-content">
-              <Icon name="info" size={16} />
-              <span>
-                <strong>Crash Recovery Available:</strong> An unsaved session (<em>{recoverySnapshot.name}</em>) from {recoverySnapshot.time} was found.
-              </span>
-            </div>
-            <div className="alert-actions">
-              <button type="button" className="btn primary compact" onClick={handleRestoreRecovery}>
-                Restore Session
-              </button>
-              <button type="button" className="btn subtle compact" onClick={handleDiscardRecovery}>
-                Discard
-              </button>
-            </div>
-          </div>
-        )}
-
         <header className="home-header">
           <div className="home-header-brand">
             <div className="home-title-group">
@@ -279,9 +256,22 @@ export function HomeWorkspace() {
         </section>
         <section className="home-section" style={{ ['--s' as string]: 1 }}>
           <h2 className="section-title">Recent projects</h2>
-          {recents.length > 0 ? (
+          {recents.length > 0 || recoverySnapshot ? (
             <div className="recents-grid">
-              {recents.slice(0, 4).map((item) => (
+              {recoverySnapshot && (
+                <div className="recent-card recovery-card" role="group" aria-label="Unsaved session found">
+                  <div className="recent-icon"><Icon name="refresh" size={18} /></div>
+                  <div className="recent-info">
+                    <span className="recent-name">Unsaved session · {recoverySnapshot.name}</span>
+                    <span className="recent-path">Found from {recoverySnapshot.time}</span>
+                  </div>
+                  <div className="recovery-actions">
+                    <button type="button" className="btn primary compact" onClick={handleRestoreRecovery}>Restore</button>
+                    <button type="button" className="btn subtle compact" onClick={handleDiscardRecovery}>Discard</button>
+                  </div>
+                </div>
+              )}
+              {recents.slice(0, recoverySnapshot ? 3 : 4).map((item) => (
                 <button
                   key={item.path}
                   type="button"

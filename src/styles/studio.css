@@ -589,3 +589,6 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 .ed-ai-chip:not(.on) svg { color: var(--text-2); }
 .ed-ai-chip:not(.on):hover { background: var(--fill-hover); border-style: solid; border-color: color-mix(in srgb, var(--text) 45%, transparent); color: var(--text); }
 .ed-ai-chip:not(.on):hover svg { color: var(--text); }
+
+/* the header never wears the story's category colour: picking a category in the panels recolours the panels and the canvas, not the header's buttons, focus rings or avatar */
+.topbar, .ed-head, .vw-header { --cat: var(--text-2); --cat-ink: var(--bg-0); }

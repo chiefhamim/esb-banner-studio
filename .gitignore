@@ -32,3 +32,4 @@ tools/out/
 scratch/
 /*.png
 .env*
+tools/sync.log
