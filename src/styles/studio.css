@@ -633,3 +633,26 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; font: 500 11.5px/1 var(--ui); letter-spacing: .01em; font-variant-numeric: tabular-nums; color: var(--text-2); background: var(--fill); border: 0; border-radius: 5px; box-shadow: inset 0 -1px 0 var(--card-line); }
 .menu .menu-item { gap: 10px; }
 .keys .krow kbd, .krow kbd { justify-self: end; }
+
+/* ---------------------------------------------------------------- About ESB Studio */
+.about2 { display: flex; flex-direction: column; gap: 20px; }
+.about2-hero { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0 4px; text-align: center; }
+.about2-hero .logo-wrap.big { margin: 0; }
+.about2-stripe { display: flex; gap: 3px; margin: 2px 0; }
+.about2-stripe i { width: 18px; height: 3px; border-radius: 2px; }
+.about2-stripe i:nth-child(1) { background: #0aa37a; } .about2-stripe i:nth-child(2) { background: #f4c20d; } .about2-stripe i:nth-child(3) { background: #e53935; }
+.about2-hero h3 { margin: 0; font: 600 22px/28px var(--ui); letter-spacing: -.02em; color: var(--text); }
+.about2-hero h3 span { color: var(--text-2); font-weight: 500; }
+.about2-hero p { margin: 0; max-width: 340px; font-size: 13px; line-height: 20px; color: var(--text-2); }
+.about2-ver { display: inline-flex; align-items: center; height: 22px; padding: 0 10px; font: 500 11.5px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text-2); background: var(--fill); border-radius: var(--r-pill); }
+.about2-desks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.about2-desks > div { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px; background: var(--card, var(--bg-2)); border: 1px solid var(--card-line); border-radius: var(--r-3); }
+.about2-desks .icon { margin-bottom: 6px; color: var(--text-2); }
+.about2-desks b { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text); }
+.about2-desks small { font-size: 11.5px; line-height: 16px; color: var(--text-3); }
+.about2-author { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--fill); border-radius: var(--r-3); }
+.about2-author .about-meta { flex: 1; }
+.about2-link { display: inline-flex; flex: none; align-items: center; gap: 6px; height: 32px; padding: 0 12px; font: 500 13px/1 var(--ui); color: var(--text); text-decoration: none; background: var(--raised); border-radius: var(--r-2); box-shadow: var(--raised-shadow), 0 0 0 1px var(--card-line); transition: transform var(--t-2) var(--spring); }
+.about2-link:hover { transform: translateY(-1px); }
+.about2-link:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.about2-foot { margin: 0; font-size: 11.5px; line-height: 16px; text-align: center; color: var(--text-3); }

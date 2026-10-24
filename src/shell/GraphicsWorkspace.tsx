@@ -12,7 +12,7 @@ import { copyToClipboard, emptySlots, humanBytes, loadSettings, renderBanner, ru
 import type { ExportSettings } from '../export'
 import { openProject, openRecent, readRecent, saveProject } from '../project'
 import { hint, pointer, restoreSessionPhotos, useStore } from '../store'
-import { CATEGORIES, FORMATS, FORMAT_LIST, getFormat } from '../core/tokens'
+import { CATEGORIES, FORMATS, getFormat } from '../core/tokens'
 import { ContextMenu, Dialog, IconButton, MenuBar, MenuButton, Select, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
 import { Icon } from '../ui/Icon'
@@ -564,20 +564,30 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       )}
 
       {showAbout && (
-        <Dialog title="ESB Studio" kicker={`Version ${__APP_VERSION__}`} onClose={() => setShowAbout(false)} width={520}>
-          <div className="about">
-            <span className="logo-wrap big"><img src={logoUrl} alt="ESB PowerLine" /></span>
-            <p>Builds ESB PowerLine news banners from the brand templates — exact colours, type and spacing every time — with full editing control and exports sized for Facebook, Instagram and the web.</p>
-            <div className="about-formats">{FORMAT_LIST.map((f) => <span key={f.id}><b>{f.name}</b>{f.w}×{f.h}</span>)}</div>
-            <div className="about-author">
+        <Dialog title="About ESB Studio" kicker="ESB PowerLine" onClose={() => setShowAbout(false)} width={480}>
+          <div className="about2">
+            <div className="about2-hero">
+              <span className="logo-wrap big"><img src={logoUrl} alt="ESB PowerLine" /></span>
+              <div className="about2-stripe" aria-hidden><i /><i /><i /></div>
+              <h3>ESB PowerLine <span>Studio</span></h3>
+              <p>Where stories are written, imagination is designed and reality is cut.</p>
+              <span className="about2-ver">Version {__APP_VERSION__}</span>
+            </div>
+            <div className="about2-desks">
+              <div><Icon name="newspaper" size={18} /><b>Editorial</b><small>Link in, English story out</small></div>
+              <div><Icon name="layers" size={18} /><b>Graphics</b><small>Banners and social cards</small></div>
+              <div><Icon name="video" size={18} /><b>Video</b><small>Timeline, titles and export</small></div>
+            </div>
+            <div className="about2-author">
               <div className="about-avatar">HR</div>
               <div className="about-meta">
-                <span className="kicker">Designed &amp; Engineered by</span>
+                <span className="kicker">Designed &amp; engineered by</span>
                 <b>Hamim Ruwayfi</b>
-                <small>ESB PowerLine · Editorial &amp; Newsroom Workflow</small>
+                <small>Editorial &amp; Newsroom Workflow</small>
               </div>
+              <a className="about2-link" href="https://facebook.com/chiefhamim" target="_blank" rel="noopener noreferrer"><Icon name="link" size={14} />Facebook</a>
             </div>
-            <p className="hint">Everything runs on this PC. Fonts, artwork and templates are bundled — no internet needed.</p>
+            <p className="about2-foot">Everything runs on this PC — fonts, artwork and templates are bundled. © ESB PowerLine, Express Broadcast and Communication Ltd.</p>
           </div>
         </Dialog>
       )}
