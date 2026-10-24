@@ -114,7 +114,9 @@ Use compact controls and meaningful information density, while keeping important
 Use one persistent application shell, with three primary workspaces and a shared project/media layer.
 
 ### Global Shell
-- **Workspace switcher:** Home · Editorial · Graphics · Video as one segmented control at the start of every workspace header (`WorkspaceSwitcher` in `src/shell/WorkspaceRail.tsx`). There is no side rail. The ESB logo appears only on Home and in About.
+- **Workspace switcher:** Home as its own button, then Editorial · Graphics · Video as one segmented control, at the start of every workspace header (`WorkspaceSwitcher` in `src/shell/WorkspaceRail.tsx`). There is no side rail. The ESB logo appears only on Home and in About. Home's header carries the appearance toggle and **Quit** (desktop only, `esb:quit`; Ctrl+Q anywhere).
+- **Tooltips:** one `Tooltips` layer mounted in `App.tsx` for every workspace (it once lived inside Graphics, so the other desks had none). A trailing shortcut — "Undo (Ctrl+Z)" — renders as a key chip.
+- **Selection colour:** the story's category colour (`--cat`, with `--cat-ink` for legible text on it) is set on the document root and marks *selection only*: the open panel's icon tile, switches and ticks that are on, the chosen collage, the picked keyphrase, menu highlights, the signed-in avatar. Everything else stays neutral, and hover never moves an element (no layout shift) — it answers with depth and colour.
 - **Project control:** current project/story, save state, recent projects and project actions.
 - **Global command/search palette:** search commands, actions, projects and assets; show relevant keyboard shortcuts.
 - **Contextual toolbar:** controls relevant to the current workspace and selection.

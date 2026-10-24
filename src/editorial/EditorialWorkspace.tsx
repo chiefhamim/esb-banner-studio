@@ -791,7 +791,7 @@ export function EditorialWorkspace() {
   ]
 
   return (
-    <div ref={wsRef} className={'editorial-workspace' + (hasStory && sourceOpen ? ' source-open' : '')} style={{ ['--cat' as string]: catData.accent } as CSSProperties}>
+    <div ref={wsRef} className={'editorial-workspace' + (hasStory && sourceOpen ? ' source-open' : '')} style={{ ['--cat' as string]: catData.accent, ['--cat-ink' as string]: catData.chipText } as CSSProperties}>
       {/* Header: the same bar Graphics uses — brand, menus, a centred tool group, quiet icon pills, one primary action. */}
       <header className="topbar ed-head">
         <WorkspaceSwitcher />
@@ -824,13 +824,20 @@ export function EditorialWorkspace() {
             <span>{progressStatus}</span>
           </div>
         )}
-        <div className="pillbar">
-          <IconButton icon="plus" tip="New story" onClick={handleNewStory} />
-          <IconButton icon="refresh" tip="Sync stories from esbpowerline.com" onClick={handleSyncFeed} disabled={syncing} />
-          <i className="pill-sep" />
-          <IconButton icon="sparkle" tip={apiKey ? 'Gemini 2.5 active' : 'Configure a Gemini API key'} active={!!apiKey} onClick={() => setShowApiKeyModal(true)} />
-          <IconButton icon="user" tip={staffSession ? `Signed in as ${staffSession.name}` : 'Staff sign-in'} active={!!staffSession} onClick={() => setShowLoginModal(true)} />
+        {/* the desk's own tools: stories, the translation engine and the editor's account — each says its state */}
+        <div className="pillbar ed-tools">
+          <IconButton icon="plus" tip="New story — the current one stays under Stories" onClick={handleNewStory} />
+          <IconButton icon="refresh" tip={syncing ? 'Syncing…' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
         </div>
+        <button type="button" className={'ed-ai-chip' + (apiKey ? ' on' : '')} onClick={() => setShowApiKeyModal(true)} aria-label="Gemini translation" data-tip={apiKey ? 'Gemini translation is on — change the model or key' : 'Gemini is off — add your AI Studio key for better translations'}>
+          <Icon name="sparkle" size={14} />
+          <i className="ed-ai-dot" aria-hidden />
+        </button>
+        <button type="button" className={'ed-account' + (staffSession ? ' in' : '')} onClick={() => setShowLoginModal(true)} aria-label={staffSession ? 'Staff sign-in' : 'Staff sign-in'} data-tip={staffSession ? `${staffSession.name} · ${staffSession.email} — account and connection check` : 'Sign in with your esbpowerline.com newsroom account'}>
+          {staffSession
+            ? <span className="ed-avatar">{(staffSession.name || staffSession.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span>
+            : <><Icon name="user" size={14} /><span className="ed-account-label">Sign in</span></>}
+        </button>
         <button type="button" className="btn primary" onClick={openPublish} disabled={!draft.headline.trim()} title="Review the checklist and publish to esbpowerline.com">
           <Icon name="upload" size={15} />
           <span>Publish</span>

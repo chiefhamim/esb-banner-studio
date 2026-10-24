@@ -4263,8 +4263,6 @@ html[data-theme="dark"] .fb-action-btn:hover {
 /* workspace switcher: the same sliding segmented control as everywhere else */
 .ws-switch { flex: none; height: var(--h-md); padding: 2px; }
 .ws-switch .ws-btn { height: 28px; padding: 0 10px; gap: 6px; font-size: 13px; }
-.ws-switch .ws-home { padding: 0 8px; }
-.ws-switch .ws-home:not(.on) .ws-label { display: none; }
 /* narrower windows: only the current workspace keeps its name; the others are icons with tooltips */
 @media (max-width: 1500px) {
   .ws-switch .ws-btn:not(.on) { padding: 0 8px; }

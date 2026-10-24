@@ -338,7 +338,6 @@
 /* a hex value is 7 characters and must show all 7; the field's own label gives way first */
 .colorfield { gap: 6px; }
 .colorfield input { min-width: 7.2ch; letter-spacing: -.01em; }
-.colorfield > span:not(.swatch), .colorfield > label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------------------------------------------------------------- Graphics header under ~1180 px (a 1366 laptop at 125%): Export stays on screen */
 .topbar { container: topbar / inline-size; }
@@ -371,3 +370,105 @@
   .slot-choose-btn { width: 28px; height: 28px; padding: 0; justify-content: center; }
 }
 @container slot (max-width: 90px) or (max-height: 64px) { .slot-choose-btn { display: none; } }
+
+/* ---------------------------------------------------------------- workspace switcher: Home on its own, the three desks together */
+.ws-wrap { display: inline-flex; flex: none; align-items: center; gap: 6px; }
+.ws-home-btn { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-2); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring); }
+.ws-home-btn:hover { color: var(--text); background: var(--fill-hover); }
+.ws-home-btn:active { transform: scale(.96); }
+.ws-home-btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow), 0 0 0 1px var(--card-line); }
+.ws-home-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.home-head-actions { display: inline-flex; align-items: center; gap: 6px; }
+.home-head-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 32px; height: 32px; padding: 0 8px; font: 500 13px/1 var(--ui); color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-2); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
+.home-head-btn:hover { color: var(--text); background: var(--fill-hover); }
+.home-head-btn.quit { padding: 0 12px 0 10px; }
+.home-head-btn.quit:hover { color: var(--danger); background: var(--danger-soft); }
+.home-head-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- tooltips: one quiet dark chip, the shortcut as a key */
+.tooltip { display: inline-flex; align-items: center; gap: 8px; max-width: 320px; padding: 6px 10px; font: 500 12px/16px var(--ui); letter-spacing: .005em; white-space: normal; color: var(--tip-fg); background: var(--tip-bg); border-radius: 8px; box-shadow: 0 10px 28px -8px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.07); animation: tip-in 160ms var(--spring) both; }
+.tooltip .tip-key { flex: none; padding: 1px 5px; font: 600 10.5px/14px var(--ui); letter-spacing: .02em; color: inherit; background: color-mix(in srgb, currentColor 14%, transparent); border: 0; border-radius: 4px; box-shadow: none; opacity: .85; }
+@keyframes tip-in { from { opacity: 0; transform: translateY(3px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .tooltip { animation: none; } }
+
+/* A colour field needs its label, a swatch and all 7 hex characters; half of a 300 px panel cannot hold them ("Col…").
+   A two-up row that holds one stacks both controls full width, so the pair stays balanced. */
+.grid2:has(> .colorfield) { grid-template-columns: minmax(0, 1fr); }
+.colorfield .cf-label { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--text-2); overflow: visible; }
+.colorfield input { flex: none; width: 8ch; text-align: right; }
+
+/* ---------------------------------------------------------------- selection takes the story's category colour */
+/* The open panel's icon tile, the chosen collage and the picked keyphrase used solid ink. They follow the desk's
+   category now (Power Generation indigo, Fossil Fuels amber…), with that category's own text colour on top so
+   light accents stay legible. Chrome stays neutral; only "this is selected" carries the colour. */
+.pnl.open .pnl-icon { color: var(--cat-ink, var(--on-ink)); background: var(--cat, var(--ink)); }
+.collage-btn.on .collage { border-color: var(--cat, var(--ink)); background: color-mix(in srgb, var(--cat, var(--ink)) 12%, transparent); }
+.collage-btn.on rect { fill: var(--cat, var(--ink)); }
+.seo-chip.on { color: var(--cat-ink, var(--on-ink)); background: var(--cat, var(--ink)); }
+.sq-row.on { box-shadow: 0 0 0 1.5px var(--cat, var(--ink)); }
+.sq-row.on::before { background: var(--cat, var(--ink)); }
+
+/* ---------------------------------------------------------------- Editorial header tools: each says its state */
+.ed-ai-chip, .ed-account { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; height: 32px; min-width: 32px; padding: 0 8px; font: 500 13px/1 var(--ui); color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-2); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), transform var(--t-1) var(--ease); }
+.ed-ai-chip:hover, .ed-account:hover { color: var(--text); background: var(--fill-hover); }
+.ed-ai-chip:active, .ed-account:active, .ws-home-btn:active, .home-head-btn:active { transform: scale(.96); }
+.ed-ai-chip:focus-visible, .ed-account:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.ed-ai-chip.on { color: var(--text); }
+.ed-ai-dot { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; background: var(--warning); border-radius: 50%; box-shadow: 0 0 0 2px var(--fill); }
+.ed-ai-chip.on .ed-ai-dot { background: var(--success); }
+.ed-ai-chip:hover .ed-ai-dot { box-shadow: 0 0 0 2px var(--fill-hover); }
+.ed-account.in { padding: 0 2px; background: transparent; }
+.ed-avatar { display: grid; place-items: center; width: 28px; height: 28px; font: 600 11px/1 var(--ui); letter-spacing: .02em; color: var(--cat-ink, var(--on-ink)); background: var(--cat, var(--ink)); border-radius: 50%; box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--card-line); transition: box-shadow var(--t-2) var(--spring); }
+.ed-account.in:hover { background: transparent; }
+.ed-account.in:hover .ed-avatar { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--cat, var(--ink)); }
+.ibtn.spin svg { animation: ed-spin 900ms linear infinite; }
+@keyframes ed-spin { to { transform: rotate(360deg); } }
+@container ed (max-width: 1100px) { .ed-account-label { display: none; } }
+
+/* ---------------------------------------------------------------- side tabs follow their column: a narrow column keeps the
+   label on the chosen tab and shows the others as icons (named in their tooltip), so nothing runs past the edge */
+.side-tabs { container: tabs / inline-size; }
+.side-tabs button { min-width: 0; }
+.side-tabs .tab-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* first the icons go (all three words still fit), and only a really narrow column falls back to icons */
+@container tabs (max-width: 336px) {
+  .side-tabs:has(> button:nth-of-type(3)) button svg { display: none; }
+  .side-tabs:has(> button:nth-of-type(3)) button { gap: 0; padding: 0 6px; }
+}
+@container tabs (max-width: 250px) {
+  .side-tabs:has(> button:nth-of-type(3)) button svg { display: inline-block; }
+  .side-tabs:has(> button:nth-of-type(3)) button.on { gap: 6px; padding: 0 10px; }
+  .side-tabs:has(> button:nth-of-type(3)) button:not(.on) { flex: 0 0 36px; padding: 0; }
+  .side-tabs:has(> button:nth-of-type(3)) button:not(.on) .tab-label { display: none; }
+}
+@container tabs (max-width: 200px) {
+  .side-tabs button:not(.on) { flex: 0 0 36px; padding: 0; }
+  .side-tabs button:not(.on) .tab-label { display: none; }
+}
+/* switches and ticks that are on follow the category too; the knob is white on any coloured track, both themes */
+.switch input:checked + i, .tgl[aria-checked=true] { background: var(--cat, var(--ink)); }
+.switch input:checked + i::after, .tgl[aria-checked=true]::after, :root[data-theme=dark] .switch input:checked + i::after, :root[data-theme=dark] .tgl[aria-checked=true]::after { background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
+.check input:checked + i { color: var(--cat-ink, var(--on-ink)); background: var(--cat, var(--ink)); border-color: var(--cat, var(--ink)); }
+
+/* ---------------------------------------------------------------- hover and press: quick, quiet, the same everywhere */
+/* menus highlight in the category colour, like a system accent */
+.menu .menu-item:hover:not(:disabled), .menu .menu-item.active { color: var(--cat-ink, var(--on-ink)); background: var(--cat, var(--ink)); }
+.menu .menu-item:hover:not(:disabled) .icon, .menu .menu-item.active .icon, .menu .menu-item:hover:not(:disabled) .mi-hint, .menu .menu-item:hover:not(:disabled) small { color: inherit; opacity: .82; }
+/* press feedback on every button-like control */
+.btn:active:not(:disabled), .ibtn:active:not(:disabled), .pv-btn:active, .mb-item:active, .ws-btn:active, .side-tabs button:active, .seg-ctl button:active, .collage-btn:active, .seo-chip:active { transform: scale(.97); }
+.btn, .ibtn, .pv-btn, .mb-item, .ws-btn, .cat, .collage-btn, .seo-chip, .sq-row, .pnl > header .pnl-chev, .pnl-icon { transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring), transform var(--t-2) var(--spring), border-color var(--t-1) var(--ease); }
+/* the primary action lifts a little */
+.btn.primary:hover:not(:disabled) { box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--ink) 55%, transparent); }
+/* a closed panel hints what opening it does: its icon takes a wash of the category, the chevron leans in */
+.pnl:not(.open) > header:hover .pnl-icon { color: var(--cat, var(--text)); background: color-mix(in srgb, var(--cat, var(--ink)) 13%, var(--card)); }
+.pnl:not(.open) > header:hover .pnl-chev { transform: translateX(2px); color: var(--text); }
+/* tiles lift */
+/* tiles answer the pointer with depth and an edge in their own colour — never by moving (no layout shift) */
+.pnl-body .cat:hover:not(.on) { box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.22), 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
+.collage-btn:hover:not(.on) .collage { border-color: color-mix(in srgb, var(--cat, var(--ink)) 45%, transparent); }
+.ws-switch .ws-btn:not(.on):hover { background: color-mix(in srgb, var(--raised) 55%, transparent); }
+@media (prefers-reduced-motion: reduce) { .btn, .ibtn, .pv-btn, .cat, .pnl > header .pnl-chev { transition: none; } .btn:active, .ibtn:active, .cat:hover { transform: none !important; } }
+:root[data-theme=dark] .pnl:not(.open) > header:hover .pnl-icon { color: color-mix(in srgb, var(--cat, #fff) 55%, #fff); background: color-mix(in srgb, var(--cat, var(--ink)) 28%, var(--card)); }
+/* Home's header has the room, and it is where you choose a desk: name all three */
+.home-topbar .ws-switch .ws-btn .ws-label { display: inline; }
+.home-topbar .ws-switch .ws-btn { padding: 0 10px; }

@@ -6,6 +6,17 @@ const { FsScope } = require('./fs-scope.cjs')
 const { fetchArticleHtml, fetchImageData } = require('./net-guard.cjs')
 const siteUpload = require('./site-upload.cjs')
 
+// Last line of defence: a stray network or stream error in the main process is logged (userData/main-errors.log) instead
+// of stopping the editor with Electron's "A JavaScript error occurred in the main process" dialog. Each cause found is
+// still fixed where it starts — this only keeps an unseen one from taking the desk down mid-story.
+function logMainError(kind, err) {
+  const line = `[${new Date().toISOString()}] ${kind}: ${err && err.stack ? err.stack : String(err)}\n`
+  console.error(line)
+  try { fs.appendFileSync(path.join(app.getPath('userData'), 'main-errors.log'), line) } catch { /* the log is best effort */ }
+}
+process.on('uncaughtException', (err) => logMainError('uncaughtException', err))
+process.on('unhandledRejection', (err) => logMainError('unhandledRejection', err))
+
 // Keep the profile folder of the earlier name so saved work, recents and export settings carry over after the rename.
 if (process.env.ESB_USER_DATA) app.setPath('userData', process.env.ESB_USER_DATA)
 else if (!app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', path.join(app.getPath('appData'), 'ESB Banner Studio'))
@@ -132,6 +143,9 @@ ipcMain.handle('esb:site-upload', async (_e, cookies, bytes, mime, name) => {
   return siteUpload.uploadBanner({ cookies, bytes: buf, mime, name })
 })
 ipcMain.handle('esb:site-upload-probe', async (_e, cookies) => siteUpload.probeUpload(cookies))
+
+// Home → Quit: close every window and end the app (app.quit runs before-quit/will-quit, so nothing is cut short).
+ipcMain.handle('esb:quit', () => { app.quit(); return true })
 
 // Signing out of the Studio signs the CMS window out too.
 ipcMain.handle('esb:site-sign-out', async () => {

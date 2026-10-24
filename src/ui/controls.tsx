@@ -120,7 +120,12 @@ export function Tooltips() {
     if (top + h > window.innerHeight - 6) top = r.top - h - 8
     setAt({ left: clamp(left, 6, window.innerWidth - w - 6), top: clamp(top, 6, window.innerHeight - h - 6) })
   }, [tip])
-  return tip ? createPortal(<div ref={ref} className="tooltip" style={{ left: at?.left ?? -9999, top: at?.top ?? -9999 }}>{tip.text}</div>, document.body) : null
+  // "Undo (Ctrl+Z)" → the label, then the shortcut as a key chip; other parentheses stay part of the text
+  const m = tip?.text.match(/^(.*?)\s*\(((?:Ctrl|Shift|Alt|⌘|Cmd|Esc|Del|Home|End|Space|Enter|Tab|←|→|↑|↓|[A-Z0-9]|F\d+)(?:\s*[+/]\s*[^)]+)?)\)$/)
+  return tip ? createPortal(
+    <div ref={ref} className="tooltip" role="tooltip" style={{ left: at?.left ?? -9999, top: at?.top ?? -9999 }}>
+      {m ? <><span>{m[1]}</span><kbd className="tip-key">{m[2]}</kbd></> : tip.text}
+    </div>, document.body) : null
 }
 
 // ------------------------------------------------------------------ Select
@@ -290,8 +295,8 @@ export function Tabs<T extends string>({ value, options, onChange, className = '
     <div ref={wrap} className={'side-tabs ' + className} role="tablist">
       {thumb}
       {options.map((o) => (
-        <button key={o.value} type="button" role="tab" aria-selected={o.value === value} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}>
-          {o.icon && <Icon name={o.icon} size={15} />}{o.label}
+        <button key={o.value} type="button" role="tab" aria-selected={o.value === value} aria-label={o.label} data-tip={o.icon ? o.label : undefined} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}>
+          {o.icon && <Icon name={o.icon} size={15} />}<span className="tab-label">{o.label}</span>
         </button>
       ))}
     </div>

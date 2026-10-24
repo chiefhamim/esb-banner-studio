@@ -531,7 +531,8 @@ try {
   await page.click('.side-tabs button:has-text("Story")')
   const ds = await page.evaluate(() => {
     const chrome = '.topbar, .toolbar, .left, .right, .statusbar'
-    const skip = '.cat, .meter, .menu-item, .el-row, .layer, .pv-btn, .chip, .ibtn, .cat-ico, .lp, .logo-wrap, .cf-swatch, .cp-sw, .collage, .thumb, .slot-img, .chip-note, .swatch-dot, .ratio-glyph, .fb, .stage-wrap, .hsv-sv, .hsv-hue, .el-tag, .stage-scroll'
+    // selection markers carry the story's category colour by design (open panel icon, switches and ticks that are on)
+    const skip = '.pnl.open .pnl-icon, .switch, .tgl, .check, .seo-chip.on, .collage-btn.on, .cat, .meter, .menu-item, .el-row, .layer, .pv-btn, .chip, .ibtn, .cat-ico, .lp, .logo-wrap, .cf-swatch, .cp-sw, .collage, .thumb, .slot-img, .chip-note, .swatch-dot, .ratio-glyph, .fb, .stage-wrap, .hsv-sv, .hsv-hue, .el-tag, .stage-scroll'
     const sizes = new Set(), fams = new Set(), radii = new Set(), heights = {}, chroma = []
     const chromaOf = (c) => { const m = c.match(/rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)/); return m ? Math.max(+m[1], +m[2], +m[3]) - Math.min(+m[1], +m[2], +m[3]) : 0 }
     for (const el of document.querySelectorAll(chrome.split(',').map((c) => c.trim() + ' *').join(','))) {

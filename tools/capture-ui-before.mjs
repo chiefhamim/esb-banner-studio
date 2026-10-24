@@ -63,7 +63,7 @@ try {
         await page.waitForTimeout(200)
 
         // 3. Switch to Home Workspace
-        await page.click('.ws-btn[data-ws="home"]')
+        await page.click('[data-ws="home"]')
         await page.waitForSelector('.home-workspace')
         await page.waitForTimeout(200)
         await page.screenshot({ path: path.join(outDir, `home-${vp.name}-${theme}-dpr${dpr}.png`) })

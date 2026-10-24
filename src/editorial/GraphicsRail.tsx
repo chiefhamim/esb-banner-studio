@@ -165,7 +165,7 @@ export function OutputsPanel({ base, onToast }: { base: Assets; onToast: (msg: s
             <div className="ed-outputs-opts">
               <Select<SiteDevice> className="sm" title="Screen" value={device} onChange={setDevice} options={[{ value: 'desktop', label: 'Desktop' }, { value: 'tablet', label: 'Tablet' }, { value: 'mobile', label: 'Phone' }]} />
               <Select<SiteTheme> className="sm" title="Site theme" value={theme} onChange={setTheme} options={SITE_THEMES.map((t) => ({ value: t.id, label: t.label }))} />
-              <Select<'banner' | 'photo'> className="sm" title="Article image" value={heroMode} onChange={setHeroMode} options={[{ value: 'banner', label: 'Banner hero' }, { value: 'photo', label: 'Photo hero' }]} />
+              <Select<'banner' | 'photo'> className="sm" title="Article image" value={heroMode} onChange={setHeroMode} options={[{ value: 'banner', label: 'Banner', hint: 'The 16:9 Web banner as the article image' }, { value: 'photo', label: 'Photo', hint: 'The bare photo as the article image' }]} />
             </div>
             <SitePreview
               theme={theme}

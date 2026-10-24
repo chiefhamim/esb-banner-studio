@@ -262,8 +262,13 @@ async function safeFetch(targetUrl, options = {}) {
         timeout: remainingTime,
       })
 
+      // Detach the handlers that would resolve again, but never leave the request without an 'error' listener: a
+      // destroyed or half-closed socket emits 'error' ("socket hang up") a tick later, and with no listener that is an
+      // uncaught exception — in Electron, the "A JavaScript error occurred in the main process" dialog. A slow image
+      // host hitting the 4 s timeout was enough to raise it.
       const cleanup = () => {
         req.removeAllListeners()
+        req.on('error', () => {})
       }
 
       req.on('timeout', () => {

@@ -130,7 +130,7 @@ try {
     }
 
     // ---- Home
-    await tryStep('home', async () => { await page.click('.ws-btn[data-ws="home"]') })
+    await tryStep('home', async () => { await page.click('[data-ws="home"]') })
     // ---- Graphics, with a long headline, credit and caption
     await page.click('.ws-btn[data-ws="graphics"]')
     await page.waitForTimeout(400)
@@ -181,9 +181,9 @@ try {
     await openEach('.ed-side', 'ed-right')
     for (const t of ['Banner', 'Web article', 'Facebook']) await tryStep(`ed-outputs-${t}`, async () => { if (!(await page.locator('[data-panel="ed-outputs"].open').count())) await page.click('[data-panel="ed-outputs"] > header'); await page.click(`.ed-outputs-tabs button:has-text("${t}")`); await page.waitForTimeout(600) })
     for (const m of ['Story', 'Site', 'View']) { await tryStep(`ed-menu-${m}`, async () => { await page.click(`.ed-head .menubar .mb-item:has-text("${m}")`) }); await page.keyboard.press('Escape') }
-    await tryStep('ed-apikey', async () => { await page.click('.ed-head .pillbar [aria-label*="Gemini"]'); await page.waitForSelector('.dialog') })
+    await tryStep('ed-apikey', async () => { await page.click('.ed-head .ed-ai-chip'); await page.waitForSelector('.dialog') })
     await page.keyboard.press('Escape')
-    await tryStep('ed-signin', async () => { await page.click('.ed-head .pillbar [aria-label^="Staff"]'); await page.waitForSelector('.signin') })
+    await tryStep('ed-signin', async () => { await page.click('.ed-head .ed-account'); await page.waitForSelector('.signin') })
     await page.fill('.signin input[name=email]', LONG.email).catch(() => {})
     await page.fill('.signin input[name=password]', 'x').catch(() => {})
     await tryStep('ed-signin-account', async () => { await page.click('.signin-submit'); await page.waitForSelector('.signin-avatar') })

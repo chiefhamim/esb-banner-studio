@@ -11,6 +11,9 @@ import { Icon } from '../ui/Icon'
 
 export function HomeWorkspace() {
   const setWorkspace = useShellStore((s) => s.setWorkspace)
+  const theme = useStore((s) => s.theme)
+  // Quit exists only in the desktop app; a browser tab is closed by the browser
+  const canQuit = typeof window !== 'undefined' && !!window.esb?.quit
   const [recents, setRecents] = useState<RecentProject[]>([])
   const [recoverySnapshot, setRecoverySnapshot] = useState<{ time: string; name: string } | null>(null)
 
@@ -77,6 +80,17 @@ export function HomeWorkspace() {
     <header className="topbar home-topbar">
       <WorkspaceSwitcher />
       <div className="spacer" />
+      <div className="home-head-actions">
+        <button type="button" className="home-head-btn" data-tip={theme === 'dark' ? 'Switch to light appearance' : 'Switch to dark appearance'} aria-label="Toggle appearance" onClick={() => useStore.getState().setTheme(theme === 'dark' ? 'light' : 'dark')}>
+          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
+        </button>
+        {canQuit && (
+          <button type="button" className="home-head-btn quit" data-tip="Quit ESB Studio (Ctrl+Q)" onClick={() => void window.esb?.quit?.()}>
+            <Icon name="x" size={14} />
+            <span>Quit</span>
+          </button>
+        )}
+      </div>
     </header>
     <main className="home-workspace" aria-label="Home dashboard">
       <div className="home-container">

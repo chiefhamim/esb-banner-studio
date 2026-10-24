@@ -35,6 +35,7 @@ export interface EsbBridge {
   prepareDragFile: (name: string, bytes: Uint8Array) => Promise<string | null>
   startDrag: (filePathOrName: string, bytes?: Uint8Array) => void
   saveVideo?: (name: string, bytes: Uint8Array) => Promise<string | null>
+  quit?: () => Promise<boolean>
   openSiteAs?: (cookies: { name: string; value: string }[], sitePath: string) => Promise<boolean>
   siteSignOut?: () => Promise<boolean>
   siteUpload?: (cookies: { name: string; value: string }[], bytes: Uint8Array, mime: string, name: string) => Promise<{ ok: boolean; url?: string; status?: number; error?: string }>

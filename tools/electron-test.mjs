@@ -79,7 +79,7 @@ try {
   console.log(canvasOk ? 'PASS' : 'FAIL', 'stage canvas rendered')
 
   // Workspace switcher navigation
-  await page.click('.ws-btn[data-ws="home"]')
+  await page.click('[data-ws="home"]')
   await page.waitForSelector('.home-workspace')
   const homeOk = await page.evaluate(() => !!document.querySelector('.home-workspace h1')?.textContent.includes('ESB PowerLine Studio'))
   console.log(homeOk ? 'PASS' : 'FAIL', 'switched to Home workspace')
@@ -100,6 +100,15 @@ try {
   console.log(graphicsOk ? 'PASS' : 'FAIL', 'switched back to Graphics workspace')
   await page.screenshot({ path: path.join(root, 'tools', 'out', 'electron.png') })
   console.log(errors.length ? 'FAIL' : 'PASS', 'no console errors', errors.slice(0, 3).join(' | '))
+
+  // Home → Quit ends the app (last: nothing runs after it)
+  await page.click('[data-ws="home"]')
+  await page.waitForSelector('.home-head-btn.quit')
+  await page.screenshot({ path: path.join(root, 'tools', 'out', 'electron-home.png') })
+  const closed = new Promise((r) => app.process().once('exit', () => r(true)))
+  await page.click('.home-head-btn.quit').catch(() => {})
+  const quitOk = await Promise.race([closed, new Promise((r) => setTimeout(() => r(false), 8000))])
+  console.log(quitOk ? 'PASS' : 'FAIL', 'Home → Quit closes the app')
 } finally {
-  await app.close()
+  await app.close().catch(() => {})
 }

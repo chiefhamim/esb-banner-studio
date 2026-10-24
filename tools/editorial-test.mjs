@@ -301,7 +301,7 @@ try {
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ access_token: 'acc', refresh_token: 'ref', expires_in: 3600, user: { id: 'u1', email: body.email, user_metadata: {}, app_metadata: {} } }) })
   })
   await page.route('**/rest/v1/profiles**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ role: 'EDITOR', status: 'ACTIVE', full_name: 'Desk Editor' }]) }))
-  await page.click('.editorial-workspace .pillbar [aria-label^="Staff"]')
+  await page.click('.editorial-workspace .ed-account')
   await page.waitForSelector('.signin')
   const sheet = await page.evaluate(() => ({ bypass: /bypass/i.test(document.querySelector('.signin').innerText), emailType: document.querySelector('.signin input[name=email]')?.type, pwAuto: document.querySelector('.signin input[name=password]')?.autocomplete }))
   check('Sign-in sheet: real email/password fields, no bypass option', !sheet.bypass && sheet.emailType === 'email' && sheet.pwAuto === 'current-password', JSON.stringify(sheet))
@@ -348,7 +348,7 @@ try {
   // 10. Publishing from the browser preview: the banner cannot be uploaded here, so the article carries the original
   // photo and the result says so (the desktop app uploads it — tools/unit/site-upload.test.ts, electron-test)
   await page.keyboard.press('Escape')
-  await page.click('.editorial-workspace .pillbar [aria-label^="Staff"]')
+  await page.click('.editorial-workspace .ed-account')
   await page.fill('.signin input[name=email]', 'rasel@esbpowerline.com')
   await page.fill('.signin input[name=password]', 'correct horse')
   await page.waitForFunction(() => !document.querySelector('.signin-submit')?.disabled) // the sheet focuses its field 60 ms after opening; a fill before that can be re-rendered away
@@ -373,7 +373,7 @@ try {
   // the banner, and the queue survives a reload
   await page.keyboard.press('Escape')
   const firstHead = await page.inputValue('#draft-headline')
-  await page.click('.editorial-workspace .pillbar [aria-label="New story"]')
+  await page.click('.editorial-workspace .pillbar [aria-label^="New story"]')
   await page.waitForSelector('.ed-launcher-queue .sq-row')
   const launch = await page.evaluate(() => [...document.querySelectorAll('.ed-launcher-queue .sq-row')].map((r) => r.innerText.replace(/\s+/g, ' ')))
   check('New story keeps the last one: launcher lists it as Published', launch.length === 1 && launch[0].includes(firstHead) && /Published/.test(launch[0]), JSON.stringify(launch))

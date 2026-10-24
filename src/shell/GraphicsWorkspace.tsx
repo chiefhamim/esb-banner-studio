@@ -13,7 +13,7 @@ import type { ExportSettings } from '../export'
 import { openProject, openRecent, readRecent, saveProject } from '../project'
 import { hint, pointer, restoreSessionPhotos, useStore } from '../store'
 import { CATEGORIES, FORMATS, FORMAT_LIST, getFormat } from '../core/tokens'
-import { ContextMenu, Dialog, IconButton, MenuBar, MenuButton, Select, Tabs, Tooltips } from '../ui/controls'
+import { ContextMenu, Dialog, IconButton, MenuBar, MenuButton, Select, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import { DEFAULT_LAYOUT, LIMITS, Splitter, loadLayout, saveLayout } from '../ui/layout'
@@ -100,6 +100,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   const [imgMenu, setImgMenu] = useState<{ x: number; y: number } | null>(null)
   // panel sizes: dragged live straight into CSS variables (no React render per frame), saved on release
   const catAccent = useStore((st) => CATEGORIES.find((c) => c.id === st.doc.content.categoryId)?.accent)
+  const catInk = useStore((st) => CATEGORIES.find((c) => c.id === st.doc.content.categoryId)?.chipText)
   const [layout, setLayout] = useState<LayoutState>(loadLayout)
   const appRef = useRef<HTMLDivElement>(null)
   // each sidebar tab remembers where you were scrolled
@@ -435,7 +436,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   ]
 
   return (
-    <div className="app" ref={appRef} style={{ gridTemplateColumns: gridCols(layout.lw, layout.rw), ['--dock']: layout.dock + 'px', ['--cat']: catAccent } as CSSProperties}>
+    <div className="app" ref={appRef} style={{ gridTemplateColumns: gridCols(layout.lw, layout.rw), ['--dock']: layout.dock + 'px', ['--cat']: catAccent, ['--cat-ink']: catInk } as CSSProperties}>
       <header className="topbar">
         <WorkspaceSwitcher />
         <MenuBar menus={menus} />
@@ -582,7 +583,6 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
 
       {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} />}
 
-      <Tooltips />
 
       <input ref={file} type="file" accept="image/*" multiple hidden
         onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void useStore.getState().addImages(fs) }} />
