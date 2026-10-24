@@ -25,7 +25,7 @@
   --h-control-lg: 36px;  /* Topbar actions, primary export */
   --h-row: 36px;         /* Standard list & table row */
   --h-panel-header: 40px;/* Standard panel section header */
-  --h-app-header: 40px;  /* Draggable app header bar */
+  --h-app-header: 46px;  /* Draggable app header bar */
   --w-rail: 56px;        /* Left workspace navigation rail */
 
   /* ---------------------------------------------------------------- Corner Radii */

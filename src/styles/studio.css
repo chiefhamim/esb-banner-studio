@@ -373,11 +373,13 @@
 
 /* ---------------------------------------------------------------- workspace switcher: Home on its own, the three desks together */
 .ws-wrap { display: inline-flex; flex: none; align-items: center; gap: 6px; }
-.ws-home-btn { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: var(--text-2); background: var(--fill); border: 0; border-radius: 6px; cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring); }
+.ws-home-btn { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: var(--text-2); background: var(--fill); border: 1px solid var(--line-2); border-radius: 6px; cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring), border-color var(--t-1) var(--ease); }
 .ws-home-btn:hover { color: var(--text); background: var(--fill-hover); }
 .ws-home-btn:active { transform: scale(.96); }
 .ws-home-btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow), 0 0 0 1px var(--card-line); }
 .ws-home-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.ws-home-btn svg { transition: filter var(--t-2) var(--ease); }
+.ws-home-btn:hover svg, .ws-home-btn:focus-visible svg { stroke: url(#ws-home-ig); filter: drop-shadow(0 0 4px rgba(120, 110, 255, .4)); }
 .home-head-actions { display: inline-flex; align-items: center; gap: 6px; }
 .home-head-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 32px; height: 32px; padding: 0 8px; font: 500 13px/1 var(--ui); color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-2); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
 .home-head-btn:hover { color: var(--text); background: var(--fill-hover); }

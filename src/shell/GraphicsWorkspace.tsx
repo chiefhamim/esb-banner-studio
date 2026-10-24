@@ -24,7 +24,7 @@ import { WelcomeModal } from '../ui/WelcomeModal'
 
 type Tab = 'story' | 'photos'
 
-const gridCols = (lw: number, rw: number) => `52px clamp(264px, ${lw}px, 38vw) minmax(0, 1fr) clamp(264px, ${rw}px, 38vw)`
+const gridCols = (lw: number, rw: number) => `46px clamp(264px, ${lw}px, 38vw) minmax(0, 1fr) clamp(264px, ${rw}px, 38vw)`
 
 const SHORTCUTS: { group: string; rows: [string, string][] }[] = [
   { group: 'File', rows: [['Ctrl + N', 'New banner'], ['Ctrl + Shift + N', 'Next story — keep this layout'], ['Ctrl + O', 'Open project'], ['Ctrl + S', 'Save project'], ['Ctrl + Shift + S', 'Save project as…'], ['Ctrl + I', 'Import photos'], ['Ctrl + E', 'Export…'], ['Ctrl + Shift + C', 'Copy banner as image']] },

@@ -25,6 +25,16 @@ export function WorkspaceSwitcher() {
   const { wrap, thumb } = useSlidingThumb(current)
   return (
     <div className="ws-wrap">
+      {/* the Home icon's hover sheen — same moving gradient and colours as the "Studio" word on the Home screen */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden focusable="false">
+        <defs>
+          <linearGradient id="ws-home-ig" gradientUnits="userSpaceOnUse" x1="-24" y1="0" x2="0" y2="24" spreadMethod="reflect">
+            <stop offset="0" stopColor="#0aa37a" /><stop offset=".5" stopColor="#1fd3a8" /><stop offset="1" stopColor="#3b82f6" />
+            <animate attributeName="x1" values="-24;0;-24" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
+            <animate attributeName="x2" values="0;24;0" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
+          </linearGradient>
+        </defs>
+      </svg>
       <button
         type="button"
         className={'ws-home-btn' + (current === 'home' ? ' on' : '')}

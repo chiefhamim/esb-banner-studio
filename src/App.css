@@ -78,13 +78,13 @@ button:disabled { cursor: default; }
 }
 
 /* ---------------------------------------------------------------- graphics workspace (banner editor)
-   app header 40 (--h-app-header) · tool rail 52 · status 28 — panels are user-resizable via --lw / --rw */
+   app header 46 (--h-app-header) · tool rail 46 · status 28 — panels are user-resizable via --lw / --rw */
 .app {
   --lw: 312px;
   --rw: 312px;
   display: grid;
   height: 100%;
-  grid-template-columns: 52px clamp(264px, var(--lw), 38vw) minmax(0, 1fr) clamp(264px, var(--rw), 38vw);
+  grid-template-columns: 46px clamp(264px, var(--lw), 38vw) minmax(0, 1fr) clamp(264px, var(--rw), 38vw);
   grid-template-rows: var(--h-app-header) minmax(0, 1fr) 28px;
   grid-template-areas: "top top top top" "tools left center right" "status status status status";
 }
