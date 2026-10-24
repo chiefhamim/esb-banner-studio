@@ -842,9 +842,9 @@ export function EditorialWorkspace() {
           <IconButton icon="plus" tip="New story — the current one stays under Stories" onClick={handleNewStory} />
           <IconButton icon="refresh" tip={syncing ? 'Syncing…' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
         </div>
-        <button type="button" className={'ed-ai-chip' + (apiKey ? ' on' : '')} onClick={() => setShowApiKeyModal(true)} aria-label="AI translation" data-tip={apiKey ? `${aiName} · ${aiModelLabel} — change the provider, model or prompt` : 'AI is off — add a Gemini, Claude, OpenAI or OpenRouter key'}>
-          <Icon name="sparkle" size={14} />
-          <i className="ed-ai-dot" aria-hidden />
+        <button type="button" className={'ed-ai-chip' + (apiKey ? ' on' : '')} data-provider={ai.provider} onClick={() => setShowApiKeyModal(true)} aria-label="AI translation" data-tip={apiKey ? `${aiName} · ${aiModelLabel} — change the provider, model or prompt` : 'AI is off — add a Gemini, Claude, OpenAI or OpenRouter key'}>
+          <Icon name={apiKey ? 'sparkle' : 'link'} size={14} />
+          <span className="ed-ai-label">{apiKey ? aiName : 'Connect AI'}</span>
         </button>
         <button type="button" className={'ed-account' + (staffSession ? ' in' : '')} onClick={() => setShowLoginModal(true)} aria-label={staffSession ? 'Staff sign-in' : 'Staff sign-in'} data-tip={staffSession ? `${staffSession.name} · ${staffSession.email} — account and connection check` : 'Sign in with your esbpowerline.com newsroom account'}>
           {staffSession

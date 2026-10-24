@@ -78,7 +78,7 @@ function createWindow() {
   if (DEV_URL) win.loadURL(DEV_URL)
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   // never navigate the editor away from itself; open links in the default browser
-  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
+  win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); return { action: 'deny' } })  // only web links ever leave the app (never file:, ms-settings:, custom schemes)
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:') && url !== DEV_URL) e.preventDefault() })
 
   // S3: Install permission handlers: only microphone (media) for app origin, deny everything else

@@ -567,3 +567,25 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 .ai-settings[data-provider=openrouter] .ai-provider-seg .pill-slide { background: #6467f2 !important; }
 
 .stage-scroll.fits { overflow: hidden; }
+
+/* Editorial AI chip: a pill. No key yet = a gradient outline inviting you to add one; key saved = filled with the provider's own colours. */
+.ed-ai-chip { height: 32px; padding: 0 12px 0 10px; border-radius: 999px; font: 600 12.5px/1 var(--ui); letter-spacing: -.005em; gap: 6px; border: 1px solid transparent; transition: filter .15s ease, box-shadow .2s ease, background-color .15s ease; }
+.ed-ai-chip:not(.on) { color: var(--text-2); background: linear-gradient(var(--bg-1), var(--bg-1)) padding-box, linear-gradient(110deg, #4285f4, #9b72cb 55%, #d96570) border-box; }
+.ed-ai-chip:not(.on) svg { color: #9b72cb; }
+.ed-ai-chip:not(.on):hover { color: var(--text); background: linear-gradient(var(--fill-hover), var(--fill-hover)) padding-box, linear-gradient(110deg, #4285f4, #9b72cb 55%, #d96570) border-box; }
+.ed-ai-chip.on { color: #fff; border-color: transparent; box-shadow: 0 1px 2px rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .22); }
+.ed-ai-chip.on:hover { color: #fff; filter: brightness(1.07) saturate(1.05); }
+.ed-ai-chip.on[data-provider=gemini] { background: linear-gradient(110deg, #4285f4 0%, #9b72cb 55%, #d96570 100%); }
+.ed-ai-chip.on[data-provider=anthropic] { background: linear-gradient(110deg, #d97757, #c4623f); }
+.ed-ai-chip.on[data-provider=openai] { background: linear-gradient(110deg, #10a37f, #0b8566); }
+.ed-ai-chip.on[data-provider=openrouter] { background: linear-gradient(110deg, #6467f2, #4f52d6); }
+@media (max-width: 1180px) { .ed-ai-chip .ed-ai-label { display: none; } .ed-ai-chip { padding: 0 9px; } }
+
+/* centring: Inter's text box sits about 1 px high against its capitals; nudge the label so it is optically centred with the icon */
+.ed-ai-chip .ed-ai-label { display: block; line-height: 1; transform: translateY(1px); }
+.ed-ai-chip svg { display: block; }
+/* not connected: a quiet dashed "slot" instead of a coloured pill */
+.ed-ai-chip:not(.on) { background: transparent; border: 1px dashed color-mix(in srgb, var(--text) 38%, transparent); color: var(--text-2); }
+.ed-ai-chip:not(.on) svg { color: var(--text-2); }
+.ed-ai-chip:not(.on):hover { background: var(--fill-hover); border-style: solid; border-color: color-mix(in srgb, var(--text) 45%, transparent); color: var(--text); }
+.ed-ai-chip:not(.on):hover svg { color: var(--text); }

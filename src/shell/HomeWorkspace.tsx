@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { WorkspaceSwitcher } from './WorkspaceRail'
-import logoUrl from '../assets/images/esb-logo.png'
 import lightBgUrl from '../assets/images/home/home-light.jpg'
-import darkBgUrl from '../assets/images/home/home-dark.jpg'
+import darkBgUrl from '../assets/images/home/home-dark-chrome.jpg'
 import { readRecent, openProject, openRecent } from '../project'
 import type { RecentProject } from '../project'
 import { useShellStore } from './shellStore'
@@ -12,6 +11,15 @@ import type { FormatId } from '../core/types'
 import { Icon } from '../ui/Icon'
 import { Dialog } from '../ui/controls'
 
+const HOME_BG_POS_KEY = 'esb-banner-studio/home-bg-pos'
+type BgPos = { x: number; y: number; s: number }
+const BG_POS_0: BgPos = { x: 0, y: 0, s: 1 }
+const clampPos = (p: BgPos): BgPos => {
+  const s = Math.min(3, Math.max(1, p.s)), lim = (s - 1) * 50 + 6
+  return { s, x: Math.min(lim, Math.max(-lim, p.x)), y: Math.min(lim, Math.max(-lim, p.y)) }
+}
+// only an image this app itself wrote (a JPEG data URL) is ever placed in a CSS url(); anything else in storage is ignored
+const SAFE_BG = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/
 const HOME_BG_KEY = (t: 'light' | 'dark') => `esb-banner-studio/home-bg-${t}`
 
 export function HomeWorkspace() {
@@ -47,12 +55,29 @@ export function HomeWorkspace() {
   // The editor can put any image of their own behind Home. It is scaled to 1600 px and kept in this machine's local
   // storage as a JPEG (a few hundred KB), so it survives restarts without copying files anywhere.
   const [customBgs, setCustomBgs] = useState<Record<'light' | 'dark', string | null>>(() => {
-    const read = (t: 'light' | 'dark') => { try { return localStorage.getItem(HOME_BG_KEY(t)) } catch { return null } }
+    const read = (t: 'light' | 'dark') => { try { const v = localStorage.getItem(HOME_BG_KEY(t)); return v && SAFE_BG.test(v) ? v : null } catch { return null } }
     return { light: read('light'), dark: read('dark') }
   })
   const customBg = customBgs[theme]
   const bgInput = useRef<HTMLInputElement>(null)
   const [showSettings, setShowSettings] = useState(false)
+  // The picture can be dragged and zoomed by hand (per theme), so a light patch of it can be put exactly where the logo sits.
+  const [bgPos, setBgPos] = useState<Record<'light' | 'dark', BgPos>>(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(HOME_BG_POS_KEY) || 'null')
+      const ok = (p: unknown): BgPos => { const q = p as Partial<BgPos> | null; return q && [q.x, q.y, q.s].every((n) => typeof n === 'number' && Number.isFinite(n)) ? clampPos(q as BgPos) : BG_POS_0 }
+      if (v && typeof v === 'object') return { light: ok(v.light), dark: ok(v.dark) }
+    } catch { /* ignore */ }
+    return { light: BG_POS_0, dark: BG_POS_0 }
+  })
+  const [moving, setMoving] = useState(false)
+  const dragRef = useRef<{ px: number; py: number; x: number; y: number } | null>(null)
+  const pos = bgPos[theme]
+  const setPos = (p: BgPos) => setBgPos((b) => {
+    const next = { ...b, [theme]: clampPos(p) }
+    try { localStorage.setItem(HOME_BG_POS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+    return next
+  })
   const pickBackground = async (file: File | undefined) => {
     if (!file || !file.type.startsWith('image/')) return
     const url = URL.createObjectURL(file)
@@ -123,12 +148,14 @@ export function HomeWorkspace() {
         <button type="button" className="home-head-btn" data-tip={theme === 'dark' ? 'Switch to light appearance' : 'Switch to dark appearance'} aria-label="Toggle appearance" onClick={() => useStore.getState().setTheme(theme === 'dark' ? 'light' : 'dark')}>
           <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
         </button>
+        {canQuit && <i className="home-head-sep" aria-hidden />}
         {canQuit && (
           <button type="button" className="home-head-btn quit" data-tip="Quit ESB Studio (Ctrl+Q)" onClick={() => void window.esb?.quit?.()}>
             <Icon name="x" size={14} />
             <span>Quit</span>
           </button>
         )}
+        <span className="home-fold" aria-hidden><Icon name="more" size={18} /></span>
       </div>
     </header>
     <input ref={bgInput} type="file" accept="image/*" hidden onChange={(e) => { void pickBackground(e.target.files?.[0]); e.target.value = '' }} />
@@ -137,7 +164,8 @@ export function HomeWorkspace() {
         <div className="stack" style={{ gap: 10 }}>
           <strong>Home background</strong>
           <p className="sub">{customBg ? 'Showing your own image.' : `Showing the ${theme === 'dark' ? 'dark' : 'light'} default.`} Your image is kept on this computer and used for the {theme === 'dark' ? 'dark' : 'light'} appearance only; the other keeps its own.</p>
-          <div className="row" style={{ gap: 8 }}>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" className="btn" onClick={() => { setShowSettings(false); setMoving(true) }}><Icon name="hand" size={14} /> Move background…</button>
             <button type="button" className="btn" onClick={() => bgInput.current?.click()}><Icon name="image" size={14} /> Choose image…</button>
             {customBg && <button type="button" className="btn" onClick={resetBackground}><Icon name="reset" size={14} /> Use default</button>}
           </div>
@@ -145,7 +173,26 @@ export function HomeWorkspace() {
       </Dialog>
     )}
     {/* the background: a soft colour field that drifts slowly; a veil in the theme's own colour keeps it quiet */}
-    <div className="home-bg" aria-hidden><div className="home-bg-img" style={{ backgroundImage: `url(${customBg ?? (theme === 'dark' ? darkBgUrl : lightBgUrl)})` }} /></div>
+    <div className={'home-bg' + (moving ? ' moving' : '')} aria-hidden>
+      <div className="home-bg-pos" style={{ transform: `translate(${pos.x}%, ${pos.y}%) scale(${pos.s})` }}>
+        <div className="home-bg-img" style={{ backgroundImage: `url("${customBg ?? (theme === 'dark' ? darkBgUrl : lightBgUrl)}")` }} />
+      </div>
+    </div>
+    {moving && (
+      <div
+        className="home-move-layer"
+        onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); dragRef.current = { px: e.clientX, py: e.clientY, x: pos.x, y: pos.y } }}
+        onPointerMove={(e) => { const d = dragRef.current; if (!d) return; const r = e.currentTarget.getBoundingClientRect(); setPos({ ...pos, x: d.x + ((e.clientX - d.px) / r.width) * 100, y: d.y + ((e.clientY - d.py) / r.height) * 100 }) }}
+        onPointerUp={() => { dragRef.current = null }}
+        onWheel={(e) => setPos({ ...pos, s: pos.s * (e.deltaY < 0 ? 1.06 : 1 / 1.06) })}
+      >
+        <div className="home-move-bar" onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+          <span>Drag to move the background · scroll to zoom</span>
+          <button type="button" className="btn" onClick={() => setPos(BG_POS_0)}>Reset</button>
+          <button type="button" className="btn primary" onClick={() => setMoving(false)}>Done</button>
+        </div>
+      </div>
+    )}
     <main className="home-workspace" aria-label="Home dashboard">
       <div className="home-container">
         {/* Crash recovery banner if available */}
@@ -170,14 +217,24 @@ export function HomeWorkspace() {
 
         <header className="home-header">
           <div className="home-header-brand">
-            <img src={logoUrl} alt="Energy Sector Bangladesh" className="home-brand-logo" />
             <div className="home-title-group">
-              <h1 className="home-title">ESB Power Line Studio</h1>
-              <p className="home-subtitle">Where ESB's energy stories are written, designed and cut</p>
+              <h1 className="home-title">ESB Power Line <span className="home-title-accent">Studio</span></h1>
+              <p className="home-subtitle">Where stories are written, imagination is designed and reality is cut</p>
             </div>
           </div>
         </header>
 
+        <svg className="home-defs" aria-hidden focusable="false">
+          <defs>
+            {([['1', '#0aa37a', '#1fd3a8', '#3b82f6'], ['2', '#3b82f6', '#7c5cff', '#d946ef'], ['3', '#ff7a1a', '#ff3b6b', '#b24bf3']] as const).map(([n, c1, c2, c3]) => (
+              <linearGradient key={n} id={`home-ig-${n}`} gradientUnits="userSpaceOnUse" x1="-24" y1="0" x2="0" y2="24" spreadMethod="reflect">
+                <stop offset="0" stopColor={c1} /><stop offset=".5" stopColor={c2} /><stop offset="1" stopColor={c3} />
+                <animate attributeName="x1" values="-24;0;-24" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
+                <animate attributeName="x2" values="0;24;0" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
+              </linearGradient>
+            ))}
+          </defs>
+        </svg>
         <nav className="home-launch" aria-label="Workspaces">
           {([
             { id: 'editorial', icon: 'newspaper', name: 'Editorial', note: 'Link in, English story out', run: () => setWorkspace('editorial') },

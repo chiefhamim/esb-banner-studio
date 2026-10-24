@@ -312,3 +312,419 @@
 .home-shell .empty-notice span { font-size: 13px; font-weight: 600; color: var(--text-2); margin-top: 6px; }
 .home-shell .empty-notice small { font-size: 11.5px; line-height: 16px; }
 @media (max-width: 1100px) { .home-shell .home-split { grid-template-columns: minmax(0, 1fr); } .home-shell .formats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* "Studio" only: a slow energy-green to teal to blue sheen that drifts across the word */
+.home-shell .home-title-accent {
+  background: linear-gradient(in oklch 100deg, #0e9f5b 0%, #12b3b0 28%, #3b82f6 56%, #12b3b0 78%, #0e9f5b 100%);
+  background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  animation: home-sheen 9s ease-in-out infinite alternate; padding-bottom: .08em;
+}
+:root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #34e39a 0%, #3ee0d6 28%, #7aa8ff 56%, #3ee0d6 78%, #34e39a 100%); }
+@keyframes home-sheen { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
+@media (prefers-reduced-motion: reduce) { .home-shell .home-title-accent { animation: none; } }
+
+/* title and tagline share one width: the title is 2.59 x the tagline's size (measured), both scaled from the same clamp */
+.home-shell .home-title-group { --hs: clamp(12px, 1.8vh, 14px); }
+.home-shell .home-subtitle { font-size: var(--hs); }
+.home-shell .home-title { font-size: calc(var(--hs) * 2.59); line-height: 1.15; }
+
+/* ---- glass: real frosted panels over the picture (blur + saturation + lit top edge), a lighter veil so the colour shows through ---- */
+.home-bg::after { background: color-mix(in srgb, var(--bg-0) 6%, transparent); }
+:root[data-theme=dark] .home-bg::after { background: color-mix(in srgb, var(--bg-0) 22%, transparent); }
+
+.home-shell .home-launch, .home-shell .format-card, .home-shell .recent-card, .home-shell .empty-notice, .home-shell .home-head-actions {
+  background: rgba(255, 255, 255, .46);
+  border: 1px solid rgba(255, 255, 255, .62);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75), inset 0 0 0 .5px rgba(255, 255, 255, .25), 0 10px 28px -12px rgba(30, 30, 70, .28);
+}
+:root[data-theme=dark] .home-shell .home-launch, :root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice, :root[data-theme=dark] .home-shell .home-head-actions {
+  background: rgba(22, 22, 40, .38);
+  border: 1px solid rgba(255, 255, 255, .15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 .5px rgba(255, 255, 255, .05), 0 12px 32px -12px rgba(0, 0, 0, .6);
+}
+.home-shell .empty-notice { border-style: dashed; border-color: rgba(255, 255, 255, .7); }
+:root[data-theme=dark] .home-shell .empty-notice { border-color: rgba(255, 255, 255, .22); }
+
+/* the launcher is one glass sheet; its cells are clear, divided by light hairlines */
+.home-shell .home-launch { border-radius: 14px; }
+.home-shell .launch-tile + .launch-tile { border-left-color: rgba(255, 255, 255, .55); }
+:root[data-theme=dark] .home-shell .launch-tile + .launch-tile { border-left-color: rgba(255, 255, 255, .13); }
+.home-shell .launch-icon { background: rgba(255, 255, 255, .55) !important; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 0 0 .5px rgba(30, 30, 70, .08) !important; }
+:root[data-theme=dark] .home-shell .launch-icon { background: rgba(255, 255, 255, .1) !important; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 0 0 .5px rgba(255, 255, 255, .08) !important; }
+.home-shell .format-glyph, .home-shell .recent-icon { background: rgba(255, 255, 255, .5); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8); }
+:root[data-theme=dark] .home-shell .format-glyph, :root[data-theme=dark] .home-shell .recent-icon { background: rgba(255, 255, 255, .09); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14); }
+
+/* hover: the glass brightens a little */
+.home-shell .launch-tile:hover { background: rgba(255, 255, 255, .34) !important; }
+:root[data-theme=dark] .home-shell .launch-tile:hover { background: rgba(255, 255, 255, .08) !important; }
+.home-shell .format-card:hover, .home-shell .recent-card:hover { background: rgba(255, 255, 255, .66); border-color: rgba(255, 255, 255, .9); }
+:root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .32); }
+
+.home-shell .home-head-btn { background: transparent; }
+.home-shell .home-head-actions { padding: 2px; gap: 2px; border-radius: 10px; }
+.home-shell .home-version { background: rgba(255, 255, 255, .5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+:root[data-theme=dark] .home-shell .home-version { background: rgba(255, 255, 255, .1); }
+
+/* ---- calmer glass: less blur and see-through, softer edge light ---- */
+.home-bg::after { background: color-mix(in srgb, var(--bg-0) 14%, transparent); }
+:root[data-theme=dark] .home-bg::after { background: color-mix(in srgb, var(--bg-0) 32%, transparent); }
+.home-shell .home-launch, .home-shell .format-card, .home-shell .recent-card, .home-shell .empty-notice, .home-shell .home-head-actions {
+  background: rgba(255, 255, 255, .62); border-color: rgba(255, 255, 255, .55);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25); backdrop-filter: blur(12px) saturate(1.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .55), 0 6px 18px -10px rgba(30, 30, 70, .22);
+}
+:root[data-theme=dark] .home-shell .home-launch, :root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice, :root[data-theme=dark] .home-shell .home-head-actions {
+  background: rgba(20, 20, 36, .55); border-color: rgba(255, 255, 255, .12);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25); backdrop-filter: blur(12px) saturate(1.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 8px 22px -10px rgba(0, 0, 0, .55);
+}
+.home-shell .format-card:hover, .home-shell .recent-card:hover { background: rgba(255, 255, 255, .78); }
+:root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: rgba(255, 255, 255, .13); }
+
+/* ---- one typeface for both blocks: the UI sans, no mono labels or sizes ---- */
+.home-shell .section-title { font: 600 12.5px/16px var(--ui); letter-spacing: 0; text-transform: none; color: var(--text-2); }
+.home-shell .format-dims { font: 450 11.5px/15px var(--ui); font-variant-numeric: tabular-nums; color: var(--text-3); }
+.home-shell .format-tag { font: 500 10.5px/14px var(--ui); font-variant-numeric: tabular-nums; }
+
+/* ---- very light frost ---- */
+.home-bg::after { background: color-mix(in srgb, var(--bg-0) 10%, transparent); }
+:root[data-theme=dark] .home-bg::after { background: color-mix(in srgb, var(--bg-0) 26%, transparent); }
+.home-shell .home-launch, .home-shell .format-card, .home-shell .recent-card, .home-shell .empty-notice, .home-shell .home-head-actions {
+  background: rgba(255, 255, 255, .5); border-color: rgba(255, 255, 255, .6);
+  -webkit-backdrop-filter: blur(6px) saturate(1.15); backdrop-filter: blur(6px) saturate(1.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 4px 14px -8px rgba(30, 30, 70, .22);
+}
+:root[data-theme=dark] .home-shell .home-launch, :root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice, :root[data-theme=dark] .home-shell .home-head-actions {
+  background: rgba(18, 18, 34, .46); border-color: rgba(255, 255, 255, .13);
+  -webkit-backdrop-filter: blur(6px) saturate(1.15); backdrop-filter: blur(6px) saturate(1.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 6px 18px -10px rgba(0, 0, 0, .5);
+}
+
+/* ---- hover you can see in the light theme: the panel turns near-solid white, the outline darkens, a soft shadow lifts it ---- */
+.home-shell .format-card:hover, .home-shell .recent-card:hover { background: rgba(255, 255, 255, .92); border-color: rgba(30, 30, 70, .34); box-shadow: inset 0 1px 0 #fff, 0 8px 20px -10px rgba(30, 30, 70, .38); }
+.home-shell .launch-tile:hover { background: rgba(255, 255, 255, .82) !important; box-shadow: inset 0 0 0 1px rgba(30, 30, 70, .22) !important; }
+.home-shell .launch-tile:hover .launch-name { color: var(--ink); }
+:root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: rgba(255, 255, 255, .15); border-color: rgba(255, 255, 255, .4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 8px 20px -10px rgba(0, 0, 0, .6); }
+:root[data-theme=dark] .home-shell .launch-tile:hover { background: rgba(255, 255, 255, .11) !important; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .26) !important; }
+:root[data-theme=dark] .home-shell .launch-tile:hover .launch-name { color: #fff; }
+
+/* ---- corner controls hide until the pointer comes near the top-right corner (or they take keyboard focus) ---- */
+.home-shell .home-topbar { position: absolute; top: 0; right: 0; left: auto; width: 340px; height: 80px; z-index: 6; }
+.home-shell .home-topbar .home-head-actions { opacity: 0; transform: translateY(-4px); transition: opacity .25s ease, transform .25s ease; }
+.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { opacity: 1; transform: none; }
+@media (hover: none) { .home-shell .home-topbar .home-head-actions { opacity: 1; transform: none; } }
+
+/* ---- refined hover: a gentle lift in brightness and a clearer outline, never a white slab ---- */
+.home-shell .format-card:hover, .home-shell .recent-card:hover { background: rgba(255, 255, 255, .66); border-color: rgba(30, 30, 70, .2); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 8px 18px -10px rgba(30, 30, 70, .3); }
+.home-shell .launch-tile:hover { background: rgba(30, 30, 70, .055) !important; box-shadow: none !important; }
+.home-shell .launch-tile:hover .launch-name { color: var(--text); }
+:root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .34); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 8px 18px -10px rgba(0, 0, 0, .6); }
+:root[data-theme=dark] .home-shell .launch-tile:hover { background: rgba(255, 255, 255, .08) !important; box-shadow: none !important; }
+
+/* ---- corner controls: quietly visible at rest, fully there on approach ---- */
+.home-shell .home-topbar .home-head-actions { opacity: .6; transform: none; }
+.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { opacity: 1; }
+.home-shell .launch-tile:hover { background: rgba(30, 30, 70, .085) !important; }
+.home-shell .format-card:hover, .home-shell .recent-card:hover { border-color: rgba(30, 30, 70, .28); }
+
+/* ---- corner controls, folded: one small round handle; hover or focus unfolds Settings, Appearance and Quit to its left ---- */
+.home-shell .home-topbar { width: 240px; height: 64px; }
+.home-shell .home-topbar .home-head-actions {
+  flex-direction: row; justify-content: flex-end; align-items: center; white-space: nowrap; overflow: hidden;
+  width: 36px; height: 36px; padding: 2px; gap: 2px; border-radius: 999px; opacity: .75;
+  transition: width .38s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, border-radius .38s ease;
+}
+.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { width: 192px; opacity: 1; border-radius: 18px; }
+.home-shell .home-fold { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--text-2); }
+.home-shell .home-topbar:hover .home-fold, .home-shell .home-topbar:focus-within .home-fold { color: var(--text-3); }
+.home-shell .home-topbar .home-head-btn { flex: none; opacity: 0; transform: translateX(8px); transition: opacity .2s ease, transform .3s cubic-bezier(.22, 1, .36, 1), background-color .15s ease; }
+.home-shell .home-topbar:hover .home-head-btn, .home-shell .home-topbar:focus-within .home-head-btn { opacity: 1; transform: none; transition-delay: .06s; }
+.home-shell .home-topbar .home-head-btn:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.home-shell .home-topbar { top: 12px; right: 14px; }
+.home-shell .home-topbar .home-head-actions { position: absolute; top: 0; right: 0; }
+@media (hover: none) { .home-shell .home-topbar .home-head-actions { width: 192px; border-radius: 18px; opacity: 1; } .home-shell .home-topbar .home-head-btn { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .home-shell .home-topbar .home-head-actions, .home-shell .home-topbar .home-head-btn { transition: none; } }
+
+/* ---- pill: every control is itself a pill, so hover and selection follow the pill's own curve ---- */
+.home-shell .home-topbar .home-head-actions { padding: 3px; gap: 2px; border-radius: 999px; }
+.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { border-radius: 999px; }
+.home-shell .home-topbar .home-head-btn { height: 30px; min-width: 30px; padding: 0; border-radius: 999px; }
+.home-shell .home-topbar .home-head-btn.quit { padding: 0 13px 0 11px; }
+.home-shell .home-fold { width: 30px; height: 30px; }
+.home-shell .home-topbar .home-head-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.home-shell .home-topbar .home-head-btn.quit:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { width: 172px; }
+@media (hover: none) { .home-shell .home-topbar .home-head-actions { width: 172px; } }
+
+/* ---- brand lockup: logo | vertical ESB stripe | name ---- */
+.home-shell .home-header::after { display: none; }
+.home-shell .home-brand-rule { flex: none; align-self: stretch; width: 3px; margin: 4px 0; border-radius: 2px; background: linear-gradient(180deg, #1f9d57 0 33.3%, #e53935 33.3% 66.6%, #f0953a 66.6%); }
+.home-shell .home-header-brand { gap: clamp(14px, 2.2vh, 20px); }
+.home-shell .home-header { gap: clamp(14px, 2.8vh, 26px); }
+
+/* ---- pill: a hairline sets Quit apart from the two everyday controls ---- */
+.home-shell .home-head-sep { flex: none; width: 1px; height: 16px; margin: 0 3px; background: color-mix(in srgb, var(--text) 18%, transparent); }
+.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { width: 182px; }
+@media (hover: none) { .home-shell .home-topbar .home-head-actions { width: 182px; } }
+
+/* ---- looping video background (seamless 20 s ping-pong of the supplied artwork) ---- */
+.home-bg-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.home-bg.has-video::after { background: color-mix(in srgb, var(--bg-0) 4%, transparent); }
+:root[data-theme=dark] .home-bg.has-video::after { background: color-mix(in srgb, #0b0b18 52%, transparent); }
+.home-bg.has-video::after { background: rgba(255, 255, 255, .42); }
+:root[data-theme=dark] .home-bg.has-video::after { background: color-mix(in srgb, #0b0b18 52%, transparent); }
+.home-bg.has-video::after { background: rgba(255, 255, 255, .58); }
+:root[data-theme=dark] .home-bg.has-video::after { background: color-mix(in srgb, #0b0b18 52%, transparent); }
+
+/* ---- luminous background: light in both themes, so the logo needs no white tile ---- */
+.home-bg.has-video::after { background: rgba(255, 255, 255, .22); }
+:root[data-theme=dark] .home-bg.has-video::after { background: radial-gradient(ellipse 60% 46% at 50% 36%, rgba(10, 10, 26, 0) 0%, rgba(10, 10, 26, .25) 55%, rgba(10, 10, 26, .62) 100%); }
+:root[data-theme=dark] .home-shell .home-brand-logo { padding: 0; background: none; border-radius: 0; box-shadow: none; filter: drop-shadow(0 6px 12px rgba(20, 20, 60, .18)); }
+/* the hero sits on the bright centre in dark mode too, so its text stays dark ink */
+:root[data-theme=dark] .home-shell .home-title { color: #16123a; }
+:root[data-theme=dark] .home-shell .home-subtitle { color: color-mix(in srgb, #16123a 78%, transparent); }
+:root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #0e9f5b 0%, #12b3b0 28%, #3b82f6 56%, #12b3b0 78%, #0e9f5b 100%); }
+/* dark glass a little denser so its light text holds over the pale picture */
+:root[data-theme=dark] .home-shell .home-launch, :root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice, :root[data-theme=dark] .home-shell .home-head-actions { background: rgba(16, 16, 34, .62); }
+:root[data-theme=dark] .home-shell .section-title { color: #1d1a45; }
+
+/* ---- richer, less washed out. Light: the picture is pushed up in saturation and the veil nearly removed. Dark: the same footage is deepened, and the wordmark gets a soft feathered glow instead of a tile. ---- */
+.home-bg-video { filter: saturate(1.45) contrast(1.06); }
+.home-bg.has-video::after { background: rgba(255, 255, 255, .06); }
+:root[data-theme=dark] .home-bg-video { filter: brightness(.5) saturate(1.9) contrast(1.18); }
+:root[data-theme=dark] .home-bg.has-video::after { background: radial-gradient(ellipse 70% 55% at 50% 38%, rgba(8, 8, 24, 0) 0%, rgba(8, 8, 24, .28) 60%, rgba(8, 8, 24, .6) 100%); }
+:root[data-theme=dark] .home-shell .home-brand-logo { border-radius: 36px; box-shadow: 0 0 38px 20px rgba(255, 255, 255, .9), 0 0 90px 40px rgba(255, 255, 255, .35); filter: none; }
+:root[data-theme=dark] .home-shell .home-title { color: #fff; }
+:root[data-theme=dark] .home-shell .home-subtitle { color: rgba(255, 255, 255, .78); }
+:root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #34e39a 0%, #3ee0d6 28%, #7aa8ff 56%, #3ee0d6 78%, #34e39a 100%); }
+:root[data-theme=dark] .home-shell .section-title { color: rgba(255, 255, 255, .75); }
+:root[data-theme=dark] .home-shell .home-launch, :root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice, :root[data-theme=dark] .home-shell .home-head-actions { background: rgba(14, 12, 36, .5); }
+/* dark: the black wordmark sits on a soft feathered white halo, no hard-edged tile */
+:root[data-theme=dark] .home-shell .home-brand-logo { border-radius: 0; box-shadow: none; padding: 20px 40px; margin: -20px -40px; background: radial-gradient(closest-side, #fff 0%, #fff 55%, rgba(255, 255, 255, .55) 78%, rgba(255, 255, 255, 0) 100%); }
+
+/* ---- back to the two still backgrounds (soft-white curves / indigo-magenta waves), drifting gently. Undoes the video-era dark-theme tweaks. ---- */
+.home-bg-video { display: none; }
+:root[data-theme=dark] .home-shell .home-brand-logo { padding: 6px 12px; margin: 0; background: #fff; border-radius: 8px; box-shadow: none; filter: none; }
+:root[data-theme=dark] .home-shell .home-title { color: var(--text); }
+:root[data-theme=dark] .home-shell .home-subtitle { color: var(--text-2); }
+:root[data-theme=dark] .home-shell .section-title { color: var(--text-2); }
+:root[data-theme=dark] .home-shell .home-launch, :root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice, :root[data-theme=dark] .home-shell .home-head-actions { background: rgba(18, 18, 34, .46); }
+.home-bg::after { background: color-mix(in srgb, var(--bg-0) 10%, transparent); }
+:root[data-theme=dark] .home-bg::after { background: color-mix(in srgb, var(--bg-0) 26%, transparent); }
+
+/* ---- dark theme: no tile behind the wordmark. The hero carries its own soft light bloom (a lit patch of the background, not a box), so the black lettering contrasts naturally while the rest of the screen stays deep indigo. ---- */
+:root[data-theme=dark] .home-shell .home-header { position: relative; isolation: isolate; }
+:root[data-theme=dark] .home-shell .home-header::before {
+  content: ''; position: absolute; z-index: -1; pointer-events: none;
+  left: 50%; top: 50%; width: min(1000px, 98vw); height: 330%; transform: translate(-50%, -50%);
+  background:
+    radial-gradient(ellipse 46% 27% at 50% 50%, rgba(244, 242, 255, .98) 0%, rgba(228, 224, 255, .94) 48%, rgba(180, 168, 255, .6) 74%, rgba(120, 96, 255, 0) 100%);
+  filter: blur(10px);
+}
+:root[data-theme=dark] .home-shell .home-brand-logo { padding: 0; margin: 0; background: none; border-radius: 0; box-shadow: none; filter: none; }
+:root[data-theme=dark] .home-shell .home-title { color: #15103a; }
+:root[data-theme=dark] .home-shell .home-subtitle { color: color-mix(in srgb, #15103a 76%, transparent); }
+:root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #0a8f52 0%, #0e9aa0 28%, #2a5fe0 56%, #0e9aa0 78%, #0a8f52 100%); }
+
+/* ---- dark theme, new picture: "Minimal Voronoi Shades 04" — a deep teal field with one big golden rounded shape across the top. The hero sits on the gold, so the black wordmark has its light surface from the picture itself; no tile, no halo. ---- */
+:root[data-theme=dark] .home-shell .home-header::before { display: none; }
+:root[data-theme=dark] .home-bg::after { background: color-mix(in srgb, var(--bg-0) 4%, transparent); }
+:root[data-theme=dark] .home-bg-img { filter: none; }
+:root[data-theme=dark] .home-shell .home-title { color: #1b1200; }
+:root[data-theme=dark] .home-shell .home-subtitle { color: color-mix(in srgb, #1b1200 78%, transparent); }
+:root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #0b6b3e 0%, #0b6f78 28%, #1a3fb8 56%, #0b6f78 78%, #0b6b3e 100%); }
+
+/* dark background blurred: the same golden-shape-on-teal picture, softened so its edge melts into the teal (the extra inset hides the blur's feathered rim) */
+:root[data-theme=dark] .home-bg-img { filter: blur(34px) saturate(1.08); inset: -10%; }
+
+/* ---- dark, v3: a calm deep-teal picture, with ONE soft golden glow placed behind the logo only (the title stays on the dark teal, in light text, so "Studio" keeps its colours; nothing reaches the four tiles) ---- */
+:root[data-theme=dark] .home-bg-img { filter: blur(18px) saturate(1.05); inset: -6%; }
+:root[data-theme=dark] .home-bg::before {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(ellipse 210px 118px at calc(50% - 205px) 27%, rgba(255, 214, 40, .98) 0%, rgba(255, 176, 20, .92) 38%, rgba(255, 150, 20, .5) 66%, rgba(255, 150, 20, 0) 100%);
+  filter: blur(14px);
+}
+:root[data-theme=dark] .home-shell .home-title { color: var(--text); }
+:root[data-theme=dark] .home-shell .home-subtitle { color: var(--text-2); }
+:root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #34e39a 0%, #3ee0d6 28%, #7aa8ff 56%, #3ee0d6 78%, #34e39a 100%); }
+
+/* ---- one picture for both themes: the soft-white curves. In dark mode the page chrome is dark glass on that light picture, and the text that sits directly on the picture (hero, section labels, footer) switches to ink. ---- */
+:root[data-theme=dark] .home-bg::before { display: none; }
+:root[data-theme=dark] .home-bg-img { filter: none; inset: -6%; }
+:root[data-theme=dark] .home-bg::after { background: color-mix(in srgb, #fff 8%, transparent); }
+:root[data-theme=dark] .home-shell .home-title { color: #14142b; }
+:root[data-theme=dark] .home-shell .home-subtitle { color: #4a4a63; }
+:root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #0e9f5b 0%, #12b3b0 28%, #3b82f6 56%, #12b3b0 78%, #0e9f5b 100%); }
+:root[data-theme=dark] .home-shell .section-title { color: #4a4a63; }
+:root[data-theme=dark] .home-shell .home-footer { color: #4a4a63; }
+:root[data-theme=dark] .home-shell .home-footer .home-credit { color: #14142b; }
+:root[data-theme=dark] .home-shell .home-version { color: #14142b; background: rgba(20, 20, 43, .1); }
+:root[data-theme=dark] .home-shell .home-launch, :root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice, :root[data-theme=dark] .home-shell .home-head-actions { background: rgba(24, 24, 40, .86); border-color: rgba(255, 255, 255, .12); }
+
+/* ---- dark theme: its own dark-toned picture (the same soft curves, in indigo with a periwinkle rim); the page text goes back to light ---- */
+:root[data-theme=dark] .home-bg::after { background: color-mix(in srgb, #0b0a24 10%, transparent); }
+:root[data-theme=dark] .home-shell .home-title { color: #fff; }
+:root[data-theme=dark] .home-shell .home-subtitle { color: rgba(255, 255, 255, .74); }
+:root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #34e39a 0%, #3ee0d6 28%, #7aa8ff 56%, #3ee0d6 78%, #34e39a 100%); }
+:root[data-theme=dark] .home-shell .section-title, :root[data-theme=dark] .home-shell .home-footer { color: rgba(255, 255, 255, .72); }
+:root[data-theme=dark] .home-shell .home-footer .home-credit { color: #fff; }
+:root[data-theme=dark] .home-shell .home-version { color: #fff; background: rgba(255, 255, 255, .12); }
+:root[data-theme=dark] .home-shell .home-launch, :root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice, :root[data-theme=dark] .home-shell .home-head-actions { background: rgba(14, 12, 40, .5); border-color: rgba(255, 255, 255, .14); }
+
+/* ---- movable background: the picture sits in a positioned wrapper (drag + zoom set by hand, per theme); drift is paused while moving ---- */
+.home-bg-pos { position: absolute; inset: 0; transform-origin: 50% 50%; }
+.home-bg-pos .home-bg-img { inset: -6%; }
+.home-bg.moving .home-bg-img { animation-play-state: paused; }
+.home-move-layer { position: absolute; inset: 0; z-index: 30; cursor: grab; touch-action: none; }
+.home-move-layer:active { cursor: grabbing; }
+.home-move-bar { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 16px; font: 500 13px/1 var(--ui); color: #fff; background: rgba(16, 16, 28, .82); border: 1px solid rgba(255, 255, 255, .16); border-radius: 12px; box-shadow: 0 10px 30px -8px rgba(0, 0, 0, .6); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); cursor: default; }
+
+/* no logo on Home: the title block stands alone, centred, with the three-stripe hairline under it */
+.home-shell .home-header-brand { justify-content: center; text-align: center; }
+.home-shell .home-title-group { align-items: center; }
+.home-shell .home-header::after { display: block; content: ''; width: 96px; height: 3px; background: linear-gradient(90deg, #1f9d57 0 33.3%, #e53935 33.3% 66.6%, #f0953a 66.6%); }
+:root[data-theme=dark] .home-shell .home-header::before { display: none; }
+
+/* the ESB three-stripe hairline, vertical, right after the title block (it replaces the horizontal one under it) */
+.home-shell .home-header::after { display: none; }
+.home-shell .home-header-brand { flex-direction: row; align-items: stretch; gap: clamp(14px, 2.2vh, 20px); }
+.home-shell .home-header-brand::after { content: ''; flex: none; width: 3px; margin: 4px 0; border-radius: 2px; background: linear-gradient(180deg, #1f9d57 0 33.3%, #e53935 33.3% 66.6%, #f0953a 66.6%); }
+.home-shell .home-title-group { text-align: left; align-items: flex-start; }
+
+/* ---- dark theme picture: "Chrome Background 06" — black silk with neon pink and cyan ribbons (2560 px). No logo to protect now, so it can be bold; light text, dark glass. ---- */
+:root[data-theme=dark] .home-bg-img { filter: saturate(1.1) contrast(1.04); }
+:root[data-theme=dark] .home-bg::after { background: radial-gradient(ellipse 80% 70% at 50% 40%, rgba(4, 6, 20, .18) 0%, rgba(4, 6, 20, .42) 100%); }
+:root[data-theme=dark] .home-shell .home-launch, :root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice, :root[data-theme=dark] .home-shell .home-head-actions { background: rgba(8, 10, 26, .55); }
+:root[data-theme=dark] .home-shell .home-title, :root[data-theme=dark] .home-shell .home-subtitle { text-shadow: 0 1px 2px rgba(0, 0, 10, .75), 0 4px 26px rgba(0, 0, 14, .85); }
+:root[data-theme=dark] .home-shell .home-title-accent { filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .7)); }
+:root[data-theme=dark] .home-bg::after { background: radial-gradient(ellipse 46% 15% at 50% 26%, rgba(2, 4, 16, .55) 0%, rgba(2, 4, 16, 0) 100%), radial-gradient(ellipse 80% 70% at 50% 40%, rgba(4, 6, 20, .18) 0%, rgba(4, 6, 20, .42) 100%); }
+:root[data-theme=dark] .home-shell .home-title-accent { filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .7)); }  /* the smoky, glassy "Studio" look: keep */
+
+/* the smoky glass "Studio" in the white theme too */
+:root:not([data-theme=dark]) .home-shell .home-title-accent { text-shadow: 0 1px 2px rgba(0, 0, 10, .75), 0 4px 26px rgba(0, 0, 14, .85); filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .7)); }
+
+/* white theme "Studio": frosted glass instead of smoke — a clear teal-to-blue fill, a white lip below it and a faint blue glow. */
+:root:not([data-theme=dark]) .home-shell .home-title-accent {
+  filter: none;
+  background-image: linear-gradient(in oklch 100deg, #0aa37a 0%, #0fb3c4 30%, #3b82f6 58%, #0fb3c4 80%, #0aa37a 100%);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .85), 0 6px 20px rgba(59, 130, 246, .28);
+}
+:root:not([data-theme=dark]) .home-shell .home-title-accent { text-shadow: none; filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .9)) drop-shadow(0 5px 14px rgba(59, 130, 246, .3)); }
+
+/* the stripe hairline wears the same effect as "Studio": smoky glass in dark, frosted glow in white */
+.home-shell .home-header-brand::after { box-shadow: inset 1px 0 0 rgba(255, 255, 255, .35); }
+:root[data-theme=dark] .home-shell .home-header-brand::after { filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .7)) saturate(1.1); }
+:root:not([data-theme=dark]) .home-shell .home-header-brand::after { filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .9)) drop-shadow(0 5px 14px rgba(59, 130, 246, .3)); }
+
+/* wider stripe with a slow light that glides down it */
+.home-shell .home-header-brand::after {
+  width: 6px; margin: 2px 0; border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .85) 50%, rgba(255, 255, 255, 0) 100%) 0 -70% / 100% 55% no-repeat,
+    linear-gradient(180deg, #1f9d57 0 33.3%, #e53935 33.3% 66.6%, #f0953a 66.6%);
+  animation: home-stripe-glide 4.2s cubic-bezier(.45, 0, .25, 1) infinite;
+}
+@keyframes home-stripe-glide {
+  0%   { background-position: 0 -70%, 0 0; }
+  60%, 100% { background-position: 0 170%, 0 0; }
+}
+@media (prefers-reduced-motion: reduce) { .home-shell .home-header-brand::after { animation: none; } }
+
+/* stripe animation, take two: the three bands melt into one blended ribbon of green > red > orange, then settle back into three clean bands */
+@property --stripe-blend { syntax: '<number>'; inherits: false; initial-value: 0; }
+.home-shell .home-header-brand::after {
+  --stripe-blend: 0;
+  background: linear-gradient(180deg,
+    #1f9d57 0%,
+    #1f9d57 calc(33.3% * (1 - var(--stripe-blend))),
+    #e53935 calc(33.3% + 16.7% * var(--stripe-blend)),
+    #e53935 calc(66.6% - 16.7% * var(--stripe-blend)),
+    #f0953a calc(66.6% + 33.4% * var(--stripe-blend)),
+    #f0953a 100%);
+  animation: home-stripe-blend 5.4s cubic-bezier(.6, 0, .3, 1) infinite;
+}
+@keyframes home-stripe-blend {
+  0%, 18% { --stripe-blend: 0; }
+  50%     { --stripe-blend: 1; }
+  82%, 100% { --stripe-blend: 0; }
+}
+
+/* stripe: three clean bands that melt smoothly into one vivid green > red > orange ribbon and back */
+.home-shell .home-header-brand::after {
+  width: 6px; margin: 2px 0; border-radius: 4px; transform: none;
+  --stripe-blend: 0;
+  background: linear-gradient(180deg,
+    #14c26a 0%,
+    #14c26a calc(33.3% * (1 - var(--stripe-blend))),
+    #ff3b4a calc(33.3% + 16.7% * var(--stripe-blend)),
+    #ff3b4a calc(66.6% - 16.7% * var(--stripe-blend)),
+    #ffa02e calc(66.6% + 33.4% * var(--stripe-blend)),
+    #ffa02e 100%);
+  animation: home-stripe-blend 6.4s ease-in-out infinite;
+}
+@keyframes home-stripe-blend {
+  0%, 14% { --stripe-blend: 0; }
+  50%     { --stripe-blend: 1; }
+  86%, 100% { --stripe-blend: 0; }
+}
+:root[data-theme=dark] .home-shell .home-header-brand::after { filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .7)) saturate(1.15); }
+:root:not([data-theme=dark]) .home-shell .home-header-brand::after { filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .9)) drop-shadow(0 5px 14px rgba(59, 130, 246, .3)) saturate(1.15); }
+
+/* stripe, spin: the three clean bands turn slowly on the bar's own vertical axis, like a lazy motor — it narrows edge-on, shows its back, and comes round again */
+.home-shell .home-header-brand::after {
+  width: 8px; transform-origin: 50% 50%; backface-visibility: visible;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, .35), rgba(255, 255, 255, 0) 45%, rgba(0, 0, 20, .22)),
+    linear-gradient(180deg, #14c26a 0 33.3%, #ff3b4a 33.3% 66.6%, #ffa02e 66.6%);
+  animation: home-stripe-spin 7s cubic-bezier(.4, .1, .3, .9) infinite;
+}
+@keyframes home-stripe-spin { from { transform: perspective(160px) rotateY(0deg); } to { transform: perspective(160px) rotateY(360deg); } }
+@media (prefers-reduced-motion: reduce) { .home-shell .home-header-brand::after { animation: none; transform: none; } }
+
+/* stripe, tumble: it turns end over end around its horizontal (X) centre axis — a slow, circular roll */
+.home-shell .home-header-brand::after {
+  width: 6px;
+  background: linear-gradient(180deg, #14c26a 0 33.3%, #ff3b4a 33.3% 66.6%, #ffa02e 66.6%);
+  animation: home-stripe-roll 8s linear infinite;
+}
+@keyframes home-stripe-roll { from { transform: perspective(260px) rotateX(0deg); } to { transform: perspective(260px) rotateX(360deg); } }
+@media (prefers-reduced-motion: reduce) { .home-shell .home-header-brand::after { animation: none; transform: none; } }
+
+/* stripe, final: still, 6 px, three vivid bands, with a subtle light reflection (a soft sheen down the left edge + a faint specular glint near the top) */
+.home-shell .home-header-brand::after {
+  width: 6px; margin: 2px 0; border-radius: 4px; transform: none; animation: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .5) 12%, rgba(255, 255, 255, 0) 24%) 0 0 / 100% 100% no-repeat,
+    linear-gradient(90deg, rgba(255, 255, 255, .5) 0%, rgba(255, 255, 255, .12) 38%, rgba(255, 255, 255, 0) 60%, rgba(0, 0, 20, .1) 100%),
+    linear-gradient(180deg, #14c26a 0 33.3%, #ff3b4a 33.3% 66.6%, #ffa02e 66.6%);
+}
+
+/* the reflection drifts: a soft band of light slides slowly down the glass bar and fades out, then comes round again */
+.home-shell .home-header-brand::after {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, .6) 50%, rgba(255, 255, 255, 0) 100%) 0 -60% / 100% 45% no-repeat,
+    linear-gradient(90deg, rgba(255, 255, 255, .5) 0%, rgba(255, 255, 255, .12) 38%, rgba(255, 255, 255, 0) 60%, rgba(0, 0, 20, .1) 100%),
+    linear-gradient(180deg, #14c26a 0 33.3%, #ff3b4a 33.3% 66.6%, #ffa02e 66.6%);
+  animation: home-stripe-sheen 5.5s cubic-bezier(.45, .05, .35, 1) infinite;
+}
+@keyframes home-stripe-sheen {
+  0%   { background-position: 0 -60%, 0 0, 0 0; }
+  70%, 100% { background-position: 0 160%, 0 0, 0 0; }
+}
+@media (prefers-reduced-motion: reduce) { .home-shell .home-header-brand::after { animation: none; background-position: 0 8%, 0 0, 0 0; } }
+/* highlight now moves at the same slow pace as the "Studio" sheen: 9 s, ease-in-out, back and forth */
+.home-shell .home-header-brand::after { animation: home-stripe-sheen2 9s ease-in-out infinite alternate; }
+@keyframes home-stripe-sheen2 { from { background-position: 0 -60%, 0 0, 0 0; } to { background-position: 0 160%, 0 0, 0 0; } }
+@media (prefers-reduced-motion: reduce) { .home-shell .home-header-brand::after { animation: none; } }
+/* title and the longer tagline share one width again (title = 3.02 x the tagline size, measured) */
+.home-shell .home-title { font-size: calc(var(--hs) * 3.02); }
+
+/* ---- hover on Editorial / Graphics / Video: the icon's line fills with its own shimmering colour gradient (SVG gradients defined once in HomeWorkspace; each slides slowly back and forth) ---- */
+.home-shell .launch-tile:nth-child(1):hover .launch-icon svg, .home-shell .launch-tile:nth-child(1):focus-visible .launch-icon svg { stroke: url(#home-ig-1); }
+.home-shell .launch-tile:nth-child(2):hover .launch-icon svg, .home-shell .launch-tile:nth-child(2):focus-visible .launch-icon svg { stroke: url(#home-ig-2); }
+.home-shell .launch-tile:nth-child(3):hover .launch-icon svg, .home-shell .launch-tile:nth-child(3):focus-visible .launch-icon svg { stroke: url(#home-ig-3); }
+.home-shell .launch-tile:nth-child(-n+3) .launch-icon svg { stroke-width: 2; transition: filter .3s ease; }
+.home-shell .launch-tile:nth-child(-n+3):hover .launch-icon svg { filter: drop-shadow(0 0 5px rgba(120, 110, 255, .45)); }
+.home-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
