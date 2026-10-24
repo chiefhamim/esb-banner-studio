@@ -667,3 +667,14 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .workspace-main > * { animation: ws-in 360ms cubic-bezier(.4, 0, .2, 1) both; }
 @keyframes ws-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .ws-switch .pill-slide.ready, .ws-switch .ws-btn, .ws-home-btn, .workspace-main > * { transition: none; animation: none; } }
+
+/* ---------------------------------------------------------------- Editorial header: the AI chip joins the same control family
+   Same height, radius, type and quiet fill as Sign in / Publish; the provider shows as a coloured mark, not a loud gradient pill. */
+.ed-ai-chip { height: 32px; min-width: 32px; padding: 0 12px 0 10px; gap: 7px; border-radius: var(--r-2); font: 500 13px/1 var(--ui); letter-spacing: 0; border: 1px solid transparent; transition: background-color var(--t-2) var(--ease), color var(--t-2) var(--ease), border-color var(--t-2) var(--ease); }
+.ed-ai-chip .ed-ai-label { transform: none; }
+.ed-ai-chip[data-provider=gemini] { --ai: #8f6bd6; } .ed-ai-chip[data-provider=anthropic] { --ai: #d97757; } .ed-ai-chip[data-provider=openai] { --ai: #10a37f; } .ed-ai-chip[data-provider=openrouter] { --ai: #6467f2; }
+.ed-ai-chip.on[data-provider] { color: var(--text); background: var(--fill); border-color: transparent; box-shadow: none; filter: none; }
+.ed-ai-chip.on[data-provider]:hover { color: var(--text); background: var(--fill-hover); filter: none; }
+.ed-ai-chip.on[data-provider] svg { color: var(--ai); }
+.ed-ai-chip:not(.on) { border-radius: var(--r-2); padding: 0 12px 0 10px; }
+@media (max-width: 1180px) { .ed-ai-chip { padding: 0 9px; } }
