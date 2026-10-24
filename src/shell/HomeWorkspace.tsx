@@ -18,7 +18,9 @@ const HOME_BG_POS_KEY = 'esb-banner-studio/home-bg-pos'
 type BgPos = { x: number; y: number; s: number }
 const BG_POS_0: BgPos = { x: 0, y: 0, s: 1 }
 const clampPos = (p: BgPos): BgPos => {
-  const s = Math.min(3, Math.max(1, p.s)), lim = (s - 1) * 50 + 6
+  // The picture is 6% larger than the screen on every side, and its slow drift moves it up to 3.4% either way; an offset may only use what is left, or a strip
+  // of the page shows along the edge at the extremes of the drift.
+  const s = Math.min(3, Math.max(1, p.s)), lim = (s - 1) * 50 + 2.5
   return { s, x: Math.min(lim, Math.max(-lim, p.x)), y: Math.min(lim, Math.max(-lim, p.y)) }
 }
 // only an image this app itself wrote (a JPEG data URL) is ever placed in a CSS url(); anything else in storage is ignored

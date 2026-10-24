@@ -84,6 +84,25 @@ try {
   const homeOk = await page.evaluate(() => !!document.querySelector('.home-workspace h1')?.textContent.includes('Ai Studio'))
   console.log(homeOk ? 'PASS' : 'FAIL', 'switched to Home workspace')
 
+  // The Home picture drifts slowly; an offset saved from "Move background" at the old limit left a strip of the page showing along the screen edge
+  // at the extremes of the drift. The offset is now limited to what the drift leaves, so the picture covers the screen at every phase.
+  await page.evaluate(() => localStorage.setItem('esb-banner-studio/home-bg-pos', JSON.stringify({ light: { x: 6, y: -6, s: 1 }, dark: { x: 6, y: -6, s: 1 } })))
+  await page.reload()
+  await page.waitForSelector('.topbar, .home-shell')
+  await page.evaluate(() => document.querySelector('[data-ws="home"]')?.click())
+  await page.waitForSelector('.home-bg-img')
+  const gap = await page.evaluate(async () => {
+    const img = document.querySelector('.home-bg-img'); img.style.animationPlayState = 'paused'
+    let worst = 0
+    for (let t = 0; t <= 40; t += 2) {
+      img.style.animationDelay = '-' + t + 's'; await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+      const b = img.getBoundingClientRect()
+      worst = Math.max(worst, b.left, b.top, innerWidth - b.right, innerHeight - b.bottom)
+    }
+    return worst
+  })
+  console.log(gap <= 0 ? 'PASS' : 'FAIL', 'Home picture covers the screen at every phase of its drift, even with a saved offset', gap.toFixed(1) + ' px')
+
   await page.click('.ws-btn[data-ws="editorial"]')
   await page.waitForSelector('.editorial-workspace')
   const editorialOk = await page.waitForSelector('.editorial-workspace .ws-btn.on[data-ws="editorial"]', { timeout: 8000 }).then(() => true, () => false)

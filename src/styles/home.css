@@ -677,8 +677,11 @@
 }
 
 /* New dark picture (orange and cyan light in the corners, a dark band through the middle): the old vignette was built for the bright silk and dulled
-   exactly the corners that carry the colour, so the veil is gone — the middle is already dark enough for the text — and the smoke on "Ai" and
-   "Studio" is lighter, because dark glass on a dark picture sinks. */
+   exactly the corners that carry the colour, so the veil is gone — the middle is already dark enough for the text. "Ai" and "Studio" keep their full smoky look. */
 :root[data-theme=dark] .home-bg::after { background: none; }
 :root[data-theme=dark] .home-bg-img { filter: saturate(1.06); }
-:root[data-theme=dark] .home-shell :is(.home-ai, .home-title-accent) { text-shadow: 0 1px 2px rgba(0, 0, 10, .3), 0 4px 22px rgba(0, 0, 14, .28); }
+/* Same smoke, brighter colours under it in dark mode: smoke dims whatever it covers, and this picture is darker behind the title than the old one. */
+:root[data-theme=dark] .home-shell .home-title-accent { background-image: linear-gradient(in oklch 100deg, #8cb6ff 0%, #b3a0ff 34%, #ff8cff 62%, #b3a0ff 82%, #8cb6ff 100%); }
+:root[data-theme=dark] .home-shell .home-ai { background-image: linear-gradient(in oklch 100deg, #ff5359 0%, #ff9a3d 24%, #ffd23a 42%, #2fe58f 70%, #ff9a3d 88%, #ff5359 100%); }
+/* The smoke's outer shadow at half strength on "Ai" and "Studio": the wide halo 0.85 → 0.43 and the drop shadow 0.7 → 0.35; the tight edge shadow stays. */
+:root[data-theme=dark] .home-shell :is(.home-ai, .home-title-accent) { text-shadow: 0 1px 2px rgba(0, 0, 10, .75), 0 4px 26px rgba(0, 0, 14, .43); filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .35)); }
