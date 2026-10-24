@@ -30,6 +30,8 @@
 @container ed (max-width: 1240px) { .ed-head .ed-site-pill .site-host, .ed-head .pv-btn .dpc-tag { display: none; } .ed-head-host { max-width: 128px; } }
 /* Narrow windows (a 1366 laptop at 125-150 %): the centre group goes to icons first; the menus and the icon bar stay,
    because they hold sign-in, the Gemini key, New story and the View menu's theme and font. */
+/* with a story loaded the header also carries the source and site pills, the task times and three 96 px buttons: below 1360 the Re-translate label and the latency go */
+@container ed (max-width: 1359px) { .ed-head .ed-retranslate-label, .ed-head .ed-site-pill .site-state { display: none; } }
 @container ed (max-width: 1100px) { .ed-head .ed-retranslate-label, .ed-head .ed-site-pill .site-state { display: none; } .ed-head-host { max-width: 104px; } }
 @container ed (max-width: 960px) { .ed-head .ed-head-host, .ed-head .pv-btn .dpc-tag { display: none; } .ed-head .pillbar .pill-sep { display: none; } }
 
