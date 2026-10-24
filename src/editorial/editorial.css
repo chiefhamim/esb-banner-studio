@@ -140,7 +140,7 @@
 .ed-legend i { width: 12px; height: 3px; border-radius: 2px; }
 .ed-legend i.ok { background: var(--success); }
 .ed-legend i.bad { margin-left: 6px; background: var(--warning); }
-.ed-card .ed-story-doc-view { max-width: 68ch; gap: 14px; font-size: 15px; line-height: 1.65; }
+.ed-card .ed-story-doc-view { width: 100%; gap: 14px; font-size: 15px; line-height: 1.65; }
 
 .ed-slug { display: flex; align-items: center; gap: 8px; }
 .ed-slug-prefix { flex: none; font: 500 12px/16px var(--mono); color: var(--text-3); }

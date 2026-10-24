@@ -4179,7 +4179,7 @@ html[data-theme="dark"] .fb-action-btn:hover {
   font-size: 15px;
   line-height: 1.65;
   color: var(--text);
-  max-width: 68ch;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 14px;

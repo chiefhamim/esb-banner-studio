@@ -1,7 +1,7 @@
 # ESB Banner Studio Auto-Sync Daemon
 # Keeps local repository synchronized with origin/main
 
-$repoDir = "C:\Users\User\esb-banner-studio"
+$repoDir = Split-Path -Parent $PSScriptRoot
 $logFile = "$repoDir\tools\sync.log"
 $intervalSeconds = 20
 
