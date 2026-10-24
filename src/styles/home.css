@@ -660,3 +660,7 @@
 /* The name spans the tagline edge to edge: both scale with --hs, so 3.92 x --hs makes "ESB Power/Line AI Studio" exactly as wide as
    "Where stories are written, imagination is designed and reality is cut" at any window size. */
 .home-shell .home-title { font-size: calc(var(--hs) * 3.92); }
+
+/* EXPERIMENT (own commit — revert it to undo): Studio's smoky dark look on "AI" too — its soft dark halo around the letters and the same
+   shadow showing through the glyphs — with AI's own colours. */
+:root[data-theme=dark] .home-shell .home-ai { text-shadow: 0 1px 2px rgba(0, 0, 10, .75), 0 4px 26px rgba(0, 0, 14, .85); }
