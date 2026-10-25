@@ -718,3 +718,21 @@
 /* one row, filling the container: the unsaved session if there is one, otherwise the latest project */
 .home-shell .recents-box { grid-template-rows: minmax(0, 1fr); }
 .home-shell .recovery-actions { gap: 2px; }
+
+/* the project that is on top shows what it is — name, folder, kind and when — and keeps showing it; Restore and Delete slide in from the right only after the pointer has rested on it for a second */
+.home-shell .recent-main.recent-card.recent-card { cursor: pointer; overflow: hidden; align-items: center; gap: 14px; }
+.home-shell .recent-main .recent-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.home-shell .recent-main .recent-name { font-size: 14px; line-height: 20px; font-weight: 700; }
+.home-shell .recent-main .recent-path { font-size: 11.5px; line-height: 16px; color: var(--text-3); }
+.home-shell .recent-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px/16px var(--ui); color: var(--text-2); }
+.home-shell .recent-warn { display: flex; align-items: center; gap: 6px; margin-top: 2px; font: 700 11.5px/16px var(--ui); color: #d97a1c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-shell .recent-warn i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #f0953a; box-shadow: 0 0 0 3px color-mix(in srgb, #f0953a 24%, transparent); }
+:root[data-theme=dark] .home-shell .recent-warn { color: #f5a85a; }
+.home-shell .recent-actions { position: absolute; right: 10px; top: 50%; display: flex; gap: 2px; padding: 4px; border-radius: 10px; background: color-mix(in srgb, var(--card, #fff) 92%, transparent); box-shadow: 0 1px 2px rgba(20, 20, 40, .12), inset 0 0 0 1px var(--line-2); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  opacity: 0; transform: translate(18px, -50%); pointer-events: none; transition: opacity .22s ease, transform .28s var(--ease, ease); transition-delay: 0s; }
+:root[data-theme=dark] .home-shell .recent-actions { background: color-mix(in srgb, #10141c 90%, transparent); }
+.home-shell .recent-main:hover .recent-actions { opacity: 1; transform: translate(0, -50%); pointer-events: auto; transition-delay: 1s; }
+.home-shell .recent-main:focus-within .recent-actions { opacity: 1; transform: translate(0, -50%); pointer-events: auto; transition-delay: 0s; }
+@media (prefers-reduced-motion: reduce) { .home-shell .recent-actions { transition: none; transform: translate(0, -50%); } }
+.home-shell .recent-main .recent-meta { font-size: 11.5px; font-weight: 500; }
+.home-shell .recent-warn i { margin-left: 3px; }

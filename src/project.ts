@@ -33,9 +33,11 @@ export interface ProjectFileV2 {
 
 export type ProjectFile = ProjectFileV1 | ProjectFileV2
 
-export interface RecentProject { name: string; path: string }
+export interface RecentProject { name: string; path: string; /** When it was last opened or saved here (ms); older entries have none. */ at?: number }
 export const readRecent = (): RecentProject[] => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') } catch { return [] } }
-const pushRecent = (r: RecentProject) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify([r, ...readRecent().filter((x) => x.path !== r.path)].slice(0, 6))) } catch { /* ignore */ } }
+/** Take one project off the list (the file itself is left alone). */
+export const removeRecent = (path: string) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify(readRecent().filter((x) => x.path !== path))) } catch { /* ignore */ } }
+const pushRecent = (r: RecentProject) => { try { localStorage.setItem(RECENT_KEY, JSON.stringify([{ ...r, at: r.at ?? Date.now() }, ...readRecent().filter((x) => x.path !== r.path)].slice(0, 6))) } catch { /* ignore */ } }
 
 const toDataUrl = (blob: Blob): Promise<string> => new Promise((res, rej) => { const f = new FileReader(); f.onload = () => res(String(f.result)); f.onerror = () => rej(f.error); f.readAsDataURL(blob) })
 

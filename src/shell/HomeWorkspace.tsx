@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import lightBgUrl from '../assets/images/home/home-light.jpg'
 import darkBgUrl from '../assets/images/home/home-dark-gradient.jpg'
 import markUrl from '../assets/images/home/esb-mark-light.png'
-import { readRecent, openProject, openRecent } from '../project'
+import { readRecent, openProject, openRecent, removeRecent } from '../project'
 import type { RecentProject } from '../project'
 import { useShellStore } from './shellStore'
 import { useStore } from '../store'
@@ -28,12 +28,25 @@ const clampPos = (p: BgPos): BgPos => {
 const SAFE_BG = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/
 const HOME_BG_KEY = (t: 'light' | 'dark') => `esb-banner-studio/home-bg-${t}`
 
+/** The folder a project lives in, from its path. */
+const dirOf = (p: string) => { const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\')); return i > 0 ? p.slice(0, i) : p }
+/** "just now", "5 min", "3 h", "2 days", else the date. */
+function ago(at: number): string {
+  const m = Math.round((Date.now() - at) / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m} min ago`
+  if (m < 60 * 24) return `${Math.round(m / 60)} h ago`
+  if (m < 60 * 24 * 7) return `${Math.round(m / 1440)} day${Math.round(m / 1440) === 1 ? '' : 's'} ago`
+  return new Date(at).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 export function HomeWorkspace() {
   const setWorkspace = useShellStore((s) => s.setWorkspace)
   const theme = useStore((s) => s.theme)
   // Quit exists only in the desktop app; a browser tab is closed by the browser
   const canQuit = typeof window !== 'undefined' && !!window.esb?.quit
   const [recents, setRecents] = useState<RecentProject[]>([])
+  const top = recents[0] ?? null
   const [recoverySnapshot, setRecoverySnapshot] = useState<{ time: string; name: string } | null>(null)
 
   useEffect(() => {
@@ -265,36 +278,43 @@ export function HomeWorkspace() {
           <h2 className="section-title">Recent projects</h2>
           {recents.length > 0 || recoverySnapshot ? (
             <div className="recents-grid empty-notice recents-box">
-              {recoverySnapshot && (
-                <div className="recent-card recovery-card" role="group" aria-label="Unsaved session found">
+              {top ? (
+                <div className="recent-card recent-main" role="button" tabIndex={0} onClick={() => handleOpenRecent(top)} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) void handleOpenRecent(top) }}>
+                  <div className="recent-icon"><Icon name="folder" size={20} /></div>
+                  <div className="recent-info">
+                    <span className="recent-name">{top.name}</span>
+                    <span className="recent-path mono">{dirOf(top.path)}</span>
+                    <span className="recent-meta">ESB project · {top.path.split(/[\\/]/).pop()}{top.at ? ` · opened ${ago(top.at)}` : ''}</span>
+                    {recoverySnapshot && <span className="recent-warn"><i />Unsaved changes · {recoverySnapshot.time.replace(/:\d{2}(?=\s?[AP]M|$)/i, '')}</span>}
+                  </div>
+                  <div className="recent-actions" onClick={(e) => e.stopPropagation()}>
+                    {recoverySnapshot ? (
+                      <>
+                        <button type="button" className="ibtn" data-tip="Restore the unsaved session" aria-label="Restore the unsaved session" onClick={handleRestoreRecovery}><Icon name="undo" size={15} /></button>
+                        <button type="button" className="ibtn" data-tip="Discard the unsaved session" aria-label="Discard the unsaved session" onClick={handleDiscardRecovery}><Icon name="trash" size={15} /></button>
+                      </>
+                    ) : (
+                      <>
+                        <button type="button" className="ibtn" data-tip="Open this project" aria-label="Open this project" onClick={() => void handleOpenRecent(top)}><Icon name="undo" size={15} /></button>
+                        <button type="button" className="ibtn" data-tip="Remove from recent projects" aria-label="Remove from recent projects" onClick={() => { removeRecent(top.path); setRecents(readRecent()) }}><Icon name="trash" size={15} /></button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="recent-card recent-main recovery-card" role="group" aria-label="Unsaved session found">
                   <div className="recent-icon"><Icon name="refresh" size={18} /></div>
                   <div className="recent-info">
                     <span className="recent-name">Unsaved session</span>
-                    <span className="recent-path">{recoverySnapshot.name} · {recoverySnapshot.time}</span>
+                    <span className="recent-path">{recoverySnapshot?.name}</span>
+                    <span className="recent-meta">Found from {recoverySnapshot?.time}</span>
                   </div>
-                  <div className="recovery-actions">
+                  <div className="recent-actions">
                     <button type="button" className="ibtn" data-tip="Restore the unsaved session" aria-label="Restore the unsaved session" onClick={handleRestoreRecovery}><Icon name="undo" size={15} /></button>
                     <button type="button" className="ibtn" data-tip="Discard the unsaved session" aria-label="Discard the unsaved session" onClick={handleDiscardRecovery}><Icon name="trash" size={15} /></button>
                   </div>
                 </div>
               )}
-              {recents.slice(0, recoverySnapshot ? 0 : 1).map((item) => (
-                <button
-                  key={item.path}
-                  type="button"
-                  className="recent-card"
-                  onClick={() => handleOpenRecent(item)}
-                  title={`Open ${item.name} (${item.path})`}
-                >
-                  <div className="recent-icon">
-                    <Icon name="folder" size={20} />
-                  </div>
-                  <div className="recent-info">
-                    <span className="recent-name">{item.name}</span>
-                    <span className="recent-path mono">{item.path}</span>
-                  </div>
-                </button>
-              ))}
             </div>
           ) : (
             <div className="empty-notice"><Icon name="folder" size={22} /><span>Nothing opened yet</span><small>Projects you open or save appear here.</small></div>
