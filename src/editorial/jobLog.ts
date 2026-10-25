@@ -35,6 +35,15 @@ const KEY = 'esb-banner-studio/editorial/jobs/v1'
 export const KEEP_PER_STORY = 12
 const KEEP_TOTAL = 240
 
+/** 7.1 s · 42 s · 1 m 05 s — one-decimal under ten seconds, whole seconds after, minutes past sixty. */
+export function fmtDuration(ms: number): string {
+  const s = ms / 1000
+  if (s < 10) return s.toFixed(1) + ' s'
+  if (s < 60) return Math.round(s) + ' s'
+  const m = Math.floor(s / 60)
+  return `${m} m ${String(Math.round(s - m * 60)).padStart(2, '0')} s`
+}
+
 /** The story new jobs are filed under — kept in step with the queue's active story. */
 let currentStory = ''
 export const setJobStory = (id: string | null) => { currentStory = id ?? '' }

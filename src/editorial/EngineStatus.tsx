@@ -12,6 +12,7 @@ import { Select } from '../ui/controls'
 import { AI_PROVIDERS, aiFor, modelLabel, providerMeta, roleProvider, testAiKey } from './aiProviders'
 import type { AiProviderId, AiRole, AiSettings } from './aiProviders'
 import { useEditorialStore } from './editorialStore'
+import { fmtDuration } from './jobLog'
 
 type Check = { state: 'busy' } | { state: 'ok'; ms: number; model: string } | { state: 'bad'; error: string }
 type Active = { provider: AiProviderId; key: string; model: string }
@@ -35,7 +36,7 @@ async function check(a: Active) {
   useHealth.getState().set(k, r.ok ? { state: 'ok', ms: Math.round(performance.now() - t0), model: r.model ?? a.model } : { state: 'bad', error: r.error ?? 'It did not answer.' })
 }
 
-const fmt = (ms: number) => (ms < 10_000 ? (ms / 1000).toFixed(1) : String(Math.round(ms / 1000))) + ' s'
+const fmt = fmtDuration
 
 export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offline: boolean; onAddKey: () => void }) {
   const setAiSettings = useEditorialStore((s) => s.setAiSettings)

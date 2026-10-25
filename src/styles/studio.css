@@ -403,12 +403,12 @@
 /* The open panel's icon tile, the chosen collage and the picked keyphrase used solid ink. They follow the desk's
    category now (Power Generation indigo, Fossil Fuels amber…), with that category's own text colour on top so
    light accents stay legible. Chrome stays neutral; only "this is selected" carries the colour. */
-.pnl.open .pnl-icon { color: var(--cat-ink, var(--on-ink)); background: var(--cat, var(--ink)); }
-.collage-btn.on .collage { border-color: var(--cat, var(--ink)); background: color-mix(in srgb, var(--cat, var(--ink)) 12%, transparent); }
-.collage-btn.on rect { fill: var(--cat, var(--ink)); }
-.seo-chip.on { color: var(--cat-ink, var(--on-ink)); background: var(--cat, var(--ink)); }
-.sq-row.on { box-shadow: 0 0 0 1.5px var(--cat, var(--ink)); }
-.sq-row.on::before { background: var(--cat, var(--ink)); }
+.pnl.open .pnl-icon { color: var(--sel-ink); background: var(--sel); }
+.collage-btn.on .collage { border-color: var(--sel); background: color-mix(in srgb, var(--sel) 12%, transparent); }
+.collage-btn.on rect { fill: var(--sel); }
+.seo-chip.on { color: var(--sel-ink); background: var(--sel); }
+.sq-row.on { box-shadow: 0 0 0 1.5px var(--sel); }
+.sq-row.on::before { background: var(--sel); }
 
 /* ---------------------------------------------------------------- Editorial header tools: each says its state */
 .ed-ai-chip, .ed-account { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; height: 32px; min-width: 32px; padding: 0 8px; font: 500 13px/1 var(--ui); color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-2); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), transform var(--t-1) var(--ease); }
@@ -418,9 +418,9 @@
 .ed-ai-chip.on { color: var(--text); }
 .ed-ai-dot { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; background: var(--warning); border-radius: 50%; box-shadow: 0 0 0 2px var(--fill); }
 .ed-account.in { padding: 0 2px; background: transparent; }
-.ed-avatar { display: grid; place-items: center; width: 28px; height: 28px; font: 600 11px/1 var(--ui); letter-spacing: .02em; color: var(--cat-ink, var(--on-ink)); background: var(--cat, var(--ink)); border-radius: 50%; box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--card-line); transition: box-shadow var(--t-2) var(--spring); }
+.ed-avatar { display: grid; place-items: center; width: 28px; height: 28px; font: 600 11px/1 var(--ui); letter-spacing: .02em; color: var(--sel-ink); background: var(--sel); border-radius: 50%; box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--card-line); transition: box-shadow var(--t-2) var(--spring); }
 .ed-account.in:hover { background: transparent; }
-.ed-account.in:hover .ed-avatar { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--cat, var(--ink)); }
+.ed-account.in:hover .ed-avatar { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--sel); }
 .ibtn.spin svg { animation: ed-spin 900ms linear infinite; }
 @keyframes ed-spin { to { transform: rotate(360deg); } }
 @container ed (max-width: 1100px) { .ed-account-label { display: none; } }
@@ -446,13 +446,13 @@
   .side-tabs button:not(.on) .tab-label { display: none; }
 }
 /* switches and ticks that are on follow the category too; the knob is white on any coloured track, both themes */
-.switch input:checked + i, .tgl[aria-checked=true] { background: var(--cat, var(--ink)); }
+.switch input:checked + i, .tgl[aria-checked=true] { background: var(--sel); }
 .switch input:checked + i::after, .tgl[aria-checked=true]::after, :root[data-theme=dark] .switch input:checked + i::after, :root[data-theme=dark] .tgl[aria-checked=true]::after { background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
-.check input:checked + i { color: var(--cat-ink, var(--on-ink)); background: var(--cat, var(--ink)); border-color: var(--cat, var(--ink)); }
+.check input:checked + i { color: var(--sel-ink); background: var(--sel); border-color: var(--sel); }
 
 /* ---------------------------------------------------------------- hover and press: quick, quiet, the same everywhere */
 /* menus highlight in the category colour, like a system accent */
-.menu .menu-item:hover:not(:disabled), .menu .menu-item.active { color: var(--cat-ink, var(--on-ink)); background: var(--cat, var(--ink)); }
+.menu .menu-item:hover:not(:disabled), .menu .menu-item.active { color: var(--sel-ink); background: var(--sel); }
 .menu .menu-item:hover:not(:disabled) .icon, .menu .menu-item.active .icon, .menu .menu-item:hover:not(:disabled) .mi-hint, .menu .menu-item:hover:not(:disabled) small { color: inherit; opacity: .82; }
 /* press feedback on every button-like control */
 .btn:active:not(:disabled), .ibtn:active:not(:disabled), .pv-btn:active, .mb-item:active, .ws-btn:active, .side-tabs button:active, .seg-ctl button:active, .collage-btn:active, .seo-chip:active { transform: scale(.97); }
@@ -460,15 +460,15 @@
 /* the primary action lifts a little */
 .btn.primary:hover:not(:disabled) { box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--ink) 55%, transparent); }
 /* a closed panel hints what opening it does: its icon takes a wash of the category, the chevron leans in */
-.pnl:not(.open) > header:hover .pnl-icon { color: var(--cat, var(--text)); background: color-mix(in srgb, var(--cat, var(--ink)) 13%, var(--card)); }
+.pnl:not(.open) > header:hover .pnl-icon { color: var(--sel-text); background: color-mix(in srgb, var(--sel) 13%, var(--card)); }
 .pnl:not(.open) > header:hover .pnl-chev { transform: translateX(2px); color: var(--text); }
 /* tiles lift */
 /* tiles answer the pointer with depth and an edge in their own colour — never by moving (no layout shift) */
 .pnl-body .cat:hover:not(.on) { box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.22), 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
-.collage-btn:hover:not(.on) .collage { border-color: color-mix(in srgb, var(--cat, var(--ink)) 45%, transparent); }
+.collage-btn:hover:not(.on) .collage { border-color: color-mix(in srgb, var(--sel) 45%, transparent); }
 .ws-switch .ws-btn:not(.on):hover { background: color-mix(in srgb, var(--raised) 55%, transparent); }
 @media (prefers-reduced-motion: reduce) { .btn, .ibtn, .pv-btn, .cat, .pnl > header .pnl-chev { transition: none; } .btn:active, .ibtn:active, .cat:hover { transform: none !important; } }
-:root[data-theme=dark] .pnl:not(.open) > header:hover .pnl-icon { color: color-mix(in srgb, var(--cat, #fff) 55%, #fff); background: color-mix(in srgb, var(--cat, var(--ink)) 28%, var(--card)); }
+:root[data-theme=dark] .pnl:not(.open) > header:hover .pnl-icon { color: color-mix(in srgb, var(--cat, #fff) 55%, #fff); background: color-mix(in srgb, var(--sel) 28%, var(--card)); }
 /* Home's header has the room, and it is where you choose a desk: name all three */
 .home-topbar .ws-switch .ws-btn .ws-label { display: inline; }
 .home-topbar .ws-switch .ws-btn { padding: 0 10px; }
@@ -487,10 +487,10 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 .ed-head .ed-head-group .pv-btn { height: 30px; padding: 0 12px; gap: 7px; font: 500 13px/1 var(--ui); color: var(--text-2); background: var(--fill); border-radius: 9px; }
 .ed-head .ed-head-group .pv-btn > svg { color: var(--text-3); transition: color var(--t-1) var(--ease), transform var(--t-2) var(--spring); }
 .ed-head .ed-head-group .pv-btn:hover:not(:disabled) { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow), 0 6px 14px -8px rgba(0, 0, 0, 0.22); }
-.ed-head .ed-head-group .pv-btn:hover:not(:disabled) > svg { color: var(--cat, var(--text)); }
+.ed-head .ed-head-group .pv-btn:hover:not(:disabled) > svg { color: var(--sel-text); }
 .ed-head .ed-head-group .pv-btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
-.ed-head .ed-head-group .pv-btn.on > svg { color: var(--cat, var(--text)); }
-.ed-head .ed-head-group .pv-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--cat, var(--ink)) 70%, transparent); outline-offset: 1px; }
+.ed-head .ed-head-group .pv-btn.on > svg { color: var(--sel-text); }
+.ed-head .ed-head-group .pv-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--sel) 70%, transparent); outline-offset: 1px; }
 .ed-head .ed-site-pill { border: 0; }
 .ed-head .ed-site-pill .site-host { font: 500 13px/1 var(--ui); letter-spacing: -.005em; }
 .ed-head .ed-site-pill .site-state { padding: 2px 6px; font: 500 10.5px/14px var(--mono); color: var(--text-3); background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 999px; }
@@ -512,7 +512,7 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 
 /* ---------------------------------------------------------------- AI buttons, SEO by AI, the article link on Social */
 .ai-btn > svg { color: var(--cat, currentColor); }
-.seo-ai { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--cat, var(--ink)) 6%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cat, var(--ink)) 16%, transparent); }
+.seo-ai { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--sel) 6%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sel) 16%, transparent); }
 .seo-ai-text { display: flex; flex: 1 1 240px; min-width: 0; flex-direction: column; gap: 2px; font-size: 13px; line-height: 18px; }
 .seo-ai-text .hint { margin: 0; }
 .seo-ai .btn { flex: none; margin-left: auto; }
@@ -861,7 +861,7 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .seg-ctl button.on:hover, .side-tabs button.on:hover, .ws-switch .ws-btn.on:hover { background: transparent; }
 .seg-ctl button:focus-visible, .side-tabs button:focus-visible, .ws-switch .ws-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .ed-link-pill:hover { background: var(--fill-hover); }
-.ed-link-pill.on:hover { background: color-mix(in srgb, var(--cat, var(--ink)) 22%, var(--fill-hover)); }
+.ed-link-pill.on:hover { background: color-mix(in srgb, var(--sel) 22%, var(--fill-hover)); }
 .ed-more > summary { padding: 0 6px; margin: 0 -6px; border-radius: var(--r-2); }
 .ed-more > summary:hover { color: var(--text); background: var(--fill); }
 .ed-more > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
@@ -872,3 +872,26 @@ label.switch:active i { filter: brightness(.94); }
 .pv-btn.on:hover, .ed-ai-chip.on:hover { filter: brightness(1.08); }
 .ed-account.in:hover { filter: brightness(1.12); }
 .btn:disabled, .ibtn:disabled { cursor: default; }
+
+/* ---- selection colour, per theme. Light: the category's own accent. Dark: that accent softened toward the surface
+   (saturated colour on a dark ground vibrates and glares - Material's dark-theme rule) with dark ink on top, which
+   keeps 4.5:1 or better; every selection rule above reads --sel / --sel-ink / --sel-text. ---- */
+:root, .editorial-workspace, .app { --sel: var(--cat, var(--ink)); --sel-ink: var(--cat-ink, var(--on-ink)); --sel-text: var(--cat, var(--text)); }
+:root[data-theme=dark], :root[data-theme=dark] .editorial-workspace, :root[data-theme=dark] .app {
+  --sel: color-mix(in oklab, var(--cat, #d4d4d8) 62%, #c9c9d1);
+  --sel-ink: #111114;
+  --sel-text: color-mix(in oklab, var(--cat, #d4d4d8) 55%, #f2f2f5);
+}
+
+/* ---- Activity numerals: tabular lining figures, one badge style, right-aligned durations ---- */
+.ed-tp-history, .ed-tp-pop, .eng-pop, .ed-card, .acct { font-variant-numeric: tabular-nums lining-nums; font-feature-settings: 'tnum' 1, 'lnum' 1; }
+.ed-tp-history { width: auto; min-width: 32px; padding: 0 9px; gap: 6px; display: inline-flex; align-items: center; justify-content: center; }
+.ed-tp-count { position: static; min-width: 0; height: auto; padding: 0; display: inline; font: 600 12px/1 var(--ui); color: var(--text-2); background: none; border-radius: 0; box-shadow: none; letter-spacing: .01em; }
+.ed-tp-history:hover .ed-tp-count, .ed-tp-history.on .ed-tp-count { color: var(--text); }
+.ed-tp-live { position: static; width: 8px; height: 8px; box-shadow: none; flex: none; }
+.ed-tp-kind-btn .mono { font: 600 11px/1 var(--ui); opacity: 1; color: var(--text-3); }
+.ed-tp-kind-btn.on .mono { color: var(--text-2); }
+.ed-tp-ms { min-width: 46px; text-align: right; font: 500 12px/1 var(--ui); color: var(--text-2); }
+.ed-tp-steps li .ed-tp-ms { color: var(--text-3); }
+.ed-tp-job.live .ed-tp-ms { color: var(--sel-text); }
+.ed-tp-head-t span { font-variant-numeric: tabular-nums; }

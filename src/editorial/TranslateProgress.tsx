@@ -9,11 +9,11 @@ import { Icon } from '../ui/Icon'
 import { useEditorialStore } from './editorialStore'
 import { modelLabel, providerMeta } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
-import { useJobLog } from './jobLog'
+import { fmtDuration, useJobLog } from './jobLog'
 import { useStoryQueue } from './storyQueue'
 import type { Job, JobKind } from './jobLog'
 
-const fmt = (ms: number) => (ms < 10_000 ? (ms / 1000).toFixed(1) : String(Math.round(ms / 1000))) + ' s'
+const fmt = fmtDuration
 const storyJob = (first: string): { kind: JobKind; title: string } =>
   /upload/i.test(first) ? { kind: 'publish', title: 'Publishing' } : /re-translat/i.test(first) ? { kind: 'story', title: 'Re-translation' } : { kind: 'story', title: 'Story translation' }
 const KINDS: { kind: JobKind; label: string }[] = [{ kind: 'story', label: 'Story' }, { kind: 'seo', label: 'SEO' }, { kind: 'social', label: 'Social' }, { kind: 'publish', label: 'Publish' }]
@@ -97,8 +97,8 @@ export function TranslateProgress({ status }: { status: string | null }) {
     <div ref={chipRef} className={'ed-topbar-progress ed-tp'} role="group" aria-label="Task times">
       <button type="button" className={'ed-tp-history' + (open ? ' on' : '')} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="Activity"
         data-tip={live ? `Activity — ${live.title} running, ${fmt(total(live))}` : jobs.length ? `Activity for this story — ${jobs.length} ${jobs.length === 1 ? 'task' : 'tasks'}, with model and time` : 'Activity — translation, SEO, caption and publish runs for this story, with model and time'}>
-        <Icon name="activity" size={16} />{live && <span className="ed-tp-live" aria-hidden />}
-        {jobs.length > 0 && <span className="ed-tp-count mono">{jobs.length}</span>}
+        <Icon name="activity" size={16} />
+        {live ? <span className="ed-tp-live" aria-hidden /> : jobs.length > 0 && <span className="ed-tp-count">{jobs.length > 99 ? '99+' : jobs.length}</span>}
       </button>
       {open && at && createPortal(
         <div ref={popRef} className="ed-tp-pop" role="status" aria-live="polite" style={{ top: at.top, right: at.right }}>
