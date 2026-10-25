@@ -1035,7 +1035,9 @@ label.switch:active i { filter: brightness(.94); }
 .ed-tp-ms { white-space: nowrap; }
 .ed-tp-steps li .ed-tp-step { line-height: 17px; }
 .eng-model > span, .eng-nokey, .eng-err, .eng-head-t span { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
-.eng-model { align-items: flex-start; }
+.eng-model { align-items: flex-start; line-height: 16px; }
+.eng-model > span { line-height: 16px; }
+.eng-model .sb-pdot { margin-top: 4px; } /* centres the 8px dot on the first 16px text line, also when the name wraps */
 
 .pcard-story { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; background: var(--card); border-radius: var(--r-2); }
 
