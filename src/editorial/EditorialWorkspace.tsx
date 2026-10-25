@@ -14,6 +14,8 @@ import { BannerCard } from './BannerCard'
 import { bodyForPublish, richOf } from './richBody'
 import { RichBodyEditor } from './RichBodyEditor'
 import { RichReview } from './RichReview'
+import { CatMark } from './CatMark'
+import { BannerThumb } from './BannerThumb'
 import { useWidth } from '../ui/useWidth'
 import { Splitter } from '../ui/layout'
 import { BN_FONTS, useBnFont } from './bnFont'
@@ -919,6 +921,14 @@ export function EditorialWorkspace() {
         </div>
       )}
 
+      {compact && launcherTab !== 'live_feed' && (
+        <ol className="ed-how" aria-label="How a story is made">
+          {([['link', 'Bring the story', 'A Bengali or English news link, or paste the text.'], ['sparkle', 'The AI writes it in English', 'Every figure kept, headline and SEO fields within the site’s limits, layout where the story needs it.'], ['check', 'Check the figures', 'Green is found in the source, amber needs your eye.'], ['upload', 'Review and publish', 'Banner, article and Facebook post go out together.']] as const).map(([icon, title, text], i) => (
+            <li key={title}><span className="ed-how-n"><Icon name={icon} size={14} /></span><div><b>{i + 1}. {title}</b><p>{text}</p></div></li>
+          ))}
+        </ol>
+      )}
+
       {launcherTab === 'live_feed' && (
         <div className="ed-intake-body">
           <div className="ed-intake-url">
@@ -1182,12 +1192,12 @@ export function EditorialWorkspace() {
           {/* CENTRE — the CMS article editor: headline & deck, then the story as its own panel */}
           <main className="ed-center scroll">
             <div className="ed-center-col">
-              <section className="ed-card ed-card-headline">
+              <section className="ed-card ed-card-headline" style={{ ['--cat' as string]: catData.accent } as CSSProperties}>
                 <header className="ed-card-head">
-                  <Icon name="newspaper" size={16} />
+                  <CatMark cat={catData} />
                   <div className="ed-card-title">
                     <h2>Headline &amp; deck</h2>
-                    <p>English copy for esbpowerline.com — review the translation against the source.</p>
+                    <p>{catData.name} · English copy for esbpowerline.com — review the translation against the source.</p>
                   </div>
                   <span className={'ed-state-chip ' + (translationProvider === 'offline' ? 'warn' : '')}>
                     {isAiProvider(translationProvider) ? `${providerMeta(translationProvider).name} draft` : translationProvider === 'offline' ? 'Needs translation' : 'Machine draft'}
@@ -1218,7 +1228,7 @@ export function EditorialWorkspace() {
                 </div>
               </section>
 
-              <section className="ed-card ed-card-story">
+              <section className="ed-card ed-card-story" style={{ ['--cat' as string]: catData.accent } as CSSProperties}>
                 <header className="ed-card-head tabs">
                   <Icon name="layers" size={16} />
                   <div className="ed-card-title">
@@ -1366,6 +1376,7 @@ export function EditorialWorkspace() {
           <aside className="right ed-side" aria-label="Publishing and image">
             <Splitter axis="vert" side="l" label="Resize the sidebar" value={cols.side} min={280} max={560} reset={COLS_DEFAULT.side} onLive={liveCol('side')} onCommit={commitCol('side')} root={() => wsRef.current} />
             <div className="scroll ed-side-scroll">
+            <BannerThumb base={baseAssets} cat={catData} />
             <Panel id="ed-side-publish" icon="upload" title="Publish" sub={linked ? 'Live' : 'Draft'} persist={false}>
               <dl className="ed-kv">
                 <dt>Website</dt>

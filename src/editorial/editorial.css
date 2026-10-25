@@ -560,3 +560,33 @@
 .rv hr { border: 0; border-top: 1px solid color-mix(in srgb, var(--text) 22%, transparent); margin: 18px 0; }
 .rv img { display: block; max-width: 68%; height: auto; margin: 14px auto; border-radius: 8px; } .rv img.article-img--full { max-width: 100%; }
 .rv figcaption { font-size: 13px; color: var(--text-2); text-align: center; } .rv .article-figure__credit { display: block; font-size: 12px; color: var(--text-3); }
+
+/* ============ Editorial polish: the same product as Graphics — a category identity, the banner in view, a page to read ============ */
+.cat-mark { display: inline-grid; place-items: center; flex: none; border-radius: 9px; background: var(--cat, var(--ink)); color: var(--cat-ink, #fff); box-shadow: 0 1px 2px rgba(0, 0, 0, .25), inset 0 0 0 1px rgba(255, 255, 255, .12); }
+.ed-card-headline, .ed-card-story { position: relative; }
+.ed-card-headline::before, .ed-card-story::before { content: ''; position: absolute; left: 18px; right: 18px; top: -1px; height: 3px; border-radius: 0 0 3px 3px; background: var(--cat, var(--ink)); }
+.ed-card-head > .cat-mark { margin-top: 0; }
+.ed-card-head .ed-card-title h2 { font-weight: var(--w-headline, 800); font-size: 15px; }
+.ed-input-headline { font-size: 23px; line-height: 1.18; font-weight: 800; letter-spacing: 0; }
+.ed-input-deck { font-size: 16px; line-height: 1.5; }
+/* the story reads like a page: a comfortable measure, a lead paragraph */
+.ed-story-doc-view, .rv { max-width: 740px; font-size: 17px; line-height: 1.75; }
+.ed-story-doc-view .ed-story-doc-p { font-size: 17px; line-height: 1.75; margin: 0 0 16px; }
+.ed-story-doc-view .ed-story-doc-p:first-of-type, .rv > p:first-child { font-size: 19px; line-height: 1.6; font-weight: 500; }
+.rb-scroll .rb-doc { max-width: 740px; }
+/* the banner thumbnail that heads the sidebar */
+.bt { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--r-3); background: var(--card); box-shadow: var(--card-shadow); }
+.bt::before { content: ''; position: absolute; left: 14px; right: 14px; top: -1px; height: 3px; border-radius: 0 0 3px 3px; background: var(--cat, var(--ink)); }
+.bt-frame { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 8px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--card-line, transparent); display: grid; place-items: center; }
+.bt-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bt-edit { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: rgba(15, 15, 18, .78); color: #fff; font: 700 12px/1 var(--ui); cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease); backdrop-filter: blur(6px); }
+.bt-frame:hover .bt-edit, .bt-edit:focus-visible { opacity: 1; transform: none; }
+.bt-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 2px; }
+.bt-meta b { font: 700 13px/18px var(--ui); color: var(--text); }
+.bt-meta span { font: 500 11.5px/16px var(--ui); color: var(--text-3); }
+/* what the empty source column says: how a story is made */
+.ed-how { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 0; padding: 14px 0 0; list-style: none; border-top: 1px solid var(--line); }
+.ed-how li { display: flex; gap: 12px; align-items: flex-start; padding: 8px 4px; }
+.ed-how-n { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--fill); color: var(--text-2); }
+.ed-how b { display: block; font: 700 13.5px/18px var(--ui); color: var(--text); }
+.ed-how p { margin: 2px 0 0; font: 500 12.5px/1.5 var(--ui); color: var(--text-3); }
