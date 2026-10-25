@@ -82,7 +82,8 @@ async function timed(url: string, init: RequestInit = {}, ms = 8000): Promise<Re
  * Every link between this desk and the live site, checked in the order a publish uses them. Each step reports what
  * it actually saw; a step that cannot run says why rather than passing.
  */
-export async function runConnectionCheck(session: StaffSession | null, onStep?: (c: ConnectionCheck[]) => void): Promise<ConnectionCheck[]> {
+/** `scope: 'site'` runs only what the website needs (site, sign-in service, session, role, articles, media upload); 'all' adds the AI keys. */
+export async function runConnectionCheck(session: StaffSession | null, onStep?: (c: ConnectionCheck[]) => void, scope: 'site' | 'all' = 'all'): Promise<ConnectionCheck[]> {
   const out: ConnectionCheck[] = []
   const push = (c: ConnectionCheck) => { out.push(c); onStep?.([...out]) }
 
@@ -138,6 +139,8 @@ export async function runConnectionCheck(session: StaffSession | null, onStep?: 
   } else {
     for (const [id, label] of [['role', 'Newsroom role'], ['articles', 'Articles table'], ['upload', 'Media upload']] as const) push({ id, label, status: 'skip', detail: 'Needs a signed-in session' })
   }
+
+  if (scope === 'site') return out
 
   // each AI provider a job is given — the key it holds, and whether it still answers
   const settings = loadAiSettings()

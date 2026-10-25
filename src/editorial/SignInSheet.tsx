@@ -45,6 +45,20 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   }
   useEffect(() => { void checkFb() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // the website connection, checked for real each time the sheet opens and on demand: the site answers, the sign-in
+  // service is up, this session is still accepted, the role may write, the articles table reads, uploads are allowed
+  const [siteCheck, setSiteCheck] = useState<{ s: 'idle' | 'checking' | 'ok' | 'bad'; checks: ConnectionCheck[]; at?: Date }>({ s: 'idle', checks: [] })
+  const checkSite = async () => {
+    setSiteCheck((c) => ({ ...c, s: 'checking' }))
+    const [checks] = await Promise.all([
+      runConnectionCheck(useEditorialStore.getState().staffSession, undefined, 'site').catch(() => [] as ConnectionCheck[]),
+      useEditorialStore.getState().checkConnection().catch(() => {}),
+    ])
+    setSiteCheck({ s: checks.length && !checks.some((c) => c.status === 'fail') ? 'ok' : 'bad', checks, at: new Date() })
+  }
+  useEffect(() => { if (session) void checkSite() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const siteBad = siteCheck.checks.filter((c) => c.status === 'fail')
+
   // Focus the email field once, when the sheet opens. This used to sit in an effect keyed on `onClose` — a new function
   // on every parent render — so a status refresh or a toast moved the cursor back to the email field while the editor
   // was typing the password.
@@ -142,15 +156,18 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
             <section className="acct-sec" aria-label="Connections">
               <h3>Connections</h3>
 
-              <div className={'acct-card ' + (siteStatus.connected ? 'ok' : 'bad')}>
+              <div className={'acct-card ' + (siteCheck.s === 'checking' ? 'checking' : siteCheck.s === 'bad' || !siteStatus.connected ? 'bad' : 'ok')}>
                 <img className="acct-logo" src={siteIcon} alt="" />
                 <div className="acct-main">
-                  <div className="acct-title"><b>esbpowerline.com</b><span className={'acct-pill ' + (siteStatus.connected ? 'ok' : 'bad')}><i />{siteStatus.connected ? `Connected · ${siteStatus.latencyMs} ms` : 'Unreachable'}</span></div>
+                  <div className="acct-title"><b>esbpowerline.com</b><span className={'acct-pill ' + (siteCheck.s === 'checking' ? 'checking' : siteCheck.s === 'bad' || !siteStatus.connected ? 'bad' : 'ok')}><i />{siteCheck.s === 'checking' ? 'Checking…' : !siteStatus.connected ? 'Unreachable' : siteCheck.s === 'bad' ? 'Needs attention' : `Connected · ${siteStatus.latencyMs} ms`}</span></div>
                   <p>CMS and article database · signed in as {session.email}</p>
+                  {siteCheck.s === 'bad' && siteBad.map((c) => <p key={c.id} className="acct-err">{c.label}: {c.detail}</p>)}
+                  {siteCheck.at && siteCheck.s !== 'checking' && <p className="acct-fine">{siteCheck.checks.filter((c) => c.status === 'ok').length} checks passed{siteCheck.checks.some((c) => c.status === 'skip') ? ', ' + siteCheck.checks.filter((c) => c.status === 'skip').length + ' skipped' : ''} · {siteCheck.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
                   {expires && <p className="acct-fine">Session renews automatically · current token until {expires.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
                   <div className="acct-actions">
                     <button type="button" className="btn sm primary" onClick={() => void openCms('/cms/articles/new')} disabled={opening}><Icon name="externalLink" size={13} /><span>{opening ? 'Opening…' : 'New article'}</span></button>
                     <button type="button" className="btn sm" onClick={() => void openCms('/cms')} disabled={opening}><Icon name="globe" size={13} /><span>CMS dashboard</span></button>
+                    <button type="button" className="btn sm" onClick={() => void checkSite()} disabled={siteCheck.s === 'checking'}><Icon name="refresh" size={13} className={siteCheck.s === 'checking' ? 'spin' : ''} /><span>{siteCheck.s === 'checking' ? 'Checking…' : 'Check again'}</span></button>
                   </div>
                 </div>
               </div>
