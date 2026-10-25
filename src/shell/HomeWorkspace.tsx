@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import lightBgUrl from '../assets/images/home/home-light.jpg'
 import darkBgUrl from '../assets/images/home/home-dark-gradient.jpg'
-import markLight from '../assets/images/home/esb-mark-light.png'
-import markDark from '../assets/images/home/esb-mark-dark.png'
+import markUrl from '../assets/images/home/esb-mark-light.png'
 import { readRecent, openProject, openRecent } from '../project'
 import type { RecentProject } from '../project'
 import { useShellStore } from './shellStore'
@@ -203,7 +202,7 @@ export function HomeWorkspace() {
         <header className="home-header">
           <div className="home-header-brand">
             <div className="home-title-group">
-              <h1 className="home-title" aria-label="ESB PowerLine AI Studio"><img className="home-mark home-mark-light" src={markLight} alt="" aria-hidden draggable={false} /><img className="home-mark home-mark-dark" src={markDark} alt="" aria-hidden draggable={false} /> <span className="home-ai">Ai</span> <span className="home-title-accent">Studio</span></h1>
+              <h1 className="home-title" aria-label="ESB PowerLine AI Studio"><img className="home-mark" src={markUrl} alt="" aria-hidden draggable={false} /><span className="home-stick" aria-hidden /><span className="home-name"><span className="home-ai">Ai</span> <span className="home-title-accent">Studio</span></span></h1>
               <p className="home-subtitle">Where stories are written, imagination is designed and reality is cut</p>
             </div>
           </div>

@@ -476,8 +476,7 @@
 .home-shell .home-header-brand { justify-content: center; text-align: center; }
 .home-shell .home-title-group { align-items: center; }
 /* the ESB three-stripe hairline, vertical, right after the title block (it replaces the horizontal one under it) */
-.home-shell .home-header-brand { flex-direction: row; align-items: stretch; gap: clamp(14px, 2.2vh, 20px); }
-.home-shell .home-header-brand::after { content: ''; flex: none; width: 3px; margin: 4px 0; border-radius: 2px; background: linear-gradient(180deg, #1f9d57 0 33.3%, #e53935 33.3% 66.6%, #f0953a 66.6%); }
+.home-shell .home-header-brand { flex-direction: row; align-items: center; gap: clamp(14px, 2.2vh, 20px); }
 .home-shell .home-title-group { text-align: left; align-items: flex-start; }
 /* ---- dark theme picture: "Chrome Background 06" — black silk with neon pink and cyan ribbons (2560 px). No logo to protect now, so it can be bold; light text, dark glass. ---- */
 :root[data-theme=dark] .home-bg-img { filter: saturate(1.1) contrast(1.04); }
@@ -497,8 +496,6 @@
 }
 :root:not([data-theme=dark]) .home-shell .home-title-accent { text-shadow: none; filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .9)) drop-shadow(0 5px 14px rgba(59, 130, 246, .3)); }
 /* the stripe hairline wears the same effect as "Studio": smoky glass in dark, frosted glow in white */
-.home-shell .home-header-brand::after { box-shadow: inset 1px 0 0 rgba(255, 255, 255, .35); }
-:root[data-theme=dark] .home-shell .home-header-brand::after { filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .7)) saturate(1.1); }
 :root:not([data-theme=dark]) .home-shell .home-header-brand::after { filter: drop-shadow(0 1px 0 rgba(255, 255, 255, .9)) drop-shadow(0 5px 14px rgba(59, 130, 246, .3)); }
 /* wider stripe with a slow light that glides down it */
 .home-shell .home-header-brand::after {
@@ -692,11 +689,6 @@
 .home-shell .recent-empty { border-style: dashed; background: transparent; }
 .home-shell .recent-empty .recent-name { color: var(--text-2); } .home-shell .recent-empty .recent-path { color: var(--text-3); }
 
-/* the original ESB Power Line monogram in the title, exactly as tall as the "Ai Studio" lettering (ascender to baseline, .78em for this font); white letters on the dark theme */
-.home-shell .home-mark { display: inline-block; height: .78em; width: auto; vertical-align: baseline; margin-right: .2em; user-select: none; }
-.home-shell .home-mark-dark { display: none; }
-:root[data-theme=dark] .home-shell .home-mark-light { display: none; }
-:root[data-theme=dark] .home-shell .home-mark-dark { display: inline-block; }
 
 /* an unsaved session is one slot like any project: icon, two lines, Restore and a discard button on the same row */
 .home-shell .recovery-card { flex-wrap: nowrap; padding: 0 12px 0 14px; row-gap: 0; }
@@ -704,3 +696,13 @@
 .home-shell .recovery-actions { margin-left: auto; align-items: center; gap: 4px; }
 .home-shell .recovery-actions .btn { height: 28px; }
 
+
+/* the title lockup: the original monogram, the ESB stripe, "Ai Studio" — as tall as one another (ink height of the lettering, .78em), standing on one baseline,
+   and spread to exactly the width of the tagline underneath (it is justified to the lockup if the lockup is the wider one) */
+.home-shell .home-title-group { width: fit-content; max-width: 100%; }
+.home-shell .home-title { display: flex; align-items: baseline; justify-content: space-between; gap: .32em; width: 100%; white-space: nowrap; }
+.home-shell .home-mark { display: block; flex: none; height: .78em; width: auto; margin: 0; user-select: none; }
+.home-shell .home-stick { flex: none; width: .075em; height: .78em; border-radius: 2px; background: linear-gradient(180deg, #1f9d57 0 33.3%, #e53935 33.3% 66.6%, #f0953a 66.6%); box-shadow: inset 1px 0 0 rgba(255, 255, 255, .3); }
+:root[data-theme=dark] .home-shell .home-stick { filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .7)) saturate(1.1); }
+.home-shell .home-name { flex: none; }
+.home-shell .home-subtitle { text-align: justify; text-align-last: justify; }
