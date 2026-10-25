@@ -18,18 +18,8 @@ interface ShellState {
 
 const STORAGE_KEY = 'esb-banner-studio/shell'
 
-function loadSavedWorkspace(): WorkspaceId {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (parsed.workspace === 'home' || parsed.workspace === 'graphics') {
-        return parsed.workspace
-      }
-    }
-  } catch { /* ignore */ }
-  return 'graphics' // Default to graphics workspace
-}
+/** The app always opens on Home, whichever workspace was open when it was closed. */
+const loadSavedWorkspace = (): WorkspaceId => 'home'
 
 export const useShellStore = create<ShellState>((set, get) => ({
   workspace: loadSavedWorkspace(),
