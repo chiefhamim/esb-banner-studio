@@ -40,7 +40,7 @@ import { autoDesk } from './deskFlag'
 import { detectCategory, suggestHighlight } from '../core/newsroom'
 import { extractFactTable, type FactItem } from './facts'
 import { bengaliToAsciiDigits } from './bengali'
-import { translateNewsArticle } from './translator'
+import { alignKeywords, seoFields, translateNewsArticle } from './translator'
 import { AiSettingsDialog } from './AiSettingsDialog'
 import { TranslateProgress } from './TranslateProgress'
 import { useJobLog } from './jobLog'
@@ -573,21 +573,34 @@ export function EditorialWorkspace() {
         (status) => setProgressStatus(status),
       )
       setTranslationMeta(res.provider, res.modelUsed)
-      setDraftField('headline', res.headline)
-      setDraftField('deck', res.deck)
-      setDraftField('body', res.body)
-      setDraftField('slug', res.slug)
-      setDraftField('focusKeywords', res.focusKeywords)
-      setDraftField('focusKeyphrase', (res.focusKeywords || '').split(',')[0]?.trim() ?? '')
-      setDraftField('metaTitle', res.metaTitle)
-      setDraftField('metaDescription', res.metaDescription)
-      if (res.facebook) setSocialCaption('facebook', res.facebook)
+      const cur = useEditorialStore.getState().draft
+      if (linked && cur.headline.trim()) {
+        // a story already on the site keeps its headline, deck, address and captions (its banner was made from that
+        // headline); only the body and the search fields are refreshed, built around the existing headline
+        const kw = alignKeywords(cur.headline, res.body, res.metaTitle, res.focusKeywords)
+        const seo = seoFields(cur.headline, cur.deck, res.body, kw, res.metaTitle, res.metaDescription)
+        setDraftField('body', res.body)
+        setDraftField('focusKeywords', kw)
+        setDraftField('focusKeyphrase', kw.split(',')[0]?.trim() ?? '')
+        setDraftField('metaTitle', seo.metaTitle)
+        setDraftField('metaDescription', seo.metaDescription)
+      } else {
+        setDraftField('headline', res.headline)
+        setDraftField('deck', res.deck)
+        setDraftField('body', res.body)
+        setDraftField('slug', res.slug)
+        setDraftField('focusKeywords', res.focusKeywords)
+        setDraftField('focusKeyphrase', (res.focusKeywords || '').split(',')[0]?.trim() ?? '')
+        setDraftField('metaTitle', res.metaTitle)
+        setDraftField('metaDescription', res.metaDescription)
+        if (res.facebook) setSocialCaption('facebook', res.facebook)
+      }
 
       setDraftNotice(res.translationFailed ? 'Part of the story could not be translated — the Bengali is left in place for you to translate.' : res.coverageWarning ?? null)
       showToast(
         res.translationFailed
           ? 'No translation service reachable — draft still has untranslated Bengali, review before publishing'
-          : 'Re-translated source story into English',
+          : linked ? 'Body and search fields refreshed — the headline, address and captions of this live story were kept' : 'Re-translated source story into English',
       )
     } catch (err: any) {
       setErrorMsg(err.message || 'Re-translation failed')
