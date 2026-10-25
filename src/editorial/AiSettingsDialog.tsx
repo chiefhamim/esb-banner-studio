@@ -158,7 +158,7 @@ export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; on
           >
             <textarea className="input ai-prompt" rows={8} spellCheck={false} value={draft.prompt} onChange={(e) => { const v = e.target.value; patch((d) => ({ ...d, prompt: v })) }} />
           </Field>
-          <p className="hint">The Main provider follows this prompt for the translation, word for word; only the answer's layout is fixed — headline, deck, slug, keywords, meta title and description, and the complete body — and the desk holds those to the site's limits. Keys are kept on this computer and sent only to their own provider.</p>
+          <p className="hint">The Main provider follows this prompt for the translation, word for word; only the answer's layout is fixed — headline, deck, slug, keywords, meta title and description, and the complete body (with headings, bullet points, tables and highlights where the story calls for them, plus chart ideas built only from the source's own numbers) — and the desk holds those to the site's limits. Keys are kept on this computer and sent only to their own provider.</p>
         </section>
       </div>
     </Dialog>

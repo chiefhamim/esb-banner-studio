@@ -62,6 +62,14 @@ STRUCTURE
 - Opening paragraph, under 40 words: who did what, the key number, and why it matters to the sector, using only facts in the source.
 - Then context in order of importance, one idea per short paragraph. Close on what happens next only if the source says so.
 
+RICH LAYOUT (use it when it helps the reader, never as decoration)
+- A news story of up to four paragraphs stays plain paragraphs. In a longer story with clearly separate parts, add short sub-headings.
+- When the source lists three or more parallel items (projects, conditions, figures, demands), set them as bullet points; use a numbered list only when the order matters.
+- When the source gives the same measure for three or more years, places or companies, present it as a small table, and also offer a chart idea. The numbers are copied exactly from the source; you never calculate a total, a change or a percentage the source does not print.
+- Feature at most one direct quotation as a block quote when it is a full, newsworthy sentence; otherwise keep quotes inside the paragraphs.
+- Make at most two key figures bold and at most one key phrase highlighted. Keep bold and highlight rare so they still mean something.
+- Layout never changes the facts: every number, name and quote still comes from the source, and nothing is dropped to make room for it. The exact marks to write are given in the reply format below.
+
 ENERGY PRECISION
 - Keep units with every figure, with a space between number and unit (40 MW, not 40MW). Never mix up power (MW) and energy (MWh). Say whether a number is capacity or actual output. Write "million" in full instead of "M".
 - On first use, spell out units and acronyms (million cubic feet per day, mmcfd). Give lakh and crore a plain gloss, for example "Tk 592 crore (5.92 billion taka)". Do not convert currencies or energy units unless the source does.
