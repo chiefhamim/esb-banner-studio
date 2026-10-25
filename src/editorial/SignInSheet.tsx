@@ -3,6 +3,7 @@
 // issues; the password is sent to that service and nowhere else, and is never stored.
 
 import { useEffect, useRef, useState } from 'react'
+import type * as React from 'react'
 import { createPortal } from 'react-dom'
 import { useEditorialStore } from './editorialStore'
 import { SITE_BASE_URL, openSiteCms } from './siteApi'
@@ -136,7 +137,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                 <h2>{session.name}</h2>
                 <p>{session.email}</p>
               </div>
-              <span className="acct-role" style={session.role && ROLE_COLOR[session.role] ? { color: ROLE_COLOR[session.role], borderColor: ROLE_COLOR[session.role], background: `color-mix(in srgb, ${ROLE_COLOR[session.role]} 10%, transparent)` } : undefined}>{session.role ? ROLE_LABEL[session.role] ?? session.role : 'Staff'}</span>
+              <span className="acct-role" style={{ ['--role' as string]: (session.role && ROLE_COLOR[session.role]) || '#6b7280' } as React.CSSProperties}><i aria-hidden />{session.role ? ROLE_LABEL[session.role] ?? session.role : 'Staff'}</span>
             </header>
 
             <section className="acct-sec" aria-label="Connections">
