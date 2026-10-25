@@ -1027,3 +1027,12 @@ label.switch:active i { filter: brightness(.94); }
 .ed-tp-steps { margin: 0 14px 8px 36px; padding: 4px 10px 4px 14px; }
 .ed-tp-steps li { grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 12px; }
 .ed-tp-steps li .ed-tp-ms { padding-right: 2px; }
+
+/* Activity (and the Engine panel): text is never cut with "…" - it wraps, so every word is readable */
+.ed-tp-step, .ed-tp-by, .ed-tp-job-title b, .ed-tp-err { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.ed-tp-steps li, .ed-tp-job-head { align-items: start; }
+.ed-tp-steps li .ed-tp-mark, .ed-tp-job-head .ed-tp-mark, .ed-tp-job-head .ed-tp-chev { margin-top: 2px; }
+.ed-tp-ms { white-space: nowrap; }
+.ed-tp-steps li .ed-tp-step { line-height: 17px; }
+.eng-model > span, .eng-nokey, .eng-err, .eng-head-t span { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+.eng-model { align-items: flex-start; }
