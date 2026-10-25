@@ -2,7 +2,7 @@
 // go out with, clear what is left, choose where it goes, and publish. Everything here is read from the draft — nothing is a
 // placeholder — and every open item takes you to where it is fixed.
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Icon } from '../ui/Icon'
 import { Panel, Switch } from '../ui/controls'
@@ -16,7 +16,8 @@ import type { Assets } from '../core/render'
 import type { Category } from '../core/tokens'
 import siteIcon from '../assets/images/site/site-icon.png'
 
-const ICON = { ok: 'check', warn: 'info', bad: 'x' } as const
+/** What the button on an open item says: the thing you will do there. */
+const ACTION: Record<ReadyFix, string> = { headline: 'Edit', deck: 'Edit', body: 'Open editor', facts: 'Review', seo: 'Open SEO', photo: 'Add photo', tags: 'Add tags', 'sign-in': 'Sign in', site: 'Check', bengali: 'Translate' }
 const openPanel = (id: string) => window.dispatchEvent(new CustomEvent('esb:open-panel', { detail: id }))
 
 function Ring({ done, total, state }: { done: number; total: number; state: string }) {
@@ -69,18 +70,10 @@ export function EditorialSide(p: {
   const open = ready.checks.filter((c) => c.status !== 'ok')
   const title = ready.state === 'ready' ? 'Ready to publish' : ready.state === 'review' ? `${ready.warnings} to check first` : `${ready.blockers} required to fix`
   const sub = p.linked ? 'Live on esbpowerline.com · Publish updates it' : `${p.cat.name} · ${p.words} words · ${p.readTime} min read`
-  const Row = (c: ReadyCheck) => (
-    <li key={c.id}>
-      <button type="button" className={'es-row ' + c.status} disabled={!c.fix} onClick={() => c.fix && p.onFix(c.fix)}>
-        <span className="es-row-ic"><Icon name={ICON[c.status]} size={12} /></span>
-        <span className="es-row-t"><b>{c.label}</b><span>{c.detail}</span></span>
-        {c.fix && <Icon name="chevRight" size={13} className="es-row-go" />}
-      </button>
-    </li>
-  )
-  const required = ready.checks.filter((c) => c.group === 'Required')
-  const quality = ready.checks.filter((c) => c.group === 'Quality')
-  const byState = (a: ReadyCheck, b: ReadyCheck) => Number(a.status === 'ok') - Number(b.status === 'ok')
+  const rank = (c: ReadyCheck) => (c.group === 'Required' ? 0 : 2) + (c.status === 'bad' ? 0 : 1)
+  const todo = open.slice().sort((a, b) => rank(a) - rank(b))
+  const passed = ready.checks.filter((c) => c.status === 'ok')
+  const [showPassed, setShowPassed] = useState(false)
 
   return (
     <>
@@ -94,11 +87,28 @@ export function EditorialSide(p: {
 
         <Panel id="ed-side-publish" icon="check" title="Before you publish" persist={false}
           actions={<span className={'es-count ' + ready.state}>{open.length ? `${open.length} open` : 'All clear'}</span>}>
-          <div className="es-list">
-            <h4>Required</h4>
-            <ul>{[...required].sort(byState).map(Row)}</ul>
-            <h4>Worth a look</h4>
-            <ul>{[...quality].sort(byState).map(Row)}</ul>
+          <div className="es-todo">
+            {todo.length === 0 ? (
+              <div className="es-clear"><span><Icon name="check" size={14} /></span><div><b>Nothing left to fix</b><p>All {ready.total} checks pass.</p></div></div>
+            ) : (
+              <ul>
+                {todo.map((c) => (
+                  <li key={c.id} className={c.status}>
+                    <i className="es-dot" aria-hidden />
+                    <div className="es-todo-t"><b>{c.label}{c.group === 'Required' && <em>Required</em>}</b><span>{c.detail}</span></div>
+                    {c.fix && <button type="button" className="btn xs" onClick={() => p.onFix(c.fix!)}>{ACTION[c.fix]}</button>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {passed.length > 0 && (
+              <>
+                <button type="button" className="es-passed" aria-expanded={showPassed} onClick={() => setShowPassed((v) => !v)}>
+                  <Icon name="check" size={13} /><span>{passed.length} check{passed.length === 1 ? '' : 's'} passed</span><Icon name="chevDown" size={13} className="es-passed-chev" />
+                </button>
+                {showPassed && <div className="es-chips">{passed.map((c) => <span key={c.id} title={c.detail}><Icon name="check" size={10} />{c.label}</span>)}</div>}
+              </>
+            )}
           </div>
           {p.last}
         </Panel>
