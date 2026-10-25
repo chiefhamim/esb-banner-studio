@@ -48,7 +48,7 @@ import { PublishDialog } from './PublishDialog'
 import type { PublishOutcome } from './PublishDialog'
 import { FacebookDialog } from './FacebookDialog'
 import { EngineStatus } from './EngineStatus'
-import { commentOnPost, getFacebook, postBannerToFacebook } from './facebook'
+import { commentOnPost, getFacebook, getStoryOn, postBannerToFacebook, postPhotoStory, setStoryOn } from './facebook'
 import { fixSeoWithAi } from './seoFix'
 import type { SeoDraft } from './seoFix'
 import type { EditorialDraft } from './editorialStore'
@@ -229,6 +229,8 @@ export function EditorialWorkspace() {
   const [publishJobId, setPublishJobId] = useState<number | null>(null)
   const [fbCfg, setFbCfg] = useState(() => getFacebook())
   const [fbOn, setFbOn] = useState(false)
+  const [fbStory, setFbStoryState] = useState(() => getStoryOn())
+  const setFbStory = (v: boolean) => { setFbStoryState(v); setStoryOn(v) }
   const [editingLive, setEditingLive] = useState<string | null>(null)
   const [lastPublish, setLastPublish] = useState<{ story: string | null; ok: boolean; at: number; text: string } | null>(null)
   // the site article this story is linked to (published from here, or opened for editing) - Publish then updates it
@@ -703,6 +705,14 @@ export function EditorialWorkspace() {
               const c = await commentOnPost(fbCfg, post.postId, `Full story: ${link}`)
               fbNote += c.ok ? ' Link added as the first comment — pin it on Facebook.' : ` The link comment failed: ${c.error}`
               if (!c.ok) jobError = `Posted to Facebook, but the link comment failed: ${c.error}`
+            }
+            if (fbStory) {
+              jobLog.step(jobId, 'Rendering the Story banner')
+              const sblob = await renderBanner(useStore.getState().doc, 'story', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
+              jobLog.step(jobId, 'Sharing to the Page Story')
+              const st = sblob ? await postPhotoStory(fbCfg, sblob) : { ok: false as const, error: 'The Story banner could not be rendered.' }
+              fbNote += st.ok ? ' Shared to the Page Story.' : ` The Story failed: ${st.error}`
+              if (!st.ok && !jobError) jobError = `Posted to Facebook, but the Story failed: ${st.error}`
             }
           } else jobError = `The site was saved, but Facebook failed: ${post.error}`
         } else if (targetStatus === 'PUBLISHED') {
@@ -1426,6 +1436,8 @@ export function EditorialWorkspace() {
           fbPage={fbCfg ? fbCfg.pageName || fbCfg.pageId : null}
           fbOn={fbOn}
           onFbOn={setFbOn}
+          fbStory={fbStory}
+          onFbStory={setFbStory}
           onFbConnect={() => setShowFbDialog(true)}
           onCopyJson={handleCopyCmsPayload}
           copied={copiedPayload}

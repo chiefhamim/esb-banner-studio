@@ -73,3 +73,33 @@ export async function commentOnPost(cfg: FacebookConfig, postId: string, message
     return { ok: false, error: 'Could not reach Facebook. Check the connection and try again.' }
   }
 }
+
+/**
+ * Share a picture to the Page's Story (Meta's Page Stories API): upload it unpublished, then publish it as a photo
+ * story. Meta may require the app to be approved for Stories; its refusal is reported in words.
+ */
+export async function postPhotoStory(cfg: FacebookConfig, photo: Blob): Promise<{ ok: true; storyId: string } | { ok: false; error: string }> {
+  try {
+    const up = new FormData()
+    up.append('source', photo, photo.type === 'image/png' ? 'story.png' : 'story.jpg')
+    up.append('published', 'false')
+    const r1 = await fetch(`${GRAPH}/${encodeURIComponent(cfg.pageId)}/photos`, { method: 'POST', headers: auth(cfg.token), body: up })
+    const b1 = await r1.json().catch(() => null)
+    if (!r1.ok || !b1?.id) return { ok: false, error: facebookError(r1.status, b1) }
+    const form = new FormData()
+    form.append('photo_id', String(b1.id))
+    const r2 = await fetch(`${GRAPH}/${encodeURIComponent(cfg.pageId)}/photo_stories`, { method: 'POST', headers: auth(cfg.token), body: form })
+    const b2 = await r2.json().catch(() => null)
+    if (!r2.ok || !(b2?.success || b2?.post_id)) {
+      const base = facebookError(r2.status, b2)
+      return { ok: false, error: `${base} Page Stories may need Meta's approval for your app.` }
+    }
+    return { ok: true, storyId: String(b2.post_id ?? b1.id) }
+  } catch {
+    return { ok: false, error: 'Could not reach Facebook. Check the connection and try again.' }
+  }
+}
+
+const STORY_KEY = 'esb-banner-studio/fb-story'
+export const getStoryOn = () => { try { return localStorage.getItem(STORY_KEY) === '1' } catch { return false } }
+export const setStoryOn = (v: boolean) => { try { localStorage.setItem(STORY_KEY, v ? '1' : '0') } catch { /* ignore */ } }
