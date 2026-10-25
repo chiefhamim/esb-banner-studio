@@ -37,6 +37,8 @@ export interface EditorialDraft {
   metaTitle: string         // SEO meta title
   metaDescription: string   // SEO meta description
   body: string              // full English story body
+  /** The same story with its formatting (headings, lists, tables…) as the site's HTML; ignored once the plain text changes (see richBody.richOf). */
+  bodyHtml: string
   byline: string
   /** Credit the story to "ESB News Desk" instead of the signed-in editor (the CMS's tick option). */
   postAsNewsDesk: boolean
@@ -156,6 +158,7 @@ const DEFAULT_DRAFT: EditorialDraft = {
   metaTitle: '',
   metaDescription: '',
   body: '',
+  bodyHtml: '',
   byline: '',
   postAsNewsDesk: false,
   credit: '',
@@ -376,6 +379,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
         metaTitle: seo.metaTitle,
         metaDescription: seo.metaDescription,
         body: bodyStr,
+        bodyHtml: '',
         byline: article.byline || currentDraft.byline || '',
         postAsNewsDesk: currentDraft.postAsNewsDesk,
         credit: article.images[0]?.credit || article.publisher || currentDraft.credit || '',

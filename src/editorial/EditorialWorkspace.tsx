@@ -11,6 +11,8 @@ import type { CSSProperties } from 'react'
 import './editorial.css'
 import { useEditorialStore } from './editorialStore'
 import { BannerCard } from './BannerCard'
+import { bodyForPublish, richOf } from './richBody'
+import { RichBodyEditor } from './RichBodyEditor'
 import { useWidth } from '../ui/useWidth'
 import { Splitter } from '../ui/layout'
 import { BN_FONTS, useBnFont } from './bnFont'
@@ -672,6 +674,7 @@ export function EditorialWorkspace() {
         headline: draft.headline,
         deck: draft.deck,
         body: draft.body,
+        bodyHtml: bodyForPublish(draft),
         slug: draft.slug,
         category: catData.name,
         focusKeywords: draft.focusKeywords,
@@ -805,6 +808,7 @@ export function EditorialWorkspace() {
       headline: draft.headline,
       deck: draft.deck,
       body: draft.body,
+      bodyHtml: bodyForPublish(draft),
       slug: draft.slug,
       category: catData.name,
       focusKeywords: draft.focusKeywords,
@@ -1233,7 +1237,7 @@ export function EditorialWorkspace() {
                       <Seg<'review' | 'edit'>
                         value={bodyMode}
                         onChange={setBodyMode}
-                        options={[{ value: 'review', icon: 'check', label: 'Verified view' }, { value: 'edit', icon: 'edit', label: 'Edit text' }]}
+                        options={[{ value: 'review', icon: 'check', label: 'Verified view' }, { value: 'edit', icon: 'edit', label: 'Edit' }]}
                       />
                       <span className="ed-legend"><i className="ok" />in source <i className="bad" />not found in source</span>
                     </div>
@@ -1262,7 +1266,7 @@ export function EditorialWorkspace() {
                         <textarea id="draft-body" hidden readOnly value={draft.body} />
                       </div>
                     ) : (
-                      <textarea id="draft-body" className="ed-input ed-input-body" placeholder="The full English story. Leave a blank line between paragraphs." value={draft.body} onChange={(e) => setDraftField('body', e.target.value)} />
+                      <RichBodyEditor body={draft.body} bodyHtml={richOf(draft)} onChange={(html, plain) => { setDraftField('bodyHtml', html); setDraftField('body', plain) }} />
                     )}
                   </div>
                 )}
@@ -1333,6 +1337,7 @@ export function EditorialWorkspace() {
                       heroUrl={heroMode === 'banner' ? webBannerUrl : bannerLeadImage}
                       heroCredit={draft.credit}
                       paragraphs={draft.body.split(/\n{2,}/).map((t) => t.trim()).filter(Boolean)}
+                      bodyHtml={richOf(draft)}
                       tags={tagList}
                       related={relatedStories}
                     />

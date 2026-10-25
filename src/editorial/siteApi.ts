@@ -445,6 +445,8 @@ export function buildCmsArticlePayload(params: {
   deck: string
   slug: string
   body: string
+  /** The story as the site's HTML, when it has formatting; otherwise the plain body becomes paragraphs. */
+  bodyHtml?: string
   category: string
   tags?: string[]
   metaTitle?: string
@@ -473,7 +475,7 @@ export function buildCmsArticlePayload(params: {
     shortTitle: cleanHeadline.length > 60 ? cleanHeadline.slice(0, 58) + '…' : null,
     slug: cleanSlug,
     excerpt: cleanDeck,
-    content: bodyToHtml(params.body),
+    content: params.bodyHtml || bodyToHtml(params.body),
     readTime: Math.max(1, Math.ceil(params.body.trim().split(/\s+/).filter(Boolean).length / 200)),
     category: params.category || 'Fossil Fuels & Commodities',
     status: 'PUBLISHED',

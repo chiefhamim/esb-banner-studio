@@ -57,6 +57,8 @@ export interface SitePreviewProps {
   heroUrl: string | null
   heroCredit: string
   paragraphs: string[]
+  /** The story's formatted HTML (already sanitised); when present it is shown instead of `paragraphs`. */
+  bodyHtml?: string | null
   tags: string[]
   related: RelatedStory[]
 }
@@ -191,9 +193,13 @@ function SitePage(p: SitePreviewProps) {
   const banner = p.theme === 'midnight' ? bannerMidnight : p.theme === 'dark' ? bannerDark : bannerWhite
   const cat = NAV_CATEGORIES.find((c) => c.name === p.category) ?? NAV_CATEGORIES[0]
   const initials = (p.author || 'ESB PowerLine').substring(0, 2)
-  const split = adSplitIndex(p.paragraphs.length)
-  const first = split === null ? p.paragraphs : p.paragraphs.slice(0, split)
-  const second = split === null ? [] : p.paragraphs.slice(split)
+  // formatted stories split into their top-level blocks, as the site does for the ad slot
+  const blocks = p.bodyHtml ? Array.from(new DOMParser().parseFromString(`<body>${p.bodyHtml}</body>`, 'text/html').body.children).map((e) => e.outerHTML) : null
+  const items = blocks ?? p.paragraphs
+  const split = adSplitIndex(items.length)
+  const first = split === null ? items : items.slice(0, split)
+  const second = split === null ? [] : items.slice(split)
+  const item = (t: string, k: string) => (blocks ? <div key={k} className="article-block" dangerouslySetInnerHTML={{ __html: t }} /> : <p key={k}>{t}</p>)
   const year = p.date.getFullYear()
 
   return (
@@ -355,16 +361,16 @@ function SitePage(p: SitePreviewProps) {
           </div>
 
           <div className="article-body mt-8 text-lg md:text-xl leading-relaxed pb-safe">
-            {first.map((t, i) => <p key={i}>{t}</p>)}
+            {first.map((t, i) => item(t, String(i)))}
             {second.length > 0 && (
               <>
                 <div className="article-body-ad-block my-10 flex h-[140px] items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/20" aria-hidden>
                   <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">In-article advertisement · automatic midpoint</span>
                 </div>
-                {second.map((t, i) => <p key={`b${i}`}>{t}</p>)}
+                {second.map((t, i) => item(t, `b${i}`))}
               </>
             )}
-            {p.paragraphs.length === 0 && <p className="text-muted-foreground">The story body appears here as it will read on esbpowerline.com.</p>}
+            {items.length === 0 && <p className="text-muted-foreground">The story body appears here as it will read on esbpowerline.com.</p>}
           </div>
 
           {p.tags.length > 0 && (
