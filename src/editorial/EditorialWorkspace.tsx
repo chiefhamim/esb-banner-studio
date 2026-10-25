@@ -48,6 +48,7 @@ import { PublishDialog } from './PublishDialog'
 import type { PublishOutcome } from './PublishDialog'
 import { FacebookDialog } from './FacebookDialog'
 import { EngineStatus } from './EngineStatus'
+import { ProviderMark } from './ProviderMark'
 import { commentOnPost, getFacebook, postBannerToFacebook } from './facebook'
 import { fixSeoWithAi } from './seoFix'
 import type { SeoDraft } from './seoFix'
@@ -1029,7 +1030,7 @@ export function EditorialWorkspace() {
         <div className="spacer" />
         <TranslateProgress status={progressStatus} />
         <button type="button" className={'ed-ai-chip' + (mainAi ? ' on' : '')} data-provider={ai.provider} onClick={() => setShowApiKeyModal(true)} aria-label="AI keys and roles" data-tip={mainAi ? `Main: ${aiName} · ${aiModelLabel}${seoAi ? ` — SEO: ${providerMeta(seoAi.provider).name}` : ''}${socialAi ? ` — Social: ${providerMeta(socialAi.provider).name}` : ''}. Click to change` : 'AI is off — add a Gemini, Claude, OpenAI or OpenRouter key'}>
-          <Icon name={mainAi ? 'sparkle' : 'link'} size={14} />
+          {mainAi ? <ProviderMark id={ai.provider} size={18} /> : <Icon name="link" size={14} />}
           <span className="ed-ai-label">{mainAi ? aiName : 'Connect AI'}</span>
         </button>
         <button type="button" className={'ed-account' + (staffSession ? ' in' : '')} onClick={() => setShowLoginModal(true)} aria-label={staffSession ? 'Staff sign-in' : 'Staff sign-in'} data-tip={staffSession ? `${staffSession.name} · ${staffSession.email} — account and connection check` : 'Sign in with your esbpowerline.com newsroom account'}>
