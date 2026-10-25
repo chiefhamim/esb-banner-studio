@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/controls'
-import { AI_PROVIDERS, aiFor, modelLabel, providerMeta, roleProvider, testAiKey } from './aiProviders'
+import { AI_PROVIDERS, aiFor, modelLabel, providerMeta, roleProvider, testAiKey, useAiUsage, usageTotals } from './aiProviders'
 import type { AiProviderId, AiRole, AiSettings } from './aiProviders'
 import { useEditorialStore } from './editorialStore'
 import { fmtDuration } from './jobLog'
@@ -41,6 +41,9 @@ const fmt = fmtDuration
 export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offline: boolean; onAddKey: () => void }) {
   const setAiSettings = useEditorialStore((s) => s.setAiSettings)
   const byKey = useHealth((s) => s.byKey)
+  const usageCalls = useAiUsage((s) => s.calls)
+  const usage = usageTotals(usageCalls)
+  const k = (n: number) => (n >= 10_000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n))
   const [open, setOpen] = useState(false)
   const [at, setAt] = useState<{ bottom: number; left: number } | null>(null)
   const btn = useRef<HTMLButtonElement>(null)
@@ -126,6 +129,12 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
               </div>
             )
           })}
+          <div className="eng-usage" aria-label="Tokens used this session">
+            <span className="eng-usage-k">This session</span>
+            {usage.calls ? (
+              <span className="eng-usage-v">{usage.calls} {usage.calls === 1 ? 'call' : 'calls'} · {k(usage.prompt)} in{usage.cacheRead ? ` (${k(usage.cacheRead)} from cache, ${Math.round(usage.hitRate * 100)}%)` : ''} · {k(usage.output)} out</span>
+            ) : <span className="eng-usage-v">no calls yet</span>}
+          </div>
           <p className="hint eng-foot">Keys and models are set from the AI button in the header.</p>
         </div>,
         document.body,

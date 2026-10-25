@@ -38,11 +38,18 @@ export function facebookError(status: number, body: { error?: { message?: string
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` })
 
 /** Read the Page the token belongs to — proves the ID and token pair works before anything is posted. */
-export async function verifyFacebook(pageId: string, token: string): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
+const verified = new Map<string, { at: number; name: string }>()
+const VERIFY_TTL = 5 * 60_000
+/** Read the Page the token belongs to. A good answer is remembered for five minutes per ID + token; `fresh` forces a new call. */
+export async function verifyFacebook(pageId: string, token: string, fresh = false): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
+  const key = `${pageId}|${token.slice(-12)}`
+  const hit = verified.get(key)
+  if (!fresh && hit && Date.now() - hit.at < VERIFY_TTL) return { ok: true, name: hit.name }
   try {
     const res = await fetch(`${GRAPH}/${encodeURIComponent(pageId)}?fields=name`, { headers: auth(token) })
     const body = await res.json().catch(() => null)
     if (!res.ok || !body?.name) return { ok: false, error: facebookError(res.status, body) }
+    verified.set(key, { at: Date.now(), name: String(body.name) })
     return { ok: true, name: String(body.name) }
   } catch {
     return { ok: false, error: 'Could not reach Facebook. Check the connection and try again.' }

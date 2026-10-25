@@ -1069,3 +1069,7 @@ label.switch:active i { filter: brightness(.94); }
 .io.open .io-chev { transform: rotate(180deg); }
 .io-body { display: flex; flex-direction: column; gap: 8px; padding: 4px 12px 12px; }
 .io-note.bad { color: var(--danger); }
+
+.eng-usage { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 8px; padding: 8px 10px; background: var(--fill); border-radius: var(--r-2); font-variant-numeric: tabular-nums lining-nums; }
+.eng-usage-k { font: 600 10.5px/1 var(--ui); letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
+.eng-usage-v { font: 500 12px/16px var(--ui); color: var(--text-2); text-align: right; overflow-wrap: anywhere; }

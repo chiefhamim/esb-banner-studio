@@ -20,6 +20,13 @@ export type Ai = { provider: AiProviderId; key: string; model: string }
 export interface Story { headline: string; deck: string; body: string }
 
 const storyText = (s: Story) => `Headline: ${s.headline}\n\nDeck: ${s.deck}\n\nStory:\n${s.body}`
+/** For captions: the headline, deck and the opening paragraphs (about 1,500 characters) carry every fact a caption uses, at a fraction of the tokens. */
+const captionText = (s: Story) => {
+  const paras = s.body.split(/\n\s*\n/)
+  let body = ''
+  for (const p of paras) { if (body.length >= 1500) break; body += (body ? '\n\n' : '') + p }
+  return `Headline: ${s.headline}\n\nDeck: ${s.deck}\n\nStory (opening):\n${body}`
+}
 
 /** Tells the history panel which part of a job is running, so it can show where the time went. */
 export type OnStep = (label: string) => void
@@ -172,7 +179,7 @@ export async function aiCaptions(ai: Ai, story: Story & { slug: string; desk: st
   onStep?.(`Writing with ${providerMeta(ai.provider).name} · ${model}`)
   const { data, model: used } = await aiJson<Record<string, string>>({
     provider: ai.provider, key: ai.key, model, system: SOCIAL_SYSTEM,
-    user: `${storyText(story)}\n\nDesk: ${story.desk}\nArticle link: ${url}` + (fix ? `\n\nThe captions below were checked and have problems. Rewrite all four so every problem is fixed and nothing else gets worse.\nProblems:\n${fix.problems.join('\n')}\n\nCurrent captions:\nFacebook: ${fix.current.facebook}\nX: ${fix.current.x}\nLinkedIn: ${fix.current.linkedin}\nTelegram: ${fix.current.telegram}` : ''),
+    user: `${captionText(story)}\n\nDesk: ${story.desk}\nArticle link: ${url}` + (fix ? `\n\nThe captions below were checked and have problems. Rewrite all four so every problem is fixed and nothing else gets worse.\nProblems:\n${fix.problems.join('\n')}\n\nCurrent captions:\nFacebook: ${fix.current.facebook}\nX: ${fix.current.x}\nLinkedIn: ${fix.current.linkedin}\nTelegram: ${fix.current.telegram}` : ''),
     schema: SOCIAL_SCHEMA, maxTokens: 8000, timeoutMs: 120_000, effort: 'low',
   })
   onStep?.("Checking it against the site's rules")

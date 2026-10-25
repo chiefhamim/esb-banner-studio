@@ -37,10 +37,10 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const [fb, setFb] = useState(() => getFacebook())
   const [fbState, setFbState] = useState<{ s: 'idle' | 'checking' | 'ok' | 'bad'; msg?: string }>({ s: 'idle' })
   const [fbDialog, setFbDialog] = useState(false)
-  const checkFb = async (cfg = fb) => {
+  const checkFb = async (cfg = fb, fresh = false) => {
     if (!cfg) { setFbState({ s: 'idle' }); return }
     setFbState({ s: 'checking' })
-    const r = await verifyFacebook(cfg.pageId, cfg.token)
+    const r = await verifyFacebook(cfg.pageId, cfg.token, fresh)
     setFbState(r.ok ? { s: 'ok', msg: r.name } : { s: 'bad', msg: r.error })
   }
   useEffect(() => { void checkFb() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -171,7 +171,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                   {fb && fbState.s !== 'bad' && <p className="acct-fine">{fb.permanent ? 'Token does not expire.' : 'Token from the Graph API Explorer: it can stop within an hour. Open Change Page, then “Make it permanent”.'}</p>}
                   <div className="acct-actions">
                     <button type="button" className={'btn sm' + (fb ? '' : ' primary')} onClick={() => setFbDialog(true)}><Icon name="link" size={13} /><span>{fb ? 'Change Page or token' : 'Connect Page'}</span></button>
-                    {fb && <button type="button" className="btn sm" onClick={() => void checkFb()} disabled={fbState.s === 'checking'}><Icon name="refresh" size={13} /><span>{fbState.s === 'checking' ? 'Checking…' : 'Check again'}</span></button>}
+                    {fb && <button type="button" className="btn sm" onClick={() => void checkFb(fb, true)} disabled={fbState.s === 'checking'}><Icon name="refresh" size={13} /><span>{fbState.s === 'checking' ? 'Checking…' : 'Check again'}</span></button>}
                   </div>
                 </div>
               </div>

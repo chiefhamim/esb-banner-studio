@@ -12,6 +12,22 @@
 // is a story without its last paragraphs.
 
 import Anthropic from '@anthropic-ai/sdk'
+import { create } from 'zustand'
+
+/** What the provider reported for each call this session: tokens read (fresh and from cache), written to cache, and produced. */
+export interface AiUsageEntry { at: number; provider: string; model: string; input: number; cacheRead: number; cacheWrite: number; output: number }
+export const useAiUsage = create<{ calls: AiUsageEntry[]; add: (e: AiUsageEntry) => void; reset: () => void }>((set) => ({
+  calls: [],
+  add: (e) => set((s) => ({ calls: [...s.calls.slice(-199), e] })),
+  reset: () => set({ calls: [] }),
+}))
+/** Totals for the Engine panel. Claude's `input_tokens` excludes cached tokens, so the real prompt size is input + cacheRead + cacheWrite. */
+export function usageTotals(calls: AiUsageEntry[]) {
+  const t = { calls: calls.length, input: 0, cacheRead: 0, cacheWrite: 0, output: 0 }
+  for (const c of calls) { t.input += c.input; t.cacheRead += c.cacheRead; t.cacheWrite += c.cacheWrite; t.output += c.output }
+  const prompt = t.input + t.cacheRead + t.cacheWrite
+  return { ...t, prompt, hitRate: prompt ? t.cacheRead / prompt : 0 }
+}
 
 export type AiProviderId = 'gemini' | 'anthropic' | 'openai' | 'openrouter'
 
@@ -296,6 +312,8 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
       if (msg.stop_reason === 'refusal') throw new Error('Claude declined this request')
       if (msg.stop_reason === 'max_tokens') throw new Error('Claude ran out of room before finishing — the story may be too long for one reply')
       const text = msg.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('')
+      const u = msg.usage as { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null } | undefined
+      if (u) useAiUsage.getState().add({ at: Date.now(), provider: 'anthropic', model: msg.model || model, input: u.input_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0, output: u.output_tokens ?? 0 })
       return { data: parseJson(text) as T, model: msg.model || model }
     }
 
