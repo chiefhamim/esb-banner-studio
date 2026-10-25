@@ -850,7 +850,7 @@ export function EditorialWorkspace() {
         </button>
         <button type="button" className={'ed-account' + (staffSession ? ' in' : '')} onClick={() => setShowLoginModal(true)} aria-label={staffSession ? 'Staff sign-in' : 'Staff sign-in'} data-tip={staffSession ? `${staffSession.name} · ${staffSession.email} — account and connection check` : 'Sign in with your esbpowerline.com newsroom account'}>
           {staffSession
-            ? <><span className="ed-avatar">{(staffSession.name || staffSession.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span><span className="ed-account-name">{staffSession.name || staffSession.email}</span></>
+            ? <><span className="ed-avatar">{(staffSession.name || staffSession.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span></>
             : <><Icon name="user" size={14} /><span className="ed-account-label">Sign in</span></>}
         </button>
         <button type="button" className="btn primary" onClick={openPublish} disabled={!draft.headline.trim()} data-tip="Review the checklist and publish to esbpowerline.com">

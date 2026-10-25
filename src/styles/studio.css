@@ -746,6 +746,16 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 @media (max-width: 1280px) { .ed-statusbar .sb-who, .ed-statusbar .sb-rname { display: none; } }
 /* header account: avatar + the editor's name */
 .ed-account .ed-account-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12.5px/1 var(--ui); color: var(--text-2); }
-.ed-account.in { gap: 8px; padding: 0 10px 0 4px; }
+.ed-account.in { gap: 0; padding: 0 4px; }
 @media (max-width: 1280px) { .ed-account .ed-account-name { display: none; } .ed-account.in { padding: 0 4px; } }
 .ed-statusbar::before { display: none; }  /* the CMS dot in the footer replaces the old category dot */
+
+/* footer balance: every muted label (CMS, ENGINE, MAIN, SEO, SOCIAL) is one style, every value is one style, one gap */
+.ed-statusbar .sb-k, .ed-statusbar .sb-rname { font: 600 10.5px/16px var(--ui); letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); margin: 0; }
+.ed-statusbar .sb-host, .ed-statusbar .sb-who, .ed-statusbar .sb-role b, .ed-statusbar .sb-pill { font: 600 12px/16px var(--ui); }
+.ed-statusbar .sb-pill { height: 20px; }
+.ed-statusbar .sb-cms, .ed-statusbar .sb-engine, .ed-statusbar .sb-role { gap: 8px; }
+.ed-statusbar .sb-engine { gap: 10px; }
+.ed-statusbar .sb-chev { font-size: 13px; line-height: 16px; margin: 0 4px; opacity: .6; }
+.ed-statusbar .sb-who { font-weight: 500; }
+.ed-statusbar .sb-role b.free { font-weight: 500; }
