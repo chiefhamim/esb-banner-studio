@@ -44,7 +44,7 @@ import { translateNewsArticle } from './translator'
 import { AiSettingsDialog } from './AiSettingsDialog'
 import { TranslateProgress } from './TranslateProgress'
 import { useJobLog } from './jobLog'
-import { aiFor, providerMeta, roleProvider } from './aiProviders'
+import { aiFor, modelLabel, providerMeta, roleProvider } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
 import { aiCaptions, aiSeo, articleUrl, storyCaptions, xLength } from './aiDesk'
 import {
@@ -131,7 +131,6 @@ export function EditorialWorkspace() {
   const liveArticles = useEditorialStore((s) => s.liveArticles)
   const slugStatus = useEditorialStore((s) => s.slugStatus)
   const translationProvider = useEditorialStore((s) => s.translationProvider)
-  const modelUsed = useEditorialStore((s) => s.modelUsed)
 
   const checkConnection = useEditorialStore((s) => s.checkConnection)
   const syncFromLiveFeed = useEditorialStore((s) => s.syncFromLiveFeed)
@@ -1254,19 +1253,31 @@ export function EditorialWorkspace() {
           ========================================================================= */}
       <footer className="statusbar ed-statusbar">
         <span className={'sb-cms ' + (siteStatus.connected ? 'on' : 'off')}>
-          <i className="sb-dot" aria-hidden />
-          CMS: <b>esbpowerline.com</b> · <b>{siteStatus.connected ? (staffSession?.name ? `Connected · ${staffSession.name}` : 'Connected') : 'Disconnected'}</b>
+          <span className="sb-k">CMS</span>
+          <b className="sb-host">esbpowerline.com</b>
+          <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.connected ? 'Connected' : 'Disconnected'}</span>
+          {siteStatus.connected && staffSession?.name && (
+            <span className="sb-who"><span className="sb-av" aria-hidden>{staffSession.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span>{staffSession.name}</span>
+          )}
         </span>
         <div className="sep" />
-        <span className={'sb-engine' + (mainAi ? ' ai' : '')}>
-          Engine:{' '}
-          <b>
-            {translationProvider === 'offline'
-              ? 'Offline — manual translation needed'
-              : mainAi
-                ? `${aiName} · ${isAiProvider(translationProvider) && modelUsed ? modelUsed : aiModelLabel}`
-                : 'Neural GTX'}
-          </b>
+        <span className="sb-engine">
+          <span className="sb-k">Engine</span>
+          {translationProvider === 'offline' ? (
+            <b>Offline — manual translation needed</b>
+          ) : (
+            ([['Main', mainAi], ['SEO', seoAi], ['Social', socialAi]] as const).map(([role, a], i) => (
+              <span key={role} className="sb-role">
+                {i > 0 && <i className="sb-chev" aria-hidden>›</i>}
+                <span className="sb-rname">{role}</span>
+                {a ? (
+                  <b data-provider={a.provider}><i className="sb-pdot" aria-hidden />{providerMeta(a.provider).name} · {a.model === 'auto' ? 'Auto' : modelLabel(a.model)}</b>
+                ) : (
+                  <b className="free">Neural GTX</b>
+                )}
+              </span>
+            ))
+          )}
         </span>
         <div className="spacer" />
         <span>
