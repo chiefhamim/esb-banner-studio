@@ -55,7 +55,7 @@ import type { PublishOutcome } from './PublishDialog'
 import { FacebookDialog } from './FacebookDialog'
 import { EngineStatus } from './EngineStatus'
 import { ProviderMark } from './ProviderMark'
-import { commentOnPost, getFacebook, postBannerToFacebook } from './facebook'
+import { commentOnPost, getFacebook, postBannerToFacebook, useFacebookPrefs } from './facebook'
 import { fixSeoWithAi } from './seoFix'
 import type { SeoDraft } from './seoFix'
 import type { EditorialDraft } from './editorialStore'
@@ -237,6 +237,8 @@ export function EditorialWorkspace() {
   const [publishJobId, setPublishJobId] = useState<number | null>(null)
   const [fbCfg, setFbCfg] = useState(() => getFacebook())
   const [fbOn, setFbOn] = useState(false)
+  const fbLink = useFacebookPrefs((s) => s.linkComment)
+  const setFbLink = useFacebookPrefs((s) => s.setLinkComment)
   const [editingLive, setEditingLive] = useState<string | null>(null)
   const [lastPublish, setLastPublish] = useState<{ story: string | null; ok: boolean; at: number; text: string } | null>(null)
   // the site article this story is linked to (published from here, or opened for editing) - Publish then updates it
@@ -752,7 +754,8 @@ export function EditorialWorkspace() {
           if (post.ok) {
             jobBy += ' + Facebook'
             fbUrl = post.url
-            if (link) {
+            if (link && !fbLink) fbNote += ' The article link was not added (that option is off).'
+            if (link && fbLink) {
               jobLog.step(jobId, 'Adding the article link as a comment')
               const c = await commentOnPost(fbCfg, post.postId, `Full story: ${link}`)
               fbNote += c.ok ? ' Link added as the first comment — pin it on Facebook.' : ` The link comment failed: ${c.error}`
@@ -1401,6 +1404,8 @@ export function EditorialWorkspace() {
               fbCfg={fbCfg}
               fbOn={fbOn}
               onFbOn={setFbOn}
+              fbLink={fbLink}
+              onFbLink={setFbLink}
               onConnectFb={() => setShowFbDialog(true)}
               onPublish={openPublish}
               onFix={fixReady}
@@ -1498,6 +1503,8 @@ export function EditorialWorkspace() {
           words={wordCount}
           paragraphs={paragraphCount}
           slugStatus={slugStatus}
+          fbLink={fbLink}
+          onFbLink={setFbLink}
           base={baseAssets}
           heroMode={heroMode}
           onHeroMode={setHeroMode}

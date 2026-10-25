@@ -13,6 +13,7 @@ import { buildReadiness, triage } from './readiness'
 import { useIgnoredChecks } from './ignoredChecks'
 import type { ReadyCheck, ReadyFix } from './readiness'
 import { canUploadToSite } from './siteConnect'
+import { getFormat } from '../core/tokens'
 import { verifyFacebook } from './facebook'
 import type { Assets } from '../core/render'
 import type { Category } from '../core/tokens'
@@ -46,6 +47,8 @@ export function EditorialSide(p: {
   fbCfg: { pageName?: string; pageId: string; token: string } | null
   fbOn: boolean
   onFbOn: (v: boolean) => void
+  fbLink: boolean
+  onFbLink: (v: boolean) => void
   onConnectFb: () => void
   onPublish: () => void
   onFix: (fix: ReadyFix) => void
@@ -165,22 +168,27 @@ export function EditorialSide(p: {
           actions={<span className="es-dots"><i className={site.connected ? 'on' : ''} title="Website" /><i className={fb.s === 'ok' && p.fbOn ? 'on' : ''} title="Facebook" /></span>}>
           <div className="es-dest">
             <img className="es-dest-logo" src={siteIcon} alt="" />
-            <div className="es-dest-t"><b>ESB PowerLine</b><span>esbpowerline.com · {p.linked ? 'updates the live article' : 'publishes a new article'}</span></div>
+            <div className="es-dest-t"><b>Website</b><span>esbpowerline.com · {p.linked ? 'updates the live article' : 'new article'}</span></div>
             <span className={'es-pill ' + (site.connected ? 'ok' : 'bad')}><i />{site.connected ? `Online${site.latencyMs ? ' · ' + site.latencyMs + ' ms' : ''}` : 'Offline'}</span>
           </div>
           <div className="es-dest">
             {p.fbCfg && !fbLogoBad
-              ? <img className="es-dest-logo round" src={`https://graph.facebook.com/${p.fbCfg.pageId}/picture?type=square`} alt="" onError={() => setFbLogoBad(true)} />
+              ? <img className="es-dest-logo round" src={`https://graph.facebook.com/${p.fbCfg.pageId}/picture?type=square`} alt="" title={fb.name || p.fbCfg.pageName || 'Facebook Page'} onError={() => setFbLogoBad(true)} />
               : <span className="es-dest-logo fb" aria-hidden>f</span>}
-            <div className="es-dest-t"><b>{p.fbCfg ? fb.name || p.fbCfg.pageName || 'Facebook Page' : 'Facebook Page'}</b><span>{!p.fbCfg ? 'Not connected' : fb.s === 'bad' ? fb.err : 'Facebook · posts the 4:5 banner with the caption'}</span></div>
+            <div className="es-dest-t"><b>Facebook</b><span>{!p.fbCfg ? 'Connect a Page to post the banner' : fb.s === 'bad' ? fb.err : `${getFormat('fb45').ratio} banner with the caption`}</span></div>
             {p.fbCfg
               ? <button type="button" className={'es-pill btn-pill ' + (fb.s === 'ok' ? 'ok' : fb.s === 'bad' ? 'bad' : 'wait')} onClick={recheckFb} data-tip="Check the connection again"><i />{fb.s === 'ok' ? 'Connected' : fb.s === 'bad' ? 'Needs attention' : 'Checking…'}</button>
               : <span className="es-pill off"><i />Not connected</span>}
           </div>
           <div className="es-post">
-            {p.fbCfg
-              ? <Switch checked={p.fbOn} onChange={p.onFbOn} label="Post to Facebook when I publish" />
-              : <button type="button" className="btn sm" onClick={p.onConnectFb}><Icon name="link" size={13} /><span>Connect the Facebook Page</span></button>}
+            {p.fbCfg ? (
+              <>
+                <Switch checked={p.fbOn} onChange={p.onFbOn} label="Post the banner when I publish" />
+                <div className={p.fbOn ? '' : 'es-sub-off'}><Switch checked={p.fbLink} onChange={p.onFbLink} label="Add the article link as the first comment" /></div>
+              </>
+            ) : (
+              <button type="button" className="btn sm" onClick={p.onConnectFb}><Icon name="link" size={13} /><span>Connect the Facebook Page</span></button>
+            )}
           </div>
           <p className="es-note">You confirm the details, images and captions in the next step. Nothing is sent before that.</p>
         </Panel>

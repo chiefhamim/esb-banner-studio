@@ -3,6 +3,8 @@
 // from the app to graph.facebook.com with the token in an Authorization header (not in the URL).
 // Publishing posts the 4:5 banner as a photo with the Facebook caption, which already ends with the article link.
 
+import { create } from 'zustand'
+
 const KEY = 'esb-banner-studio/facebook'
 const GRAPH = 'https://graph.facebook.com/v26.0'
 
@@ -122,3 +124,12 @@ export async function makeTokenPermanent(input: { pageId: string; userToken: str
     return { ok: false, error: 'Could not reach Facebook. Check the connection and try again.' }
   }
 }
+
+const PREFS_KEY = 'esb-banner-studio/facebook-prefs'
+const readPrefs = (): { linkComment: boolean } => { try { return { linkComment: (JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as { linkComment?: boolean }).linkComment !== false } } catch { return { linkComment: true } } }
+
+/** How a Facebook post is made, as the editor set it: whether the article link is added as the post's first comment (on unless turned off). */
+export const useFacebookPrefs = create<{ linkComment: boolean; setLinkComment: (v: boolean) => void }>((set) => ({
+  ...readPrefs(),
+  setLinkComment: (linkComment) => { try { localStorage.setItem(PREFS_KEY, JSON.stringify({ linkComment })) } catch { /* ignore */ } set({ linkComment }) },
+}))

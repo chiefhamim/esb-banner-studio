@@ -32,6 +32,9 @@ export function PublishDialog(p: {
   jobId: number | null
   fbPage: string | null
   fbOn: boolean
+  /** Add the article link as the post's first comment. */
+  fbLink: boolean
+  onFbLink: (v: boolean) => void
   onFbOn: (v: boolean) => void
   onFbConnect: () => void
   onCopyJson: () => void
@@ -84,7 +87,7 @@ export function PublishDialog(p: {
         </div>
         <BannerPreviews base={p.base} heroMode={p.heroMode} onHeroMode={p.onHeroMode} photoUrl={p.photoUrl} caption={p.fbOn || !p.fbPage ? draft.social.facebook : undefined} pageName={p.fbPage} wide webExtra={<ImageOptions dest="web" base={p.base} />} fbExtra={p.fbPage ? <ImageOptions dest="fb" base={p.base} /> : undefined}
           fbToggle={p.fbPage ? <Switch checked={p.fbOn} onChange={p.onFbOn} label={p.fbOn ? 'Posting' : 'Off'} /> : <button type="button" className="btn xs" onClick={p.onFbConnect}><Icon name="link" size={12} /><span>Connect a Page</span></button>}
-          fbNote={<p className="hint pcard-note">{p.fbPage ? <>The article link goes in the first comment. <button type="button" className="btn-link" onClick={p.onFbConnect}>Change Page</button></> : 'Connect a Facebook Page to post the banner there as well.'}</p>} />
+          fbNote={p.fbPage ? <div className="pcard-note"><Switch checked={p.fbLink} onChange={p.onFbLink} label="Add the article link as the first comment" /><button type="button" className="btn-link" onClick={p.onFbConnect}>Change Page</button></div> : <p className="hint pcard-note">Connect a Facebook Page to post the banner there as well.</p>} />
         {p.jobId != null && <PublishProgress id={p.jobId} />}
         {p.result && (
           <div ref={(el) => { el?.scrollIntoView({ block: 'end', behavior: 'smooth' }) }} className={'callout ' + (p.result.ok ? 'good' : 'warn')} role="status">
