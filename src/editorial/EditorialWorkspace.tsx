@@ -47,9 +47,10 @@ import { useJobLog } from './jobLog'
 import { PublishDialog } from './PublishDialog'
 import type { PublishOutcome } from './PublishDialog'
 import { FacebookDialog } from './FacebookDialog'
+import { EngineStatus } from './EngineStatus'
 import { getFacebook, postBannerToFacebook } from './facebook'
 import { openArticleForEdit } from './liveEdit'
-import { aiFor, modelLabel, providerMeta, roleProvider } from './aiProviders'
+import { aiFor, providerMeta, roleProvider } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
 import { aiCaptions, aiSeo, articleUrl, storyCaptions, xLength } from './aiDesk'
 import {
@@ -882,11 +883,6 @@ export function EditorialWorkspace() {
               <span className="dpc-tag">{source?.paragraphs.length ?? paragraphCount} ¶</span>
             </button>
           )}
-          <button type="button" className="pv-btn ed-site-pill" onClick={() => setShowLoginModal(true)} aria-label="esbpowerline.com connection" data-tip={`${siteStatus.statusText || (siteStatus.connected ? 'Connected' : 'Not reachable')} · ${siteStatus.latencyMs} ms · checked ${siteStatus.lastChecked || 'now'} — open the connection check`}>
-            <span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />
-            <span className="site-host">esbpowerline.com</span>
-            <span className="site-state">{siteStatus.connected ? `${siteStatus.latencyMs} ms` : 'offline'}</span>
-          </button>
           {hasStory && source && (
             <button type="button" className="pv-btn" onClick={handleRetranslateSource} disabled={translating} aria-label="Re-translate" data-tip={mainAi ? `Translate the original story again with ${aiName} · ${aiModelLabel}` : 'Translate the original story again (free machine translation — add an AI key for better results)'}>
               <Icon name="refresh" size={14} />
@@ -1305,30 +1301,14 @@ export function EditorialWorkspace() {
           3. BOTTOM STATUS BAR — Minimal & quiet (Requirement 7)
           ========================================================================= */}
       <footer className="statusbar ed-statusbar">
-        <span className={'sb-cms ' + (siteStatus.connected ? 'on' : 'off')}>
+        <button type="button" className={'sb-cms ' + (siteStatus.connected ? 'on' : 'off')} onClick={() => setShowLoginModal(true)}
+          data-tip={`${siteStatus.statusText || (siteStatus.connected ? 'Connected' : 'Not reachable')} · checked ${siteStatus.lastChecked || 'now'} — open the connection check`}>
           <span className="sb-k">CMS</span>
           <b className="sb-host">esbpowerline.com</b>
-          <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.connected ? `Connected as ${staffSession?.name || 'Mehedi Hasan Hamim'}` : 'Disconnected'}</span>
-        </span>
+          <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.connected ? `Connected as ${staffSession?.name || 'Mehedi Hasan Hamim'} · ${siteStatus.latencyMs} ms` : 'Disconnected'}</span>
+        </button>
         <div className="sep" />
-        <span className="sb-engine">
-          <span className="sb-k">Engine</span>
-          {translationProvider === 'offline' ? (
-            <b>Offline — manual translation needed</b>
-          ) : (
-            ([['Main', mainAi], ['SEO', seoAi], ['Social', socialAi]] as const).map(([role, a], i) => (
-              <span key={role} className="sb-role">
-                {i > 0 && <i className="sb-chev" aria-hidden>›</i>}
-                <span className="sb-rname">{role}</span>
-                {a ? (
-                  <b data-provider={a.provider}><i className="sb-pdot" aria-hidden />{providerMeta(a.provider).name} · {a.model === 'auto' ? 'Auto' : modelLabel(a.model)}</b>
-                ) : (
-                  <b className="free">Neural GTX</b>
-                )}
-              </span>
-            ))
-          )}
-        </span>
+        <EngineStatus ai={ai} offline={translationProvider === 'offline'} />
         <div className="spacer" />
         <span>
           {wordCount} words · ~{readTimeMin} min read
