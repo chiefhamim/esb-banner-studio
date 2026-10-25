@@ -77,16 +77,9 @@ export function PublishDialog(p: {
           <div><dt>Story</dt><dd><b>{p.words} words · {p.paragraphs} ¶</b></dd></div>
           <div><dt>Slug</dt><dd className="mono"><b>{draft.slug || 'not set'}</b>{!p.updating && p.slugStatus !== 'idle' && <i className={'pub-slug ' + p.slugStatus}>{p.slugStatus}</i>}</dd></div>
         </dl>
-        <BannerPreviews base={p.base} heroMode={p.heroMode} onHeroMode={p.onHeroMode} photoUrl={p.photoUrl} caption={p.fbOn || !p.fbPage ? draft.social.facebook : undefined} pageName={p.fbPage} wide webExtra={<ImageOptions dest="web" base={p.base} />} fbExtra={p.fbPage ? <ImageOptions dest="fb" base={p.base} /> : undefined} />
-        <div className="pub-fb">
-          {p.fbPage ? (
-            <Switch checked={p.fbOn} onChange={p.onFbOn} label={<span>Also post to Facebook <b>{p.fbPage}</b></span>} />
-          ) : (
-            <button type="button" className="btn sm" onClick={p.onFbConnect}><Icon name="link" size={13} /><span>Connect a Facebook Page</span></button>
-          )}
-          {p.fbPage && <button type="button" className="btn-link" onClick={p.onFbConnect}>Change</button>}
-          {p.fbPage && <span className="hint">The caption goes without a link; the article link is added as the Page's first comment (pin it from Facebook).</span>}
-        </div>
+        <BannerPreviews base={p.base} heroMode={p.heroMode} onHeroMode={p.onHeroMode} photoUrl={p.photoUrl} caption={p.fbOn || !p.fbPage ? draft.social.facebook : undefined} pageName={p.fbPage} wide webExtra={<ImageOptions dest="web" base={p.base} />} fbExtra={p.fbPage ? <ImageOptions dest="fb" base={p.base} /> : undefined}
+          fbToggle={p.fbPage ? <Switch checked={p.fbOn} onChange={p.onFbOn} label={p.fbOn ? 'Posting' : 'Off'} /> : <button type="button" className="btn xs" onClick={p.onFbConnect}><Icon name="link" size={12} /><span>Connect a Page</span></button>}
+          fbNote={<p className="hint pcard-note">{p.fbPage ? <>The caption goes without a link; the article link is added as the Page&apos;s first comment (pin it from Facebook). <button type="button" className="btn-link" onClick={p.onFbConnect}>Change Page</button></> : 'Connect a Facebook Page to post the banner there as well.'}</p>} />
         {p.jobId != null && <PublishProgress id={p.jobId} />}
         {p.result && (
           <div className={'callout ' + (p.result.ok ? 'good' : 'warn')} role="status">

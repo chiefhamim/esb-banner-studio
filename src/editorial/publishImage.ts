@@ -51,6 +51,9 @@ export const usePublishImage = create<PublishImageState>((set, get) => ({
   },
 }))
 
+/** WebP and PNG are never squeezed further: WebP goes up as rendered at the highest quality, PNG is lossless. Only JPG follows the slider. */
+export const effectiveQuality = (o: ImageOpts) => (o.type === 'jpeg' ? o.quality : 1)
+
 /** Pixel size of a banner at these settings. */
 export const pixelSize = (d: Dest, o: ImageOpts) => ({ w: Math.round(SIZE_OF[d].w * o.scale), h: Math.round(SIZE_OF[d].h * o.scale) })
 
@@ -66,7 +69,7 @@ export function useImageBytes(base: Assets | null, d: Dest, o: ImageOpts): numbe
     let live = true
     setBytes(null)
     const t = setTimeout(() => {
-      renderBanner(doc, FORMAT_OF[d], base, o.scale, o.type, o.quality).then((b) => { if (live) setBytes(b.size) }).catch(() => { if (live) setBytes(null) })
+      renderBanner(doc, FORMAT_OF[d], base, o.scale, o.type, effectiveQuality(o)).then((b) => { if (live) setBytes(b.size) }).catch(() => { if (live) setBytes(null) })
     }, 450)
     return () => { live = false; clearTimeout(t) }
   }, [base, doc, images, d, o.scale, o.type, o.quality])

@@ -20,12 +20,14 @@ export function ImageOptions({ dest, base }: { dest: Dest; base: Assets | null }
         <span className="io-k">Format</span>
         <div className="io-chips">{TYPES_FOR[dest].map((t) => <Chip key={t.id} on={o.type === t.id} onClick={() => set(dest, { type: t.id })}>{t.name}</Chip>)}</div>
       </div>
-      {o.type !== 'png' && (
+      {o.type === 'jpeg' ? (
         <div className="io-row">
           <span className="io-k">Quality</span>
           <Slider value={o.quality} min={0.5} max={1} step={0.01} onChange={(v) => set(dest, { quality: v })} className="io-slider" />
           <b className="io-q">{Math.round(o.quality * 100)}%</b>
         </div>
+      ) : (
+        <p className="io-note">{o.type === 'webp' ? 'WebP goes up as it is: highest quality, no extra compression. Only JPG is compressed.' : 'PNG is lossless: no compression.'}</p>
       )}
       <div className={'io-out' + (over ? ' bad' : '')}>
         <span>{px.w} × {px.h} px</span>

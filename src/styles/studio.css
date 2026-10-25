@@ -1004,3 +1004,26 @@ label.switch:active i { filter: brightness(.94); }
 .seo-src { margin-left: 8px; padding: 1px 6px; font: 600 9.5px/14px var(--ui); letter-spacing: .05em; text-transform: uppercase; font-style: normal; border-radius: var(--r-pill); color: var(--text-3); background: var(--fill); vertical-align: 1px; }
 .seo-src.google { color: var(--info, #6ea0ff); background: color-mix(in srgb, #4f8cff 14%, transparent); }
 .soc-checks { margin-top: 14px; }
+
+/* publish sheet: each destination, the story numbers, the progress and the result sit in their own container */
+.pcard { margin: 0; padding: 14px; gap: 12px; background: var(--fill); border-radius: var(--r-3); box-shadow: inset 0 0 0 1px var(--card-line); }
+.pcard-h { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+.pcard-ic { display: grid; place-items: center; width: 32px; height: 32px; flex: none; color: var(--text-2); background: var(--card); border-radius: var(--r-2); box-shadow: var(--raised-shadow); }
+.pcard-ic.fb { color: #1877f2; }
+.pcard-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.pcard-t b { font: 600 14px/18px var(--ui); color: var(--text); }
+.pcard-t span { font: 400 11.5px/15px var(--ui); color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcard .bp-frame { background: var(--card); box-shadow: inset 0 0 0 1px var(--card-line); }
+.pcard .io { background: var(--card); }
+.pcard .bp-caption { padding: 8px 10px; background: var(--card); border-radius: var(--r-2); color: var(--text-2); }
+.pcard-note { margin: 0; }
+.io-note { margin: 0; font: 400 11.5px/16px var(--ui); color: var(--text-3); }
+.pub-stats-row { padding: 12px 14px; background: var(--fill); border-radius: var(--r-3); box-shadow: inset 0 0 0 1px var(--card-line); }
+.pub > .pp, .pub > .callout { margin: 0; }
+
+/* Activity: a step is just a tick - no circle (that is for the job itself) - with equal room either side */
+.ed-tp-job .ed-tp-steps li .ed-tp-mark { width: 14px; height: 14px; background: none; border-radius: 0; }
+.ed-tp-job.ok .ed-tp-steps li .ed-tp-mark, .ed-tp-job.bad .ed-tp-steps li .ed-tp-mark { background: none; }
+.ed-tp-steps { margin: 0 14px 8px 36px; padding: 4px 10px 4px 14px; }
+.ed-tp-steps li { grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 12px; }
+.ed-tp-steps li .ed-tp-ms { padding-right: 2px; }

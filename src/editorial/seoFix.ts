@@ -8,7 +8,7 @@
 
 import { aiJson, providerMeta } from './aiProviders'
 import { modelFor, sanitizeSeo } from './aiDesk'
-import { analyzeSeo } from './seo'
+import { analyzeSeo, countPhrase, suggestKeyphrases } from './seo'
 import type { Ai, OnStep } from './aiDesk'
 import type { AiSchema } from './aiProviders'
 import type { SeoCheck } from './seo'
@@ -65,6 +65,25 @@ export function safeBodyRewrite(oldBody: string, newBody: string): boolean {
   return fresh.length <= Math.max(4, Math.round(vocabA.size * 0.04))
 }
 
+const GRAM_STOP = new Set('a an the and or but of in on at to for from by with as is are was were be will would could can has have had its into that this than over under after before says said new'.split(' '))
+
+/** A 2 to 3 word phrase from the headline (no stop word at either end) that the story also uses; the most used, longest first. */
+export function headlineGram(headline: string, body: string): string {
+  const w = headline.replace(/[^\p{L}\p{N}\s'’-]/gu, ' ').split(/\s+/).filter(Boolean)
+  let best = '', bestScore = 0
+  for (const n of [3, 2]) {
+    for (let i = 0; i + n <= w.length; i++) {
+      const g = w.slice(i, i + n)
+      if (GRAM_STOP.has(g[0].toLowerCase()) || GRAM_STOP.has(g[n - 1].toLowerCase()) || g.some((x) => /^\d/.test(x))) continue
+      const phrase = g.join(' ').toLowerCase()
+      const uses = countPhrase(body, phrase)
+      const score = uses * n
+      if (uses > 0 && score > bestScore) { best = phrase; bestScore = score }
+    }
+  }
+  return best
+}
+
 const cleanAlt = (t: string, headline: string) => {
   const s = t.replace(/^(an? )?(image|photo|picture) of\s+/i, '').replace(/\s+/g, ' ').trim().slice(0, 125).replace(/[,;:–—-]+$/, '')
   return s && s.toLowerCase() !== headline.trim().toLowerCase() ? s : ''
@@ -98,11 +117,17 @@ export async function fixSeoWithAi(ai: Ai, start: SeoDraft, ctx: { hasImage: boo
   for (let pass = 1; pass <= 2; pass++) {
     const failing = run(cur).filter((c) => c.status !== 'good' && c.fix !== 'photo' && c.fix !== 'reporting')
     if (!failing.length) break
+    // the page heading must carry the keyphrase: from the second pass on, a phrase the headline and story both already use is fixed for it
+    let pinned = ''
+    if (failing.some((c) => c.id === 'kp-h1') && pass >= 2) {
+      const cand = suggestKeyphrases(cur.headline, cur.deck, cur.body, 12).map((k) => k.phrase).find((ph) => countPhrase(cur.headline, ph) > 0 && countPhrase(cur.body, ph) > 0 && ph.split(' ').length <= 4) ?? headlineGram(cur.headline, cur.body)
+      if (cand) { cur = { ...cur, focusKeyphrase: cand }; pinned = cand }
+    }
     onStep?.(`Pass ${pass}: ${providerMeta(ai.provider).name} fixes ${failing.length} ${failing.length === 1 ? 'check' : 'checks'}`)
     const list = failing.map((c) => `- ${c.label}: ${c.detail}`).join('\n')
     const { data, model: used } = await aiJson<Record<string, string>>({
       provider: ai.provider, key: ai.key, model: chosen, system: FIX_SYSTEM,
-      user: `Failing checks:\n${list}\n\nCurrent fields:\nFocus keyphrase: ${cur.focusKeyphrase}\nTags: ${cur.focusKeywords}\nSEO title: ${cur.metaTitle}\nMeta description: ${cur.metaDescription}\nSlug: ${cur.slug}\nImage alt: ${cur.imageAlt || '(none)'}\nPhoto on the story: ${ctx.hasImage ? 'yes' : 'no'}\nPublished stories on the site (avoid repeating a keyphrase from these titles): ${ctx.publishedTitles.slice(0, 25).join(' | ') || '(none)'}\n\nHeadline: ${cur.headline}\n\nDeck: ${cur.deck}\n\nStory:\n${cur.body}`,
+      user: `Failing checks:\n${list}${pinned ? `\nThe focus keyphrase is now fixed as "${pinned}" (the headline already uses it): keep it, and rebuild the title, description and slug around it.` : ''}\n\nCurrent fields:\nFocus keyphrase: ${cur.focusKeyphrase}\nTags: ${cur.focusKeywords}\nSEO title: ${cur.metaTitle}\nMeta description: ${cur.metaDescription}\nSlug: ${cur.slug}\nImage alt: ${cur.imageAlt || '(none)'}\nPhoto on the story: ${ctx.hasImage ? 'yes' : 'no'}\nPublished stories on the site (avoid repeating a keyphrase from these titles): ${ctx.publishedTitles.slice(0, 25).join(' | ') || '(none)'}\n\nHeadline: ${cur.headline}\n\nDeck: ${cur.deck}\n\nStory:\n${cur.body}`,
       schema: FIX_SCHEMA, maxTokens: failing.some((c) => c.fix === 'body') ? 16000 : 4000, timeoutMs: 150_000, effort: 'low',
     })
     model = used
