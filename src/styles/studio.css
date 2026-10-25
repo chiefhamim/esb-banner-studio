@@ -716,4 +716,4 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .ed-tp-empty { margin: 0; padding: 14px 12px; font-size: 12.5px; line-height: 18px; color: var(--text-3); }
 
 /* AI chip: the fill covers the whole pill. A gradient is sized to the padding box by default, so it tiled into the 1 px border and showed the opposite colour on each edge; paint it from the border box and never repeat it. */
-.ed-ai-chip.on[data-provider] { background-origin: border-box; background-clip: border-box; background-repeat: no-repeat; background-size: 100% 100%; }
+.ed-ai-chip.on[data-provider], .ed-ai-chip.on[data-provider]:hover, .ed-ai-chip.on[data-provider]:active, .ed-ai-chip.on[data-provider]:focus-visible, .btn.ai-btn[data-provider], .btn.ai-btn[data-provider]:hover:not(:disabled) { background-origin: border-box; background-clip: border-box; background-repeat: no-repeat; background-size: 100% 100%; }  /* the hover rules re-declare `background:` (which resets origin), so every state restates it */
