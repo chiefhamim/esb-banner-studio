@@ -759,3 +759,8 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .ed-statusbar .sb-chev { font-size: 13px; line-height: 16px; margin: 0 4px; opacity: .6; }
 .ed-statusbar .sb-who { font-weight: 500; }
 .ed-statusbar .sb-role b.free { font-weight: 500; }
+
+/* AI chip balance: size the sparkle to the label so both share one optical centre */
+.ed-head .ed-ai-chip { gap: 8px; padding: 0 14px 0 13px; }  /* the sparkle carries ~2 px of empty box on its left; 2 px more padding on the right centres the visible ink */
+.ed-head .ed-ai-chip svg { width: 16px; height: 16px; flex: none; }
+.ed-head .ed-ai-chip .ed-ai-label { font-weight: 600; }

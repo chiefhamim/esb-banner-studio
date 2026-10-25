@@ -1255,10 +1255,7 @@ export function EditorialWorkspace() {
         <span className={'sb-cms ' + (siteStatus.connected ? 'on' : 'off')}>
           <span className="sb-k">CMS</span>
           <b className="sb-host">esbpowerline.com</b>
-          <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.connected ? 'Connected' : 'Disconnected'}</span>
-          {siteStatus.connected && staffSession?.name && (
-            <span className="sb-who"><span className="sb-av" aria-hidden>{staffSession.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span>{staffSession.name}</span>
-          )}
+          <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.connected ? `Connected as ${staffSession?.name || 'Mehedi Hasan Hamim'}` : 'Disconnected'}</span>
         </span>
         <div className="sep" />
         <span className="sb-engine">
