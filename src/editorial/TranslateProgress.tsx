@@ -3,26 +3,30 @@
 // so the editor can see exactly what is slow. Story jobs are fed by the status text the desk already emits; SEO and
 // social jobs report their own steps (aiDesk.ts). The history stays until the editor clears it.
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from '../ui/Icon'
 import { useEditorialStore } from './editorialStore'
 import { modelLabel, providerMeta } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
 import { useJobLog } from './jobLog'
+import { useStoryQueue } from './storyQueue'
 import type { Job, JobKind } from './jobLog'
 
 const fmt = (ms: number) => (ms < 10_000 ? (ms / 1000).toFixed(1) : String(Math.round(ms / 1000))) + ' s'
 const storyJob = (first: string): { kind: JobKind; title: string } =>
   /upload/i.test(first) ? { kind: 'publish', title: 'Publishing' } : /re-translat/i.test(first) ? { kind: 'story', title: 'Re-translation' } : { kind: 'story', title: 'Story translation' }
-// the strip beside the header's tools: the latest job of each kind, with its model and time
-const SLOTS: { kind: JobKind; label: string }[] = [{ kind: 'story', label: 'Story' }, { kind: 'seo', label: 'SEO' }, { kind: 'social', label: 'Social' }, { kind: 'publish', label: 'Publish' }]
+const KINDS: { kind: JobKind; label: string }[] = [{ kind: 'story', label: 'Story' }, { kind: 'seo', label: 'SEO' }, { kind: 'social', label: 'Social' }, { kind: 'publish', label: 'Publish' }]
 /** "Claude · claude-sonnet-5-5" → "Sonnet 5.5"; a job with no model ("Machine translation") shows what it has. */
 const modelOf = (by: string) => { const i = by.indexOf(' · '); return i < 0 ? by : modelLabel(by.slice(i + 3)) }
 const isAiProvider = (p: string | null): p is AiProviderId => !!p && p !== 'neural' && p !== 'offline'
 
 export function TranslateProgress({ status }: { status: string | null }) {
-  const jobs = useJobLog((s) => s.jobs)
+  const all = useJobLog((s) => s.jobs)
+  const activeId = useStoryQueue((s) => s.activeId)
+  // only this story's history (plus a job filed before the story has its entry)
+  const jobs = useMemo(() => all.filter((j) => j.story === (activeId ?? '') || j.story === ''), [all, activeId])
+  const [kindFilter, setKindFilter] = useState<JobKind | 'all'>('all')
   const [open, setOpen] = useState(false)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [, tick] = useState(0)
@@ -48,7 +52,7 @@ export function TranslateProgress({ status }: { status: string | null }) {
   }, [status])
 
   // a job that starts opens the panel on itself; the editor closes it with Esc, a click elsewhere, or the chip
-  const newest = jobs[0]?.id
+  const newest = jobs[0] && !jobs[0].end ? jobs[0].id : undefined  // only a run that just started opens the panel, not a story switch
   const seen = useRef<number | undefined>(undefined)
   useEffect(() => {
     if (newest == null || newest === seen.current) return
@@ -85,30 +89,15 @@ export function TranslateProgress({ status }: { status: string | null }) {
 
   const now = Date.now()
   const live = jobs.find((j) => !j.end)
-  const newestId = (live ?? jobs[0])?.id
+  const shown = kindFilter === 'all' ? jobs : jobs.filter((j) => j.kind === kindFilter)
   const total = (j: Job) => (j.end ?? now) - j.start
   const toggle = (id: number) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   return (
     <div ref={chipRef} className={'ed-topbar-progress ed-tp'} role="group" aria-label="Task times">
-      {SLOTS.map(({ kind, label }) => {
-        const j = jobs.find((x) => x.kind === kind)
-        if (!j) return null
-        const isLive = !j.end
-        const model = modelOf(j.by)
-        return (
-          <button key={kind} type="button" className={'ed-tp-item ' + kind + (j.id === newestId ? ' latest' : '') + (isLive ? ' live' : j.error ? ' bad' : ' ok')}
-            onClick={() => setOpen((o) => !o)} aria-expanded={open} data-tip={`${j.title}${j.by ? ' · ' + j.by : ''} — ${isLive ? 'running' : j.error ? 'failed' : 'done'} in ${fmt(total(j))}. Click for the history`}>
-            {isLive ? <span className="pulse-dot" /> : <Icon name={j.error ? 'info' : 'check'} size={12} />}
-            <span className="ed-tp-kind">{label}</span>
-            {model && <span className="ed-tp-model">{model}</span>}
-            <span className="ed-tp-time mono">{fmt(total(j))}</span>
-          </button>
-        )
-      })}
-      <button type="button" className={'ed-tp-history' + (open ? ' on' : '')} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="Timing history"
-        data-tip={jobs.length ? `Timing history — ${jobs.length} ${jobs.length === 1 ? 'task' : 'tasks'}, with model and time` : 'Timing history — every translation, SEO and caption run, with its model and time'}>
-        <Icon name="clock" size={14} />
+      <button type="button" className={'ed-tp-history' + (open ? ' on' : '')} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="Activity"
+        data-tip={live ? `Activity — ${live.title} running, ${fmt(total(live))}` : jobs.length ? `Activity for this story — ${jobs.length} ${jobs.length === 1 ? 'task' : 'tasks'}, with model and time` : 'Activity — translation, SEO, caption and publish runs for this story, with model and time'}>
+        {live ? <span className="pulse-dot" /> : <Icon name="clock" size={14} />}
         {jobs.length > 0 && <span className="ed-tp-count mono">{jobs.length}</span>}
       </button>
       {open && at && createPortal(
@@ -117,11 +106,20 @@ export function TranslateProgress({ status }: { status: string | null }) {
             <b>Activity</b>
             <span className="hint">{jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}</span>
             <div className="spacer" />
-            {jobs.some((j) => j.end) && <button type="button" className="btn-link" onClick={() => useJobLog.getState().clear()}>Clear history</button>}
+            {jobs.some((j) => j.end) && <button type="button" className="btn-link" onClick={() => useJobLog.getState().clear(activeId ?? '')}>Clear history</button>}
           </div>
-          {!jobs.length && <p className="ed-tp-empty">Nothing timed yet. Translate a story, write SEO or captions with AI, or publish — each run is listed here with the model that did it, its steps and how long each took.</p>}
+          {jobs.length > 1 && (
+            <div className="ed-tp-kinds" role="tablist" aria-label="Filter by kind">
+              {[{ kind: 'all' as const, label: 'All' }, ...KINDS].map(({ kind, label }) => {
+                const n = kind === 'all' ? jobs.length : jobs.filter((j) => j.kind === kind).length
+                if (kind !== 'all' && !n) return null
+                return <button key={kind} type="button" role="tab" aria-selected={kindFilter === kind} className={'ed-tp-kind-btn' + (kindFilter === kind ? ' on' : '')} onClick={() => setKindFilter(kind)}>{label}<span className="mono">{n}</span></button>
+              })}
+            </div>
+          )}
+          {!jobs.length && <p className="ed-tp-empty">Nothing timed yet for this story. Translate a story, write SEO or captions with AI, or publish — each run is listed here with the model that did it, its steps and how long each took.</p>}
           <div className="ed-tp-jobs">
-            {jobs.map((j) => {
+            {shown.map((j) => {
               const isLive = !j.end
               const slowest = j.steps.reduce((m, s) => Math.max(m, (s.end ?? now) - s.start), 0)
               const isOpen = expanded.has(j.id)
@@ -129,7 +127,7 @@ export function TranslateProgress({ status }: { status: string | null }) {
                 <section key={j.id} className={'ed-tp-job ' + j.kind + (isLive ? ' live' : j.error ? ' bad' : ' ok')}>
                   <button type="button" className="ed-tp-job-head" onClick={() => toggle(j.id)} aria-expanded={isOpen}>
                     <span className="ed-tp-mark">{isLive ? <span className="pulse-dot" /> : <Icon name={j.error ? 'info' : 'check'} size={12} />}</span>
-                    <span className="ed-tp-job-title"><b>{j.title}</b>{j.by && <span className="ed-tp-by">{j.by}</span>}</span>
+                    <span className="ed-tp-job-title"><b>{j.title}</b>{j.by && <span className="ed-tp-by">{modelOf(j.by) || j.by}</span>}</span>
                     <span className="ed-tp-ms mono">{fmt(total(j))}</span>
                     <Icon name="chevDown" size={12} className={'ed-tp-chev' + (isOpen ? ' open' : '')} />
                   </button>

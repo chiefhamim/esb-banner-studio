@@ -499,6 +499,8 @@ export function generateCuid(): string {
 
 export interface InsertArticleResult {
   success: boolean
+  /** True when the save changed an article already on the site rather than creating one. */
+  updated?: boolean
   articleId?: string
   slug?: string
   liveUrl?: string
@@ -511,7 +513,8 @@ export interface InsertArticleResult {
  */
 export async function insertArticleToSupabase(
   payload: CmsArticlePayload,
-  session?: StaffSession | null
+  session?: StaffSession | null,
+  opts: { updateId?: string } = {},
 ): Promise<InsertArticleResult> {
   try {
     if (!payload.title?.trim()) {
@@ -541,7 +544,7 @@ export async function insertArticleToSupabase(
       return { success: false, error: `${session.email} is signed in, but the Studio does not know its author record on the site yet. Use "Open the site CMS" to publish from the site itself.` }
     }
 
-    const id = generateCuid()
+    const id = opts.updateId || generateCuid()
     const nowIso = new Date().toISOString()
     const status = payload.status || 'PUBLISHED'
 
@@ -583,16 +586,26 @@ export async function insertArticleToSupabase(
       'Prefer': 'return=minimal',
     }
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/Article`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(record),
-    })
+    let res: Response
+    if (opts.updateId) {
+      // Updating keeps what the site owns: author, creation time, first publish time, views and likes.
+      const cur = await findArticle({ id: opts.updateId }, session)
+      if (!cur) return { success: false, error: 'That article is no longer on esbpowerline.com (it may have been deleted). Publish it again as a new article.' }
+      const { id: _id, authorId: _a, createdAt: _c, views: _v, likes: _l, version: _ver, locale: _loc, editorTrash: _t, ...changes } = record
+      void _id; void _a; void _c; void _v; void _l; void _ver; void _loc; void _t
+      const patch: Record<string, unknown> = { ...changes, publishedAt: status === 'PUBLISHED' ? cur.publishedAt || nowIso : cur.publishedAt ?? null, updatedAt: nowIso }
+      // no new image this time: the one on the site stays
+      if (!payload.imageUrl) delete patch.imageUrl
+      res = await fetch(`${SUPABASE_URL}/rest/v1/Article?id=eq.${encodeURIComponent(opts.updateId)}`, { method: 'PATCH', headers, body: JSON.stringify(patch) })
+    } else {
+      res = await fetch(`${SUPABASE_URL}/rest/v1/Article`, { method: 'POST', headers, body: JSON.stringify(record) })
+    }
 
     if (res.status === 201 || res.ok) {
       const liveUrl = `${SITE_BASE_URL}/articles/${record.slug}`
       return {
         success: true,
+        updated: !!opts.updateId,
         articleId: id,
         slug: record.slug,
         liveUrl,
@@ -604,7 +617,7 @@ export async function insertArticleToSupabase(
         const parsed = JSON.parse(errText)
         if (parsed.message) {
           if (parsed.message.includes('Article_slug_key')) {
-            errMsg = `Slug "${record.slug}" already exists on esbpowerline.com. Please change the URL slug.`
+            errMsg = `Slug "${record.slug}" already exists on esbpowerline.com. Open that article for editing from the Site tab to update it, or change the URL slug.`
           } else {
             errMsg = parsed.message
           }
@@ -634,4 +647,66 @@ export async function openSiteCms(session: StaffSession | null, sitePath = '/cms
   }
   if (typeof window !== 'undefined') window.open(`${SITE_BASE_URL}${sitePath}`, '_blank', 'noopener')
   return 'browser'
+}
+
+export interface SiteArticleRow {
+  id: string
+  title: string
+  slug: string
+  status: string
+  excerpt: string | null
+  content: string
+  category: string
+  imageUrl: string | null
+  imageCredit: string | null
+  tags: string[] | null
+  publishedAt: string | null
+  postAsNewsDesk: boolean
+  seo: { metaTitle?: string; metaDescription?: string; focusKeyword?: string; heroImage?: { alt?: string; caption?: string } } | null
+}
+
+/** One article from the site's database, by id or slug, read with the editor's token (so drafts show too). */
+export async function findArticle(by: { id?: string; slug?: string }, session?: StaffSession | null): Promise<SiteArticleRow | null> {
+  const q = by.id ? `id=eq.${encodeURIComponent(by.id)}` : by.slug ? `slug=eq.${encodeURIComponent(by.slug.trim().toLowerCase())}` : ''
+  if (!q) return null
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/Article?${q}&select=id,title,slug,status,excerpt,content,category,imageUrl,imageCredit,tags,publishedAt,postAsNewsDesk,seo&limit=1`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session?.token || SUPABASE_ANON_KEY}`, Accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    return ((await res.json()) as SiteArticleRow[])[0] ?? null
+  } catch {
+    return null
+  }
+}
+
+/** The site's HTML paragraphs back to the plain blank-line-separated text the desk edits. */
+export function htmlToBody(html: string): string {
+  const dec = (t: string) => t.replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+  return html
+    .replace(/\r/g, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|h[1-6]|li|blockquote|div)>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .split(/\n{2,}/)
+    .map((p) => dec(p).trim())
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+/** Live check of the site: the public feed answers, the auth service is up, and — when signed in — the database accepts the editor's token. */
+export async function probeSite(session?: StaffSession | null): Promise<SiteStatus> {
+  const t0 = performance.now()
+  const stamp = () => new Date().toLocaleTimeString()
+  const feed = await siteFetch(`${SITE_BASE_URL}/feed.xml?_=${Date.now()}`, 6000)
+  const latencyMs = Math.max(1, Math.round(performance.now() - t0))
+  if (!feed.ok) return { connected: false, latencyMs, lastChecked: stamp(), statusText: feed.status ? `Site answered HTTP ${feed.status}` : 'Site unreachable' }
+  if (!session?.token) return { connected: true, latencyMs, lastChecked: stamp(), statusText: 'Site online — sign in to use the CMS' }
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/Article?select=id&limit=1`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.token}` } })
+    if (r.ok) return { connected: true, latencyMs, lastChecked: stamp(), statusText: 'Site and database connected' }
+    return { connected: true, latencyMs, lastChecked: stamp(), statusText: r.status === 401 ? 'Site online — your sign-in expired' : `Site online — database answered HTTP ${r.status}` }
+  } catch {
+    return { connected: true, latencyMs, lastChecked: stamp(), statusText: 'Site online — database not reachable' }
+  }
 }

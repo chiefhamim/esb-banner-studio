@@ -15,7 +15,7 @@ import { useStore } from '../store'
 import { useShellStore } from '../shell/shellStore'
 import { autoDesk } from './deskFlag'
 import {
-  checkSiteConnection,
+  probeSite,
   fetchLiveArticles,
   fetchLiveArticleBody,
   checkSlugAvailability,
@@ -241,7 +241,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
   setFeedSearchQuery: (query) => set({ feedSearchQuery: query }),
 
   checkConnection: async () => {
-    const status = await checkSiteConnection()
+    const status = await probeSite(get().staffSession)
     set({ siteStatus: status })
   },
 

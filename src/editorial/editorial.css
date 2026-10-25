@@ -176,8 +176,8 @@
 .ed-status.draft { color: var(--text-2); }
 .ed-status.live { color: var(--success); font-weight: 500; }
 .ed-publish-btn { justify-content: center; width: 100%; height: var(--h-lg); }
-.ed-publish-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.ed-publish-row .btn { justify-content: center; }
+.ed-publish-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ed-publish-row .btn { justify-content: center; min-width: 0; padding-inline: 6px; }
 .ed-desk-select { flex: 1; min-width: 0; }
 .ed-auto-desk { align-self: flex-start; margin-top: -4px; }
 .ed-side .field > label:has(.ed-field-row) { display: block; }

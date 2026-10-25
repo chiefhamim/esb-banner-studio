@@ -52,7 +52,7 @@ describe('The activity history', () => {
   it('clearing the history keeps a job that is still running', () => {
     const done = log().begin('seo', 'SEO', 'x'); log().finish(done)
     const running = log().begin('story', 'Story translation', 'x')
-    log().clear()
+    log().clear('')
     expect(log().jobs.map((j) => j.id)).toEqual([running])
   })
 })

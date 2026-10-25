@@ -29,7 +29,7 @@ import type { SiteDevice, SiteTheme } from './SitePreview'
 import { useShellStore } from '../shell/shellStore'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
-import { Field, Select, Check, Dialog, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
+import { Field, Select, Check, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
 import { useStore } from '../store'
 import { CATEGORIES } from '../core/tokens'
@@ -44,12 +44,20 @@ import { translateNewsArticle } from './translator'
 import { AiSettingsDialog } from './AiSettingsDialog'
 import { TranslateProgress } from './TranslateProgress'
 import { useJobLog } from './jobLog'
+import { PublishDialog } from './PublishDialog'
+import type { PublishOutcome } from './PublishDialog'
+import { FacebookDialog } from './FacebookDialog'
+import { BannerPreviews } from './BannerPreviews'
+import { getFacebook, postBannerToFacebook } from './facebook'
+import { openArticleForEdit } from './liveEdit'
 import { aiFor, modelLabel, providerMeta, roleProvider } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
 import { aiCaptions, aiSeo, articleUrl, storyCaptions, xLength } from './aiDesk'
 import {
   buildCmsArticlePayload,
   insertArticleToSupabase,
+  findArticle,
+  SITE_BASE_URL,
   ensureFreshSession,
   openSiteCms,
 } from './siteApi'
@@ -135,7 +143,6 @@ export function EditorialWorkspace() {
   const checkConnection = useEditorialStore((s) => s.checkConnection)
   const syncFromLiveFeed = useEditorialStore((s) => s.syncFromLiveFeed)
   const checkSlug = useEditorialStore((s) => s.checkSlug)
-  const loadLiveArticleForEdit = useEditorialStore((s) => s.loadLiveArticleForEdit)
   const setSourceArticle = useEditorialStore((s) => s.setSourceArticle)
   const updateSourceManual = useEditorialStore((s) => s.updateSourceManual)
   const setDraftField = useEditorialStore((s) => s.setDraftField)
@@ -164,7 +171,7 @@ export function EditorialWorkspace() {
   const [activeFactId, setActiveFactId] = useState<string | null>(null)
   const [activeSocialTab, setActiveSocialTab] = useState<'facebook' | 'x' | 'linkedin' | 'telegram'>('facebook')
   const [storyTab, setStoryTab] = useState<StoryTab>('body')
-  const [leftTab, setLeftTab] = useState<'source' | 'intake' | 'stories'>('source')
+  const [leftTab, setLeftTab] = useState<'source' | 'banner' | 'intake' | 'stories'>('source')
   const storyCount = useStoryQueue((s) => s.stories.length)
   const [tagInput, setTagInput] = useState('')
   // A translation problem worth more than a 3-second toast: shown on the Headline & deck panel until dismissed.
@@ -211,7 +218,15 @@ export function EditorialWorkspace() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showPublishModal, setShowPublishModal] = useState(false)
   const [publishingLive, setPublishingLive] = useState(false)
-  const [publishResult, setPublishResult] = useState<{ ok?: boolean; msg?: string; url?: string } | null>(null)
+  const [publishResult, setPublishResult] = useState<PublishOutcome | null>(null)
+  const [showFbDialog, setShowFbDialog] = useState(false)
+  const [fbCfg, setFbCfg] = useState(() => getFacebook())
+  const [fbOn, setFbOn] = useState(false)
+  const [editingLive, setEditingLive] = useState<string | null>(null)
+  // the site article this story is linked to (published from here, or opened for editing) - Publish then updates it
+  const activeStory = useStoryQueue((q) => q.stories.find((x) => x.id === q.activeId) ?? null)
+  const linkedSlug = activeStory?.publishedSlug ?? activeStory?.publishedUrl?.match(/\/articles\/([^/?#]+)/)?.[1] ?? null
+  const linked = linkedSlug ? { slug: linkedSlug, url: activeStory?.publishedUrl } : null
   const [copiedPayload, setCopiedPayload] = useState(false)
 
   // AI settings dialog (provider, key, model, prompt)
@@ -362,7 +377,7 @@ export function EditorialWorkspace() {
   }
 
   // URL Scraper & Parallel Translator
-  const handleFetchUrl = async (overrideUrl?: string) => {
+  const handleFetchUrl = async (overrideUrl?: string, inPlace = false) => {
     let cleanUrl = (overrideUrl ?? urlInput).trim()
     if (!cleanUrl) return
     if (!/^https?:\/\//i.test(cleanUrl)) {
@@ -370,7 +385,8 @@ export function EditorialWorkspace() {
       setUrlInput(cleanUrl)
     }
 
-    useStoryQueue.getState().beginStory()
+    // Re-fetch of the story's own link refreshes that story; a different link starts a new one
+    useStoryQueue.getState().beginStory({ inPlace })
     setLoading(true)
     setErrorMsg(null)
     setErrorDetail(null)
@@ -572,30 +588,43 @@ export function EditorialWorkspace() {
         await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
       } catch {}
 
-      const result = await insertArticleToSupabase(payload, fresh)
+      // A story linked to an article already on the site updates that article (its id is looked up by slug when
+      // only the slug is known) instead of inserting a second row with the same slug.
+      const q = useStoryQueue.getState()
+      const cur = q.stories.find((x) => x.id === q.activeId)
+      let updateId = cur?.publishedId
+      const lookup = cur?.publishedSlug ?? cur?.publishedUrl?.match(/\/articles\/([^/?#]+)/)?.[1]
+      if (!updateId && lookup) {
+        updateId = (await findArticle({ slug: lookup }, fresh))?.id
+        if (!updateId) {
+          setPublishResult({ ok: false, msg: `The linked article "${lookup}" was not found on the site (it may have been deleted, or this account cannot read it). Unlink it by opening the story fresh, or change the slug to publish a new article.` })
+          return
+        }
+      }
+      const result = await insertArticleToSupabase(payload, fresh, { updateId })
 
       if (result.success) {
-        setPublishResult({
-          ok: true,
-          msg:
-            (targetStatus === 'PUBLISHED'
-              ? `Published live to esbpowerline.com! (ID: ${result.articleId})`
-              : `Saved draft to esbpowerline.com CMS! (ID: ${result.articleId})`) + imageNote,
-          url: result.liveUrl,
-        })
-        showToast(
-          targetStatus === 'PUBLISHED'
-            ? 'Story published live to esbpowerline.com!'
-            : 'Story draft saved to Supabase!'
-        )
-        if (targetStatus === 'PUBLISHED') useStoryQueue.getState().markPublished(result.liveUrl)
+        const did = result.updated ? 'Updated' : targetStatus === 'PUBLISHED' ? 'Published' : 'Saved as draft'
+        let fbNote = ''
+        if (targetStatus === 'PUBLISHED' && fbOn && fbCfg && baseAssets) {
+          setProgressStatus('Posting to Facebook…')
+          const photo = await renderBanner(useStore.getState().doc, 'fb45', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
+          const link = result.liveUrl ?? ''
+          const text = draft.social.facebook.trim() || draft.headline
+          const caption = link && !text.includes(link) ? `${text}\n\n${link}` : text
+          const post = photo ? await postBannerToFacebook(fbCfg, photo, caption) : { ok: false as const, error: 'The banner could not be rendered.' }
+          fbNote = post.ok ? ` Posted to Facebook (${fbCfg.pageName || 'your Page'}).` : ` Facebook post failed: ${post.error}`
+        }
+        setPublishResult({ ok: true, msg: `${did} on esbpowerline.com.` + imageNote + fbNote, url: result.liveUrl })
+        showToast(targetStatus === 'PUBLISHED' ? `Story ${result.updated ? 'updated' : 'published'} on esbpowerline.com` : 'Draft saved to esbpowerline.com')
+        if (targetStatus === 'PUBLISHED') useStoryQueue.getState().markPublished({ url: result.liveUrl, id: result.articleId, slug: result.slug })
+        else if (result.updated) useStoryQueue.getState().linkArticle({ url: result.liveUrl, id: result.articleId, slug: result.slug ?? draft.slug })
         syncFromLiveFeed().catch(() => {})
       } else {
-        setPublishResult({
-          ok: false,
-          msg: result.error || 'Failed to insert article into Supabase.',
-        })
-        showToast('Supabase insert error (payload copied to clipboard)')
+        const taken = /already exists/i.test(result.error ?? '')
+        const existing = taken && !updateId ? await findArticle({ slug: payload.slug }, fresh) : null
+        setPublishResult({ ok: false, msg: result.error || 'The article could not be saved to esbpowerline.com.', existingSlug: existing?.slug })
+        showToast('The site refused the article - see the publish sheet')
       }
     } catch (err: any) {
       setPublishResult({ ok: false, msg: err.message || 'Publish error' })
@@ -604,6 +633,30 @@ export function EditorialWorkspace() {
       setPublishingLive(false)
     }
   }
+
+  // Open an article that is already on the site for editing: its real body and SEO, linked so Publish updates it
+  const handleEditLive = async (art: Parameters<typeof openArticleForEdit>[0]) => {
+    setEditingLive(art.slug)
+    try {
+      const r = await openArticleForEdit(art)
+      if (bannerLink) useEditorialStore.getState().applyDraftToBanner()
+      setLeftTab('source')
+      showToast(r.exact ? 'Opened for editing - Publish will update this article' : 'Opened from the public page (sign in to load the full record) - Publish will update this article')
+    } finally {
+      setEditingLive(null)
+    }
+  }
+
+  // The site status is live: re-checked every 20 s, when the window returns, and when the network changes
+  useEffect(() => {
+    const run = () => { if (document.visibilityState !== 'hidden') void checkConnection() }
+    const t = setInterval(run, 20000)
+    window.addEventListener('online', run); window.addEventListener('offline', run); window.addEventListener('focus', run)
+    document.addEventListener('visibilitychange', run)
+    return () => { clearInterval(t); window.removeEventListener('online', run); window.removeEventListener('offline', run); window.removeEventListener('focus', run); document.removeEventListener('visibilitychange', run) }
+  }, [checkConnection])
+  // signing in or out changes what the database check can prove
+  useEffect(() => { void checkConnection() }, [staffSession?.token, checkConnection])
 
   const handleOpenInSiteCms = () => {
     void openSiteCms(staffSession, '/cms/articles/new').then((how) => showToast(how === 'signed-in' ? 'Opened the CMS — signed in as you' : 'Opened the CMS in your browser'))
@@ -663,7 +716,7 @@ export function EditorialWorkspace() {
     [liveArticles, catData.name, draft.slug],
   )
   const suggestTags = () => suggestKeyphrases(draft.headline, draft.deck, draft.body, 6).map((k) => k.phrase)
-  const openPublish = () => { setPublishResult(null); setShowPublishModal(true) }
+  const openPublish = () => { setPublishResult(null); setFbCfg(getFacebook()); setFbOn(!linked && !!getFacebook()); setShowPublishModal(true) }
 
   // Intake form: the empty-desk launcher and the source column's "New link" tab are the same form.
   const intakeForm = (compact: boolean) => (
@@ -736,7 +789,7 @@ export function EditorialWorkspace() {
                     <b>{art.title}</b>
                     <span>{art.category} · {art.publishedAt || 'Published'}</span>
                   </div>
-                  <button type="button" className="btn sm" onClick={() => { useStoryQueue.getState().newStory(); void loadLiveArticleForEdit(art) }}>Load Story</button>
+                  <button type="button" className="btn sm" onClick={() => void handleEditLive(art)} disabled={editingLive === art.slug}>{editingLive === art.slug ? 'Opening…' : 'Edit'}</button>
                 </div>
               ))
             )}
@@ -830,7 +883,7 @@ export function EditorialWorkspace() {
               <span className="dpc-tag">{source?.paragraphs.length ?? paragraphCount} ¶</span>
             </button>
           )}
-          <button type="button" className="pv-btn ed-site-pill" onClick={() => setShowLoginModal(true)} aria-label="esbpowerline.com connection" data-tip={siteStatus.connected ? `esbpowerline.com is reachable · ${siteStatus.latencyMs} ms — open sign-in and the connection check` : 'esbpowerline.com is not reachable — open sign-in and the connection check'}>
+          <button type="button" className="pv-btn ed-site-pill" onClick={() => setShowLoginModal(true)} aria-label="esbpowerline.com connection" data-tip={`${siteStatus.statusText || (siteStatus.connected ? 'Connected' : 'Not reachable')} · ${siteStatus.latencyMs} ms · checked ${siteStatus.lastChecked || 'now'} — open the connection check`}>
             <span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />
             <span className="site-host">esbpowerline.com</span>
             <span className="site-state">{siteStatus.connected ? `${siteStatus.latencyMs} ms` : 'offline'}</span>
@@ -880,14 +933,20 @@ export function EditorialWorkspace() {
         <div ref={deskRef} className="ed-desk" style={{ ['--ed-src-px' as string]: cols.src + 'px', ['--ed-side-px' as string]: cols.side + 'px' } as CSSProperties}>
           {/* LEFT — the original article, untouched, beside the copy made from it */}
           <aside className="left ed-src" aria-label="Original source">
-            <Tabs<'source' | 'intake' | 'stories'>
+            <Tabs<'source' | 'banner' | 'intake' | 'stories'>
               value={leftTab}
               onChange={setLeftTab}
-              options={[{ value: 'source', icon: 'newspaper', label: 'Source' }, { value: 'stories', icon: 'layers', label: storyCount > 1 ? `Stories · ${storyCount}` : 'Stories' }, { value: 'intake', icon: 'link', label: 'New link' }]}
+              options={[{ value: 'source', icon: 'newspaper', label: 'Source' }, { value: 'banner', icon: 'image', label: 'Banner' }, { value: 'stories', icon: 'layers', label: storyCount > 1 ? `Stories · ${storyCount}` : 'Stories' }, { value: 'intake', icon: 'link', label: 'New link' }]}
             />
             <div className="scroll ed-src-scroll">
               {leftTab === 'intake' ? (
                 <div className="ed-src-intake">{intakeForm(true)}</div>
+              ) : leftTab === 'banner' ? (
+                <div className="ed-src-intake">
+                  <p className="hint">The banner from Graphics, live. Change it there and it changes here a moment later; this is what Publish sends.</p>
+                  <BannerPreviews base={baseAssets} heroMode={heroMode} onHeroMode={setHeroMode} photoUrl={bannerLeadImage} caption={draft.social.facebook} pageName={fbCfg ? fbCfg.pageName || fbCfg.pageId : null} />
+                  <button type="button" className="btn sm" onClick={() => useShellStore.getState().openGraphicsFrom('editorial', null)}><Icon name="edit" size={13} /><span>Edit in Graphics</span></button>
+                </div>
               ) : leftTab === 'stories' ? (
                 <div className="ed-src-intake"><StoryQueueList /></div>
               ) : (
@@ -903,7 +962,7 @@ export function EditorialWorkspace() {
                         <span className="mono" title={sourceUrl}>{sourceUrl.replace(/^https?:\/\/(www\.)?/, '')}</span>
                         <div className="ed-src-url-actions">
                           <a className="btn xs" href={sourceUrl} target="_blank" rel="noopener noreferrer" title="Open the original article"><Icon name="externalLink" size={12} /><span>Open</span></a>
-                          <button type="button" className="btn xs" onClick={() => void handleFetchUrl(sourceUrl)} disabled={loading} title="Fetch and translate this link again"><Icon name="refresh" size={12} /><span>{loading ? 'Fetching…' : 'Re-fetch'}</span></button>
+                          <button type="button" className="btn xs" onClick={() => void handleFetchUrl(sourceUrl, true)} disabled={loading} title="Fetch and translate this link again"><Icon name="refresh" size={12} /><span>{loading ? 'Fetching…' : 'Re-fetch'}</span></button>
                         </div>
                       </div>
                     ) : (
@@ -1162,34 +1221,35 @@ export function EditorialWorkspace() {
           <aside className="right ed-side" aria-label="Publishing and image">
             <Splitter axis="vert" side="l" label="Resize the sidebar" value={cols.side} min={280} max={560} reset={COLS_DEFAULT.side} onLive={liveCol('side')} onCommit={commitCol('side')} root={() => wsRef.current} />
             <div className="scroll ed-side-scroll">
-            <Panel id="ed-publish" icon="upload" defaultOpen={false} title="Publish" sub={publishResult?.ok ? 'Published' : 'Draft'}>
+            <Panel id="ed-publish" icon="upload" defaultOpen={false} title="Publish" sub={linked ? 'Live' : 'Draft'}>
               <dl className="ed-kv">
                 <dt>Status</dt>
-                <dd><span className={'ed-status ' + (publishResult?.ok ? 'live' : 'draft')}>{publishResult?.ok ? 'Published' : 'Draft · not on the site yet'}</span></dd>
-                <dt>Destination</dt>
-                <dd>
-                  <span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />
-                  esbpowerline.com {siteStatus.connected ? '' : '(offline)'}
-                </dd>
+                <dd><span className={'ed-status ' + (linked ? 'live' : 'draft')}>{linked ? 'On the site' : 'Not on the site yet'}</span></dd>
+                <dt>Site</dt>
+                <dd title={siteStatus.statusText}><span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />{siteStatus.connected ? 'esbpowerline.com' : 'Offline'}</dd>
                 <dt>Dateline</dt>
                 <dd title="What the article page shows if it is published now (Dhaka time)">{formatArticleDate(previewDate).replace(/^Published on /, '')}</dd>
                 <dt>Signed in</dt>
                 <dd>{staffSession ? staffSession.name : <button type="button" className="btn-link" onClick={() => setShowLoginModal(true)}>Sign in</button>}</dd>
                 <dt>Checks</dt>
-                <dd><span className={'ed-status ' + (checksDone === 3 ? 'live' : 'draft')}>{checksDone} of 3 pre-flight checks</span></dd>
+                <dd><span className={'ed-status ' + (checksDone === 3 ? 'live' : 'draft')}>{checksDone} of 3 done</span></dd>
               </dl>
               <button type="button" className="btn primary ed-publish-btn" onClick={openPublish} disabled={!draft.headline.trim()}>
                 <Icon name="upload" size={15} />
-                <span>Review &amp; publish</span>
+                <span>{linked ? 'Review & update' : 'Review & publish'}</span>
               </button>
               <div className="ed-publish-row">
-                <button type="button" className="btn sm" onClick={handleCopyCmsPayload} disabled={!draft.headline.trim()}>
+                <button type="button" className="btn sm" onClick={handleCopyCmsPayload} disabled={!draft.headline.trim()} data-tip="Copy the CMS JSON">
                   <Icon name={copiedPayload ? 'check' : 'copy'} size={13} />
-                  <span>{copiedPayload ? 'Copied' : 'CMS JSON'}</span>
+                  <span>{copiedPayload ? 'Copied' : 'JSON'}</span>
                 </button>
-                <button type="button" className="btn sm" onClick={handleOpenInSiteCms}>
+                <button type="button" className="btn sm" onClick={handleOpenInSiteCms} data-tip="Open the site's CMS editor">
                   <Icon name="externalLink" size={13} />
-                  <span>Site CMS</span>
+                  <span>CMS</span>
+                </button>
+                <button type="button" className="btn sm" onClick={() => setShowFbDialog(true)} data-tip={fbCfg ? `Facebook: ${fbCfg.pageName || fbCfg.pageId}` : 'Connect a Facebook Page'}>
+                  <Icon name="link" size={13} />
+                  <span>{fbCfg ? 'Facebook ✓' : 'Facebook'}</span>
                 </button>
               </div>
             </Panel>
@@ -1291,121 +1351,35 @@ export function EditorialWorkspace() {
 
       {showApiKeyModal && <AiSettingsDialog onClose={() => setShowApiKeyModal(false)} onToast={showToast} />}
 
-      {/* Publish to CMS & Supabase Dialog */}
+      {/* Review & publish */}
       {showPublishModal && (
-        <Dialog
-          title="Publish Story to esbpowerline.com"
-          kicker="LIVE CMS PUBLISHING"
-          width={620}
+        <PublishDialog
+          draft={draft}
+          checklist={checklist}
+          onToggle={toggleChecklist}
+          words={wordCount}
+          paragraphs={paragraphCount}
+          slugStatus={slugStatus}
+          base={baseAssets}
+          heroMode={heroMode}
+          onHeroMode={setHeroMode}
+          photoUrl={bannerLeadImage}
+          updating={linked}
+          busy={publishingLive}
+          result={publishResult}
+          fbPage={fbCfg ? fbCfg.pageName || fbCfg.pageId : null}
+          fbOn={fbOn}
+          onFbOn={setFbOn}
+          onFbConnect={() => setShowFbDialog(true)}
+          onCopyJson={handleCopyCmsPayload}
+          copied={copiedPayload}
+          onOpenCms={handleOpenInSiteCms}
+          onPublish={(st) => void handleLivePublishToCms(st)}
+          onUpdateExisting={(slug) => { useStoryQueue.getState().linkArticle({ slug, url: `${SITE_BASE_URL}/articles/${slug}` }); void handleLivePublishToCms('PUBLISHED') }}
           onClose={() => setShowPublishModal(false)}
-          footer={
-            <>
-              <button type="button" className="btn" onClick={handleCopyCmsPayload} title="Copy formatted CMS JSON to clipboard">
-                <Icon name="copy" size={14} />
-                <span>{copiedPayload ? 'Copied JSON!' : 'Copy CMS JSON'}</span>
-              </button>
-              <button type="button" className="btn" onClick={handleOpenInSiteCms} title="Open esbpowerline.com/cms in browser">
-                <Icon name="globe" size={14} />
-                <span>Open CMS Editor ↗</span>
-              </button>
-              <div className="spacer" />
-              <button
-                type="button"
-                className="btn"
-                onClick={() => void handleLivePublishToCms('DRAFT')}
-                disabled={publishingLive || !draft.headline.trim()}
-                title="Save as Draft in Supabase (hidden from public, visible in CMS)"
-              >
-                <Icon name="check" size={14} />
-                <span>Save Draft</span>
-              </button>
-              <button
-                type="button"
-                className="btn primary"
-                onClick={() => void handleLivePublishToCms('PUBLISHED')}
-                disabled={publishingLive || !draft.headline.trim() || !(checklist.figuresChecked && checklist.namesChecked && checklist.attributionKept)}
-                title={!(checklist.figuresChecked && checklist.namesChecked && checklist.attributionKept) ? 'Please tick all pre-flight verification items before publishing' : 'Directly publish live to esbpowerline.com database'}
-              >
-                <Icon name="upload" size={14} />
-                <span>{publishingLive ? 'Publishing…' : 'Publish Live to CMS'}</span>
-              </button>
-            </>
-          }
-        >
-          <div className="stack">
-            <div className="grid2 sub">
-              <div>
-                <span className="kicker">HEADLINE BUDGET</span>
-                <div>
-                  <b>{draft.headline.length} / 104 chars</b> {draft.headline.length <= 104 ? '✓' : '⚠ Over'}
-                </div>
-              </div>
-              <div>
-                <span className="kicker">DECK BUDGET</span>
-                <div>
-                  <b>{draft.deck.length} / 200 chars</b> {draft.deck.length <= 200 ? '✓' : '⚠ Over'}
-                </div>
-              </div>
-              <div>
-                <span className="kicker">URL SLUG</span>
-                <div className="mono">
-                  <b>{draft.slug || 'not-set'}</b> ({slugStatus})
-                </div>
-              </div>
-              <div>
-                <span className="kicker">STORY LENGTH</span>
-                <div>
-                  <b>
-                    {wordCount} words · {paragraphCount} paragraphs
-                  </b>
-                </div>
-              </div>
-            </div>
-
-            <div className="ed-preflight stack" style={{ gap: 8 }}>
-              <span className="kicker">EDITORIAL VERIFICATION CHECKLIST</span>
-              <Check
-                checked={checklist.figuresChecked}
-                onChange={() => toggleChecklist('figuresChecked')}
-                label="Numbers, capacities (MW / MMCFD), and currency figures verified against source"
-              />
-              <Check
-                checked={checklist.namesChecked}
-                onChange={() => toggleChecklist('namesChecked')}
-                label="Institutional names, ministries, and official designations verified"
-              />
-              <Check
-                checked={checklist.attributionKept}
-                onChange={() => toggleChecklist('attributionKept')}
-                label="Original source credit and photo attribution preserved"
-              />
-            </div>
-
-            {publishResult && (
-              <div className={`callout ${publishResult.ok ? 'good' : 'warn'}`}>
-                <Icon name={publishResult.ok ? 'check' : 'info'} size={15} />
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
-                  <span>{publishResult.msg}</span>
-                  {publishResult.url && (
-                    <div>
-                      <a
-                        href={publishResult.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn small primary"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4, textDecoration: 'none' }}
-                      >
-                        <Icon name="globe" size={12} />
-                        <span>View Live Article on esbpowerline.com ↗</span>
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </Dialog>
+        />
       )}
+      {showFbDialog && <FacebookDialog onClose={() => setShowFbDialog(false)} onChange={(on) => { setFbCfg(getFacebook()); setFbOn(on && !linked) }} />}
     </div>
   )
 }

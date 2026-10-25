@@ -1,0 +1,61 @@
+// The Facebook Page connection. The editor pastes the Page ID and a Page access token (from their Meta developer
+// app); both stay in this machine's localStorage — never in the repo, never in a log — and every call goes straight
+// from the app to graph.facebook.com with the token in an Authorization header (not in the URL).
+// Publishing posts the 4:5 banner as a photo with the Facebook caption, which already ends with the article link.
+
+const KEY = 'esb-banner-studio/facebook'
+const GRAPH = 'https://graph.facebook.com/v21.0'
+
+export interface FacebookConfig { pageId: string; token: string; pageName?: string }
+
+export function getFacebook(): FacebookConfig | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as FacebookConfig | null
+    return v && /^\d{5,}$/.test(v.pageId) && v.token ? v : null
+  } catch {
+    return null
+  }
+}
+export function saveFacebook(c: FacebookConfig) { try { localStorage.setItem(KEY, JSON.stringify(c)) } catch { /* ignore */ } }
+export function clearFacebook() { try { localStorage.removeItem(KEY) } catch { /* ignore */ } }
+
+/** Graph API errors in words an editor can act on. */
+export function facebookError(status: number, body: { error?: { message?: string; code?: number } } | null): string {
+  const code = body?.error?.code
+  if (code === 190 || status === 401) return 'Facebook rejected the token — it expired or was revoked. Create a new Page access token and paste it again.'
+  if (code === 200 || code === 10 || status === 403) return 'The token does not allow posting to this Page. It needs pages_manage_posts and pages_read_engagement for the Page.'
+  if (code === 100) return 'Facebook could not find that Page ID, or the token is not for this Page.'
+  if (code === 4 || code === 17 || code === 32) return 'Facebook is limiting requests right now. Wait a few minutes and try again.'
+  return body?.error?.message ? `Facebook said: ${body.error.message}` : `Facebook answered HTTP ${status}.`
+}
+
+const auth = (token: string) => ({ Authorization: `Bearer ${token}` })
+
+/** Read the Page the token belongs to — proves the ID and token pair works before anything is posted. */
+export async function verifyFacebook(pageId: string, token: string): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${GRAPH}/${encodeURIComponent(pageId)}?fields=name`, { headers: auth(token) })
+    const body = await res.json().catch(() => null)
+    if (!res.ok || !body?.name) return { ok: false, error: facebookError(res.status, body) }
+    return { ok: true, name: String(body.name) }
+  } catch {
+    return { ok: false, error: 'Could not reach Facebook. Check the connection and try again.' }
+  }
+}
+
+/** Post the banner as a photo with a caption to the Page. */
+export async function postBannerToFacebook(cfg: FacebookConfig, photo: Blob, caption: string): Promise<{ ok: true; postId: string; url: string } | { ok: false; error: string }> {
+  try {
+    const form = new FormData()
+    form.append('source', photo, 'banner.jpg')
+    form.append('caption', caption)
+    form.append('published', 'true')
+    const res = await fetch(`${GRAPH}/${encodeURIComponent(cfg.pageId)}/photos`, { method: 'POST', headers: auth(cfg.token), body: form })
+    const body = await res.json().catch(() => null)
+    if (!res.ok || !(body?.post_id || body?.id)) return { ok: false, error: facebookError(res.status, body) }
+    const postId = String(body.post_id || body.id)
+    return { ok: true, postId, url: `https://www.facebook.com/${postId}` }
+  } catch {
+    return { ok: false, error: 'Could not reach Facebook. Check the connection and try again.' }
+  }
+}

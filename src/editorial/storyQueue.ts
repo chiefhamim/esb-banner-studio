@@ -8,6 +8,7 @@
 import { create } from 'zustand'
 import { useEditorialStore } from './editorialStore'
 import type { EditorialChecklist, EditorialDraft } from './editorialStore'
+import { adoptJobs, dropJobs, setJobStory } from './jobLog'
 
 export type StoryStatus = 'draft' | 'review' | 'approved' | 'published'
 export const STATUS_LABEL: Record<StoryStatus, string> = { draft: 'Draft', review: 'Needs check', approved: 'Approved', published: 'Published' }
@@ -30,6 +31,9 @@ export interface StoryItem {
   createdAt: number
   updatedAt: number
   publishedUrl?: string
+  /** The site's Article id and slug once this story is on esbpowerline.com, so a later Publish updates that article. */
+  publishedId?: string
+  publishedSlug?: string
   snapshot: EditorialSnapshot
 }
 
@@ -89,13 +93,15 @@ interface QueueState {
   /** Write the story in the editor into its queue entry now (creating one if it has content and none exists). */
   saveActive: () => void
   /** About to load a different story into the editor: keep the current one and give the next its own entry. */
-  beginStory: () => void
+  beginStory: (opts?: { inPlace?: boolean }) => void
   /** An empty editor; the current story stays in the queue. */
   newStory: () => void
   switchTo: (id: string) => void
   remove: (id: string) => void
   setStatus: (id: string, status: StoryStatus) => void
-  markPublished: (url?: string) => void
+  markPublished: (ref: { url?: string; id?: string; slug?: string }) => void
+  /** Link the story on the desk to an article already on the site (opened for editing). */
+  linkArticle: (ref: { url?: string; id?: string; slug: string }) => void
 }
 
 function load(): { stories: StoryItem[]; activeId: string | null } {
@@ -149,6 +155,7 @@ export const useStoryQueue = create<QueueState>((set, get) => ({
       const next = capStories([item, ...stories], item.id)
       set({ stories: next, activeId: item.id })
       persist(next, item.id)
+      adoptJobs(item.id)
       return
     }
     if (cur.snapshot.draft === snap.draft && cur.snapshot.source === snap.source && cur.snapshot.checklist === snap.checklist && cur.snapshot.deskAuto === snap.deskAuto) return
@@ -158,8 +165,11 @@ export const useStoryQueue = create<QueueState>((set, get) => ({
     persist(next, cur.id)
   },
 
-  beginStory: () => {
+  beginStory: (opts) => {
     get().saveActive()
+    // refreshing the story on the desk (Re-fetch of its own link) updates it in place; a new link starts a new entry
+    if (opts?.inPlace) { forkFrom = undefined; return }
+    setJobStory(null)
     forkFrom = hasContent(snapshotOfEditor()) ? useEditorialStore.getState().source : undefined
   },
 
@@ -169,6 +179,7 @@ export const useStoryQueue = create<QueueState>((set, get) => ({
     applying = true
     try { useEditorialStore.getState().clear() } finally { applying = false }
     set({ activeId: null })
+    setJobStory(null)
     persist(get().stories, null)
   },
 
@@ -188,6 +199,7 @@ export const useStoryQueue = create<QueueState>((set, get) => ({
       applying = false
     }
     set({ activeId: id })
+    setJobStory(id)
     persist(get().stories, id)
     // the banner follows the story on the desk, as it does when a story is first loaded
     const ed = useEditorialStore.getState()
@@ -203,6 +215,8 @@ export const useStoryQueue = create<QueueState>((set, get) => ({
     const next = stories.filter((s) => s.id !== id)
     const nextActive = id === activeId ? null : activeId
     set({ stories: next, activeId: nextActive })
+    if (id === activeId) setJobStory(null)
+    dropJobs(id)
     persist(next, nextActive)
   },
 
@@ -212,15 +226,26 @@ export const useStoryQueue = create<QueueState>((set, get) => ({
     persist(next, get().activeId)
   },
 
-  markPublished: (url) => {
+  markPublished: ({ url, id, slug }) => {
     get().saveActive()
     const { activeId } = get()
     if (!activeId) return
-    const next = get().stories.map((s) => (s.id === activeId ? { ...s, status: 'published' as const, statusPinned: false, publishedUrl: url ?? s.publishedUrl, updatedAt: Date.now() } : s))
+    const next = get().stories.map((s) => (s.id === activeId ? { ...s, status: 'published' as const, statusPinned: false, publishedUrl: url ?? s.publishedUrl, publishedId: id ?? s.publishedId, publishedSlug: slug ?? s.publishedSlug, updatedAt: Date.now() } : s))
+    set({ stories: next })
+    persist(next, activeId)
+  },
+
+  linkArticle: ({ url, id, slug }) => {
+    get().saveActive()
+    const { activeId } = get()
+    if (!activeId) return
+    const next = get().stories.map((s) => (s.id === activeId ? { ...s, status: 'published' as const, statusPinned: false, publishedUrl: url ?? s.publishedUrl, publishedId: id, publishedSlug: slug } : s))
     set({ stories: next })
     persist(next, activeId)
   },
 }))
+
+setJobStory(useStoryQueue.getState().activeId)
 
 // The editor autosaves into its queue entry, a moment after typing stops. A launch with a draft from before the
 // queue existed adopts it as the first story.
