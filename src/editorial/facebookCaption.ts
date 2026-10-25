@@ -39,7 +39,14 @@ export function sanitizeFacebook(raw: string, fallbackHeadline = ''): string {
   if (!body) body = (fallbackHeadline ?? '').replace(/\s+/g, ' ').trim()
   if (body.length > TEXT_LIMIT) {
     // drop the second line first; if the first alone is still long, cut at a word
-    body = lines[0] && lines[0].length <= TEXT_LIMIT ? lines[0] : (lines[0] ?? body).slice(0, TEXT_LIMIT).replace(/\s+\S*$/, '').replace(/[,;:–—-]+$/, '') + '…'
+    if (lines[0] && lines[0].length <= TEXT_LIMIT) body = lines[0]
+    else {
+      // too long: end at the last clause that fits (a comma or semicolon), so the caption still reads as a whole thought;
+      // only if there is no such place is it cut at a word
+      const head = (lines[0] ?? body).slice(0, TEXT_LIMIT)
+      const clause = Math.max(head.lastIndexOf(', '), head.lastIndexOf('; '))
+      body = clause >= 60 ? head.slice(0, clause).trim() + '.' : head.replace(/\s+\S*$/, '').replace(/[,;:–—-]+$/, '') + '…'
+    }
   }
   return line ? (body ? `${body}\n\n${line}` : line) : body
 }

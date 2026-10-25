@@ -8,7 +8,7 @@
 
 import { aiJson, providerMeta } from './aiProviders'
 import { modelFor, sanitizeSeo } from './aiDesk'
-import { analyzeSeo, countPhrase, suggestKeyphrases } from './seo'
+import { analyzeSeo, countPhrase, headlineGram, suggestKeyphrases } from './seo'
 import type { Ai, OnStep } from './aiDesk'
 import type { AiSchema } from './aiProviders'
 import type { SeoCheck } from './seo'
@@ -63,25 +63,6 @@ export function safeBodyRewrite(oldBody: string, newBody: string): boolean {
   if ([...caps(b)].some((w) => !vocabA.has(w))) return false
   const fresh = [...new Set(wordsOf(b).filter((w) => w.length >= 5 && !vocabA.has(w)))]
   return fresh.length <= Math.max(4, Math.round(vocabA.size * 0.04))
-}
-
-const GRAM_STOP = new Set('a an the and or but of in on at to for from by with as is are was were be will would could can has have had its into that this than over under after before says said new'.split(' '))
-
-/** A 2 to 3 word phrase from the headline (no stop word at either end) that the story also uses; the most used, longest first. */
-export function headlineGram(headline: string, body: string): string {
-  const w = headline.replace(/[^\p{L}\p{N}\s'’-]/gu, ' ').split(/\s+/).filter(Boolean)
-  let best = '', bestScore = 0
-  for (const n of [3, 2]) {
-    for (let i = 0; i + n <= w.length; i++) {
-      const g = w.slice(i, i + n)
-      if (GRAM_STOP.has(g[0].toLowerCase()) || GRAM_STOP.has(g[n - 1].toLowerCase()) || g.some((x) => /^\d/.test(x))) continue
-      const phrase = g.join(' ').toLowerCase()
-      const uses = countPhrase(body, phrase)
-      const score = uses * n
-      if (uses > 0 && score > bestScore) { best = phrase; bestScore = score }
-    }
-  }
-  return best
 }
 
 const cleanAlt = (t: string, headline: string) => {

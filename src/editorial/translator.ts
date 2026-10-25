@@ -7,7 +7,7 @@ import { bengaliToAsciiDigits } from './bengali'
 import { GTX_MAX, translateComplete } from './translateNet'
 import { aiFor, aiJson, geminiLabel, listModels, loadAiSettings, providerMeta, resolveModel } from './aiProviders'
 import type { AiProviderId, AiSchema, AiSettings } from './aiProviders'
-import { DESCRIPTION_MAX, buildMetaDescription, buildMetaTitle, buildSlug, countPhrase, suggestKeyphrases } from './seo'
+import { DESCRIPTION_MAX, buildMetaDescription, buildMetaTitle, buildSlug, countPhrase, headlineGram, suggestKeyphrases } from './seo'
 
 export interface EditorialTranslationResult {
   headline: string          // strictly <= 104 characters
@@ -40,41 +40,37 @@ function injectedTranslator(): ((text: string) => Promise<string>) | null {
   return typeof fn === 'function' ? fn : null
 }
 
-export const JOURNALISTIC_TRANSLATOR_PROMPT = `You are a professional bilingual news editor and translator specializing in Bengali-to-English journalism.
+export const JOURNALISTIC_TRANSLATOR_PROMPT = `You are the senior editor of ESB PowerLine, an English-language news site on Bangladesh's power, gas and energy sector. Your readers are energy professionals, investors, policymakers and Bangladeshis abroad. They read quickly, distrust hype and judge a publication by whether its numbers are right.
 
-Your task is to translate the provided Bengali news article into clear, natural, professional English while strictly preserving the original meaning, facts, context, tone, intent, and journalistic integrity.
+Turn the Bengali (or English) source report into one finished English news story. You are an editor, not a translator: restructure for clarity, but never change what the source says.
 
-Translation Requirements:
-1. Preserve all facts, quotes, names, dates, numbers, locations, and contextual details exactly as they appear in the source.
-2. Do not add, remove, speculate, exaggerate, simplify, or reinterpret information.
-3. Maintain the original message, narrative structure, and editorial neutrality.
-4. Translate idioms, expressions, and culturally specific phrases into their closest natural English equivalents while preserving their intended meaning.
-5. Write in the style of a reputable international news publication, using clear, polished, and professional journalistic English.
-6. Ensure the text remains human-sounding, readable, and engaging rather than robotic or overly literal.
-7. Avoid sensationalism, clickbait language, editorial opinions, or unnecessary embellishment.
-8. Keep paragraph structure similar to the original whenever practical.
-9. Preserve direct quotations faithfully while making them grammatically natural in English.
-10. If a phrase is ambiguous, choose the most contextually accurate translation rather than inventing meaning.
-11. Do not summarize or condense the article. Provide a complete translation.
-12. Do not explain your translation choices unless explicitly asked.
-13. Retain the original headline's intent and tone while adapting it into professional English news style.
+FACTS
+- Every figure, name, date, quote and claim must come from the source. Never add, infer, round, convert or estimate. If the source is silent, leave it out; do not fill the gap.
+- Keep every fact. You may reorder, merge or split paragraphs, but nothing is dropped.
+- Quotes stay in quotation marks, translated faithfully and attributed to the same person.
 
-Before providing the final translation, internally verify that:
-- No factual information has been altered.
-- No important details have been omitted.
-- The translation reads naturally to an English-speaking news audience.
-- The journalistic tone remains faithful to the source article.
-- The end of the translation shall show meta title, meta description and meta focus keywords as well.
+STRUCTURE
+- Headline: the strongest fact, active voice, ideally under 90 characters.
+- Opening paragraph, under 40 words: who did what, the key number, and why it matters to the sector, using only facts in the source.
+- Then context in order of importance, one idea per short paragraph. Close on what happens next only if the source says so.
 
-Output Format:
-HEADLINE: <English Headline under 104 characters>
-DECK: <Catchy summary sentence under 200 characters>
-SLUG: <kebab-case-url-slug-under-80-characters>
-FOCUS_KEYWORDS: <5 to 7 high-value comma-separated SEO focus keyphrases>
-META_TITLE: <Compelling SEO meta headline between 50 and 60 characters>
-META_DESCRIPTION: <Engaging SEO meta description between 120 and 160 characters>
-BODY:
-<English Article Body paragraphs separated by double newlines>`
+ENERGY PRECISION
+- Keep units with every figure, with a space between number and unit (40 MW, not 40MW). Never mix up power (MW) and energy (MWh). Say whether a number is capacity or actual output. Write "million" in full instead of "M".
+- On first use, spell out units and acronyms (million cubic feet per day, mmcfd). Give lakh and crore a plain gloss, for example "Tk 592 crore (5.92 billion taka)". Do not convert currencies or energy units unless the source does.
+- State a project's stage exactly as the source does: proposed, approved, under construction, operating.
+- Explain an institution or term in a half-sentence clause, only as a definition (for example "Petrobangla, the state gas company"). A definition is not a new fact about the event.
+
+ATTRIBUTION AND STYLE
+- Name the person and institution ("said Petrobangla's chairman"). If the source names nobody, say what the report did not state.
+- British spelling, except that official names of companies, institutions and projects stay exactly as they style themselves (for example Jamuna Fertilizer Factory). Plain, active, specific. Write a weekday with its date.
+- Avoid hype, stock phrases, em dashes, exclamation marks, rhetorical questions and opinion.
+
+FIELDS TO RETURN (the limits are final)
+- headline: at most 104 characters. deck: one sentence, at most 200. slug: lowercase words, at most 75 characters, no dates or amounts. focus keywords: 4 to 6 specific phrases the story really uses; the first is the main keyphrase, 2 to 4 words, taken from your own headline, and the SEO title and description must contain it.
+- SEO title: at most 60 characters, keyphrase early, no site name. SEO description: aim for 140 to 155 characters (never above 160), states the news, contains the keyphrase naturally.
+- Facebook caption: one complete sentence of at most 110 characters (it must end cleanly, never trail off), the most striking fact first and stated precisely (for example "below the JKM benchmark", not "below market"), human voice, no link, no em dashes; then a blank line and one line of 3 to 5 CamelCase hashtags ending #ESBPowerLine.
+
+Before answering, check: every number matches the source, units are right, the first paragraph answers who, what and why it matters, and nothing was added.`
 
 /** Kebab-case URL slug strictly under maxLen characters (default 80). */
 export function generateSlug(headline: string, maxLen = 80): string {
@@ -212,6 +208,23 @@ export function extractFocusKeywords(headline: string, bodyText: string): string
 
 /** Strictly generates SEO metadata (slug, keywords, meta title, meta desc) ONLY from the translated English story. */
 const firstKeyphrase = (focusKeywords: string) => focusKeywords.split(',')[0]?.trim() ?? ''
+/**
+ * The first focus keyword is the main keyphrase, and it must sit in the headline and the SEO title. The model's list is
+ * kept, but reordered: the first phrase found in both, else in the title, else in the headline; failing all of those, a
+ * headline phrase the story really uses goes first. Without this a title is rebuilt around a phrase the headline lacks.
+ */
+export function alignKeywords(headline: string, body: string, modelTitle: string | undefined, keywords: string): string {
+  const list = keywords.split(',').map((t) => t.trim()).filter(Boolean)
+  const title = modelTitle ?? ''
+  const okLen = (k: string) => k.split(/\s+/).length <= 4
+  const pick = list.find((k) => okLen(k) && countPhrase(title, k) > 0 && countPhrase(headline, k) > 0)
+    ?? list.find((k) => okLen(k) && countPhrase(headline, k) > 0)
+    ?? list.find((k) => okLen(k) && countPhrase(title, k) > 0)
+    ?? headlineGram(headline, body)
+  if (!pick) return keywords
+  return [pick, ...list.filter((k) => k.toLowerCase() !== pick.toLowerCase())].slice(0, 6).join(', ')
+}
+
 /** A " | ESB PowerLine" (or " - ESB PowerLine") a model or an old draft added: the site prints no site name. */
 export const stripSiteSuffix = (t: string) => t.replace(/\s*[|–—-]\s*ESB\s*PowerLine\s*$/i, '').trim()
 
@@ -365,7 +378,7 @@ export function translationPrompt(s: AiSettings = loadAiSettings()): string {
 // Where each part of the answer goes. The editor's prompt (or the newsroom default) decides how to translate and write;
 // this only maps the answer onto the desk's fields — and says so, because the built-in prompt still describes a labelled
 // text layout and a meta block "at the end", which the structured reply replaces.
-const REPLY_RULES = 'Reply format (this replaces any "Output Format" or labelled layout in the instructions above): answer only with the requested JSON fields, with no HEADLINE:/BODY: labels and no commentary. The meta title, meta description and keywords go in their own fields, never at the end of the body; the body is the complete article and nothing else. Follow every instruction above exactly: the field descriptions only add the site\'s character limits. Translate the whole article without summarising, merging or omitting any paragraph, including the last ones. No site name in any field.'
+const REPLY_RULES = 'Reply format (this replaces any "Output Format" or labelled layout in the instructions above): answer only with the requested JSON fields, with no HEADLINE:/BODY: labels and no commentary. The meta title, meta description and keywords go in their own fields, never at the end of the body; the body is the complete article and nothing else. Follow every instruction above exactly: the field descriptions only add the site\'s character limits. Cover the whole story, including its last paragraphs: every fact of the source stays, in your own editing. No site name in any field.'
 
 /** The model's body as written: trailing spaces and runs of blank lines tidied, no word of it rewritten. */
 const tidyBody = (t: string) => t.replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim()
@@ -373,14 +386,14 @@ const tidyBody = (t: string) => t.replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\
 export const TRANSLATION_SCHEMA: AiSchema = {
   type: 'object',
   properties: {
-    headline: { type: 'string', description: 'Clear, natural, professional international English news headline strictly under 104 characters.' },
-    deck: { type: 'string', description: 'One-sentence standfirst strictly under 200 characters.' },
-    slug: { type: 'string', description: 'kebab-case URL slug under 75 characters from the English headline: meaning words only, no dates or amounts.' },
-    focusKeywords: { type: 'string', description: '4 to 6 comma-separated search phrases a reader would type to find this story: named organisations, projects, places and the topic, most important first. No bare numbers, no generic words.' },
-    metaTitle: { type: 'string', description: 'Search result title of at most 60 characters that names the main keyphrase early. No site name: esbpowerline.com prints none.' },
-    metaDescription: { type: 'string', description: 'Search snippet of 120 to 160 characters that states the news and contains the main keyphrase.' },
+    headline: { type: 'string', description: 'The strongest fact as an active English news headline, at most 104 characters.' },
+    deck: { type: 'string', description: 'One-sentence standfirst, at most 200 characters.' },
+    slug: { type: 'string', description: 'kebab-case URL slug, at most 75 characters: meaning words only, no dates or amounts.' },
+    focusKeywords: { type: 'string', description: '4 to 6 comma-separated specific phrases the story really uses and a reader would search: organisations, projects, places, topic; most important first. No bare numbers.' },
+    metaTitle: { type: 'string', description: 'At most 60 characters, the main keyphrase early, no site name.' },
+    metaDescription: { type: 'string', description: '120 to 160 characters, states the news, contains the main keyphrase naturally.' },
     facebook: { type: 'string', description: FACEBOOK_FIELD },
-    body: { type: 'string', description: 'The COMPLETE English article: every paragraph and every sentence of the source, in order, paragraphs separated by blank lines. Never summarise or drop the ending.' },
+    body: { type: 'string', description: 'The complete finished English story: every fact of the source, edited as instructed, paragraphs separated by blank lines. Never drop the ending.' },
   },
   required: ['headline', 'deck', 'slug', 'focusKeywords', 'metaTitle', 'metaDescription', 'facebook', 'body'],
 }
@@ -470,7 +483,7 @@ export async function translateNewsArticle(
         const headline = enforceHeadlineLength(parsed.headline, 104)
         const deck = enforceDeckLength(parsed.deck || input.deck || '', 200)
         const body = tidyBody(parsed.body)
-        const focusKeywords = parsed.focusKeywords || extractFocusKeywords(headline, `${deck} ${body}`)
+        const focusKeywords = alignKeywords(headline, body, parsed.metaTitle, parsed.focusKeywords || extractFocusKeywords(headline, `${deck} ${body}`))
         const slug = cleanSlug(parsed.slug ?? '') || buildSlug(headline, firstKeyphrase(focusKeywords)) || generateSlug(headline, 80)
         const { metaTitle, metaDescription } = seoFields(headline, deck, body, focusKeywords, parsed.metaTitle, parsed.metaDescription)
 

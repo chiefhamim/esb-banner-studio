@@ -350,8 +350,10 @@ export function buildMetaTitle(headline: string, keyphrase: string): string {
 export function buildMetaDescription(deck: string, body: string, keyphrase: string): string {
   // Lead with the deck if it names the keyphrase, else with the story's first sentence that does; then add whole
   // sentences while they fit, so the snippet ends on a full stop rather than mid-word.
-  const pieces = [deck.replace(/\s+/g, ' ').trim(), ...sentencesOf(body)].filter(Boolean)
-  const lead = (keyphrase && pieces.find((p) => countPhrase(p, keyphrase))) || pieces[0] || ''
+  // a credit line or an aside is never a description; and only the deck or the opening sentences may lead - a keyphrase hit
+  // in paragraph six (a different subplot) must not become the snippet
+  const pieces = [deck.replace(/\s+/g, ' ').trim(), ...sentencesOf(body).filter((x) => !/^(source|photo|file photo|image)\s*:/i.test(x))].filter(Boolean)
+  const lead = (keyphrase && pieces.slice(0, 4).find((p) => countPhrase(p, keyphrase))) || pieces[0] || ''
   let d = lead
   for (const p of pieces) {
     if (p === lead || d.includes(p)) continue
@@ -372,3 +374,23 @@ export function buildSlug(headline: string, keyphrase: string): string {
   while (slug.length > 75) slug = slug.slice(0, slug.lastIndexOf('-'))
   return slug
 }
+
+const GRAM_STOP = new Set('a an the and or but of in on at to for from by with as is are was were be will would could can has have had its into that this than over under after before says said new'.split(' '))
+
+/** A 2 to 3 word phrase from the headline (no stop word at either end) that the story also uses; the most used, longest first. */
+export function headlineGram(headline: string, body: string): string {
+  const w = headline.replace(/[^\p{L}\p{N}\s'’-]/gu, ' ').split(/\s+/).filter(Boolean)
+  let best = '', bestScore = 0
+  for (const n of [3, 2]) {
+    for (let i = 0; i + n <= w.length; i++) {
+      const g = w.slice(i, i + n)
+      if (GRAM_STOP.has(g[0].toLowerCase()) || GRAM_STOP.has(g[n - 1].toLowerCase()) || g.some((x) => /^\d/.test(x))) continue
+      const phrase = g.join(' ').toLowerCase()
+      const uses = countPhrase(body, phrase)
+      const score = uses * n
+      if (uses > 0 && score > bestScore) { best = phrase; bestScore = score }
+    }
+  }
+  return best
+}
+
