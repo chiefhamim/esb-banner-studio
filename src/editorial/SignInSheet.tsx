@@ -134,10 +134,9 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
             <header className="acct-head">
               <div className="signin-avatar" aria-hidden>{initials}</div>
               <div className="acct-id">
-                <h2>{session.name}</h2>
+                <div className="acct-name"><h2>{session.name}</h2><span className="acct-role" style={{ ['--role' as string]: (session.role && ROLE_COLOR[session.role]) || '#6b7280' } as React.CSSProperties}>{session.role ? ROLE_LABEL[session.role] ?? session.role : 'Staff'}</span></div>
                 <p>{session.email}</p>
               </div>
-              <span className="acct-role" style={{ ['--role' as string]: (session.role && ROLE_COLOR[session.role]) || '#6b7280' } as React.CSSProperties}>{session.role ? ROLE_LABEL[session.role] ?? session.role : 'Staff'}</span>
             </header>
 
             <section className="acct-sec" aria-label="Connections">
