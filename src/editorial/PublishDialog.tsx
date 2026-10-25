@@ -2,7 +2,7 @@
 // numbers. Right: the banner as it will appear on the website and on Facebook. Footer: two actions only — save a
 // draft, or publish (or update the article that is already live).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Dialog, IconButton, Switch } from '../ui/controls'
 import { fmtDuration, useJobLog } from './jobLog'
 import { Icon } from '../ui/Icon'
@@ -82,7 +82,7 @@ export function PublishDialog(p: {
           fbNote={<p className="hint pcard-note">{p.fbPage ? <>The caption goes without a link; the article link is added as the Page&apos;s first comment (pin it from Facebook). <button type="button" className="btn-link" onClick={p.onFbConnect}>Change Page</button></> : 'Connect a Facebook Page to post the banner there as well.'}</p>} />
         {p.jobId != null && <PublishProgress id={p.jobId} />}
         {p.result && (
-          <div className={'callout ' + (p.result.ok ? 'good' : 'warn')} role="status">
+          <div ref={(el) => { el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }} className={'callout ' + (p.result.ok ? 'good' : 'warn')} role="status">
             <Icon name={p.result.ok ? 'check' : 'info'} size={15} />
             <div className="pub-result">
               <span>{p.result.msg}</span>
@@ -104,7 +104,11 @@ export function PublishDialog(p: {
 function PublishProgress({ id }: { id: number }) {
   const job = useJobLog((s) => s.jobs.find((j) => j.id === id))
   const [, tick] = useState(0)
+  const lastRef = useRef<HTMLLIElement>(null)
   const running = !!job && !job.end
+  const count = job?.steps.length ?? 0
+  // keep the newest step in view as the publish moves on (the sheet scrolls; the list can be below the fold)
+  useEffect(() => { lastRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [count, job?.end])
   useEffect(() => {
     if (!running) return
     const t = setInterval(() => tick((n) => n + 1), 100)
@@ -121,7 +125,7 @@ function PublishProgress({ id }: { id: number }) {
           const last = i === job.steps.length - 1
           const bad = !!job.error && last && !live
           return (
-            <li key={i} className={live ? 'live' : bad ? 'bad' : 'done'}>
+            <li key={i} ref={last ? lastRef : undefined} className={live ? 'live' : bad ? 'bad' : 'done'}>
               <span className="pp-mark">{live ? <span className="pulse-dot" /> : <Icon name={bad ? 'info' : 'check'} size={11} strokeWidth={2.6} />}</span>
               <span className="pp-label">{st.label}</span>
               <span className="pp-time">{fmtDuration((st.end ?? now) - st.start)}</span>
