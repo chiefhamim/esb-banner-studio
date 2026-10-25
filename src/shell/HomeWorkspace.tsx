@@ -264,7 +264,7 @@ export function HomeWorkspace() {
         <section className="home-section" style={{ ['--s' as string]: 1 }}>
           <h2 className="section-title">Recent projects</h2>
           {recents.length > 0 || recoverySnapshot ? (
-            <div className="recents-grid">
+            <div className="recents-grid empty-notice recents-box">
               {recoverySnapshot && (
                 <div className="recent-card recovery-card" role="group" aria-label="Unsaved session found">
                   <div className="recent-icon"><Icon name="refresh" size={18} /></div>
