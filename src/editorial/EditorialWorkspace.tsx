@@ -64,6 +64,7 @@ import {
   buildCmsArticlePayload,
   insertArticleToSupabase,
   findArticle,
+  sessionRefusedBySite,
   siteFetch,
   SITE_BASE_URL,
   ensureFreshSession,
@@ -624,20 +625,36 @@ export function EditorialWorkspace() {
       // a token older than an hour is renewed first, so a long editing session does not fail at the last step
       const fresh = await ensureFreshSession(staffSession)
       if (!fresh) jobError = 'Not signed in to esbpowerline.com'
+      // the site may have ended this sign-in (signed in elsewhere): then the banner upload is refused and the article would
+      // go out with no picture, so stop here and ask for a fresh sign-in instead
+      const refused = fresh ? await sessionRefusedBySite(fresh) : null
+      if (refused) {
+        jobError = `The site ended your sign-in (HTTP ${refused}). Nothing was published. Sign in again, then publish.`
+        setPublishResult({ ok: false, msg: jobError })
+        useEditorialStore.getState().logoutStaff()
+        setShowLoginModal(true)
+        return
+      }
 
       // The article's image is the 16:9 Web banner the desk made, uploaded to the site's media library — one
       // ~1920×1080 JPEG per publish, well inside Vercel's 4.5 MB body limit. When that cannot happen (browser
       // preview, photo hero chosen, upload refused) the original photo's link is used and the result says so.
       let imageUrl = bannerLeadImage || undefined
       let imageNote = ''
+      let uploadError = ''
       if (heroMode === 'banner' && baseAssets && fresh && canUploadToSite()) {
         jobLog.step(jobId, 'Rendering the web banner')
         const wo = usePublishImage.getState().opts.web
         const blob = await renderBanner(useStore.getState().doc, 'web', baseAssets, wo.scale, wo.type, effectiveQuality(wo)).catch(() => null)
         jobLog.step(jobId, 'Uploading the banner to the media library')
-        const up = blob ? await uploadBannerToSite(fresh, blob, draft.slug) : { ok: false as const, error: 'The banner could not be rendered.' }
+        let up = blob ? await uploadBannerToSite(fresh, blob, draft.slug) : { ok: false as const, error: 'The banner could not be rendered.' }
+        // one retry: a dropped connection or a busy moment on the site should not cost the article its picture
+        if (!up.ok && blob && !/over 4 MB|sign in/i.test(up.error ?? '')) {
+          jobLog.step(jobId, 'Uploading the banner again')
+          up = await uploadBannerToSite(fresh, blob, draft.slug)
+        }
         if (up.ok) { imageUrl = up.url; imageNote = ' Image: the Web banner, uploaded to the media library.' }
-        else imageNote = ` Banner upload failed (${up.error}) — used the original photo instead.`
+        else { uploadError = up.error ?? 'unknown error'; imageNote = ` Banner upload failed (${uploadError}) — used the original photo instead.` }
       } else if (heroMode === 'banner' && !canUploadToSite()) {
         imageNote = ' The browser preview cannot upload the banner, so the original photo was used.'
       }
@@ -645,7 +662,9 @@ export function EditorialWorkspace() {
         imageUrl = undefined
         imageNote = heroMode === 'banner' && !canUploadToSite()
           ? ' The browser preview cannot upload the banner and the photo is a local file, so no image was attached — add one in the CMS.'
-          : ' The photo is a local file the site cannot reach, so no image was attached — add one in the CMS.'
+          : uploadError
+            ? ` The banner upload failed (${uploadError}) and the original photo is a local file the site cannot reach, so no image was attached — add one in the CMS.`
+            : ' The photo is a local file the site cannot reach, so no image was attached — add one in the CMS.'
       }
 
       const payload = buildCmsArticlePayload({
@@ -706,6 +725,7 @@ export function EditorialWorkspace() {
           const link = result.liveUrl ?? ''
           // the caption carries no link (a link-free, short caption is the point); the article link is the first comment
           const caption = sanitizeFacebook(draft.social.facebook, draft.headline).trim() || draft.headline
+          jobLog.step(jobId, 'Posting to Facebook')
           const post = photo ? await postBannerToFacebook(fbCfg, photo, caption) : { ok: false as const, error: 'The banner could not be rendered.' }
           fbNote = post.ok ? ` Posted to Facebook (${fbCfg.pageName || 'your Page'}).` : ` Facebook post failed: ${post.error}`
           if (post.ok) {
@@ -1399,10 +1419,10 @@ export function EditorialWorkspace() {
           3. BOTTOM STATUS BAR — Minimal & quiet (Requirement 7)
           ========================================================================= */}
       <footer className="statusbar ed-statusbar">
-        <button type="button" className={'sb-cms ' + (siteStatus.connected ? 'on' : 'off')} onClick={() => setShowLoginModal(true)}
+        <button type="button" className={'sb-cms ' + (siteStatus.connected && !siteStatus.sessionEnded ? 'on' : 'off')} onClick={() => { if (siteStatus.sessionEnded) useEditorialStore.getState().logoutStaff(); setShowLoginModal(true) }}
           data-tip={`${siteStatus.statusText || (siteStatus.connected ? 'Connected' : 'Not reachable')} · checked ${siteStatus.lastChecked || 'now'} — open the connection check`}>
           <span className="sb-k">CMS</span>
-          <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.connected ? `Connected as ${staffSession?.name || 'Mehedi Hasan Hamim'} · ${siteStatus.latencyMs} ms` : 'Disconnected'}</span>
+          <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.sessionEnded ? 'Sign-in ended · click to sign in' : siteStatus.connected ? `Connected as ${staffSession?.name || 'Mehedi Hasan Hamim'} · ${siteStatus.latencyMs} ms` : 'Disconnected'}</span>
         </button>
         <div className="sep" />
         <EngineStatus ai={ai} offline={translationProvider === 'offline'} onAddKey={() => setShowApiKeyModal(true)} />

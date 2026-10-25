@@ -13,6 +13,8 @@ export interface SiteStatus {
   lastChecked: string
   version?: string
   statusText?: string
+  /** The site's auth service ended this sign-in (signed in elsewhere): uploads are refused until the editor signs in again. */
+  sessionEnded?: boolean
 }
 
 export interface LiveArticleSummary {
@@ -352,6 +354,21 @@ export async function ensureFreshSession(session: StaffSession | null): Promise<
     return next.session ?? null
   } catch {
     return null
+  }
+}
+
+/**
+ * Is this sign-in still alive on the site? The database accepts a token until it expires, but the auth service ends a
+ * session when it is signed out elsewhere (the CMS in a browser, another device) - then the site refuses uploads even
+ * though reading still works. Returns the HTTP status when it is refused, else null.
+ */
+export async function sessionRefusedBySite(session: StaffSession | null): Promise<number | null> {
+  if (!session?.token) return 401
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.token}` } })
+    return r.ok ? null : r.status
+  } catch {
+    return null // no answer: do not block on a network blip; the publish reports its own errors
   }
 }
 
@@ -702,6 +719,8 @@ export async function probeSite(session?: StaffSession | null): Promise<SiteStat
   const latencyMs = Math.max(1, Math.round(performance.now() - t0))
   if (!feed.ok) return { connected: false, latencyMs, lastChecked: stamp(), statusText: feed.status ? `Site answered HTTP ${feed.status}` : 'Site unreachable' }
   if (!session?.token) return { connected: true, latencyMs, lastChecked: stamp(), statusText: 'Site online — sign in to use the CMS' }
+  const refused = await sessionRefusedBySite(session)
+  if (refused) return { connected: true, latencyMs, lastChecked: stamp(), statusText: `Site online — it ended your sign-in (HTTP ${refused}); sign in again`, sessionEnded: true }
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/Article?select=id&limit=1`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.token}` } })
     if (r.ok) return { connected: true, latencyMs, lastChecked: stamp(), statusText: 'Site and database connected' }

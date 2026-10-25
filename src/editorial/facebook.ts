@@ -23,7 +23,7 @@ export function clearFacebook() { try { localStorage.removeItem(KEY) } catch { /
 export function facebookError(status: number, body: { error?: { message?: string; code?: number } } | null): string {
   const code = body?.error?.code
   if (code === 190 || status === 401) return 'Facebook rejected the token — it expired or was revoked. Create a new Page access token and paste it again.'
-  if (code === 200 || code === 10 || status === 403) return 'The token does not allow this. Posting needs pages_manage_posts and pages_read_engagement; commenting the article link needs pages_manage_engagement. Generate a new Page token with all three and paste it again.'
+  if (code === 200 || code === 10 || status === 403) return 'The token does not allow this. Posting needs pages_manage_posts and pages_read_engagement; commenting the article link needs pages_manage_engagement. Generate a new Page token with all three and paste it again.' + (body?.error?.message ? ` Facebook's own words: ${body.error.message}` : '')
   if (code === 100) return 'Facebook could not find that Page ID, or the token is not for this Page.'
   if (code === 4 || code === 17 || code === 32) return 'Facebook is limiting requests right now. Wait a few minutes and try again.'
   return body?.error?.message ? `Facebook said: ${body.error.message}` : `Facebook answered HTTP ${status}.`
