@@ -2,7 +2,9 @@
 // numbers. Right: the banner as it will appear on the website and on Facebook. Footer: two actions only — save a
 // draft, or publish (or update the article that is already live).
 
+import { useEffect, useState } from 'react'
 import { Dialog, Check, IconButton, Switch } from '../ui/controls'
+import { fmtDuration, useJobLog } from './jobLog'
 import { Icon } from '../ui/Icon'
 import { BannerPreviews } from './BannerPreviews'
 import type { Assets } from '../core/render'
@@ -26,6 +28,8 @@ export function PublishDialog(p: {
   updating: { slug: string; url?: string } | null
   busy: boolean
   result: PublishOutcome | null
+  /** The running (or last) publish job, shown as a live step list with timers. */
+  jobId: number | null
   fbPage: string | null
   fbOn: boolean
   onFbOn: (v: boolean) => void
@@ -90,6 +94,7 @@ export function PublishDialog(p: {
             )}
             {p.fbPage && <button type="button" className="btn-link" onClick={p.onFbConnect}>Change</button>}
           </div>
+          {p.jobId != null && <PublishProgress id={p.jobId} />}
           {p.result && (
             <div className={'callout ' + (p.result.ok ? 'good' : 'warn')} role="status">
               <Icon name={p.result.ok ? 'check' : 'info'} size={15} />
@@ -107,5 +112,38 @@ export function PublishDialog(p: {
         </div>
       </div>
     </Dialog>
+  )
+}
+
+/** Each destination step with its own timer: it ticks while the step runs and freezes when the step has arrived. */
+function PublishProgress({ id }: { id: number }) {
+  const job = useJobLog((s) => s.jobs.find((j) => j.id === id))
+  const [, tick] = useState(0)
+  const running = !!job && !job.end
+  useEffect(() => {
+    if (!running) return
+    const t = setInterval(() => tick((n) => n + 1), 100)
+    return () => clearInterval(t)
+  }, [running])
+  if (!job) return null
+  const now = Date.now()
+  return (
+    <div className="pp" aria-live="polite">
+      <div className="pp-head"><span className="kicker">PROGRESS</span><span className="pp-total">{fmtDuration((job.end ?? now) - job.start)}</span></div>
+      <ol className="pp-steps">
+        {job.steps.map((st, i) => {
+          const live = !st.end
+          const last = i === job.steps.length - 1
+          const bad = !!job.error && last && !live
+          return (
+            <li key={i} className={live ? 'live' : bad ? 'bad' : 'done'}>
+              <span className="pp-mark">{live ? <span className="pulse-dot" /> : <Icon name={bad ? 'info' : 'check'} size={11} strokeWidth={2.6} />}</span>
+              <span className="pp-label">{st.label}</span>
+              <span className="pp-time">{fmtDuration((st.end ?? now) - st.start)}</span>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
   )
 }

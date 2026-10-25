@@ -57,6 +57,7 @@ import {
   buildCmsArticlePayload,
   insertArticleToSupabase,
   findArticle,
+  siteFetch,
   SITE_BASE_URL,
   ensureFreshSession,
   openSiteCms,
@@ -220,6 +221,7 @@ export function EditorialWorkspace() {
   const [publishingLive, setPublishingLive] = useState(false)
   const [publishResult, setPublishResult] = useState<PublishOutcome | null>(null)
   const [showFbDialog, setShowFbDialog] = useState(false)
+  const [publishJobId, setPublishJobId] = useState<number | null>(null)
   const [fbCfg, setFbCfg] = useState(() => getFacebook())
   const [fbOn, setFbOn] = useState(false)
   const [editingLive, setEditingLive] = useState<string | null>(null)
@@ -543,6 +545,7 @@ export function EditorialWorkspace() {
     // the whole publish is one timed job (banner upload -> site -> Facebook); its tick is red if any part failed
     const jobLog = useJobLog.getState()
     const jobId = jobLog.begin('publish', linked ? 'Updating article' : targetStatus === 'DRAFT' ? 'Saving draft' : 'Publishing', 'Checking the sign-in')
+    setPublishJobId(jobId)
     let jobError: string | undefined
     let jobBy = 'esbpowerline.com'
     try {
@@ -556,8 +559,9 @@ export function EditorialWorkspace() {
       let imageUrl = bannerLeadImage || undefined
       let imageNote = ''
       if (heroMode === 'banner' && baseAssets && fresh && canUploadToSite()) {
-        jobLog.step(jobId, 'Uploading the Web banner')
+        jobLog.step(jobId, 'Rendering the web banner')
         const blob = await renderBanner(useStore.getState().doc, 'web', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
+        jobLog.step(jobId, 'Uploading the banner to the media library')
         const up = blob ? await uploadBannerToSite(fresh, blob, draft.slug) : { ok: false as const, error: 'The banner could not be rendered.' }
         if (up.ok) { imageUrl = up.url; imageNote = ' Image: the Web banner, uploaded to the media library.' }
         else imageNote = ` Banner upload failed (${up.error}) — used the original photo instead.`
@@ -608,18 +612,26 @@ export function EditorialWorkspace() {
           return
         }
       }
-      jobLog.step(jobId, updateId ? 'Updating the article on esbpowerline.com' : 'Saving to esbpowerline.com')
+      jobLog.step(jobId, updateId ? 'Updating the article on esbpowerline.com' : targetStatus === 'DRAFT' ? 'Saving the draft to esbpowerline.com' : 'Publishing the article to esbpowerline.com')
       const result = await insertArticleToSupabase(payload, fresh, { updateId })
 
       if (result.success) {
         const did = result.updated ? 'Updated' : targetStatus === 'PUBLISHED' ? 'Published' : 'Saved as draft'
         let fbNote = ''
+        if (targetStatus === 'PUBLISHED' && result.liveUrl) {
+          // arrival: the public page answers (a few tries - the site may take a moment to serve a new page)
+          jobLog.step(jobId, 'Checking the article is live on the site')
+          let live = false
+          for (let i = 0; i < 4 && !live; i++) { live = (await siteFetch(`${result.liveUrl}?_=${Date.now()}`, 6000)).ok; if (!live) await new Promise((r) => setTimeout(r, 1500)) }
+          imageNote += live ? ' The page is live.' : ' Saved, but the public page did not answer yet — it can take a minute to appear.'
+        }
         if (targetStatus === 'PUBLISHED' && fbOn && fbCfg && baseAssets) {
-          jobLog.step(jobId, 'Posting to Facebook')
+          jobLog.step(jobId, 'Rendering the Facebook banner')
           const photo = await renderBanner(useStore.getState().doc, 'fb45', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
           const link = result.liveUrl ?? ''
           const text = draft.social.facebook.trim() || draft.headline
           const caption = link && !text.includes(link) ? `${text}\n\n${link}` : text
+          jobLog.step(jobId, 'Posting to Facebook')
           const post = photo ? await postBannerToFacebook(fbCfg, photo, caption) : { ok: false as const, error: 'The banner could not be rendered.' }
           fbNote = post.ok ? ` Posted to Facebook (${fbCfg.pageName || 'your Page'}).` : ` Facebook post failed: ${post.error}`
           if (post.ok) jobBy += ' + Facebook'
@@ -732,7 +744,7 @@ export function EditorialWorkspace() {
     [liveArticles, catData.name, draft.slug],
   )
   const suggestTags = () => suggestKeyphrases(draft.headline, draft.deck, draft.body, 6).map((k) => k.phrase)
-  const openPublish = () => { setPublishResult(null); setFbCfg(getFacebook()); setFbOn(!linked && !!getFacebook()); setShowPublishModal(true) }
+  const openPublish = () => { setPublishResult(null); setPublishJobId(null); setFbCfg(getFacebook()); setFbOn(!linked && !!getFacebook()); setShowPublishModal(true) }
 
   // Intake form: the empty-desk launcher and the source column's "New link" tab are the same form.
   const intakeForm = (compact: boolean) => (
@@ -1348,6 +1360,7 @@ export function EditorialWorkspace() {
           updating={linked}
           busy={publishingLive}
           result={publishResult}
+          jobId={publishJobId}
           fbPage={fbCfg ? fbCfg.pageName || fbCfg.pageId : null}
           fbOn={fbOn}
           onFbOn={setFbOn}

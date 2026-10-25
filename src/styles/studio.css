@@ -919,3 +919,18 @@ label.switch:active i { filter: brightness(.94); }
 :root[data-theme=dark] .select.open { background: var(--fill-active); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22); }
 :root[data-theme=dark] .menu-item.current .mi-check { color: var(--sel-text); }
 :root[data-theme=dark] .btn:active:not(:disabled), :root[data-theme=dark] .ibtn:active:not(:disabled) { background: var(--fill-active); }
+
+/* publish progress: each destination step with its own running timer */
+.pp { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--fill); border-radius: var(--r-3); font-variant-numeric: tabular-nums lining-nums; }
+.pp-head { display: flex; align-items: center; justify-content: space-between; }
+.pp-total { font: 600 12px/1 var(--ui); color: var(--text-2); }
+.pp-steps { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.pp-steps li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 26px; font: 400 12.5px/16px var(--ui); color: var(--text-2); }
+.pp-steps li.live { color: var(--text); font-weight: 500; }
+.pp-mark { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--fill-hover); }
+.pp-steps li.done .pp-mark { color: var(--success); background: var(--success-soft); }
+.pp-steps li.bad { color: var(--danger); }
+.pp-steps li.bad .pp-mark { color: var(--danger); background: var(--danger-soft); }
+.pp-label { min-width: 0; overflow-wrap: anywhere; }
+.pp-time { min-width: 44px; text-align: right; font: 500 12px/1 var(--ui); color: var(--text-3); }
+.pp-steps li.live .pp-time { color: var(--sel-text); }
