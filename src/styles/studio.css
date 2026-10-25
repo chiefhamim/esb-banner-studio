@@ -708,3 +708,9 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .ed-head .ed-tools .ibtn:hover:not(:disabled) { background: var(--fill-hover); }
 .ed-head .btn.primary { height: 32px; padding: 0 14px; font: 500 13px/1 var(--ui); border-radius: var(--r-2); }
 @container ed (min-width: 1181px) { .ed-head .ed-ai-chip, .ed-head .ed-account:not(.in), .ed-head .btn.primary { min-width: 96px; justify-content: center; } }
+
+/* timing history: a clock button that is always in the header, with a count badge once something has been timed */
+.ed-tp-history { position: relative; display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; color: var(--text-2); background: var(--fill); border: 0; border-radius: 999px; cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
+.ed-tp-history:hover, .ed-tp-history.on { color: var(--text); background: var(--fill-hover); }
+.ed-tp-count { position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; padding: 0 4px; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; color: var(--on-ink, #fff); background: var(--ink); border-radius: 999px; box-shadow: 0 0 0 2px var(--bg-1); }
+.ed-tp-empty { margin: 0; padding: 14px 12px; font-size: 12.5px; line-height: 18px; color: var(--text-3); }

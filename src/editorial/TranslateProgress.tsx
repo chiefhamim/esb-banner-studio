@@ -66,11 +66,11 @@ export function TranslateProgress({ status }: { status: string | null }) {
 
   // the panel floats above the whole window (portal + fixed), anchored under the chip, so no column can cover or clip it
   useLayoutEffect(() => {
-    if (!open || !jobs.length) return
+    if (!open) return
     const place = () => { const r = chipRef.current?.getBoundingClientRect(); if (r) setAt({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) }) }
     place(); window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
-  }, [open, jobs.length])
+  }, [open, jobs.length])  // re-anchor when the strip grows
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
@@ -83,10 +83,9 @@ export function TranslateProgress({ status }: { status: string | null }) {
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('pointerdown', onDown) }
   }, [open])
 
-  if (!jobs.length) return null
   const now = Date.now()
   const live = jobs.find((j) => !j.end)
-  const newestId = (live ?? jobs[0]).id
+  const newestId = (live ?? jobs[0])?.id
   const total = (j: Job) => (j.end ?? now) - j.start
   const toggle = (id: number) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
@@ -107,6 +106,11 @@ export function TranslateProgress({ status }: { status: string | null }) {
           </button>
         )
       })}
+      <button type="button" className={'ed-tp-history' + (open ? ' on' : '')} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="Timing history"
+        data-tip={jobs.length ? `Timing history — ${jobs.length} ${jobs.length === 1 ? 'task' : 'tasks'}, with model and time` : 'Timing history — every translation, SEO and caption run, with its model and time'}>
+        <Icon name="clock" size={14} />
+        {jobs.length > 0 && <span className="ed-tp-count mono">{jobs.length}</span>}
+      </button>
       {open && at && createPortal(
         <div ref={popRef} className="ed-tp-pop" role="status" aria-live="polite" style={{ top: at.top, right: at.right }}>
           <div className="ed-tp-head">
@@ -115,6 +119,7 @@ export function TranslateProgress({ status }: { status: string | null }) {
             <div className="spacer" />
             {jobs.some((j) => j.end) && <button type="button" className="btn-link" onClick={() => useJobLog.getState().clear()}>Clear history</button>}
           </div>
+          {!jobs.length && <p className="ed-tp-empty">Nothing timed yet. Translate a story, write SEO or captions with AI, or publish — each run is listed here with the model that did it, its steps and how long each took.</p>}
           <div className="ed-tp-jobs">
             {jobs.map((j) => {
               const isLive = !j.end
