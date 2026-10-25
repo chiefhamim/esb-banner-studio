@@ -135,7 +135,6 @@ const COLS_DEFAULT = { src: 312, side: 340 }
 export function EditorialWorkspace() {
   const source = useEditorialStore((s) => s.source)
   const draft = useEditorialStore((s) => s.draft)
-  const checklist = useEditorialStore((s) => s.checklist)
   const siteStatus = useEditorialStore((s) => s.siteStatus)
   const staffSession = useEditorialStore((s) => s.staffSession)
   const liveArticles = useEditorialStore((s) => s.liveArticles)
@@ -149,7 +148,6 @@ export function EditorialWorkspace() {
   const updateSourceManual = useEditorialStore((s) => s.updateSourceManual)
   const setDraftField = useEditorialStore((s) => s.setDraftField)
   const setSocialCaption = useEditorialStore((s) => s.setSocialCaption)
-  const toggleChecklist = useEditorialStore((s) => s.toggleChecklist)
   const setTranslationMeta = useEditorialStore((s) => s.setTranslationMeta)
   const bannerLink = useEditorialStore((s) => s.bannerLink)
   const deskAuto = useEditorialStore((s) => s.deskAuto)
@@ -618,6 +616,7 @@ export function EditorialWorkspace() {
       if (result.success) {
         const did = result.updated ? 'Updated' : targetStatus === 'PUBLISHED' ? 'Published' : 'Saved as draft'
         let fbNote = ''
+        let fbUrl: string | undefined
         if (targetStatus === 'PUBLISHED' && result.liveUrl) {
           // arrival: the public page answers (a few tries - the site may take a moment to serve a new page)
           jobLog.step(jobId, 'Checking the article is live on the site')
@@ -635,6 +634,7 @@ export function EditorialWorkspace() {
           fbNote = post.ok ? ` Posted to Facebook (${fbCfg.pageName || 'your Page'}).` : ` Facebook post failed: ${post.error}`
           if (post.ok) {
             jobBy += ' + Facebook'
+            fbUrl = post.url
             if (link) {
               jobLog.step(jobId, 'Adding the article link as a comment')
               const c = await commentOnPost(fbCfg, post.postId, `Full story: ${link}`)
@@ -645,7 +645,7 @@ export function EditorialWorkspace() {
         } else if (targetStatus === 'PUBLISHED') {
           fbNote = fbCfg ? ' Facebook: not posted (the Facebook switch was off).' : ' Facebook: not connected.'
         }
-        setPublishResult({ ok: !jobError, msg: `${did} on esbpowerline.com.` + imageNote + fbNote, url: result.liveUrl })
+        setPublishResult({ ok: !jobError, msg: `${did} on esbpowerline.com.` + imageNote + fbNote, url: result.liveUrl, fbUrl })
         setLastPublish({ story: useStoryQueue.getState().activeId, ok: !jobError, at: Date.now(), text: `${did} on the site` + (fbNote.includes('Posted') ? ' · posted to Facebook' : fbNote.includes('failed') ? ' · Facebook failed' : fbNote.includes('not') ? ' · not on Facebook' : '') })
         showToast(targetStatus === 'PUBLISHED' ? `Story ${result.updated ? 'updated' : 'published'} on esbpowerline.com` : 'Draft saved to esbpowerline.com')
         if (targetStatus === 'PUBLISHED') useStoryQueue.getState().markPublished({ url: result.liveUrl, id: result.articleId, slug: result.slug })
@@ -1245,11 +1245,6 @@ export function EditorialWorkspace() {
             <div className="scroll ed-side-scroll">
             <section className="ed-card">
               <header className="ed-card-h"><span className="ed-card-ic"><Icon name="upload" size={15} /></span><h3>Publish</h3><span className={'ed-card-tag ' + (linked ? 'live' : '')}>{linked ? 'Live' : 'Draft'}</span></header>
-              <ul className="ed-steps">
-                <li className={checklist.figuresChecked ? 'done' : ''}><Icon name="check" size={11} strokeWidth={3} /><span>Figures</span></li>
-                <li className={checklist.namesChecked ? 'done' : ''}><Icon name="check" size={11} strokeWidth={3} /><span>Names</span></li>
-                <li className={checklist.attributionKept ? 'done' : ''}><Icon name="check" size={11} strokeWidth={3} /><span>Credit</span></li>
-              </ul>
               <dl className="ed-kv">
                 <dt>Website</dt>
                 <dd><span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />{linked ? 'Live — Publish will update it' : siteStatus.connected ? 'Ready to publish' : 'Offline'}</dd>
@@ -1353,8 +1348,6 @@ export function EditorialWorkspace() {
       {showPublishModal && (
         <PublishDialog
           draft={draft}
-          checklist={checklist}
-          onToggle={toggleChecklist}
           words={wordCount}
           paragraphs={paragraphCount}
           slugStatus={slugStatus}

@@ -3,20 +3,18 @@
 // draft, or publish (or update the article that is already live).
 
 import { useEffect, useState } from 'react'
-import { Dialog, Check, IconButton, Switch } from '../ui/controls'
+import { Dialog, IconButton, Switch } from '../ui/controls'
 import { fmtDuration, useJobLog } from './jobLog'
 import { Icon } from '../ui/Icon'
 import { BannerPreviews } from './BannerPreviews'
 import type { Assets } from '../core/render'
 import type { HeroMode } from './heroMode'
-import type { EditorialChecklist, EditorialDraft } from './editorialStore'
+import type { EditorialDraft } from './editorialStore'
 
-export interface PublishOutcome { ok: boolean; msg: string; url?: string; existingSlug?: string }
+export interface PublishOutcome { ok: boolean; msg: string; url?: string; fbUrl?: string; existingSlug?: string }
 
 export function PublishDialog(p: {
   draft: EditorialDraft
-  checklist: EditorialChecklist
-  onToggle: (k: keyof EditorialChecklist) => void
   words: number
   paragraphs: number
   slugStatus: string
@@ -41,8 +39,7 @@ export function PublishDialog(p: {
   onUpdateExisting: (slug: string) => void
   onClose: () => void
 }) {
-  const { draft, checklist } = p
-  const checked = checklist.figuresChecked && checklist.namesChecked && checklist.attributionKept
+  const { draft } = p
   const blocked = p.busy || !draft.headline.trim()
   const verb = p.updating ? 'Update' : 'Publish'
   const budget = (n: number, max: number) => <b className={n > max ? 'over' : ''}>{n} / {max}{n > max ? ' · over' : ''}</b>
@@ -60,8 +57,8 @@ export function PublishDialog(p: {
           <button type="button" className="btn" onClick={() => p.onPublish('DRAFT')} disabled={blocked} title="Keep it hidden from readers; visible in the CMS">
             <Icon name="check" size={14} /><span>{p.updating ? 'Save as draft' : 'Save draft'}</span>
           </button>
-          <button type="button" className="btn primary" onClick={() => p.onPublish('PUBLISHED')} disabled={blocked || !checked}
-            title={checked ? (p.updating ? 'Change the article that is live now' : 'Publish live to esbpowerline.com') : 'Tick all three checks first'}>
+          <button type="button" className="btn primary" onClick={() => p.onPublish('PUBLISHED')} disabled={blocked}
+            title={p.updating ? 'Change the article that is live now' : 'Publish live to esbpowerline.com'}>
             <Icon name="upload" size={14} /><span>{p.busy ? (p.updating ? 'Updating…' : 'Publishing…') : verb + (p.fbOn && p.fbPage ? ' + Facebook' : '')}</span>
           </button>
         </>
@@ -80,12 +77,6 @@ export function PublishDialog(p: {
             <div><dt>Story</dt><dd><b>{p.words} words · {p.paragraphs} ¶</b></dd></div>
             <div><dt>Slug</dt><dd className="mono"><b>{draft.slug || 'not set'}</b>{!p.updating && p.slugStatus !== 'idle' && <i className={'pub-slug ' + p.slugStatus}>{p.slugStatus}</i>}</dd></div>
           </dl>
-          <div className="pub-checks">
-            <span className="kicker">BEFORE IT GOES LIVE</span>
-            <Check checked={checklist.figuresChecked} onChange={() => p.onToggle('figuresChecked')} label="Numbers, capacities and currency checked against the source" />
-            <Check checked={checklist.namesChecked} onChange={() => p.onToggle('namesChecked')} label="Institutions, ministries and titles checked" />
-            <Check checked={checklist.attributionKept} onChange={() => p.onToggle('attributionKept')} label="Source credit and photo attribution kept" />
-          </div>
           <div className="pub-fb">
             {p.fbPage ? (
               <Switch checked={p.fbOn} onChange={p.onFbOn} label={<span>Also post to Facebook <b>{p.fbPage}</b></span>} />
@@ -101,7 +92,11 @@ export function PublishDialog(p: {
               <Icon name={p.result.ok ? 'check' : 'info'} size={15} />
               <div className="pub-result">
                 <span>{p.result.msg}</span>
-                {p.result.url && <a href={p.result.url} target="_blank" rel="noopener noreferrer" className="btn sm"><Icon name="globe" size={12} /><span>View on esbpowerline.com</span></a>}
+                {p.result.url && (
+                  <button type="button" className="btn sm" onClick={() => { for (const u of [p.result!.url, p.result!.fbUrl]) if (u) window.open(u, '_blank', 'noopener') }}>
+                    <Icon name="globe" size={12} /><span>{p.result.fbUrl ? 'Open the article and the Facebook post' : 'View on esbpowerline.com'}</span>
+                  </button>
+                )}
                 {p.result.existingSlug && <button type="button" className="btn sm primary" onClick={() => p.onUpdateExisting(p.result!.existingSlug!)}><Icon name="refresh" size={12} /><span>Update that article instead</span></button>}
               </div>
             </div>

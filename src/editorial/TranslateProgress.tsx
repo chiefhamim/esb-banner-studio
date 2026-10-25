@@ -52,7 +52,9 @@ export function TranslateProgress({ status }: { status: string | null }) {
   }, [status])
 
   // a job that starts opens the panel on itself; the editor closes it with Esc, a click elsewhere, or the chip
-  const newest = jobs[0] && !jobs[0].end ? jobs[0].id : undefined  // only a run that just started opens the panel, not a story switch
+  // only a translation / SEO / caption run that just started opens the panel (not a story switch, and not a publish: the
+  // publish sheet shows its own timed steps)
+  const newest = jobs[0] && !jobs[0].end && jobs[0].kind !== 'publish' ? jobs[0].id : undefined
   const seen = useRef<number | undefined>(undefined)
   useEffect(() => {
     if (newest == null || newest === seen.current) return

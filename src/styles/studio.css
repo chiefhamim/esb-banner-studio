@@ -968,3 +968,9 @@ label.switch:active i { filter: brightness(.94); }
 /* if a segmented control has no sliding chip (not measured yet, or unmounted layout), the selected button carries the chip itself */
 .seg-ctl:not(:has(> .pill-slide)) > button.on, .side-tabs:not(:has(> .pill-slide)) > button.on { background: var(--raised); box-shadow: var(--raised-shadow); }
 :root[data-theme=dark] .seg-ctl:not(:has(> .pill-slide)) > button.on, :root[data-theme=dark] .side-tabs:not(:has(> .pill-slide)) > button.on { background: var(--chip-on-bg); }
+
+/* publish sheet previews: the whole banner, at its own proportions, centred - never cropped */
+.bp-frame.web { width: 100%; aspect-ratio: 16 / 9; }
+.bp-frame.fb { width: min(100%, calc(300px * 0.8)); aspect-ratio: 4 / 5; max-height: none; justify-self: center; }
+.bp-frame img { object-fit: contain; }
+.bp-frame.fb { margin: 0 auto; }
