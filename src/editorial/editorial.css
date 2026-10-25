@@ -260,7 +260,7 @@
 .seo-bar { flex: 1; max-width: 200px; height: 4px; overflow: hidden; background: var(--bg-3); border-radius: 2px; }
 .seo-bar i { display: block; height: 100%; background: var(--success); border-radius: 2px; transition: width var(--t-2) var(--ease); }
 .seo-group { display: flex; flex-direction: column; gap: 2px; }
-.seo-group-title { padding-bottom: 4px; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
+.seo-group-title { padding-bottom: 4px; font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: var(--track-chip); text-transform: uppercase; color: var(--text-3); }
 .seo-check { display: grid; grid-template-columns: 16px minmax(120px, 200px) minmax(0, 1fr); align-items: baseline; gap: 8px; padding: 4px 0; font-size: 12px; line-height: 18px; }
 .seo-check .icon, .seo-check svg { align-self: center; }
 .seo-check.good svg { color: var(--success); }
@@ -385,7 +385,7 @@
 .acct-id p { margin: 2px 0 0; font: 400 12.5px/17px var(--ui); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct-role { flex: none; height: 24px; padding: 0 10px; font: 600 11.5px/24px var(--ui); color: var(--text-2); background: var(--fill); border-radius: var(--r-pill); }
 .acct-sec { display: flex; flex-direction: column; gap: 10px; }
-.acct-sec h3 { margin: 0; font: 600 10.5px/16px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.acct-sec h3 { margin: 0; font: 700 10.5px/16px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
 .acct-sec-head { display: flex; align-items: center; gap: 8px; }
 .acct-sec-head em { height: 20px; padding: 0 8px; font: 600 11px/20px var(--ui); font-style: normal; border-radius: var(--r-pill); }
 .acct-sec-head em.good { color: var(--success); background: var(--success-soft); }
@@ -457,7 +457,7 @@
 .acct-role { border: 1px solid var(--card-line); font-weight: 600; }
 
 /* the role badge: the site's own role colour as a soft gradient chip, a glowing dot and letter-spaced small caps */
-.acct-role { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 14px; font: 700 10.5px/1 var(--ui); letter-spacing: .12em; text-transform: uppercase; border: 0; border-radius: var(--r-pill); color: color-mix(in srgb, var(--role) 72%, var(--text)); background: linear-gradient(120deg, color-mix(in srgb, var(--role) 24%, transparent), color-mix(in srgb, var(--role) 8%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--role) 42%, transparent), inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent); }
+.acct-role { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 14px; font: 700 10.5px/1 var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; border: 0; border-radius: var(--r-pill); color: color-mix(in srgb, var(--role) 72%, var(--text)); background: linear-gradient(120deg, color-mix(in srgb, var(--role) 24%, transparent), color-mix(in srgb, var(--role) 8%, transparent)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--role) 42%, transparent), inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent); }
 /* the role badge sits on the name's line, centred on it, so the two read as one unit */
 .acct-name { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .acct-name h2 { min-width: 0; }

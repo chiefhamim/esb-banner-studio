@@ -146,7 +146,7 @@
 .home-shell .format-card:hover .format-glyph i { transform: none; }
 .home-shell .format-tag { border-radius: 4px; padding: 1px 6px; }
 .home-shell .empty-notice { text-align: left; border-style: dashed; }
-.home-shell .section-title { font: 600 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); padding-left: 0; }
+.home-shell .section-title { font: 700 11px/1 var(--mono); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); padding-left: 0; }
 .home-shell .home-alert.recovery-alert { border-radius: 10px; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* the three stripes of the ESB banner, as a quiet divider between name and actions */
 .home-shell .home-header-brand { order: 0; }

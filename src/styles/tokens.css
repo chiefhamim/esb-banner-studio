@@ -4,6 +4,11 @@
    ========================================================================== */
 
 :root {
+  /* ESB type guideline (Figma "ESB News Banners — Guidelines"): Inter only. 800 headlines / numbers, 700 labels, 500 body & footer.
+     Tracking by role: caps chips +.05em (1.2px at 24px), spaced caps +.09em (month), wide caps +.18em (weekday), big numerals -.02em, headlines 0. Headline leading 118%. */
+  --w-headline: 800; --w-label: 700; --w-body: 500;
+  --track-chip: .05em; --track-kicker: .09em; --track-wide: .18em; --track-display: -.02em; --track-headline: 0;
+  --lh-headline: 1.18;
   /* ---------------------------------------------------------------- Geometry: 4 px Base Grid */
   --s-0: 0px;
   --s-1: 2px;

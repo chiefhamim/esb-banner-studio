@@ -321,7 +321,8 @@ Video must not destabilise working Editorial and Graphics features.
 - **Typography:**
   - Load fonts before measuring canvas text (`document.fonts.ready`).
   - Bengali: `"Hind Siliguri"` (+2px line-height, `overflow-wrap: anywhere`).
-  - English: `Inter`, `Oswald` (Banner Headings), `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`.
+  - **ESB type guideline (Figma file `mLhk4EeYSfg2w9KJll0bu2`, section "ESB News Banners — Guidelines", frame "Font letters (Inter)") applies to the app UI too:** Inter only (UI family `ESB Sans` = the same Inter 3.19 files, weights 400–800). Roles: Extra Bold 800 = headlines, big numbers, chips; Bold 700 = labels / uppercase captions; Medium 500 = body and footer text. Headlines sentence case, 118% leading, tracking 0; big numerals −.02em and tabular; uppercase tracking by tier — chip `--track-chip` .05em, spaced caps `--track-kicker` .09em, wide caps `--track-wide` .18em (tokens in `tokens.css`; uppercase rules must use them, never a raw em value). No other Latin families in the chrome (Space Grotesk / Serif are banner-only).
+  - Banner fonts: `Inter`, `Oswald` (Banner Headings), `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`.
   - Tabular numerals for technical/financial figures.
 - **Micro-Interactions:** Fast transitions (`cubic-bezier(0.16, 1, 0.3, 1)`), visible focus rings (2px ink with 2px offset), tooltips on icon-only controls.
 - **Responsive Layout:** Gracefully adapt between 1366×768 laptops and 1920×1080+ desktops with collapsible sidebars.
