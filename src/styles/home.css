@@ -692,8 +692,8 @@
 .home-shell .recent-empty { border-style: dashed; background: transparent; }
 .home-shell .recent-empty .recent-name { color: var(--text-2); } .home-shell .recent-empty .recent-path { color: var(--text-3); }
 
-/* the original ESB Power Line monogram in the title, at the height of the old text (its letters are as tall as the old cap height); white letters on the dark theme */
-.home-shell .home-mark { display: inline-block; height: 1.15em; width: auto; vertical-align: middle; margin-right: .16em; user-select: none; }
+/* the original ESB Power Line monogram in the title, exactly as tall as the "Ai Studio" lettering (ascender to baseline, .78em for this font); white letters on the dark theme */
+.home-shell .home-mark { display: inline-block; height: .78em; width: auto; vertical-align: baseline; margin-right: .2em; user-select: none; }
 .home-shell .home-mark-dark { display: none; }
 :root[data-theme=dark] .home-shell .home-mark-light { display: none; }
 :root[data-theme=dark] .home-shell .home-mark-dark { display: inline-block; }
@@ -703,3 +703,4 @@
 .home-shell .recovery-card .recent-info { flex: 1 1 0; min-width: 0; }
 .home-shell .recovery-actions { margin-left: auto; align-items: center; gap: 4px; }
 .home-shell .recovery-actions .btn { height: 28px; }
+

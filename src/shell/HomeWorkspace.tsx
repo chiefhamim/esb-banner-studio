@@ -296,12 +296,6 @@ export function HomeWorkspace() {
                   </div>
                 </button>
               ))}
-              {(recoverySnapshot ? 1 : 0) + Math.min(recents.length, recoverySnapshot ? 1 : 2) < 2 && (
-                <button type="button" className="recent-card recent-empty" onClick={() => void handleOpenProject()}>
-                  <div className="recent-icon"><Icon name="folder" size={20} /></div>
-                  <div className="recent-info"><span className="recent-name">Open a project…</span><span className="recent-path">Browse for a saved project</span></div>
-                </button>
-              )}
             </div>
           ) : (
             <div className="empty-notice"><Icon name="folder" size={22} /><span>Nothing opened yet</span><small>Projects you open or save appear here.</small></div>
