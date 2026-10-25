@@ -48,7 +48,8 @@ import { PublishDialog } from './PublishDialog'
 import type { PublishOutcome } from './PublishDialog'
 import { FacebookDialog } from './FacebookDialog'
 import { EngineStatus } from './EngineStatus'
-import { getFacebook, postBannerToFacebook } from './facebook'
+import { commentOnPost, getFacebook, postBannerToFacebook } from './facebook'
+import { sanitizeFacebook } from './facebookCaption'
 import { openArticleForEdit } from './liveEdit'
 import { aiFor, providerMeta, roleProvider } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
@@ -408,7 +409,7 @@ export function EditorialWorkspace() {
       setDraftField('metaDescription', result.metaDescription)
       setDraftField('byline', result.byline)
       setDraftField('credit', result.credit)
-      if (socialAi && isAiProvider(useEditorialStore.getState().translationProvider)) void runAi('social')
+      // the translation call also wrote the Facebook caption; X, LinkedIn and Telegram stay templated until Social > Write with AI
 
       setProgressStatus(null)
       const warn = result.extraction?.warnings ?? []
@@ -474,9 +475,7 @@ export function EditorialWorkspace() {
       const hl = suggestHighlight(translation.headline)
 
       const templated = storyCaptions({ headline: translation.headline, deck: translation.deck, categoryId: detectedCat, slug: translation.slug })
-      for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, templated[k])
-      // the provider that translated the story writes its captions too, in the background
-      if (socialAi && isAiProvider(translation.provider)) void runAi('social')
+      for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, k === 'facebook' && translation.facebook ? translation.facebook : templated[k])
 
       useEditorialStore.getState().setDeskAuto(true)
       autoDesk(() => useStore.getState().setContent({
@@ -523,6 +522,7 @@ export function EditorialWorkspace() {
       setDraftField('focusKeyphrase', (res.focusKeywords || '').split(',')[0]?.trim() ?? '')
       setDraftField('metaTitle', res.metaTitle)
       setDraftField('metaDescription', res.metaDescription)
+      if (res.facebook) setSocialCaption('facebook', res.facebook)
 
       setDraftNotice(res.translationFailed ? 'Part of the story could not be translated — the Bengali is left in place for you to translate.' : res.coverageWarning ?? null)
       showToast(
@@ -629,13 +629,19 @@ export function EditorialWorkspace() {
           jobLog.step(jobId, 'Rendering the Facebook banner')
           const photo = await renderBanner(useStore.getState().doc, 'fb45', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
           const link = result.liveUrl ?? ''
-          const text = draft.social.facebook.trim() || draft.headline
-          const caption = link && !text.includes(link) ? `${text}\n\n${link}` : text
-          jobLog.step(jobId, 'Posting to Facebook')
+          // the caption carries no link (a link-free, short caption is the point); the article link is the first comment
+          const caption = sanitizeFacebook(draft.social.facebook, draft.headline).trim() || draft.headline
           const post = photo ? await postBannerToFacebook(fbCfg, photo, caption) : { ok: false as const, error: 'The banner could not be rendered.' }
           fbNote = post.ok ? ` Posted to Facebook (${fbCfg.pageName || 'your Page'}).` : ` Facebook post failed: ${post.error}`
-          if (post.ok) jobBy += ' + Facebook'
-          else jobError = `The site was saved, but Facebook failed: ${post.error}`
+          if (post.ok) {
+            jobBy += ' + Facebook'
+            if (link) {
+              jobLog.step(jobId, 'Adding the article link as a comment')
+              const c = await commentOnPost(fbCfg, post.postId, `Full story: ${link}`)
+              fbNote += c.ok ? ' Link added as the first comment — pin it on Facebook.' : ` The link comment failed: ${c.error}`
+              if (!c.ok) jobError = `Posted to Facebook, but the link comment failed: ${c.error}`
+            }
+          } else jobError = `The site was saved, but Facebook failed: ${post.error}`
         } else if (targetStatus === 'PUBLISHED') {
           fbNote = fbCfg ? ' Facebook: not posted (the Facebook switch was off).' : ' Facebook: not connected.'
         }

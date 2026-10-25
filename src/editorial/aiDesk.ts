@@ -10,6 +10,7 @@ import { countPhrase, suggestKeyphrases } from './seo'
 import { buildSlug } from './seo'
 import { TAGS } from '../core/newsroom'
 import { cleanSlug, seoFields, stripSiteSuffix } from './translator'
+import { FACEBOOK_STYLE, sanitizeFacebook } from './facebookCaption'
 
 export const SITE_ORIGIN = 'https://esbpowerline.com'
 /** The article's public address — esbpowerline.com serves every story at /articles/{slug}. */
@@ -91,17 +92,19 @@ export async function aiSeo(ai: Ai, story: Story, onStep?: OnStep): Promise<SeoR
 const SOCIAL_SYSTEM = `You write the social posts for ESB PowerLine, a Bangladesh energy and power news site, from the English story you are given.
 Rules:
 - Use only facts the story states: no new figures, quotes, names or claims, no opinion, no clickbait.
-- Each post ends with the article link, exactly as given, on its own line.
-- Facebook: a short hook line, then 2 or 3 sentences of the news, then 2 or 3 relevant hashtags, then the link. Under 600 characters.
+- Every post except Facebook ends with the article link, exactly as given, on its own line.
+- Facebook: follow the Facebook rules below; it carries NO link.
 - X: one or two sentences and at most 2 hashtags; with the link the whole post must stay under 270 characters.
 - LinkedIn: professional tone for energy-sector readers, 3 to 5 sentences on what happened and why it matters to the sector, 3 hashtags, then the link. Under 1,200 characters.
 - Telegram: the headline on the first line, a one- or two-sentence summary, then the link. No hashtags.
-- At most one emoji per post, and only where it reads naturally.`
+- At most one emoji per post, and only where it reads naturally.
+
+${FACEBOOK_STYLE}`
 
 export const SOCIAL_SCHEMA: AiSchema = {
   type: 'object',
   properties: {
-    facebook: { type: 'string', description: 'Facebook post ending with the link.' },
+    facebook: { type: 'string', description: 'Facebook caption with NO link: one or two short lines (125 characters), then one line of 3 to 5 hashtags.' },
     x: { type: 'string', description: 'X post under 270 characters including the link.' },
     linkedin: { type: 'string', description: 'LinkedIn post ending with the link.' },
     telegram: { type: 'string', description: 'Telegram post: headline line, summary, link.' },
@@ -114,7 +117,7 @@ export type Captions = { facebook: string; x: string; linkedin: string; telegram
 /** X counts every link as 23 characters, whatever its length. */
 export const xLength = (text: string) => text.replace(/https?:\/\/\S+/g, 'x'.repeat(23)).length
 
-/** Every caption carries the article link (once, at the end) and the X post fits X's 280. */
+/** Every caption except Facebook's carries the article link (once, at the end); Facebook's has none (the link is its first comment); the X post fits X's 280. */
 export function sanitizeCaptions(raw: Partial<Captions>, url: string): Captions {
   const site = /https?:\/\/(?:www\.)?esbpowerline\.com(?:\/[^\s)]*)?/gi
   const withLink = (t: string) => {
@@ -124,7 +127,7 @@ export function sanitizeCaptions(raw: Partial<Captions>, url: string): Captions 
     const body = (t ?? '').replace(site, () => (seen ? '' : ((seen = true), url))).replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
     return seen ? body : body ? `${body}\n\n${url}` : url
   }
-  const out: Captions = { facebook: withLink(raw.facebook ?? ''), x: withLink(raw.x ?? ''), linkedin: withLink(raw.linkedin ?? ''), telegram: withLink(raw.telegram ?? '') }
+  const out: Captions = { facebook: sanitizeFacebook(raw.facebook ?? ''), x: withLink(raw.x ?? ''), linkedin: withLink(raw.linkedin ?? ''), telegram: withLink(raw.telegram ?? '') }
   if (xLength(out.x) > 280) {
     const words = out.x.replace(url, ' ').replace(/\s+/g, ' ').trim().split(' ')
     while (words.length > 1 && xLength(`${words.join(' ')}…\n\n${url}`) > 280) words.pop()
@@ -143,11 +146,11 @@ export function storyCaptions(story: { headline: string; deck: string; categoryI
   const head = story.headline.replace(/\s+/g, ' ').trim()
   const deck = story.deck.replace(/\s+/g, ' ').trim()
   const summary = deck && deck.toLowerCase() !== head.toLowerCase() ? deck : ''
-  const tags = ['ESBPowerLine', ...(TAGS[story.categoryId] ?? []).slice(0, 2)].map((t) => '#' + t).join(' ')
+  const tags = [...(TAGS[story.categoryId] ?? []).slice(0, 2), 'Bangladesh', 'ESBPowerLine'].map((t) => '#' + t).join(' ')
   const lines = (...xs: string[]) => xs.filter(Boolean).join('\n\n')
   const url = articleUrl(story.slug)
   return sanitizeCaptions({
-    facebook: lines(head, summary, tags),
+    facebook: lines(head, tags),
     x: lines(head, '#ESBPowerLine'),
     linkedin: lines(head, summary, 'Full report on ESB PowerLine, covering Bangladesh\'s power and energy sector.', tags),
     telegram: lines(`📰 *${head}*`, summary),

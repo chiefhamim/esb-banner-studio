@@ -51,7 +51,7 @@ export function FacebookDialog({ onClose, onChange }: { onClose: () => void; onC
         </Field>
         {error && <div className="callout warn" role="alert"><Icon name="info" size={15} /><span>{error}</span></div>}
         <p className="hint">
-          In Meta for Developers, create an app, add the Page, and generate a Page access token with <b>pages_manage_posts</b> and <b>pages_read_engagement</b>.
+          In Meta for Developers, create an app, add the Page, and generate a Page access token with <b>pages_manage_posts</b>, <b>pages_read_engagement</b> and <b>pages_manage_engagement</b> (the last one lets the Studio add the article link as the first comment).
           It is kept only on this computer and sent only to facebook.com, with each post.
         </p>
       </div>

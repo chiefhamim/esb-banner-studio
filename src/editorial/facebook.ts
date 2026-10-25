@@ -23,7 +23,7 @@ export function clearFacebook() { try { localStorage.removeItem(KEY) } catch { /
 export function facebookError(status: number, body: { error?: { message?: string; code?: number } } | null): string {
   const code = body?.error?.code
   if (code === 190 || status === 401) return 'Facebook rejected the token — it expired or was revoked. Create a new Page access token and paste it again.'
-  if (code === 200 || code === 10 || status === 403) return 'The token does not allow posting to this Page. It needs pages_manage_posts and pages_read_engagement for the Page.'
+  if (code === 200 || code === 10 || status === 403) return 'The token does not allow this. Posting needs pages_manage_posts and pages_read_engagement; commenting the article link needs pages_manage_engagement. Generate a new Page token with all three and paste it again.'
   if (code === 100) return 'Facebook could not find that Page ID, or the token is not for this Page.'
   if (code === 4 || code === 17 || code === 32) return 'Facebook is limiting requests right now. Wait a few minutes and try again.'
   return body?.error?.message ? `Facebook said: ${body.error.message}` : `Facebook answered HTTP ${status}.`
@@ -55,6 +55,20 @@ export async function postBannerToFacebook(cfg: FacebookConfig, photo: Blob, cap
     if (!res.ok || !(body?.post_id || body?.id)) return { ok: false, error: facebookError(res.status, body) }
     const postId = String(body.post_id || body.id)
     return { ok: true, postId, url: `https://www.facebook.com/${postId}` }
+  } catch {
+    return { ok: false, error: 'Could not reach Facebook. Check the connection and try again.' }
+  }
+}
+
+/** Add a comment, as the Page, to one of the Page's posts - the article link goes here, not in the caption. */
+export async function commentOnPost(cfg: FacebookConfig, postId: string, message: string): Promise<{ ok: true; commentId: string } | { ok: false; error: string }> {
+  try {
+    const form = new FormData()
+    form.append('message', message)
+    const res = await fetch(`${GRAPH}/${encodeURIComponent(postId)}/comments`, { method: 'POST', headers: auth(cfg.token), body: form })
+    const body = await res.json().catch(() => null)
+    if (!res.ok || !body?.id) return { ok: false, error: facebookError(res.status, body) }
+    return { ok: true, commentId: String(body.id) }
   } catch {
     return { ok: false, error: 'Could not reach Facebook. Check the connection and try again.' }
   }

@@ -94,6 +94,7 @@ export function PublishDialog(p: {
             )}
             {p.fbPage && <button type="button" className="btn-link" onClick={p.onFbConnect}>Change</button>}
           </div>
+          {p.fbPage && <p className="hint">The caption goes without a link. The article link is added as the Page's first comment; pin it from Facebook.</p>}
           {p.jobId != null && <PublishProgress id={p.jobId} />}
           {p.result && (
             <div className={'callout ' + (p.result.ok ? 'good' : 'warn')} role="status">

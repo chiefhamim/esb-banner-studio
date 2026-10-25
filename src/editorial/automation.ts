@@ -412,6 +412,8 @@ export async function automateNewsFromUrl(
   // 8. Generate Platform Social Captions
   // every caption ends with the story's own link on esbpowerline.com; an AI provider rewrites them after intake
   const socialCaptions = storyCaptions({ headline: englishHeadline, deck: englishDeck, categoryId, slug })
+  // the AI call that translated the story also wrote the Facebook caption (no extra request); free translation uses the template
+  if (translation.facebook) socialCaptions.facebook = translation.facebook
 
   // 9. Sync Editorial Store with English Translation
   onProgress?.('Syncing Editorial Desk…')

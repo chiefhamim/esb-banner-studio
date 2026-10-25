@@ -2,6 +2,7 @@
 // Strictly adheres to the professional newsroom translator prompt specification.
 
 import { polishJournalisticEnglish, translateBengaliToEnglish } from '../core/newsroom'
+import { FACEBOOK_FIELD, sanitizeFacebook } from './facebookCaption'
 import { bengaliToAsciiDigits } from './bengali'
 import { GTX_MAX, translateComplete } from './translateNet'
 import { aiFor, aiJson, geminiLabel, listModels, loadAiSettings, providerMeta, resolveModel } from './aiProviders'
@@ -16,6 +17,8 @@ export interface EditorialTranslationResult {
   metaTitle: string         // SEO meta title
   metaDescription: string   // SEO meta description
   body: string              // full English story body
+  /** The Facebook Page caption the same AI call wrote (no link; text, then one line of hashtags). Absent for free translation. */
+  facebook?: string
   /** Which AI provider wrote it, or the free machine translation ('neural'), or nothing reachable ('offline'). */
   provider: AiProviderId | 'neural' | 'offline'
   modelUsed?: string
@@ -376,9 +379,10 @@ export const TRANSLATION_SCHEMA: AiSchema = {
     focusKeywords: { type: 'string', description: '4 to 6 comma-separated search phrases a reader would type to find this story: named organisations, projects, places and the topic, most important first. No bare numbers, no generic words.' },
     metaTitle: { type: 'string', description: 'Search result title of at most 60 characters that names the main keyphrase early. No site name: esbpowerline.com prints none.' },
     metaDescription: { type: 'string', description: 'Search snippet of 120 to 160 characters that states the news and contains the main keyphrase.' },
+    facebook: { type: 'string', description: FACEBOOK_FIELD },
     body: { type: 'string', description: 'The COMPLETE English article: every paragraph and every sentence of the source, in order, paragraphs separated by blank lines. Never summarise or drop the ending.' },
   },
-  required: ['headline', 'deck', 'slug', 'focusKeywords', 'metaTitle', 'metaDescription', 'body'],
+  required: ['headline', 'deck', 'slug', 'focusKeywords', 'metaTitle', 'metaDescription', 'facebook', 'body'],
 }
 
 async function translateWithAi(
@@ -415,6 +419,7 @@ async function translateWithAi(
         focusKeywords: data.focusKeywords?.trim(),
         metaTitle: data.metaTitle?.trim(),
         metaDescription: data.metaDescription?.trim(),
+        facebook: data.facebook?.trim(),
         body: String(data.body).trim(),
         modelUsed: used,
       }
@@ -477,6 +482,7 @@ export async function translateNewsArticle(
           metaTitle,
           metaDescription,
           body,
+          facebook: parsed.facebook ? sanitizeFacebook(parsed.facebook, headline) : undefined,
           provider: ai.provider,
           modelUsed: parsed.modelUsed,
           coverageWarning: incomplete ? `The AI returned ${outParas} paragraphs for a ${srcParas}-paragraph source — check the ending against the original.` : undefined,

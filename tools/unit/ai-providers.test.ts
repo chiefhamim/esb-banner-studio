@@ -4,6 +4,7 @@ import { aiSeo } from '../../src/editorial/aiDesk'
 import { translateNewsArticle } from '../../src/editorial/translator'
 import type { AiSchema } from '../../src/editorial/aiProviders'
 import { sanitizeSeo, sanitizeCaptions, xLength, articleUrl, relinkCaptions, storyCaptions } from '../../src/editorial/aiDesk'
+import { sanitizeFacebook } from '../../src/editorial/facebookCaption'
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
@@ -261,7 +262,7 @@ describe('AI SEO is held to the site rules', () => {
   })
 })
 
-describe('AI captions always link the article', () => {
+describe('Captions link the article, except Facebook (its link is the first comment)', () => {
   const url = articleUrl('sylhet-gas-field-two-new-wells')
   it('the site is served at /articles/{slug}', () => {
     expect(url).toBe('https://esbpowerline.com/articles/sylhet-gas-field-two-new-wells')
@@ -273,7 +274,8 @@ describe('AI captions always link the article', () => {
       linkedin: 'Sector news. https://esbpowerline.com/news/made-up and again https://www.esbpowerline.com/x',
       telegram: '',
     }, url)
-    expect(r.facebook).toBe(`Two new wells.\n\nRead the detailed breakdown: ${url}\n\n#Energy`)
+    expect(r.facebook).toBe('Two new wells.\nRead the detailed breakdown:\n\n#Energy')
+    expect(r.facebook).not.toMatch(/https?:/)
     expect(r.x).toBe(`Two new wells for Sylhet.\n\n${url}`)
     expect(r.linkedin.match(/esbpowerline\.com/g)).toHaveLength(1)
     expect(r.linkedin).toContain(url)
@@ -287,14 +289,39 @@ describe('AI captions always link the article', () => {
   it('a new slug moves every caption link with it; an emptied slug leaves them alone', () => {
     const c = sanitizeCaptions({ facebook: 'News.', x: 'News.', linkedin: 'News.', telegram: 'News.' }, articleUrl('old-slug'))
     const moved = relinkCaptions(c, 'new-slug')
-    expect(Object.values(moved).every((v) => v.endsWith(articleUrl('new-slug')) && !v.includes('old-slug'))).toBe(true)
+    const { facebook, ...linked } = moved
+    expect(Object.values(linked).every((v) => v.endsWith(articleUrl('new-slug')) && !v.includes('old-slug'))).toBe(true)
+    expect(facebook).not.toMatch(/https?:/)
     expect(relinkCaptions(moved, '')).toEqual(moved)
   })
-  it('the template captions read as news: headline, deck, a few desk hashtags, the link — no highlight posing as a figure', () => {
+  it('the template captions read as news: headline, desk hashtags on one last line, the link on every post but Facebook', () => {
     const c = storyCaptions({ headline: 'Petrobangla to drill two new wells in Sylhet gas field', deck: 'BAPEX will drill the wells.', categoryId: '03', slug: 'sylhet-gas-field-two-new-wells' })
-    expect(c.facebook).toBe(`Petrobangla to drill two new wells in Sylhet gas field\n\nBAPEX will drill the wells.\n\n#ESBPowerLine #FossilFuels #EnergyPrices\n\n${articleUrl('sylhet-gas-field-two-new-wells')}`)
-    expect(c.facebook).not.toMatch(/⚡/)
-    for (const v of Object.values(c)) expect(v.endsWith(articleUrl('sylhet-gas-field-two-new-wells'))).toBe(true)
+    expect(c.facebook).toBe('Petrobangla to drill two new wells in Sylhet gas field\n\n#FossilFuels #EnergyPrices #Bangladesh #ESBPowerLine')
+    expect(c.facebook).not.toMatch(/⚡|https?:/)
+    for (const [k, v] of Object.entries(c)) if (k !== 'facebook') expect(v.endsWith(articleUrl('sylhet-gas-field-two-new-wells'))).toBe(true)
     expect(xLength(c.x)).toBeLessThanOrEqual(280)
+  })
+})
+
+
+describe('The Facebook caption shape', () => {
+  it('drops links, keeps two short lines of text and puts every hashtag on one last line', () => {
+    const r = sanitizeFacebook('Two wells for Sylhet.\nBAPEX starts drilling in March.\nThird line is cut.\nRead more https://esbpowerline.com/articles/x #LNG #Bangladesh\n#Energy #lng #ESBPowerLine #Extra #More')
+    expect(r).not.toMatch(/https?:/)
+    const [text, tags] = r.split('\n\n')
+    expect(text.split('\n')).toHaveLength(2)
+    expect(text.length).toBeLessThanOrEqual(125)
+    expect(tags).not.toContain('\n')
+    expect(tags.split(' ').length).toBeLessThanOrEqual(5)
+    expect(tags.endsWith('#ESBPowerLine')).toBe(true)
+    expect(tags.match(/#lng/gi)).toHaveLength(1)
+  })
+  it('never exceeds 125 characters of text, so there is no See more', () => {
+    const long = 'Bangladesh has signed a very long agreement with several suppliers to bring liquefied natural gas into the country over the next fifteen years under a new deal. '.repeat(3)
+    const text = sanitizeFacebook(long + '\n\n#LNG').split('\n\n')[0]
+    expect(text.length).toBeLessThanOrEqual(126)
+  })
+  it('falls back to the headline when the caption is empty or only a link', () => {
+    expect(sanitizeFacebook('https://esbpowerline.com/articles/x', 'Gas output rises 12%')).toBe('Gas output rises 12%')
   })
 })
