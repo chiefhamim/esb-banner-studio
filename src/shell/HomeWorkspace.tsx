@@ -273,12 +273,12 @@ export function HomeWorkspace() {
                     <span className="recent-path">{recoverySnapshot.name} · {recoverySnapshot.time}</span>
                   </div>
                   <div className="recovery-actions">
-                    <button type="button" className="btn primary compact" onClick={handleRestoreRecovery}>Restore</button>
+                    <button type="button" className="ibtn" data-tip="Restore the unsaved session" aria-label="Restore the unsaved session" onClick={handleRestoreRecovery}><Icon name="undo" size={15} /></button>
                     <button type="button" className="ibtn" data-tip="Discard the unsaved session" aria-label="Discard the unsaved session" onClick={handleDiscardRecovery}><Icon name="trash" size={15} /></button>
                   </div>
                 </div>
               )}
-              {recents.slice(0, recoverySnapshot ? 1 : 2).map((item) => (
+              {recents.slice(0, recoverySnapshot ? 0 : 1).map((item) => (
                 <button
                   key={item.path}
                   type="button"

@@ -714,3 +714,7 @@
 .home-shell .recents-box .recent-card.recent-card:active { background: var(--fill-active); }
 .home-shell .recents-box .recent-card + .recent-card::before { content: ''; position: absolute; left: 10px; right: 10px; top: -4px; height: 1px; background: var(--line-2); }
 .home-shell .recents-box .recent-icon { background: var(--fill); }
+
+/* one row, filling the container: the unsaved session if there is one, otherwise the latest project */
+.home-shell .recents-box { grid-template-rows: minmax(0, 1fr); }
+.home-shell .recovery-actions { gap: 2px; }
