@@ -223,6 +223,7 @@ export function EditorialWorkspace() {
   const [fbCfg, setFbCfg] = useState(() => getFacebook())
   const [fbOn, setFbOn] = useState(false)
   const [editingLive, setEditingLive] = useState<string | null>(null)
+  const [lastPublish, setLastPublish] = useState<{ story: string | null; ok: boolean; at: number; text: string } | null>(null)
   // the site article this story is linked to (published from here, or opened for editing) - Publish then updates it
   const activeStory = useStoryQueue((q) => q.stories.find((x) => x.id === q.activeId) ?? null)
   const linkedSlug = activeStory?.publishedSlug ?? activeStory?.publishedUrl?.match(/\/articles\/([^/?#]+)/)?.[1] ?? null
@@ -539,9 +540,15 @@ export function EditorialWorkspace() {
   const handleLivePublishToCms = async (targetStatus: 'PUBLISHED' | 'DRAFT' = 'PUBLISHED') => {
     setPublishingLive(true)
     setPublishResult(null)
+    // the whole publish is one timed job (banner upload -> site -> Facebook); its tick is red if any part failed
+    const jobLog = useJobLog.getState()
+    const jobId = jobLog.begin('publish', linked ? 'Updating article' : targetStatus === 'DRAFT' ? 'Saving draft' : 'Publishing', 'Checking the sign-in')
+    let jobError: string | undefined
+    let jobBy = 'esbpowerline.com'
     try {
       // a token older than an hour is renewed first, so a long editing session does not fail at the last step
       const fresh = await ensureFreshSession(staffSession)
+      if (!fresh) jobError = 'Not signed in to esbpowerline.com'
 
       // The article's image is the 16:9 Web banner the desk made, uploaded to the site's media library — one
       // ~1920×1080 JPEG per publish, well inside Vercel's 4.5 MB body limit. When that cannot happen (browser
@@ -549,10 +556,9 @@ export function EditorialWorkspace() {
       let imageUrl = bannerLeadImage || undefined
       let imageNote = ''
       if (heroMode === 'banner' && baseAssets && fresh && canUploadToSite()) {
-        setProgressStatus('Uploading the Web banner…')
+        jobLog.step(jobId, 'Uploading the Web banner')
         const blob = await renderBanner(useStore.getState().doc, 'web', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
         const up = blob ? await uploadBannerToSite(fresh, blob, draft.slug) : { ok: false as const, error: 'The banner could not be rendered.' }
-        setProgressStatus(null)
         if (up.ok) { imageUrl = up.url; imageNote = ' Image: the Web banner, uploaded to the media library.' }
         else imageNote = ` Banner upload failed (${up.error}) — used the original photo instead.`
       } else if (heroMode === 'banner' && !canUploadToSite()) {
@@ -597,25 +603,32 @@ export function EditorialWorkspace() {
       if (!updateId && lookup) {
         updateId = (await findArticle({ slug: lookup }, fresh))?.id
         if (!updateId) {
-          setPublishResult({ ok: false, msg: `The linked article "${lookup}" was not found on the site (it may have been deleted, or this account cannot read it). Unlink it by opening the story fresh, or change the slug to publish a new article.` })
+          jobError = `The linked article "${lookup}" was not found on the site (it may have been deleted, or this account cannot read it). Open the story fresh, or change the slug to publish a new article.`
+          setPublishResult({ ok: false, msg: jobError })
           return
         }
       }
+      jobLog.step(jobId, updateId ? 'Updating the article on esbpowerline.com' : 'Saving to esbpowerline.com')
       const result = await insertArticleToSupabase(payload, fresh, { updateId })
 
       if (result.success) {
         const did = result.updated ? 'Updated' : targetStatus === 'PUBLISHED' ? 'Published' : 'Saved as draft'
         let fbNote = ''
         if (targetStatus === 'PUBLISHED' && fbOn && fbCfg && baseAssets) {
-          setProgressStatus('Posting to Facebook…')
+          jobLog.step(jobId, 'Posting to Facebook')
           const photo = await renderBanner(useStore.getState().doc, 'fb45', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
           const link = result.liveUrl ?? ''
           const text = draft.social.facebook.trim() || draft.headline
           const caption = link && !text.includes(link) ? `${text}\n\n${link}` : text
           const post = photo ? await postBannerToFacebook(fbCfg, photo, caption) : { ok: false as const, error: 'The banner could not be rendered.' }
           fbNote = post.ok ? ` Posted to Facebook (${fbCfg.pageName || 'your Page'}).` : ` Facebook post failed: ${post.error}`
+          if (post.ok) jobBy += ' + Facebook'
+          else jobError = `The site was saved, but Facebook failed: ${post.error}`
+        } else if (targetStatus === 'PUBLISHED') {
+          fbNote = fbCfg ? ' Facebook: not posted (the Facebook switch was off).' : ' Facebook: not connected.'
         }
-        setPublishResult({ ok: true, msg: `${did} on esbpowerline.com.` + imageNote + fbNote, url: result.liveUrl })
+        setPublishResult({ ok: !jobError, msg: `${did} on esbpowerline.com.` + imageNote + fbNote, url: result.liveUrl })
+        setLastPublish({ story: useStoryQueue.getState().activeId, ok: !jobError, at: Date.now(), text: `${did} on the site` + (fbNote.includes('Posted') ? ' · posted to Facebook' : fbNote.includes('failed') ? ' · Facebook failed' : fbNote.includes('not') ? ' · not on Facebook' : '') })
         showToast(targetStatus === 'PUBLISHED' ? `Story ${result.updated ? 'updated' : 'published'} on esbpowerline.com` : 'Draft saved to esbpowerline.com')
         if (targetStatus === 'PUBLISHED') useStoryQueue.getState().markPublished({ url: result.liveUrl, id: result.articleId, slug: result.slug })
         else if (result.updated) useStoryQueue.getState().linkArticle({ url: result.liveUrl, id: result.articleId, slug: result.slug ?? draft.slug })
@@ -623,13 +636,16 @@ export function EditorialWorkspace() {
       } else {
         const taken = /already exists/i.test(result.error ?? '')
         const existing = taken && !updateId ? await findArticle({ slug: payload.slug }, fresh) : null
-        setPublishResult({ ok: false, msg: result.error || 'The article could not be saved to esbpowerline.com.', existingSlug: existing?.slug })
+        jobError = result.error || 'The article could not be saved to esbpowerline.com.'
+        setPublishResult({ ok: false, msg: jobError, existingSlug: existing?.slug })
+        setLastPublish({ story: useStoryQueue.getState().activeId, ok: false, at: Date.now(), text: 'Not saved — ' + jobError })
         showToast('The site refused the article - see the publish sheet')
       }
     } catch (err: any) {
-      setPublishResult({ ok: false, msg: err.message || 'Publish error' })
+      jobError = err.message || 'Publish error'
+      setPublishResult({ ok: false, msg: jobError ?? 'Publish error' })
     } finally {
-      setProgressStatus(null)
+      jobLog.finish(jobId, { by: jobBy, error: jobError })
       setPublishingLive(false)
     }
   }
@@ -1224,6 +1240,9 @@ export function EditorialWorkspace() {
                 <dt>Signed in</dt>
                 <dd>{staffSession ? staffSession.name : <button type="button" className="btn-link" onClick={() => setShowLoginModal(true)}>Sign in</button>}</dd>
               </dl>
+              {lastPublish && lastPublish.story === (activeStory?.id ?? null) && (
+                <p className={'ed-last ' + (lastPublish.ok ? 'ok' : 'bad')}><Icon name={lastPublish.ok ? 'check' : 'info'} size={12} /><span>{lastPublish.text} · {new Date(lastPublish.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></p>
+              )}
               <button type="button" className="btn primary ed-publish-btn" onClick={openPublish} disabled={!draft.headline.trim()}>
                 <Icon name="upload" size={15} />
                 <span>{linked ? 'Review & update' : 'Review & publish'}</span>

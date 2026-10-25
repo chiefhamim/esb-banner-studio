@@ -15,7 +15,7 @@ import type { Job, JobKind } from './jobLog'
 
 const fmt = fmtDuration
 const storyJob = (first: string): { kind: JobKind; title: string } =>
-  /upload/i.test(first) ? { kind: 'publish', title: 'Publishing' } : /re-translat/i.test(first) ? { kind: 'story', title: 'Re-translation' } : { kind: 'story', title: 'Story translation' }
+  /re-translat/i.test(first) ? { kind: 'story', title: 'Re-translation' } : { kind: 'story', title: 'Story translation' }
 const KINDS: { kind: JobKind; label: string }[] = [{ kind: 'story', label: 'Story' }, { kind: 'seo', label: 'SEO' }, { kind: 'social', label: 'Social' }, { kind: 'publish', label: 'Publish' }]
 /** "Claude · claude-sonnet-5-5" → "Sonnet 5.5"; a job with no model ("Machine translation") shows what it has. */
 const modelOf = (by: string) => { const i = by.indexOf(' · '); return i < 0 ? by : modelLabel(by.slice(i + 3)) }
