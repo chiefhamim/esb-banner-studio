@@ -9,6 +9,8 @@ import { SITE_BASE_URL, openSiteCms } from './siteApi'
 import { runConnectionCheck } from './siteConnect'
 import type { ConnectionCheck } from './siteConnect'
 import { Icon } from '../ui/Icon'
+import { FacebookDialog } from './FacebookDialog'
+import { getFacebook, verifyFacebook } from './facebook'
 import siteIcon from '../assets/images/site/site-icon.png'
 
 const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: 'Super admin', ADMIN: 'Admin', EDITOR: 'Editor', AUTHOR: 'Author', CONTRIBUTOR: 'Contributor' }
@@ -27,6 +29,17 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const [checks, setChecks] = useState<ConnectionCheck[] | null>(null)
   const [checking, setChecking] = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
+  // the Facebook Page connection: checked against Facebook each time the sheet opens, and on demand
+  const [fb, setFb] = useState(() => getFacebook())
+  const [fbState, setFbState] = useState<{ s: 'idle' | 'checking' | 'ok' | 'bad'; msg?: string }>({ s: 'idle' })
+  const [fbDialog, setFbDialog] = useState(false)
+  const checkFb = async (cfg = fb) => {
+    if (!cfg) { setFbState({ s: 'idle' }); return }
+    setFbState({ s: 'checking' })
+    const r = await verifyFacebook(cfg.pageId, cfg.token)
+    setFbState(r.ok ? { s: 'ok', msg: r.name } : { s: 'bad', msg: r.error })
+  }
+  useEffect(() => { void checkFb() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Focus the email field once, when the sheet opens. This used to sit in an effect keyed on `onClose` — a new function
   // on every parent render — so a status refresh or a toast moved the cursor back to the email field while the editor
@@ -121,6 +134,15 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
               <span className="signin-badge ok"><i />Connected to esbpowerline.com</span>
               <span className="signin-badge">{session.role ? ROLE_LABEL[session.role] ?? session.role : 'Role confirmed by the site'}</span>
             </div>
+            <div className={'signin-fb ' + (!fb ? 'none' : fbState.s)}>
+              <i className="signin-fb-dot" aria-hidden />
+              <div className="signin-fb-text">
+                <b>Facebook Page</b>
+                <span>{!fb ? 'Not connected' : fbState.s === 'checking' ? 'Checking…' : fbState.s === 'ok' ? `Connected · ${fbState.msg}` : fbState.s === 'bad' ? fbState.msg : fb.pageName || fb.pageId}</span>
+              </div>
+              {fb && <button type="button" className="ibtn" aria-label="Check Facebook again" data-tip="Check again" onClick={() => void checkFb()} disabled={fbState.s === 'checking'}><Icon name="refresh" size={13} /></button>}
+              <button type="button" className="btn xs" onClick={() => setFbDialog(true)}>{fb ? 'Change' : 'Connect'}</button>
+            </div>
 
             <div className="signin-actions">
               <button type="button" className="btn primary signin-submit" onClick={() => void openCms('/cms/articles/new')} disabled={opening}>
@@ -163,6 +185,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
           </div>
         )}
       </div>
+      {fbDialog && <FacebookDialog onClose={() => setFbDialog(false)} onChange={() => { const c = getFacebook(); setFb(c); void checkFb(c) }} />}
     </div>,
     document.body,
   )
