@@ -454,3 +454,4 @@
 .ed-last svg { flex: none; margin-top: 2px; }
 .ed-last.ok { color: var(--success); background: var(--success-soft); }
 .ed-last.bad { color: var(--danger); background: var(--danger-soft); }
+.acct-role { border: 1px solid var(--card-line); font-weight: 600; }

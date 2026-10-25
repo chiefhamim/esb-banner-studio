@@ -13,6 +13,8 @@ import { FacebookDialog } from './FacebookDialog'
 import { getFacebook, verifyFacebook } from './facebook'
 import siteIcon from '../assets/images/site/site-icon.png'
 
+/** The role colours esbpowerline.com uses (lib/constants.ts ROLES), so the badge matches the site's own RoleBadge. */
+const ROLE_COLOR: Record<string, string> = { SUPER_ADMIN: '#ff3b6f', ADMIN: '#8b5cf6', EDITOR: '#3b82f6', AUTHOR: '#10b981', CONTRIBUTOR: '#f59e0b' }
 const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: 'Super admin', ADMIN: 'Admin', EDITOR: 'Editor', AUTHOR: 'Author', CONTRIBUTOR: 'Contributor' }
 const isDesktop = () => typeof window !== 'undefined' && !!(window as unknown as { esb?: { openSiteAs?: unknown } }).esb?.openSiteAs
 
@@ -134,7 +136,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                 <h2>{session.name}</h2>
                 <p>{session.email}</p>
               </div>
-              <span className="acct-role">{session.role ? ROLE_LABEL[session.role] ?? session.role : 'Staff'}</span>
+              <span className="acct-role" style={session.role && ROLE_COLOR[session.role] ? { color: ROLE_COLOR[session.role], borderColor: ROLE_COLOR[session.role], background: `color-mix(in srgb, ${ROLE_COLOR[session.role]} 10%, transparent)` } : undefined}>{session.role ? ROLE_LABEL[session.role] ?? session.role : 'Staff'}</span>
             </header>
 
             <section className="acct-sec" aria-label="Connections">
