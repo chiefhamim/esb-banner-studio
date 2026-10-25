@@ -563,8 +563,6 @@
 
 /* ============ Editorial polish: the same product as Graphics — a category identity, the banner in view, a page to read ============ */
 .cat-mark { display: inline-grid; place-items: center; flex: none; border-radius: 9px; background: var(--cat, var(--ink)); color: var(--cat-ink, #fff); box-shadow: 0 1px 2px rgba(0, 0, 0, .25), inset 0 0 0 1px rgba(255, 255, 255, .12); }
-.ed-card-headline, .ed-card-story { position: relative; }
-.ed-card-headline::before, .ed-card-story::before { content: ''; position: absolute; left: 18px; right: 18px; top: -1px; height: 3px; border-radius: 0 0 3px 3px; background: var(--cat, var(--ink)); }
 .ed-card-head > .cat-mark { margin-top: 0; }
 .ed-card-head .ed-card-title h2 { font-weight: var(--w-headline, 800); font-size: 15px; }
 .ed-input-headline { font-size: 23px; line-height: 1.18; font-weight: 800; letter-spacing: 0; }
@@ -576,7 +574,6 @@
 .rb-scroll .rb-doc { max-width: 740px; }
 /* the banner thumbnail that heads the sidebar */
 .bt { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--r-3); background: var(--card); box-shadow: var(--card-shadow); }
-.bt::before { content: ''; position: absolute; left: 14px; right: 14px; top: -1px; height: 3px; border-radius: 0 0 3px 3px; background: var(--cat, var(--ink)); }
 .bt-frame { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 8px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--card-line, transparent); display: grid; place-items: center; }
 .bt-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bt-edit { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: rgba(15, 15, 18, .78); color: #fff; font: 700 12px/1 var(--ui); cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease); backdrop-filter: blur(6px); }
