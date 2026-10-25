@@ -107,7 +107,7 @@ export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; on
           <Seg<AiProviderId>
             className="ai-provider-seg"
             value={p}
-            onChange={(v) => { setEditing(v); setStatus(null) }}
+            onChange={(v) => { setEditing(v); setStatus(null); patch((d) => ({ ...d, provider: v })) }}  /* picking a company here makes it the main AI, as in the Engine panel; SEO and Social keep their own choice */
             options={AI_PROVIDERS.map((x) => ({ value: x.id, label: x.name, tip: hasKey(x.id) ? `${x.name} — key saved` : `${x.name} — no key yet` }))}
           />
           <p className="sub">
