@@ -143,6 +143,7 @@ ipcMain.handle('esb:site-upload', async (_e, cookies, bytes, mime, name) => {
   return siteUpload.uploadBanner({ cookies, bytes: buf, mime, name })
 })
 ipcMain.handle('esb:site-upload-probe', async (_e, cookies) => siteUpload.probeUpload(cookies))
+ipcMain.handle('esb:site-revalidate', async (_e, cookies, slugs) => siteUpload.revalidateSite(cookies, slugs))
 
 // Home → Quit: close every window and end the app (app.quit runs before-quit/will-quit, so nothing is cut short).
 ipcMain.handle('esb:quit', () => { app.quit(); return true })

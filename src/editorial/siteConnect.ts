@@ -12,6 +12,7 @@ type Cookie = { name: string; value: string }
 interface UploadBridge {
   siteUpload?: (cookies: Cookie[], bytes: Uint8Array, mime: string, name: string) => Promise<{ ok: boolean; url?: string; status?: number; error?: string }>
   siteUploadProbe?: (cookies: Cookie[]) => Promise<{ ok: boolean; status: number; detail: string }>
+  siteRevalidate?: (cookies: Cookie[], slugs: string[]) => Promise<{ ok: boolean; status: number; error?: string }>
 }
 const bridge = (): UploadBridge | undefined => (typeof window !== 'undefined' ? (window as unknown as { esb?: UploadBridge }).esb : undefined)
 
@@ -37,6 +38,26 @@ export async function uploadBannerToSite(session: StaffSession | null, banner: B
     return res.ok && res.url ? { ok: true, url: res.url } : { ok: false, error: res.error || 'Upload failed.' }
   } catch {
     return { ok: false, error: 'The upload could not be sent.' }
+  }
+}
+
+/**
+ * After the Studio saves an article straight into the database, ask the site to refresh its cached public pages for it
+ * (the CMS does this itself; the Studio bypasses the CMS). Best effort: a failure only means the pages catch up on
+ * their own timer (10 to 15 minutes), so it returns a short note instead of throwing.
+ */
+export async function refreshSite(session: StaffSession | null, slugs: string[]): Promise<{ ok: boolean; note: string }> {
+  const b = bridge()
+  if (!b?.siteRevalidate) return { ok: false, note: 'The browser preview cannot refresh the site; the pages update within 15 minutes.' }
+  const fresh = await ensureFreshSession(session)
+  if (!fresh) return { ok: false, note: 'Not signed in, so the site pages will catch up within 15 minutes.' }
+  try {
+    const r = await b.siteRevalidate(siteSessionCookies(fresh), slugs)
+    if (r.ok) return { ok: true, note: 'The site pages were refreshed.' }
+    if (r.status === 404) return { ok: false, note: 'The site has no refresh route yet, so the pages catch up within 15 minutes.' }
+    return { ok: false, note: `The site refresh did not go through (${r.error ?? 'error'}); the pages catch up within 15 minutes.` }
+  } catch {
+    return { ok: false, note: 'The site refresh could not be sent; the pages catch up within 15 minutes.' }
   }
 }
 

@@ -15,5 +15,6 @@ contextBridge.exposeInMainWorld('esb', {
   quit: () => ipcRenderer.invoke('esb:quit'),
   siteUpload: (cookies, bytes, mime, name) => ipcRenderer.invoke('esb:site-upload', cookies, bytes, mime, name),
   siteUploadProbe: (cookies) => ipcRenderer.invoke('esb:site-upload-probe', cookies),
+  siteRevalidate: (cookies, slugs) => ipcRenderer.invoke('esb:site-revalidate', cookies, slugs),
   startDrag: (filePath) => ipcRenderer.send('esb:start-drag', filePath),
 })

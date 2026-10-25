@@ -11,6 +11,7 @@
 // and the route's own 20-per-minute limit: nothing here can approach either.
 const SITE_ORIGIN = 'https://esbpowerline.com'
 const UPLOAD_URL = SITE_ORIGIN + '/api/upload'
+const REVALIDATE_URL = SITE_ORIGIN + '/api/cms/revalidate'
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 const TIMEOUT_MS = 45000
 
@@ -118,4 +119,28 @@ async function probeUpload(cookies, fetchImpl = fetch) {
   return { ok: false, status: res.status, detail: `Unexpected answer: HTTP ${res.status}` }
 }
 
-module.exports = { uploadBanner, probeUpload, validateUpload, isTrustedMediaUrl, checkCookies, MAX_UPLOAD_BYTES, SITE_COOKIE_NAME, SITE_COOKIE_VALUE }
+/**
+ * Ask the site to refresh its cached public pages for these article slugs (esbpowerline app/api/cms/revalidate).
+ * The Studio saves articles straight into the database, which the CMS's own refresh never sees. Best effort: it
+ * resolves { ok, status } and never throws, and a site without the route (404) is reported, not an error.
+ */
+async function revalidateSite(cookies, slugs, fetchImpl = fetch) {
+  if (!checkCookies(cookies)) return { ok: false, status: 0, error: 'Not signed in.' }
+  if (!Array.isArray(slugs) || slugs.length < 1 || slugs.length > 5 || !slugs.every((s) => typeof s === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s) && s.length <= 120)) return { ok: false, status: 0, error: 'Bad slugs.' }
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 15000)
+  try {
+    const res = await fetchImpl(REVALIDATE_URL, { method: 'POST', body: JSON.stringify({ slugs }), headers: { Cookie: cookieHeader(cookies), Origin: SITE_ORIGIN, 'Content-Type': 'application/json' }, redirect: 'manual', signal: ctrl.signal })
+    if (res.ok) return { ok: true, status: res.status }
+    if (res.status === 404) return { ok: false, status: 404, error: 'The site does not have the refresh route yet.' }
+    if (res.status === 401 || res.status === 403 || (res.status >= 300 && res.status < 400)) return { ok: false, status: res.status, error: 'The site did not accept this session.' }
+    if (res.status === 429) return { ok: false, status: 429, error: 'Too many refreshes in a minute.' }
+    return { ok: false, status: res.status, error: `HTTP ${res.status}` }
+  } catch (err) {
+    return { ok: false, status: 0, error: err && err.name === 'AbortError' ? 'The refresh timed out.' : 'Could not reach esbpowerline.com.' }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+module.exports = { uploadBanner, probeUpload, revalidateSite, validateUpload, isTrustedMediaUrl, checkCookies, MAX_UPLOAD_BYTES, SITE_COOKIE_NAME, SITE_COOKIE_VALUE }

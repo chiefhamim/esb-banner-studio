@@ -39,6 +39,7 @@ export interface EsbBridge {
   openSiteAs?: (cookies: { name: string; value: string }[], sitePath: string) => Promise<boolean>
   siteSignOut?: () => Promise<boolean>
   siteUpload?: (cookies: { name: string; value: string }[], bytes: Uint8Array, mime: string, name: string) => Promise<{ ok: boolean; url?: string; status?: number; error?: string }>
+  siteRevalidate?: (cookies: { name: string; value: string }[], slugs: string[]) => Promise<{ ok: boolean; status: number; error?: string }>
   siteUploadProbe?: (cookies: { name: string; value: string }[]) => Promise<{ ok: boolean; status: number; detail: string }>
 }
 

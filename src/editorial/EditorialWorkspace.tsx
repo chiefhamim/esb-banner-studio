@@ -20,7 +20,7 @@ import { SeoPanel } from './SeoPanel'
 import { SignInSheet } from './SignInSheet'
 import { StoryQueueList } from './StoryQueueList'
 import { useStoryQueue } from './storyQueue'
-import { canUploadToSite, uploadBannerToSite } from './siteConnect'
+import { canUploadToSite, refreshSite, uploadBannerToSite } from './siteConnect'
 import { renderBanner } from '../export'
 import { suggestKeyphrases } from './seo'
 import { FeaturedImage } from './FeaturedImage'
@@ -709,6 +709,13 @@ export function EditorialWorkspace() {
 
       if (result.success) {
         const did = result.updated ? 'Updated' : targetStatus === 'PUBLISHED' ? 'Published' : 'Saved as draft'
+        // the Studio saved straight into the database, which the CMS's own refresh never sees: tell the site to refresh
+        // the cached homepage, lists and article page now (best effort - otherwise they catch up within 10 to 15 minutes)
+        if (targetStatus === 'PUBLISHED') {
+          jobLog.step(jobId, 'Refreshing the website pages')
+          const rf = await refreshSite(fresh, [result.slug ?? draft.slug])
+          imageNote += ` ${rf.note}`
+        }
         let fbNote = ''
         let fbUrl: string | undefined
         if (targetStatus === 'PUBLISHED' && result.liveUrl) {
