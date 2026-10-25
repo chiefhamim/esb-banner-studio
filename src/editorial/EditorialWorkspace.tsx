@@ -1324,7 +1324,6 @@ export function EditorialWorkspace() {
         <button type="button" className={'sb-cms ' + (siteStatus.connected ? 'on' : 'off')} onClick={() => setShowLoginModal(true)}
           data-tip={`${siteStatus.statusText || (siteStatus.connected ? 'Connected' : 'Not reachable')} · checked ${siteStatus.lastChecked || 'now'} — open the connection check`}>
           <span className="sb-k">CMS</span>
-          <b className="sb-host">esbpowerline.com</b>
           <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.connected ? `Connected as ${staffSession?.name || 'Mehedi Hasan Hamim'} · ${siteStatus.latencyMs} ms` : 'Disconnected'}</span>
         </button>
         <div className="sep" />
