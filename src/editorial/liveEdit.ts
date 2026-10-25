@@ -25,7 +25,7 @@ export async function openArticleForEdit(art: LiveArticleSummary): Promise<{ exa
     set('metaDescription', row.seo?.metaDescription ?? row.excerpt ?? '')
     set('imageAlt', row.seo?.heroImage?.alt ?? '')
     set('imageCaption', row.seo?.heroImage?.caption ?? '')
-    set('credit', row.imageCredit ?? 'ESB PowerLine')
+    set('credit', row.imageCredit ?? '')
     set('postAsNewsDesk', !!row.postAsNewsDesk)
   }
   const q = useStoryQueue.getState()

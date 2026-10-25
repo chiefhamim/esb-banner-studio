@@ -250,6 +250,7 @@ export function getStoredStaffSession(): StaffSession | null {
 
 export function saveStaffSession(session: StaffSession) {
   try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session)) } catch { /* ignore */ }
+  try { window.dispatchEvent(new CustomEvent('esb-session', { detail: session })) } catch { /* no window: tests */ }
 }
 
 export function clearStaffSession() {
@@ -341,20 +342,34 @@ export async function authenticateStaff(email: string, password: string): Promis
   }
 }
 
-/** A session good for at least another minute, refreshed with its refresh token when needed; null if it cannot be. */
-export async function ensureFreshSession(session: StaffSession | null): Promise<StaffSession | null> {
+/**
+ * A session good for at least five more minutes. A Supabase refresh token is SINGLE USE: each refresh returns a new one and
+ * the old one is dead, and presenting a dead one again is treated as theft and ends the whole session. So three rules:
+ * always refresh from the NEWEST saved copy (never a stale object held in memory), refresh one at a time (a second caller
+ * waits for the first and shares its result), and save the new tokens at once. The refreshed session is broadcast so the
+ * desk's own copy never goes stale.
+ */
+let refreshing: Promise<StaffSession | null> | null = null
+export async function ensureFreshSession(passed: StaffSession | null): Promise<StaffSession | null> {
+  const session = getStoredStaffSession() ?? passed
   if (!session?.token) return null
-  if (session.expiresAt && session.expiresAt - Date.now() / 1000 > 60) return session
+  if (session.expiresAt && session.expiresAt - Date.now() / 1000 > 300) return session
   if (!session.refreshToken) return null
-  try {
-    const { ok, data } = await authFetch('token?grant_type=refresh_token', { refresh_token: session.refreshToken })
-    if (!ok) return null
-    const next = await sessionFromTokens(data, session.email)
-    if (next.session) saveStaffSession(next.session)
-    return next.session ?? null
-  } catch {
-    return null
-  }
+  if (refreshing) return refreshing
+  refreshing = (async () => {
+    try {
+      const { ok, data } = await authFetch('token?grant_type=refresh_token', { refresh_token: session.refreshToken })
+      if (!ok) return null
+      const next = await sessionFromTokens(data, session.email)
+      if (next.session) saveStaffSession(next.session)
+      return next.session ?? null
+    } catch {
+      return null
+    } finally {
+      refreshing = null
+    }
+  })()
+  return refreshing
 }
 
 /**
@@ -387,7 +402,7 @@ export async function signOutStaff(session: StaffSession | null) {
  * URI-encoded value passes 3,180 characters. Setting these on esbpowerline.com signs that browser in as this editor.
  */
 export function siteSessionCookies(session: StaffSession): { name: string; value: string }[] {
-  if (!session.token || !session.refreshToken) return []
+  if (!session.token) return []
   const ref = new URL(SUPABASE_URL).hostname.split('.')[0]
   const key = `sb-${ref}-auth-token`
   const json = JSON.stringify({
@@ -395,7 +410,9 @@ export function siteSessionCookies(session: StaffSession): { name: string; value
     token_type: 'bearer',
     expires_in: Math.max(0, (session.expiresAt ?? 0) - Math.floor(Date.now() / 1000)),
     expires_at: session.expiresAt,
-    refresh_token: session.refreshToken,
+    // Never the Studio's own refresh token: the site would rotate it and the Studio's copy would die (a used token ends the
+    // whole session). The CMS window lives on this access token (about an hour); the Studio keeps its own sign-in.
+    refresh_token: 'studio-managed',
     user: session.user ?? { id: session.userId, email: session.email },
   })
   const bytes = new TextEncoder().encode(json)
@@ -462,7 +479,7 @@ export function buildCmsArticlePayload(params: {
     status: 'PUBLISHED',
     // only a link the site can serve: a photo opened from disk is a blob: URL that exists in this window alone
     imageUrl: params.imageUrl && /^https:\/\//.test(params.imageUrl) ? params.imageUrl : undefined,
-    imageCredit: params.credit || 'ESB PowerLine',
+    imageCredit: params.credit?.trim() || undefined,
     tags: tagList,
     isFeatured: false,
     isBreaking: false,
@@ -578,7 +595,7 @@ export async function insertArticleToSupabase(
       category: categoryInfo.name,
       categoryId: categoryInfo.id,
       imageUrl: payload.imageUrl || null,
-      imageCredit: payload.imageCredit || 'ESB PowerLine',
+      imageCredit: payload.imageCredit?.trim() || null,
       readTime: payload.readTime || Math.max(1, Math.ceil(payload.content.length / 1000)),
       views: 0,
       likes: 0,
@@ -719,10 +736,12 @@ export async function probeSite(session?: StaffSession | null): Promise<SiteStat
   const latencyMs = Math.max(1, Math.round(performance.now() - t0))
   if (!feed.ok) return { connected: false, latencyMs, lastChecked: stamp(), statusText: feed.status ? `Site answered HTTP ${feed.status}` : 'Site unreachable' }
   if (!session?.token) return { connected: true, latencyMs, lastChecked: stamp(), statusText: 'Site online — sign in to use the CMS' }
-  const refused = await sessionRefusedBySite(session)
+  // keep-alive: renews the token well before it expires, from the newest saved copy
+  const live = (await ensureFreshSession(session)) ?? session
+  const refused = await sessionRefusedBySite(live)
   if (refused) return { connected: true, latencyMs, lastChecked: stamp(), statusText: `Site online — it ended your sign-in (HTTP ${refused}); sign in again`, sessionEnded: true }
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/Article?select=id&limit=1`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.token}` } })
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/Article?select=id&limit=1`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${live.token}` } })
     if (r.ok) return { connected: true, latencyMs, lastChecked: stamp(), statusText: 'Site and database connected' }
     return { connected: true, latencyMs, lastChecked: stamp(), statusText: r.status === 401 ? 'Site online — your sign-in expired' : `Site online — database answered HTTP ${r.status}` }
   } catch {

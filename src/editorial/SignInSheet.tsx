@@ -168,6 +168,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                   </div>
                   <p>{fb ? `Page ID ${fb.pageId} · posts the 4:5 banner when you publish` : 'Connect the ESB Page to post the banner to Facebook when you publish.'}</p>
                   {fb && fbState.s === 'bad' && fbState.msg && <p className="acct-err">{fbState.msg}</p>}
+                  {fb && fbState.s !== 'bad' && <p className="acct-fine">{fb.permanent ? 'Token does not expire.' : 'Token from the Graph API Explorer: it can stop within an hour. Open Change Page, then “Make it permanent”.'}</p>}
                   <div className="acct-actions">
                     <button type="button" className={'btn sm' + (fb ? '' : ' primary')} onClick={() => setFbDialog(true)}><Icon name="link" size={13} /><span>{fb ? 'Change Page or token' : 'Connect Page'}</span></button>
                     {fb && <button type="button" className="btn sm" onClick={() => void checkFb()} disabled={fbState.s === 'checking'}><Icon name="refresh" size={13} /><span>{fbState.s === 'checking' ? 'Checking…' : 'Check again'}</span></button>}

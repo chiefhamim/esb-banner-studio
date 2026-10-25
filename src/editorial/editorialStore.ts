@@ -285,7 +285,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
     const cleanDeck = (article.description || '').trim().slice(0, 200)
     const cleanSlug = (article.slug || generateSlug(cleanHeadline, 80)).slice(0, 80)
     const cleanByline = article.author || 'Mehedi Hasan Hamim'
-    const cleanCredit = 'ESB PowerLine'
+    const cleanCredit = ''
 
     // Immediate draft populate
     set((s) => ({
@@ -344,7 +344,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
       headline: cleanHeadline,
       categoryId: catId,
       highlight: hl || useStore.getState().doc.content.highlight,
-      credit: 'ESB PowerLine',
+      credit: '',
       caption: `${cleanHeadline}\n\n${cleanDeck}`,
     })
 
@@ -589,3 +589,8 @@ if (typeof localStorage !== 'undefined') {
 
 // dev-only handle for the end-to-end tests, as src/store.ts exposes __store
 if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') Object.assign(window, { __editorialStore: useEditorialStore })
+
+// a refreshed sign-in (siteApi.saveStaffSession) replaces the desk's copy at once: a refresh token works only once
+if (typeof window !== 'undefined') {
+  window.addEventListener('esb-session', (e) => { useEditorialStore.setState({ staffSession: (e as CustomEvent).detail ?? null }) })
+}

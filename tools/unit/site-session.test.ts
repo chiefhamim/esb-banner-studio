@@ -19,7 +19,9 @@ describe('Signing the site in as the editor', () => {
     expect(c).toHaveLength(1)
     expect(c[0].name).toBe('sb-sxgokpmrbgdndstygapc-auth-token')
     const s = decode(c)
-    expect([s.access_token, s.refresh_token, s.expires_at, s.user.id, s.token_type]).toEqual(['acc', 'ref', 4102444800, 'u1', 'bearer'])
+    expect([s.access_token, s.refresh_token, s.expires_at, s.user.id, s.token_type]).toEqual(['acc', 'studio-managed', 4102444800, 'u1', 'bearer'])
+    // the Studio's own refresh token must never reach the CMS window (the site would rotate it and kill the Studio's session)
+    expect(JSON.stringify(s)).not.toContain('"ref"')
   })
 
   it('splits a large session into .0, .1 chunks of at most 3,180 characters', () => {
@@ -71,5 +73,30 @@ describe('Staff sign-in mirrors the site', () => {
     expect(r.success).toBe(false)
     expect(r.error).toMatch(/Sign in/)
     expect(f).not.toHaveBeenCalled()
+  })
+})
+
+// A Supabase refresh token is single use. Refreshing must always start from the newest saved copy, run one at a time, and
+// save the new tokens at once; a stale in-memory object would present a dead token and end the whole session.
+describe('Keeping the sign-in alive', () => {
+  it('refreshes from the newest saved session, shares one request between callers, and saves the new tokens', async () => {
+    const { ensureFreshSession, saveStaffSession, getStoredStaffSession } = await import('../../src/editorial/siteApi')
+    const store = new Map<string, string>()
+    ;(globalThis as unknown as { localStorage: Storage }).localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) } as Storage
+    const stale = { ...base, token: 'old', refreshToken: 'dead', expiresAt: 1 }
+    saveStaffSession({ ...base, token: 'old2', refreshToken: 'alive', expiresAt: 1 })
+    const bodies: string[] = []
+    const user = { id: 'u1', email: 'e@x.com', user_metadata: {}, app_metadata: {} }
+    ;(globalThis as unknown as { fetch: typeof fetch }).fetch = (async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/auth/v1/token')) { bodies.push(String(init?.body)); return new Response(JSON.stringify({ access_token: 'new', refresh_token: 'next', expires_in: 3600, user }), { status: 200 }) }
+      return new Response('[]', { status: 200 })
+    }) as typeof fetch
+    const [a, b] = await Promise.all([ensureFreshSession(stale), ensureFreshSession(stale)])
+    expect(bodies).toHaveLength(1)
+    expect(bodies[0]).toContain('alive')
+    expect(bodies[0]).not.toContain('dead')
+    expect(a?.token).toBe('new')
+    expect(b?.token).toBe('new')
+    expect(getStoredStaffSession()?.refreshToken).toBe('next')
   })
 })

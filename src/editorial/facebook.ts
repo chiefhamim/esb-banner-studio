@@ -6,7 +6,13 @@
 const KEY = 'esb-banner-studio/facebook'
 const GRAPH = 'https://graph.facebook.com/v26.0'
 
-export interface FacebookConfig { pageId: string; token: string; pageName?: string }
+export interface FacebookConfig {
+  pageId: string
+  token: string
+  pageName?: string
+  /** True when the token was made from a long-lived user token: Meta documents that such a Page token never expires. */
+  permanent?: boolean
+}
 
 export function getFacebook(): FacebookConfig | null {
   try {
@@ -69,6 +75,42 @@ export async function commentOnPost(cfg: FacebookConfig, postId: string, message
     const body = await res.json().catch(() => null)
     if (!res.ok || !body?.id) return { ok: false, error: facebookError(res.status, body) }
     return { ok: true, commentId: String(body.id) }
+  } catch {
+    return { ok: false, error: 'Could not reach Facebook. Check the connection and try again.' }
+  }
+}
+
+/**
+ * Why a pasted token "disappears": it does not - Facebook ends it. A token copied from the Graph API Explorer is a
+ * short-lived USER token (about an hour), and a Page token made from it dies with it. A Page token made from a LONG-LIVED
+ * user token does not expire. This does that exchange: the short-lived user token + the app's ID and secret give a
+ * 60-day user token, which gives the Page's own token; `debug_token` then confirms it never expires. The app secret is
+ * used for these calls only and is not stored anywhere.
+ */
+export async function makeTokenPermanent(input: { pageId: string; userToken: string; appId: string; appSecret: string }): Promise<{ ok: true; token: string; pageName: string; permanent: boolean } | { ok: false; error: string }> {
+  const { pageId, userToken, appId, appSecret } = input
+  try {
+    const form = new FormData()
+    form.append('grant_type', 'fb_exchange_token')
+    form.append('client_id', appId)
+    form.append('client_secret', appSecret)
+    form.append('fb_exchange_token', userToken)
+    const r1 = await fetch(`${GRAPH}/oauth/access_token`, { method: 'POST', body: form })
+    const b1 = await r1.json().catch(() => null)
+    if (!r1.ok || !b1?.access_token) return { ok: false, error: `Facebook would not extend the token. ${facebookError(r1.status, b1)} Check the App ID and App Secret, and that the token is a user token from the Graph API Explorer.` }
+    const longUser = String(b1.access_token)
+    const r2 = await fetch(`${GRAPH}/${encodeURIComponent(pageId)}?fields=access_token,name`, { headers: auth(longUser) })
+    const b2 = await r2.json().catch(() => null)
+    if (!r2.ok || !b2?.access_token) return { ok: false, error: `The extended token could not read this Page's own token. ${facebookError(r2.status, b2)} The Facebook account must be an admin of the Page, with pages_show_list granted.` }
+    const pageToken = String(b2.access_token)
+    // does it expire? (expires_at 0 = never)
+    let permanent = false
+    try {
+      const r3 = await fetch(`${GRAPH}/debug_token?input_token=${encodeURIComponent(pageToken)}`, { headers: auth(`${appId}|${appSecret}`) })
+      const b3 = await r3.json().catch(() => null)
+      permanent = r3.ok && b3?.data?.expires_at === 0
+    } catch { /* unknown: reported as not confirmed */ }
+    return { ok: true, token: pageToken, pageName: String(b2.name ?? ''), permanent }
   } catch {
     return { ok: false, error: 'Could not reach Facebook. Check the connection and try again.' }
   }

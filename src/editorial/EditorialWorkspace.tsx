@@ -1323,7 +1323,7 @@ export function EditorialWorkspace() {
                       date={previewDate}
                       readTime={readTimeMin}
                       heroUrl={heroMode === 'banner' ? webBannerUrl : bannerLeadImage}
-                      heroCredit={draft.credit || 'ESB PowerLine'}
+                      heroCredit={draft.credit}
                       paragraphs={draft.body.split(/\n{2,}/).map((t) => t.trim()).filter(Boolean)}
                       tags={tagList}
                       related={relatedStories}
