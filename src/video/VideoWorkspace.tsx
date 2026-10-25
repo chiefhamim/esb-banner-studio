@@ -654,7 +654,7 @@ export function VideoWorkspace() {
           </button>
 
           <button type="button" className="btn primary sm" onClick={handleStartExport} disabled={exporting}>
-            <Icon name="download" size={14} /> {exporting ? 'Exporting…' : 'Export Video'}
+            <Icon name="download" size={14} /> {exporting ? 'Exporting…' : 'Export'}
           </button>
         </div>
       </header>

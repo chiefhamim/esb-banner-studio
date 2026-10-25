@@ -1356,7 +1356,7 @@ export function EditorialWorkspace() {
                 <dt>Facebook</dt>
                 <dd><span className={`site-dot ${fbCfg ? 'online' : 'offline'}`} />{fbCfg ? fbCfg.pageName || 'Connected' : <button type="button" className="btn-link" onClick={() => setShowFbDialog(true)}>Connect a Page</button>}</dd>
                 <dt>Signed in</dt>
-                <dd>{staffSession ? staffSession.name : <button type="button" className="btn-link" onClick={() => setShowLoginModal(true)}>Sign in</button>}</dd>
+                <dd><span className={`site-dot ${staffSession ? 'online' : 'offline'}`} />{staffSession ? staffSession.name : <button type="button" className="btn-link" onClick={() => setShowLoginModal(true)}>Sign in</button>}</dd>
               </dl>
               {lastPublish && lastPublish.story === (activeStory?.id ?? null) && (
                 <p className={'ed-last ' + (lastPublish.ok ? 'ok' : 'bad')}><Icon name={lastPublish.ok ? 'check' : 'info'} size={12} /><span>{lastPublish.text} · {new Date(lastPublish.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></p>

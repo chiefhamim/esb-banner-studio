@@ -132,7 +132,7 @@
 .ed-input:hover { border-color: transparent; box-shadow: var(--ctl-shadow-hover); }
 .ed-input:focus { border-color: transparent; outline: none; box-shadow: 0 0 0 2px var(--ink-ring), var(--ctl-shadow); }
 .ed-input::placeholder { color: var(--text-3); }
-.ed-input-headline { min-height: 64px; padding: 10px 14px; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.015em; resize: none; field-sizing: content; }
+.ed-input-headline { min-height: 64px; padding: 10px 12px; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.015em; resize: none; field-sizing: content; }
 .ed-input-deck { min-height: 52px; font-size: 15px; line-height: 22px; resize: none; field-sizing: content; }
 .ed-input-body { min-height: 420px; padding: 12px 14px; font-size: 15px; line-height: 1.65; field-sizing: content; }
 .ed-input-social { min-height: 140px; line-height: 1.55; }

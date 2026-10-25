@@ -1168,3 +1168,14 @@ label.switch:active i { filter: brightness(.94); }
 .vw-tag.lower-third { --tag: #10b981; } .vw-tag.breaking { --tag: #ef4444; } .vw-tag.attribution { --tag: #3b82f6; }
 .vw-tag.logo { --tag: #0ea5e9; } .vw-tag.caption { --tag: #f59e0b; } .vw-tag.voice { --tag: #8b5cf6; } .vw-tag.footage { --tag: #0e75dd; }
 .vw-preset-header .btn.xs { gap: 4px; }
+/* trim handles are invisible grab zones until hover/selection shows their grip (a stray 1 px border drew a dark seam 10 px inside every clip) */
+.vw-trim-handle { border: 0 !important; }
+
+/* sidebar tabs share the edges of the cards under them: the list keeps a stable scrollbar gutter (thin = 10 px on Windows)
+   and the tabs stop where the cards stop, instead of running 8 px past them on the right and 2 px short on the left */
+.left > .scroll, .vw-bin-content { scrollbar-gutter: stable; }
+.left > .side-tabs, .vw-bin-panel > .side-tabs { margin: 10px 18px 4px 8px; }
+.vw-bin-content { padding: 6px 8px 10px; }
+/* a narrow Video header gives up the timecode chip first (the transport under the monitor shows the same time) */
+@container vwh (max-width: 1040px) { .vw-header .vw-timecode { display: none; } }
+:root[data-theme=dark] .topbar .pv-btn kbd, :root[data-theme=dark] .topbar .dpc-tag { color: #c8c8d0; }
