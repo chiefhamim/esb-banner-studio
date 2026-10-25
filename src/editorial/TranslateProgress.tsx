@@ -97,16 +97,18 @@ export function TranslateProgress({ status }: { status: string | null }) {
     <div ref={chipRef} className={'ed-topbar-progress ed-tp'} role="group" aria-label="Task times">
       <button type="button" className={'ed-tp-history' + (open ? ' on' : '')} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="Activity"
         data-tip={live ? `Activity — ${live.title} running, ${fmt(total(live))}` : jobs.length ? `Activity for this story — ${jobs.length} ${jobs.length === 1 ? 'task' : 'tasks'}, with model and time` : 'Activity — translation, SEO, caption and publish runs for this story, with model and time'}>
-        {live ? <span className="pulse-dot" /> : <Icon name="clock" size={14} />}
+        <Icon name="activity" size={16} />{live && <span className="ed-tp-live" aria-hidden />}
         {jobs.length > 0 && <span className="ed-tp-count mono">{jobs.length}</span>}
       </button>
       {open && at && createPortal(
         <div ref={popRef} className="ed-tp-pop" role="status" aria-live="polite" style={{ top: at.top, right: at.right }}>
           <div className="ed-tp-head">
-            <b>Activity</b>
-            <span className="hint">{jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}</span>
-            <div className="spacer" />
-            {jobs.some((j) => j.end) && <button type="button" className="btn-link" onClick={() => useJobLog.getState().clear(activeId ?? '')}>Clear history</button>}
+            <span className="ed-tp-head-ic"><Icon name="activity" size={15} /></span>
+            <div className="ed-tp-head-t">
+              <b>Activity</b>
+              <span>This story · {jobs.length} {jobs.length === 1 ? 'run' : 'runs'}</span>
+            </div>
+            {jobs.some((j) => j.end) && <button type="button" className="btn xs ghost" onClick={() => useJobLog.getState().clear(activeId ?? '')}>Clear</button>}
           </div>
           {jobs.length > 1 && (
             <div className="ed-tp-kinds" role="tablist" aria-label="Filter by kind">
@@ -127,7 +129,7 @@ export function TranslateProgress({ status }: { status: string | null }) {
                 <section key={j.id} className={'ed-tp-job ' + j.kind + (isLive ? ' live' : j.error ? ' bad' : ' ok')}>
                   <button type="button" className="ed-tp-job-head" onClick={() => toggle(j.id)} aria-expanded={isOpen}>
                     <span className="ed-tp-mark">{isLive ? <span className="pulse-dot" /> : <Icon name={j.error ? 'info' : 'check'} size={12} />}</span>
-                    <span className="ed-tp-job-title"><b>{j.title}</b>{j.by && <span className="ed-tp-by">{modelOf(j.by) || j.by}</span>}</span>
+                    <span className="ed-tp-job-title"><b>{j.title}</b><span className="ed-tp-by">{KINDS.find((k) => k.kind === j.kind)?.label}{j.by ? ' · ' + (modelOf(j.by) || j.by) : ''}{j.error ? ' · failed' : ''}</span></span>
                     <span className="ed-tp-ms mono">{fmt(total(j))}</span>
                     <Icon name="chevDown" size={12} className={'ed-tp-chev' + (isOpen ? ' open' : '')} />
                   </button>

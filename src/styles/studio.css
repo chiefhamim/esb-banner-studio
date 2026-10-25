@@ -826,3 +826,30 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .sb-eng-state { display: inline-flex; align-items: center; gap: 7px; font: 600 12px/16px var(--ui); color: var(--text); }
 .sb-engine-btn.busy .sb-dot { animation: sb-breathe 1.4s ease-in-out infinite; }
 .eng-who .select { height: 28px; min-width: 150px; max-width: 100%; align-self: flex-start; }
+
+/* Activity: a pulse-line button and a tidy, aligned history (header, filter, one grid for every row) */
+.ed-tp-history { width: 32px; height: 32px; }
+.ed-tp-history svg { display: block; }
+.ed-tp-live { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: #4f8cff; box-shadow: 0 0 0 2px var(--bg-1); animation: sb-breathe 1.4s ease-in-out infinite; }
+.ed-tp-history .ed-tp-count { top: -4px; right: -4px; }
+.ed-tp-pop { width: 400px; border: 0; border-radius: 14px; box-shadow: var(--shadow-2); animation: sheet-in 200ms var(--spring); }
+.ed-tp-head { gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--card-line); }
+.ed-tp-head-ic { display: grid; place-items: center; width: 28px; height: 28px; flex: none; color: var(--text-2); background: var(--fill); border-radius: var(--r-2); }
+.ed-tp-head-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.ed-tp-head-t b { font: 600 14px/18px var(--ui); }
+.ed-tp-head-t span { font: 400 11.5px/15px var(--ui); color: var(--text-3); }
+.ed-tp-kinds { padding: 10px 14px 4px; }
+.ed-tp-jobs { padding: 4px 6px 8px; }
+.ed-tp-job { border-radius: var(--r-2); }
+.ed-tp-job + .ed-tp-job { border-top: 0; }
+.ed-tp-job-head { grid-template-columns: 22px minmax(0, 1fr) auto 14px; gap: 10px; padding: 9px 8px; border-radius: var(--r-2); }
+.ed-tp-job .ed-tp-mark { width: 22px; height: 22px; border-radius: 50%; background: var(--fill); }
+.ed-tp-job.ok .ed-tp-mark { background: color-mix(in srgb, #1f9d57 14%, transparent); }
+.ed-tp-job.bad .ed-tp-mark { background: color-mix(in srgb, #d4553b 14%, transparent); }
+.ed-tp-job-title b { font: 600 13px/18px var(--ui); }
+.ed-tp-by { font: 400 11.5px/15px var(--ui); }
+.ed-tp-ms { color: var(--text-2); }
+.ed-tp-err { padding: 0 8px 8px 40px; }
+.ed-tp-steps { margin: 0 8px 8px 40px; padding: 4px 0 4px 10px; border-left: 2px solid var(--card-line); }
+.ed-tp-steps li { grid-template-columns: 14px minmax(0, 1fr) auto; gap: 8px; padding: 4px 0; }
+.ed-tp-empty { padding: 18px 16px; }

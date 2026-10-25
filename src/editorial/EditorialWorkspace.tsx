@@ -824,7 +824,6 @@ export function EditorialWorkspace() {
     ? source.extraction.language === 'bn' ? 'Bengali' : source.extraction.language === 'en' ? 'English' : source.extraction.language === 'mixed' ? 'Mixed' : 'Unknown language'
     : null
   const sourceUrl = source?.url && /^https?:\/\//.test(source.url) ? source.url : null
-  const checksDone = [checklist.figuresChecked, checklist.namesChecked, checklist.attributionKept].filter(Boolean).length
   const tagList = draft.focusKeywords.split(',').map((t) => t.trim()).filter(Boolean)
   const setTags = (tags: string[]) => setDraftField('focusKeywords', tags.join(', '))
   const addTag = (raw: string) => {
@@ -1211,24 +1210,29 @@ export function EditorialWorkspace() {
             <Splitter axis="vert" side="l" label="Resize the sidebar" value={cols.side} min={280} max={560} reset={COLS_DEFAULT.side} onLive={liveCol('side')} onCommit={commitCol('side')} root={() => wsRef.current} />
             <div className="scroll ed-side-scroll">
             <section className="ed-card">
-              <h3>Publish</h3>
-              <div className={'ed-pubstat ' + (linked ? 'live' : 'draft')}>
-                <i aria-hidden />
-                <div>
-                  <b>{linked ? 'Live on esbpowerline.com' : 'Not published yet'}</b>
-                  <span>{checksDone === 3 ? 'All 3 checks done' : `${checksDone} of 3 checks done`}{fbCfg ? ' · Facebook ready' : ''}</span>
-                </div>
-              </div>
+              <header className="ed-card-h"><span className="ed-card-ic"><Icon name="upload" size={15} /></span><h3>Publish</h3><span className={'ed-card-tag ' + (linked ? 'live' : '')}>{linked ? 'Live' : 'Draft'}</span></header>
+              <ul className="ed-steps">
+                <li className={checklist.figuresChecked ? 'done' : ''}><Icon name="check" size={11} strokeWidth={3} /><span>Figures</span></li>
+                <li className={checklist.namesChecked ? 'done' : ''}><Icon name="check" size={11} strokeWidth={3} /><span>Names</span></li>
+                <li className={checklist.attributionKept ? 'done' : ''}><Icon name="check" size={11} strokeWidth={3} /><span>Credit</span></li>
+              </ul>
+              <dl className="ed-kv">
+                <dt>Website</dt>
+                <dd><span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />{linked ? 'Live — Publish will update it' : siteStatus.connected ? 'Ready to publish' : 'Offline'}</dd>
+                <dt>Facebook</dt>
+                <dd><span className={`site-dot ${fbCfg ? 'online' : 'offline'}`} />{fbCfg ? fbCfg.pageName || 'Connected' : <button type="button" className="btn-link" onClick={() => setShowFbDialog(true)}>Connect a Page</button>}</dd>
+                <dt>Signed in</dt>
+                <dd>{staffSession ? staffSession.name : <button type="button" className="btn-link" onClick={() => setShowLoginModal(true)}>Sign in</button>}</dd>
+              </dl>
               <button type="button" className="btn primary ed-publish-btn" onClick={openPublish} disabled={!draft.headline.trim()}>
                 <Icon name="upload" size={15} />
                 <span>{linked ? 'Review & update' : 'Review & publish'}</span>
               </button>
-              {!staffSession && <p className="hint">Sign in (top right) to publish.</p>}
             </section>
 
             <section className="ed-card">
-              <h3>Banner</h3>
-              <BannerCard base={baseAssets} onToast={showToast} />
+              <header className="ed-card-h"><span className="ed-card-ic"><Icon name="image" size={15} /></span><h3>Banner</h3></header>
+              <BannerCard base={baseAssets} heroMode={heroMode} onHeroMode={setHeroMode} onToast={showToast} />
               <details className="ed-more">
                 <summary>Photo, credit &amp; alt text</summary>
                 <FeaturedImage onToast={showToast} />
@@ -1236,7 +1240,7 @@ export function EditorialWorkspace() {
             </section>
 
             <section className="ed-card">
-              <h3>Details</h3>
+              <header className="ed-card-h"><span className="ed-card-ic"><Icon name="folder" size={15} /></span><h3>Details</h3><span className="ed-card-tag">{catData.name}</span></header>
               <Field label="Category">
                 <div className="row">
                   <Select
