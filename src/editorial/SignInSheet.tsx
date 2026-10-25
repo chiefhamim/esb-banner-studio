@@ -20,6 +20,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const session = useEditorialStore((s) => s.staffSession)
   const loginStaff = useEditorialStore((s) => s.loginStaff)
   const logoutStaff = useEditorialStore((s) => s.logoutStaff)
+  const siteStatus = useEditorialStore((s) => s.siteStatus)
   const [email, setEmail] = useState(session?.email ?? '')
   const [password, setPassword] = useState('')
   const [show, setShow] = useState(false)
@@ -126,47 +127,60 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
             </div>
           </form>
         ) : (
-          <div className="signin-body">
-            <div className="signin-avatar" aria-hidden>{initials}</div>
-            <h2>{session.name}</h2>
-            <p className="signin-sub">{session.email}</p>
-            <div className="signin-badges">
-              <span className="signin-badge ok"><i />Connected to esbpowerline.com</span>
-              <span className="signin-badge">{session.role ? ROLE_LABEL[session.role] ?? session.role : 'Role confirmed by the site'}</span>
-            </div>
-            <div className={'signin-fb ' + (!fb ? 'none' : fbState.s)}>
-              <i className="signin-fb-dot" aria-hidden />
-              <div className="signin-fb-text">
-                <b>Facebook Page</b>
-                <span>{!fb ? 'Not connected' : fbState.s === 'checking' ? 'Checking…' : fbState.s === 'ok' ? `Connected · ${fbState.msg}` : fbState.s === 'bad' ? fbState.msg : fb.pageName || fb.pageId}</span>
+          <div className="acct">
+            <header className="acct-head">
+              <div className="signin-avatar" aria-hidden>{initials}</div>
+              <div className="acct-id">
+                <h2>{session.name}</h2>
+                <p>{session.email}</p>
               </div>
-              {fb && <button type="button" className="ibtn" aria-label="Check Facebook again" data-tip="Check again" onClick={() => void checkFb()} disabled={fbState.s === 'checking'}><Icon name="refresh" size={13} /></button>}
-              <button type="button" className="btn xs" onClick={() => setFbDialog(true)}>{fb ? 'Change' : 'Connect'}</button>
-            </div>
+              <span className="acct-role">{session.role ? ROLE_LABEL[session.role] ?? session.role : 'Staff'}</span>
+            </header>
 
-            <div className="signin-actions">
-              <button type="button" className="btn primary signin-submit" onClick={() => void openCms('/cms/articles/new')} disabled={opening}>
-                <Icon name="externalLink" size={14} />
-                <span>{opening ? 'Opening…' : 'New article in the CMS'}</span>
-              </button>
-              <button type="button" className="btn signin-wide" onClick={() => void openCms('/cms')} disabled={opening}>
-                <Icon name="globe" size={14} />
-                <span>Open the CMS dashboard</span>
-              </button>
-            </div>
-            <p className="signin-note">
-              {isDesktop()
-                ? `The CMS opens in its own window, already signed in as ${session.name.split(' ')[0]}.`
-                : 'This browser preview cannot share your session with the site; the CMS will ask you to sign in there. The desktop app opens it signed in.'}
-              {expires && <> Session renews automatically (current token until {expires.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}).</>}
-            </p>
-            <div className="conn">
-              <div className="conn-head">
-                <span>Connection check</span>
+            <section className="acct-sec" aria-label="Connections">
+              <h3>Connections</h3>
+
+              <div className={'acct-card ' + (siteStatus.connected ? 'ok' : 'bad')}>
+                <img className="acct-logo" src={siteIcon} alt="" />
+                <div className="acct-main">
+                  <div className="acct-title"><b>esbpowerline.com</b><span className={'acct-pill ' + (siteStatus.connected ? 'ok' : 'bad')}><i />{siteStatus.connected ? `Connected · ${siteStatus.latencyMs} ms` : 'Unreachable'}</span></div>
+                  <p>CMS and article database · signed in as {session.email}</p>
+                  {expires && <p className="acct-fine">Session renews automatically · current token until {expires.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+                  <div className="acct-actions">
+                    <button type="button" className="btn sm primary" onClick={() => void openCms('/cms/articles/new')} disabled={opening}><Icon name="externalLink" size={13} /><span>{opening ? 'Opening…' : 'New article'}</span></button>
+                    <button type="button" className="btn sm" onClick={() => void openCms('/cms')} disabled={opening}><Icon name="globe" size={13} /><span>CMS dashboard</span></button>
+                  </div>
+                </div>
+              </div>
+
+              <div className={'acct-card ' + (!fb ? 'none' : fbState.s)}>
+                {fb ? (
+                  <img className="acct-logo round" src={`https://graph.facebook.com/${fb.pageId}/picture?type=square`} alt="" onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }} />
+                ) : (
+                  <span className="acct-logo fbmark" aria-hidden>f</span>
+                )}
+                <div className="acct-main">
+                  <div className="acct-title">
+                    <b>{fb ? fbState.s === 'ok' && fbState.msg ? fbState.msg : fb.pageName || 'Facebook Page' : 'Facebook Page'}</b>
+                    <span className={'acct-pill ' + (!fb ? 'none' : fbState.s)}><i />{!fb ? 'Not connected' : fbState.s === 'checking' ? 'Checking…' : fbState.s === 'ok' ? 'Connected' : fbState.s === 'bad' ? 'Needs attention' : 'Saved'}</span>
+                  </div>
+                  <p>{fb ? `Page ID ${fb.pageId} · posts the 4:5 banner when you publish` : 'Connect the ESB Page to post the banner to Facebook when you publish.'}</p>
+                  {fb && fbState.s === 'bad' && fbState.msg && <p className="acct-err">{fbState.msg}</p>}
+                  <div className="acct-actions">
+                    <button type="button" className={'btn sm' + (fb ? '' : ' primary')} onClick={() => setFbDialog(true)}><Icon name="link" size={13} /><span>{fb ? 'Change Page or token' : 'Connect Page'}</span></button>
+                    {fb && <button type="button" className="btn sm" onClick={() => void checkFb()} disabled={fbState.s === 'checking'}><Icon name="refresh" size={13} /><span>{fbState.s === 'checking' ? 'Checking…' : 'Check again'}</span></button>}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="acct-sec" aria-label="Connection check">
+              <div className="acct-sec-head">
+                <h3>Connection check</h3>
                 {checks && !checking && <em className={failed ? 'bad' : 'good'}>{failed ? `${failed} to fix` : 'All clear'}</em>}
                 <button type="button" className="btn sm conn-run" onClick={() => void check()} disabled={checking}>{checking ? 'Checking…' : checks ? 'Run again' : 'Run check'}</button>
               </div>
-              {checks && checks.length > 0 && (
+              {checks && checks.length > 0 ? (
                 <ul className="conn-list" aria-live="polite">
                   {checks.map((c) => (
                     <li key={c.id} className={'conn-row ' + c.status} data-check={c.id}>
@@ -176,12 +190,16 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                     </li>
                   ))}
                 </ul>
+              ) : (
+                <p className="conn-hint">Tests the site, your sign-in and role, the articles table, media upload and your AI key. Reads only; nothing is published.</p>
               )}
-              {!checks && <p className="conn-hint">Checks the site, sign-in, your role, the articles table, media upload and your AI key — reads only, nothing is published.</p>}
-            </div>
+            </section>
 
             {error && <div className="signin-error" role="alert"><Icon name="info" size={14} /><span>{error}</span></div>}
-            <button type="button" className="btn ghost signin-signout" onClick={() => { logoutStaff(); onToast('Signed out of esbpowerline.com') }}>Sign out</button>
+            <footer className="acct-foot">
+              <p>{isDesktop() ? 'The CMS opens in its own window, already signed in as you.' : 'This preview cannot share your session; the CMS will ask you to sign in there.'}</p>
+              <button type="button" className="btn sm ghost signin-signout" onClick={() => { logoutStaff(); onToast('Signed out of esbpowerline.com') }}>Sign out</button>
+            </footer>
           </div>
         )}
       </div>

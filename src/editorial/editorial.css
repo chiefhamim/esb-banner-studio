@@ -375,13 +375,39 @@
 .seo-serp-desc { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .seo-serp-note { margin-top: 4px; padding-top: 8px; font-family: var(--ui); font-size: 11px; line-height: 15px; color: var(--text-3); border-top: 1px solid var(--line); }
 
-/* account sheet: the Facebook Page connection, live */
-.signin-fb { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--fill); border-radius: var(--r-3); text-align: left; min-width: 0; }
-.signin-fb-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.signin-fb-text b { font: 600 12.5px/1.2 var(--ui); }
-.signin-fb-text span { font: 400 12px/1.3 var(--ui); color: var(--text-2); overflow-wrap: anywhere; }
-.signin-fb-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-3); }
-.signin-fb.ok .signin-fb-dot { background: #1f9d57; box-shadow: 0 0 0 3px color-mix(in srgb, #1f9d57 22%, transparent); }
-.signin-fb.bad .signin-fb-dot { background: #d4553b; box-shadow: 0 0 0 3px color-mix(in srgb, #d4553b 22%, transparent); }
-.signin-fb.checking .signin-fb-dot { background: #4f8cff; animation: sb-breathe 1.4s ease-in-out infinite; }
-.signin-fb.bad .signin-fb-text span { color: #b83c25; }
+/* account sheet: who is signed in, and the two connections (the site and the Facebook Page) as cards */
+.dialog.signin:has(.acct) { width: min(520px, 94vw); }
+.acct { display: flex; flex-direction: column; gap: 18px; padding: 24px 24px 18px; text-align: left; }
+.acct-head { display: flex; align-items: center; gap: 14px; padding-right: 36px; }
+.acct-head .signin-avatar { width: 52px; height: 52px; font-size: 18px; flex: none; align-self: auto; }
+.acct-id { min-width: 0; flex: 1; }
+.acct-id h2 { margin: 0; font: 600 17px/22px var(--ui); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-id p { margin: 2px 0 0; font: 400 12.5px/17px var(--ui); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-role { flex: none; height: 24px; padding: 0 10px; font: 600 11.5px/24px var(--ui); color: var(--text-2); background: var(--fill); border-radius: var(--r-pill); }
+.acct-sec { display: flex; flex-direction: column; gap: 10px; }
+.acct-sec h3 { margin: 0; font: 600 10.5px/16px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.acct-sec-head { display: flex; align-items: center; gap: 8px; }
+.acct-sec-head em { height: 20px; padding: 0 8px; font: 600 11px/20px var(--ui); font-style: normal; border-radius: var(--r-pill); }
+.acct-sec-head em.good { color: var(--success); background: var(--success-soft); }
+.acct-sec-head em.bad { color: var(--danger); background: var(--danger-soft); }
+.acct-card { display: flex; gap: 14px; padding: 14px; background: var(--fill); border-radius: var(--r-3); box-shadow: inset 0 0 0 1px var(--card-line); min-width: 0; }
+.acct-logo { width: 40px; height: 40px; flex: none; object-fit: contain; padding: 5px; background: #fff; border-radius: var(--r-2); box-shadow: var(--raised-shadow); }
+.acct-logo.round { padding: 0; object-fit: cover; border-radius: 50%; background: var(--fill-active); }
+.acct-logo.fbmark { display: grid; place-items: center; padding: 0; font: 700 24px/1 Georgia, serif; color: #fff; background: #1877f2; }
+.acct-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.acct-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.acct-title b { font: 600 14px/20px var(--ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.acct-main p { margin: 0; font: 400 12.5px/18px var(--ui); color: var(--text-2); overflow-wrap: anywhere; }
+.acct-fine { color: var(--text-3) !important; font-size: 11.5px !important; }
+.acct-err { color: var(--danger) !important; }
+.acct-pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; font: 600 11.5px/1 var(--ui); color: var(--text-2); background: var(--fill-active); border-radius: var(--r-pill); white-space: nowrap; }
+.acct-pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.acct-pill.ok { color: var(--success); background: var(--success-soft); }
+.acct-pill.bad { color: var(--danger); background: var(--danger-soft); }
+.acct-pill.checking { color: #3b6fd8; background: color-mix(in srgb, #4f8cff 14%, transparent); }
+.acct-pill.checking i { animation: sb-breathe 1.4s ease-in-out infinite; }
+.acct-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.acct .conn-hint { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-3); }
+.acct .conn-list { padding: 6px; background: var(--fill); border-radius: var(--r-3); }
+.acct-foot { display: flex; align-items: center; gap: 12px; padding-top: 12px; border-top: 1px solid var(--card-line); }
+.acct-foot p { margin: 0; flex: 1; font: 400 11.5px/16px var(--ui); color: var(--text-3); }
