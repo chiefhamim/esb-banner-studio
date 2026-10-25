@@ -4,6 +4,9 @@
 //
 // Channel 24 (channel24bd.tv): a React app. /{category}/article/{id}/{slug} is served empty; the story is at
 // https://backoffice.channel24bd.tv/api/v2/content-details/{category}/{id} (ContentDetails is the body as HTML).
+// Barta24 (barta24.com): the same kind of app. /details/{category}/{id} is served as a bare shell; the story is at
+// https://backoffice.barta24.com/api/content-details/{id}, where ContentDetails is a list of <p> strings (or one string)
+// and the headline is DetailsHeading (ContentHeading is empty).
 
 import { cleanAndDedupeParagraphs, detectLanguage, extractCatchSentence } from './extract'
 import type { ExtractedArticle } from './extract'
@@ -62,7 +65,40 @@ const channel24: SiteAdapter = {
   },
 }
 
-const ADAPTERS: SiteAdapter[] = [channel24]
+const barta24: SiteAdapter = {
+  apiUrl(u) {
+    if (!/(^|\.)barta24\.com$/i.test(u.hostname)) return null
+    const m = /^\/details\/[^/]+\/(\d+)(?:\/|$)/.exec(u.pathname)
+    return m ? `https://backoffice.barta24.com/api/content-details/${m[1]}` : null
+  },
+  build(json, pageUrl, htmlLength) {
+    const data = (json as { data?: Record<string, unknown>[] | Record<string, unknown> } | null)?.data
+    const row = Array.isArray(data) ? data[0] : data
+    if (!row) return null
+    const text = (v: unknown) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '')
+    const title = text(row.DetailsHeading) || text(row.ContentHeading)
+    const body = Array.isArray(row.ContentDetails) ? row.ContentDetails.filter((x): x is string => typeof x === 'string').join('\n') : typeof row.ContentDetails === 'string' ? row.ContentDetails : ''
+    const paragraphs = paragraphsFromHtml(body)
+    if (!title || !paragraphs.length) return null
+    const brief = text(row.ContentBrief).replace(/<[^>]+>/g, '')
+    const imagePath = text(row.ImageBgPath) || text(row.ImageSmPath)
+    const caption = text(row.ImageBgPathCaption) || undefined
+    return {
+      title,
+      deck: brief ? extractCatchSentence(brief, 200) : undefined,
+      byline: text(row.WriterName) || text(row.ByLine) || undefined,
+      publisher: 'Barta24',
+      publishedAt: text(row.created_at) || undefined,
+      canonicalUrl: pageUrl,
+      paragraphs,
+      images: imagePath ? [{ src: 'https://cdn.barta24.com/' + imagePath.replace(/^\/+/, ''), alt: title, caption }] : [],
+      rawHtmlLength: htmlLength,
+      meta: { method: 'page-data', language: detectLanguage(`${title} ${paragraphs.slice(0, 3).join(' ')}`), warnings: [] },
+    }
+  },
+}
+
+const ADAPTERS: SiteAdapter[] = [channel24, barta24]
 
 /** The adapter and JSON address for a page, or null when the page can be read from its own HTML. */
 export function adapterFor(pageUrl: string): { adapter: SiteAdapter; apiUrl: string } | null {

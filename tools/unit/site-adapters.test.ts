@@ -54,3 +54,45 @@ describe('site adapters', () => {
     expect(hit.adapter.build(null, PAGE, 0)).toBeNull()
   })
 })
+
+// Barta24: same shape of problem, a different endpoint. Synthetic words only.
+const B24_PAGE = 'https://barta24.com/details/economics/344562'
+const B24_FEED = {
+  version: '1',
+  data: [{
+    ContentID: 344562,
+    ContentHeading: null,
+    DetailsHeading: 'নমুনা শিরোনাম: একটি কাল্পনিক কারখানা',
+    ContentBrief: 'এটি একটি কাল্পনিক সারসংক্ষেপ, যা শুধু পরীক্ষার জন্য লেখা হয়েছে।',
+    ContentDetails: ['<p style="text-align: justify;">প্রথম অনুচ্ছেদের কাল্পনিক লেখা এখানে আছে।</p>', '<p>দ্বিতীয় অনুচ্ছেদের কাল্পনিক লেখা এখানে আছে।</p>'],
+    WriterName: 'পরীক্ষা প্রতিনিধি',
+    ImageBgPath: 'barta/media/bangla/imgAll/2026October/sample.jpg',
+    ImageBgPathCaption: 'নমুনা ছবি',
+    created_at: '2026-10-25T08:31:53.000000Z',
+  }],
+}
+
+describe('Barta24 adapter', () => {
+  it('finds the JSON endpoint from the article id, and leaves other pages alone', () => {
+    expect(adapterFor(B24_PAGE)?.apiUrl).toBe('https://backoffice.barta24.com/api/content-details/344562')
+    expect(adapterFor('https://www.barta24.com/details/national/12/slug-here')?.apiUrl).toBe('https://backoffice.barta24.com/api/content-details/12')
+    expect(adapterFor('https://barta24.com/')).toBeNull()
+    expect(adapterFor('https://evil.example/barta24.com/details/economics/1')).toBeNull()
+  })
+  it('builds the story from a body given as a list of paragraphs, with the headline from DetailsHeading', () => {
+    const a = adapterFor(B24_PAGE)!.adapter.build(B24_FEED, B24_PAGE, 100)!
+    expect(a.title).toContain('নমুনা শিরোনাম')
+    expect(a.paragraphs).toHaveLength(2)
+    expect(a.byline).toBe('পরীক্ষা প্রতিনিধি')
+    expect(a.publisher).toBe('Barta24')
+    expect(a.images[0].src).toBe('https://cdn.barta24.com/barta/media/bangla/imgAll/2026October/sample.jpg')
+    expect(a.meta?.language).toBe('bn')
+  })
+  it('also accepts the body as one HTML string, and returns null when there is no story', () => {
+    const one = { data: [{ ...B24_FEED.data[0], ContentDetails: '<p>প্রথম লেখা এখানে আছে।</p><p>দ্বিতীয় লেখা এখানে আছে।</p>' }] }
+    expect(adapterFor(B24_PAGE)!.adapter.build(one, B24_PAGE, 0)!.paragraphs).toHaveLength(2)
+    expect(adapterFor(B24_PAGE)!.adapter.build({ data: [] }, B24_PAGE, 0)).toBeNull()
+    expect(adapterFor(B24_PAGE)!.adapter.build({ data: [{ DetailsHeading: 'x', ContentDetails: [] }] }, B24_PAGE, 0)).toBeNull()
+  })
+})
+
