@@ -1,6 +1,7 @@
-// Review & publish: what goes where, in one sheet that never overflows. Left: the three checks and the story's
-// numbers. Right: the banner as it will appear on the website and on Facebook. Footer: two actions only — save a
-// draft, or publish (or update the article that is already live).
+// Review & publish: sleek by default. One line says what this is (a new article, or an update of a live one) and the
+// story's numbers; two containers show where the banner goes (the website, Facebook), each with its picture settings
+// folded into one line; the footer has the two actions. The step-by-step progress and the result appear below only once a
+// publish starts, and the sheet scrolls to follow them.
 
 import { useEffect, useRef, useState } from 'react'
 import { Dialog, IconButton, Switch } from '../ui/controls'
@@ -32,8 +33,6 @@ export function PublishDialog(p: {
   fbPage: string | null
   fbOn: boolean
   onFbOn: (v: boolean) => void
-  fbStory: boolean
-  onFbStory: (v: boolean) => void
   onFbConnect: () => void
   onCopyJson: () => void
   copied: boolean
@@ -45,12 +44,12 @@ export function PublishDialog(p: {
   const { draft } = p
   const blocked = p.busy || !draft.headline.trim()
   const verb = p.updating ? 'Update' : 'Publish'
-  const budget = (n: number, max: number) => <b className={n > max ? 'over' : ''}>{n} / {max}{n > max ? ' · over' : ''}</b>
+  const budget = (n: number, max: number) => <b className={n > max ? 'over' : ''}>{n}/{max}{n > max ? ' · over' : ''}</b>
   return (
     <Dialog
       title={p.updating ? 'Update the live article' : 'Publish to esbpowerline.com'}
       kicker={p.updating ? 'EDITING A LIVE ARTICLE' : 'LIVE CMS PUBLISHING'}
-      width={940}
+      width={860}
       onClose={p.onClose}
       footer={
         <>
@@ -68,20 +67,24 @@ export function PublishDialog(p: {
       }
     >
       <div className="pub">
-        {p.updating && (
-          <div className="callout"><Icon name="info" size={15} />
-            <span>This story is linked to <b className="mono">/{p.updating.slug}</b> on the site. {verb} changes that article — it will not create a second one.</span>
+        <div className="pub-top">
+          <div className={'pub-link' + (p.updating ? ' live' : '')}>
+            <Icon name={p.updating ? 'refresh' : 'link'} size={14} />
+            <span>
+              <b>{p.updating ? 'Live article' : 'New article'}</b>
+              <i>esbpowerline.com/articles/{p.updating?.slug ?? (draft.slug || 'not-set')}</i>
+              {!p.updating && p.slugStatus !== 'idle' && <em className={'pub-slug ' + p.slugStatus}>{p.slugStatus}</em>}
+            </span>
           </div>
-        )}
-        <dl className="pub-stats pub-stats-row">
-          <div><dt>Headline</dt><dd>{budget(draft.headline.length, 104)}</dd></div>
-          <div><dt>Deck</dt><dd>{budget(draft.deck.length, 200)}</dd></div>
-          <div><dt>Story</dt><dd><b>{p.words} words · {p.paragraphs} ¶</b></dd></div>
-          <div><dt>Slug</dt><dd className="mono"><b>{draft.slug || 'not set'}</b>{!p.updating && p.slugStatus !== 'idle' && <i className={'pub-slug ' + p.slugStatus}>{p.slugStatus}</i>}</dd></div>
-        </dl>
+          <div className="pub-meta">
+            <span>Headline {budget(draft.headline.length, 104)}</span>
+            <span>Deck {budget(draft.deck.length, 200)}</span>
+            <span><b>{p.words}</b> words</span>
+          </div>
+        </div>
         <BannerPreviews base={p.base} heroMode={p.heroMode} onHeroMode={p.onHeroMode} photoUrl={p.photoUrl} caption={p.fbOn || !p.fbPage ? draft.social.facebook : undefined} pageName={p.fbPage} wide webExtra={<ImageOptions dest="web" base={p.base} />} fbExtra={p.fbPage ? <ImageOptions dest="fb" base={p.base} /> : undefined}
           fbToggle={p.fbPage ? <Switch checked={p.fbOn} onChange={p.onFbOn} label={p.fbOn ? 'Posting' : 'Off'} /> : <button type="button" className="btn xs" onClick={p.onFbConnect}><Icon name="link" size={12} /><span>Connect a Page</span></button>}
-          fbNote={<>{p.fbPage && <div className="pcard-story"><Switch checked={p.fbStory} onChange={p.onFbStory} label="Also share to the Page's Story" /><span className="hint">The same banner as the post, shown for 24 hours. Goes out with the Facebook post.</span></div>}<p className="hint pcard-note">{p.fbPage ? <>The caption goes without a link; the article link is added as the Page&apos;s first comment (pin it from Facebook). <button type="button" className="btn-link" onClick={p.onFbConnect}>Change Page</button></> : 'Connect a Facebook Page to post the banner there as well.'}</p></>} />
+          fbNote={<p className="hint pcard-note">{p.fbPage ? <>The article link goes in the first comment. <button type="button" className="btn-link" onClick={p.onFbConnect}>Change Page</button></> : 'Connect a Facebook Page to post the banner there as well.'}</p>} />
         {p.jobId != null && <PublishProgress id={p.jobId} />}
         {p.result && (
           <div ref={(el) => { el?.scrollIntoView({ block: 'end', behavior: 'smooth' }) }} className={'callout ' + (p.result.ok ? 'good' : 'warn')} role="status">

@@ -47,8 +47,8 @@ export function BannerPreviews({ base, heroMode, onHeroMode, photoUrl, caption, 
           {fbToggle}
         </header>
         <div className="bp-frame fb" style={{ ['--r' as string]: 4 / 5 } as CSSProperties}>{fb ? <img src={fb} alt="Banner as the Facebook post image" /> : <span className="hint">Rendering…</span>}</div>
-        {fbExtra}
         {caption && <p className="bp-caption">{caption}</p>}
+        {fbExtra}
         {fbNote}
       </figure>
     </div>
