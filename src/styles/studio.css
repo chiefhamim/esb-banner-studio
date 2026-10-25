@@ -1190,3 +1190,12 @@ label.switch:active i { filter: brightness(.94); }
 .vw-field input[type=text]:hover { background: var(--field-hover); }
 .vw-field input[type=text]:focus { outline: 0; box-shadow: 0 0 0 2px var(--focus-ring); }
 .vw-metrics { margin-top: 2px; font: 400 11.5px/16px var(--ui); font-variant-numeric: tabular-nums; color: var(--text-3); }
+
+/* footer entries: CMS and Engine share one shape — flat status text, a single soft rounded fill on hover (no inner ring) */
+.ed-statusbar .sb-pill { border: 0; background: transparent; padding: 0; height: auto; }
+.ed-statusbar button.sb-cms, .ed-statusbar .sb-engine-btn { height: 26px; padding: 0 10px; border-radius: 8px; transition: background var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease); }
+.ed-statusbar button.sb-cms:hover, .ed-statusbar .sb-engine-btn:hover { background: var(--fill-hover); }
+.ed-statusbar button.sb-cms:active, .ed-statusbar .sb-engine-btn:active, .ed-statusbar .sb-engine-btn.on { background: var(--fill-active); }
+.ed-statusbar button.sb-cms:hover .sb-k, .ed-statusbar .sb-engine-btn:hover .sb-k { color: var(--text-2); }
+.ed-statusbar button.sb-cms:focus-visible, .ed-statusbar .sb-engine-btn:focus-visible { outline: 0; box-shadow: 0 0 0 2px var(--ink); }
+.eng-head-ic svg { display: block; }

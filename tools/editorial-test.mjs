@@ -60,13 +60,13 @@ try {
   await page.waitForSelector('.studio-shell')
 
   // 1. Switch to Editorial Desk via Workspace Rail
-  await page.click('.ws-btn[data-ws="editorial"]')
+  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]'))
   await page.waitForSelector('.editorial-workspace')
   check('Editorial Desk workspace opened', (await page.getAttribute('.editorial-workspace .ws-btn.on', 'data-ws')) === 'editorial')
 
   // 2. Verify connection telemetry and live posts list
-  await page.waitForSelector('.ed-site-pill')
-  check('Live site connection telemetry pill displayed', (await page.locator('.ed-site-pill').count()) === 1)
+  await page.waitForSelector('.sb-cms')
+  check('Live site connection telemetry pill displayed', (await page.locator('.sb-cms').count()) === 1)
 
   // 2b. A link that cannot be fetched gets an honest message and the paste fallback, not a dead end
   await page.fill('.ed-url-input', 'https://blocked.invalid/story')
@@ -95,7 +95,7 @@ try {
   await page.evaluate(() => { try { localStorage.removeItem('esb-banner-studio/editorial/v1'); sessionStorage.clear() } catch {} })
   await page.reload()
   await page.waitForSelector('.studio-shell')
-  await page.click('.ws-btn[data-ws="editorial"]')
+  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]'))
   await page.waitForSelector('button:has-text("Paste Bengali Story")')
 
   // 3. Select Paste Bengali Story mode and enter Bengali story text
@@ -112,7 +112,7 @@ try {
   await page.waitForSelector('.ed-card-story', { timeout: 30000 })
   // 5b. Panels: a fresh session opens one section per column — Organize (category) on the right, the story on the left
   const openNow = await page.evaluate(() => ({ right: [...document.querySelectorAll('.ed-side-scroll > .pnl.open')].map((p) => p.dataset.panel), left: [...document.querySelectorAll('.ed-src-scroll > .pnl.open')].map((p) => p.dataset.panel) }))
-  check('Only Organize starts open in the sidebar, only the story in the source column', openNow.right.join() === 'ed-organize' && openNow.left.join() === 'ed-src-body', JSON.stringify(openNow))
+  check('Only Publish starts open in the sidebar, only the story in the source column', openNow.right.join() === 'ed-side-publish' && openNow.left.join() === 'ed-src-body', JSON.stringify(openNow))
   await openPanel(page, 'ed-src-head')
   const sourceTitleVal = await page.inputValue('#source-title-input')
   check('Left column preserves original Bengali headline', /[\u0980-\u09FF]/.test(sourceTitleVal))
@@ -456,7 +456,7 @@ try {
   check('A failed import does not duplicate the story on the desk', afterFail === 2, String(afterFail))
   await page.reload()
   await page.waitForSelector('.studio-shell')
-  await page.click('.ws-btn[data-ws="editorial"]').catch(() => {})
+  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]')).catch(() => {})
   await page.waitForSelector('#draft-headline')
   const after = { head: await page.inputValue('#draft-headline'), n: await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/editorial/queue/v1')).stories.length) }
   check('The queue and the edit survive a reload', after.head === firstHead + ' (edited)' && after.n === 2, JSON.stringify(after))

@@ -1348,8 +1348,7 @@ export function EditorialWorkspace() {
           <aside className="right ed-side" aria-label="Publishing and image">
             <Splitter axis="vert" side="l" label="Resize the sidebar" value={cols.side} min={280} max={560} reset={COLS_DEFAULT.side} onLive={liveCol('side')} onCommit={commitCol('side')} root={() => wsRef.current} />
             <div className="scroll ed-side-scroll">
-            <section className="ed-card">
-              <header className="ed-card-h"><span className="ed-card-ic"><Icon name="upload" size={15} /></span><h3>Publish</h3><span className={'ed-card-tag ' + (linked ? 'live' : '')}>{linked ? 'Live' : 'Draft'}</span></header>
+            <Panel id="ed-side-publish" icon="upload" title="Publish" sub={linked ? 'Live' : 'Draft'} persist={false}>
               <dl className="ed-kv">
                 <dt>Website</dt>
                 <dd><span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />{linked ? 'Live — Publish will update it' : siteStatus.connected ? 'Ready to publish' : 'Offline'}</dd>
@@ -1365,19 +1364,17 @@ export function EditorialWorkspace() {
                 <Icon name="upload" size={15} />
                 <span>{linked ? 'Review & update' : 'Review & publish'}</span>
               </button>
-            </section>
+            </Panel>
 
-            <section className="ed-card">
-              <header className="ed-card-h"><span className="ed-card-ic"><Icon name="image" size={15} /></span><h3>Banner</h3></header>
+            <Panel id="ed-image" icon="image" title="Banner" defaultOpen={false} persist={false}>
               <BannerCard base={baseAssets} heroMode={heroMode} onHeroMode={setHeroMode} onToast={showToast} />
               <details className="ed-more">
                 <summary>Photo, credit &amp; alt text</summary>
                 <FeaturedImage onToast={showToast} />
               </details>
-            </section>
+            </Panel>
 
-            <section className="ed-card">
-              <header className="ed-card-h"><span className="ed-card-ic"><Icon name="folder" size={15} /></span><h3>Details</h3><span className="ed-card-tag">{catData.name}</span></header>
+            <Panel id="ed-organize" icon="folder" title="Details" sub={catData.name} defaultOpen={false} persist={false}>
               <Field label="Category">
                 <div className="row">
                   <Select
@@ -1417,7 +1414,7 @@ export function EditorialWorkspace() {
                 <input type="text" className="input" value={draft.byline} placeholder={staffSession?.name || 'Reporter name'} onChange={(e) => setDraftField('byline', e.target.value)} />
               </Field>
               <Check checked={!!draft.postAsNewsDesk} onChange={(v) => setDraftField('postAsNewsDesk', v)} label="Post as ESB News Desk" hint="Credited to the desk instead of the signed-in editor." />
-            </section>
+            </Panel>
             </div>
           </aside>
         </div>

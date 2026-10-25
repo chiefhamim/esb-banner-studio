@@ -462,3 +462,19 @@
 .acct-name { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .acct-name h2 { min-width: 0; }
 .acct-name .acct-role { height: 22px; padding: 0 11px; font-size: 10px; margin-top: 1px; }
+
+/* New link intake in the source column: big, full-width, proportional */
+.ed-intake.compact { gap: 16px; }
+.ed-intake.compact .ed-intake-tabs { width: 100%; height: 40px; }
+.ed-intake.compact .ed-intake-tabs button { flex: 1 1 0; justify-content: center; font-size: 13px; }
+.ed-intake.compact .ed-intake-body { gap: 12px; }
+.ed-intake.compact .ed-url-input { height: 48px; font-size: 15px; padding: 0 14px; }
+.ed-intake.compact .ed-intake-url .btn, .ed-intake.compact .ed-intake-foot .btn { height: 46px; font-size: 14px; width: 100%; }
+.ed-intake.compact .ed-paste-area { min-height: 300px; height: 40vh; padding: 14px 16px; font-size: 15px; line-height: 1.7; }
+.ed-intake.compact .ed-intake-foot { flex-direction: column-reverse; align-items: stretch; gap: 10px; }
+.ed-intake.compact .ed-intake-foot .hint { text-align: right; }
+.ed-intake.compact .hint { font-size: 12.5px; line-height: 1.55; }
+.ed-intake.compact .ed-intake-tabs { display: flex; }
+.ed-intake.compact .ed-intake-tabs button { padding: 0 6px; gap: 6px; white-space: nowrap; overflow: hidden; }
+.ed-intake.compact .ed-intake-tabs button { height: 100%; min-width: 0; }
+.ed-intake.compact .ed-intake-tabs button svg { display: none; }

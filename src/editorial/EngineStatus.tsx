@@ -100,7 +100,7 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
       {open && at && createPortal(
         <div ref={pop} className="eng-pop" role="dialog" aria-label="AI engines" style={{ bottom: at.bottom, left: at.left }}>
           <div className="eng-head">
-            <span className="eng-head-ic"><Icon name="sparkle" size={15} /></span>
+            <span className="eng-head-ic"><Icon name="chip" size={16} /></span>
             <div className="eng-head-t"><b>AI engines</b><span>{busy ? 'Checking each key…' : 'Each key is tested with one tiny request'}</span></div>
             <button type="button" className="btn sm" onClick={() => refresh()} disabled={busy || !distinct.length}><Icon name="refresh" size={13} /><span>Refresh all</span></button>
           </div>
