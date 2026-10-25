@@ -7,6 +7,7 @@ import { Dialog, IconButton, Switch } from '../ui/controls'
 import { fmtDuration, useJobLog } from './jobLog'
 import { Icon } from '../ui/Icon'
 import { BannerPreviews } from './BannerPreviews'
+import { ImageOptions } from './ImageOptions'
 import type { Assets } from '../core/render'
 import type { HeroMode } from './heroMode'
 import type { EditorialDraft } from './editorialStore'
@@ -47,7 +48,7 @@ export function PublishDialog(p: {
     <Dialog
       title={p.updating ? 'Update the live article' : 'Publish to esbpowerline.com'}
       kicker={p.updating ? 'EDITING A LIVE ARTICLE' : 'LIVE CMS PUBLISHING'}
-      width={860}
+      width={940}
       onClose={p.onClose}
       footer={
         <>
@@ -65,47 +66,42 @@ export function PublishDialog(p: {
       }
     >
       <div className="pub">
-        <div className="pub-left">
-          {p.updating && (
-            <div className="callout"><Icon name="info" size={15} />
-              <span>This story is linked to <b className="mono">/{p.updating.slug}</b> on the site. {verb} changes that article — it will not create a second one.</span>
-            </div>
-          )}
-          <dl className="pub-stats">
-            <div><dt>Headline</dt><dd>{budget(draft.headline.length, 104)}</dd></div>
-            <div><dt>Deck</dt><dd>{budget(draft.deck.length, 200)}</dd></div>
-            <div><dt>Story</dt><dd><b>{p.words} words · {p.paragraphs} ¶</b></dd></div>
-            <div><dt>Slug</dt><dd className="mono"><b>{draft.slug || 'not set'}</b>{!p.updating && p.slugStatus !== 'idle' && <i className={'pub-slug ' + p.slugStatus}>{p.slugStatus}</i>}</dd></div>
-          </dl>
-          <div className="pub-fb">
-            {p.fbPage ? (
-              <Switch checked={p.fbOn} onChange={p.onFbOn} label={<span>Also post to Facebook <b>{p.fbPage}</b></span>} />
-            ) : (
-              <button type="button" className="btn sm" onClick={p.onFbConnect}><Icon name="link" size={13} /><span>Connect a Facebook Page</span></button>
-            )}
-            {p.fbPage && <button type="button" className="btn-link" onClick={p.onFbConnect}>Change</button>}
+        {p.updating && (
+          <div className="callout"><Icon name="info" size={15} />
+            <span>This story is linked to <b className="mono">/{p.updating.slug}</b> on the site. {verb} changes that article — it will not create a second one.</span>
           </div>
-          {p.fbPage && <p className="hint">The caption goes without a link. The article link is added as the Page's first comment; pin it from Facebook.</p>}
-          {p.jobId != null && <PublishProgress id={p.jobId} />}
-          {p.result && (
-            <div className={'callout ' + (p.result.ok ? 'good' : 'warn')} role="status">
-              <Icon name={p.result.ok ? 'check' : 'info'} size={15} />
-              <div className="pub-result">
-                <span>{p.result.msg}</span>
-                {p.result.url && (
-                  <button type="button" className="btn sm" onClick={() => { for (const u of [p.result!.url, p.result!.fbUrl]) if (u) window.open(u, '_blank', 'noopener') }}>
-                    <Icon name="globe" size={12} /><span>{p.result.fbUrl ? 'Open the article and the Facebook post' : 'View on esbpowerline.com'}</span>
-                  </button>
-                )}
-                {p.result.existingSlug && <button type="button" className="btn sm primary" onClick={() => p.onUpdateExisting(p.result!.existingSlug!)}><Icon name="refresh" size={12} /><span>Update that article instead</span></button>}
-              </div>
-            </div>
+        )}
+        <dl className="pub-stats pub-stats-row">
+          <div><dt>Headline</dt><dd>{budget(draft.headline.length, 104)}</dd></div>
+          <div><dt>Deck</dt><dd>{budget(draft.deck.length, 200)}</dd></div>
+          <div><dt>Story</dt><dd><b>{p.words} words · {p.paragraphs} ¶</b></dd></div>
+          <div><dt>Slug</dt><dd className="mono"><b>{draft.slug || 'not set'}</b>{!p.updating && p.slugStatus !== 'idle' && <i className={'pub-slug ' + p.slugStatus}>{p.slugStatus}</i>}</dd></div>
+        </dl>
+        <BannerPreviews base={p.base} heroMode={p.heroMode} onHeroMode={p.onHeroMode} photoUrl={p.photoUrl} caption={p.fbOn || !p.fbPage ? draft.social.facebook : undefined} pageName={p.fbPage} wide webExtra={<ImageOptions dest="web" base={p.base} />} fbExtra={p.fbPage ? <ImageOptions dest="fb" base={p.base} /> : undefined} />
+        <div className="pub-fb">
+          {p.fbPage ? (
+            <Switch checked={p.fbOn} onChange={p.onFbOn} label={<span>Also post to Facebook <b>{p.fbPage}</b></span>} />
+          ) : (
+            <button type="button" className="btn sm" onClick={p.onFbConnect}><Icon name="link" size={13} /><span>Connect a Facebook Page</span></button>
           )}
+          {p.fbPage && <button type="button" className="btn-link" onClick={p.onFbConnect}>Change</button>}
+          {p.fbPage && <span className="hint">The caption goes without a link; the article link is added as the Page's first comment (pin it from Facebook).</span>}
         </div>
-        <div className="pub-right">
-          <span className="kicker">WHAT GOES WHERE</span>
-          <BannerPreviews base={p.base} heroMode={p.heroMode} onHeroMode={p.onHeroMode} photoUrl={p.photoUrl} caption={p.fbOn || !p.fbPage ? draft.social.facebook : undefined} pageName={p.fbPage} compact />
-        </div>
+        {p.jobId != null && <PublishProgress id={p.jobId} />}
+        {p.result && (
+          <div className={'callout ' + (p.result.ok ? 'good' : 'warn')} role="status">
+            <Icon name={p.result.ok ? 'check' : 'info'} size={15} />
+            <div className="pub-result">
+              <span>{p.result.msg}</span>
+              {p.result.url && (
+                <button type="button" className="btn sm" onClick={() => { for (const u of [p.result!.url, p.result!.fbUrl]) if (u) window.open(u, '_blank', 'noopener') }}>
+                  <Icon name="globe" size={12} /><span>{p.result.fbUrl ? 'Open the article and the Facebook post' : 'View on esbpowerline.com'}</span>
+                </button>
+              )}
+              {p.result.existingSlug && <button type="button" className="btn sm primary" onClick={() => p.onUpdateExisting(p.result!.existingSlug!)}><Icon name="refresh" size={12} /><span>Update that article instead</span></button>}
+            </div>
+          </div>
+        )}
       </div>
     </Dialog>
   )

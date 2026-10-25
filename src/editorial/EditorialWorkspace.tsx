@@ -50,6 +50,7 @@ import { FacebookDialog } from './FacebookDialog'
 import { EngineStatus } from './EngineStatus'
 import { commentOnPost, getFacebook, postBannerToFacebook } from './facebook'
 import { sanitizeFacebook } from './facebookCaption'
+import { usePublishImage } from './publishImage'
 import { openArticleForEdit } from './liveEdit'
 import { aiFor, providerMeta, roleProvider } from './aiProviders'
 import type { AiProviderId } from './aiProviders'
@@ -558,7 +559,8 @@ export function EditorialWorkspace() {
       let imageNote = ''
       if (heroMode === 'banner' && baseAssets && fresh && canUploadToSite()) {
         jobLog.step(jobId, 'Rendering the web banner')
-        const blob = await renderBanner(useStore.getState().doc, 'web', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
+        const wo = usePublishImage.getState().opts.web
+        const blob = await renderBanner(useStore.getState().doc, 'web', baseAssets, wo.scale, wo.type, wo.quality).catch(() => null)
         jobLog.step(jobId, 'Uploading the banner to the media library')
         const up = blob ? await uploadBannerToSite(fresh, blob, draft.slug) : { ok: false as const, error: 'The banner could not be rendered.' }
         if (up.ok) { imageUrl = up.url; imageNote = ' Image: the Web banner, uploaded to the media library.' }
@@ -626,7 +628,8 @@ export function EditorialWorkspace() {
         }
         if (targetStatus === 'PUBLISHED' && fbOn && fbCfg && baseAssets) {
           jobLog.step(jobId, 'Rendering the Facebook banner')
-          const photo = await renderBanner(useStore.getState().doc, 'fb45', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
+          const fo = usePublishImage.getState().opts.fb
+          const photo = await renderBanner(useStore.getState().doc, 'fb45', baseAssets, fo.scale, fo.type, fo.quality).catch(() => null)
           const link = result.liveUrl ?? ''
           // the caption carries no link (a link-free, short caption is the point); the article link is the first comment
           const caption = sanitizeFacebook(draft.social.facebook, draft.headline).trim() || draft.headline

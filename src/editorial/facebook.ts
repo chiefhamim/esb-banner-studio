@@ -47,7 +47,7 @@ export async function verifyFacebook(pageId: string, token: string): Promise<{ o
 export async function postBannerToFacebook(cfg: FacebookConfig, photo: Blob, caption: string): Promise<{ ok: true; postId: string; url: string } | { ok: false; error: string }> {
   try {
     const form = new FormData()
-    form.append('source', photo, 'banner.jpg')
+    form.append('source', photo, photo.type === 'image/png' ? 'banner.png' : 'banner.jpg')
     form.append('caption', caption)
     form.append('published', 'true')
     const res = await fetch(`${GRAPH}/${encodeURIComponent(cfg.pageId)}/photos`, { method: 'POST', headers: auth(cfg.token), body: form })

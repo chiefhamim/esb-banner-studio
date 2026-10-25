@@ -974,3 +974,22 @@ label.switch:active i { filter: brightness(.94); }
 .bp-frame.fb { width: min(100%, calc(300px * 0.8)); aspect-ratio: 4 / 5; max-height: none; justify-self: center; }
 .bp-frame img { object-fit: contain; }
 .bp-frame.fb { margin: 0 auto; }
+
+/* publish sheet: picture settings under each preview - size, format, quality, and what that makes */
+.io { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--fill); border-radius: var(--r-2); font-variant-numeric: tabular-nums lining-nums; }
+.io-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.io-k { font: 600 10px/1 var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); min-width: 44px; }
+.io-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.io-slider { flex: 1; min-width: 80px; }
+.io-q { min-width: 36px; text-align: right; font: 600 12px/1 var(--ui); color: var(--text-2); }
+.io-out { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font: 500 12px/16px var(--ui); color: var(--text-2); }
+.io-out.bad { color: var(--danger); }
+.io-out em { flex-basis: 100%; font-style: normal; font-weight: 500; }
+
+/* publish sheet: stats strip, then one column per destination, then switch / progress / result - no scrolling */
+.pub { display: flex; flex-direction: column; gap: 14px; }
+.pub-stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 10px 16px; }
+.pub-stats-row > div:last-child { grid-column: auto; }
+.bp.wide { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.bp.wide .bp-frame.fb { width: min(100%, calc(236px * 0.8)); }
+@media (max-width: 800px) { .bp.wide, .pub-stats-row { grid-template-columns: minmax(0, 1fr); } }
