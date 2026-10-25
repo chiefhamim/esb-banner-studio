@@ -47,7 +47,6 @@ import { useJobLog } from './jobLog'
 import { PublishDialog } from './PublishDialog'
 import type { PublishOutcome } from './PublishDialog'
 import { FacebookDialog } from './FacebookDialog'
-import { BannerPreviews } from './BannerPreviews'
 import { getFacebook, postBannerToFacebook } from './facebook'
 import { openArticleForEdit } from './liveEdit'
 import { aiFor, modelLabel, providerMeta, roleProvider } from './aiProviders'
@@ -171,7 +170,7 @@ export function EditorialWorkspace() {
   const [activeFactId, setActiveFactId] = useState<string | null>(null)
   const [activeSocialTab, setActiveSocialTab] = useState<'facebook' | 'x' | 'linkedin' | 'telegram'>('facebook')
   const [storyTab, setStoryTab] = useState<StoryTab>('body')
-  const [leftTab, setLeftTab] = useState<'source' | 'banner' | 'intake' | 'stories'>('source')
+  const [leftTab, setLeftTab] = useState<'source' | 'intake' | 'stories'>('source')
   const storyCount = useStoryQueue((s) => s.stories.length)
   const [tagInput, setTagInput] = useState('')
   // A translation problem worth more than a 3-second toast: shown on the Headline & deck panel until dismissed.
@@ -933,20 +932,14 @@ export function EditorialWorkspace() {
         <div ref={deskRef} className="ed-desk" style={{ ['--ed-src-px' as string]: cols.src + 'px', ['--ed-side-px' as string]: cols.side + 'px' } as CSSProperties}>
           {/* LEFT — the original article, untouched, beside the copy made from it */}
           <aside className="left ed-src" aria-label="Original source">
-            <Tabs<'source' | 'banner' | 'intake' | 'stories'>
+            <Tabs<'source' | 'intake' | 'stories'>
               value={leftTab}
               onChange={setLeftTab}
-              options={[{ value: 'source', icon: 'newspaper', label: 'Source' }, { value: 'banner', icon: 'image', label: 'Banner' }, { value: 'stories', icon: 'layers', label: storyCount > 1 ? `Stories · ${storyCount}` : 'Stories' }, { value: 'intake', icon: 'link', label: 'New link' }]}
+              options={[{ value: 'source', icon: 'newspaper', label: 'Source' }, { value: 'stories', icon: 'layers', label: storyCount > 1 ? `Stories · ${storyCount}` : 'Stories' }, { value: 'intake', icon: 'link', label: 'New link' }]}
             />
             <div className="scroll ed-src-scroll">
               {leftTab === 'intake' ? (
                 <div className="ed-src-intake">{intakeForm(true)}</div>
-              ) : leftTab === 'banner' ? (
-                <div className="ed-src-intake">
-                  <p className="hint">The banner from Graphics, live. Change it there and it changes here a moment later; this is what Publish sends.</p>
-                  <BannerPreviews base={baseAssets} heroMode={heroMode} onHeroMode={setHeroMode} photoUrl={bannerLeadImage} caption={draft.social.facebook} pageName={fbCfg ? fbCfg.pageName || fbCfg.pageId : null} />
-                  <button type="button" className="btn sm" onClick={() => useShellStore.getState().openGraphicsFrom('editorial', null)}><Icon name="edit" size={13} /><span>Edit in Graphics</span></button>
-                </div>
               ) : leftTab === 'stories' ? (
                 <div className="ed-src-intake"><StoryQueueList /></div>
               ) : (
