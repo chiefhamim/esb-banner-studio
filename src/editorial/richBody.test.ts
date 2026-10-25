@@ -41,3 +41,21 @@ describe('richOf / bodyForPublish', () => {
     expect(bodyForPublish(d)).toBe('<p>Edited elsewhere.</p>')
   })
 })
+
+describe('pictures', () => {
+  const fig = '<figure class="article-figure"><img src="https://x.supabase.co/a.webp" alt="Wells" class="article-img--full"><figcaption class="article-figure__caption">Wellhead<span class="article-figure__credit">Photo: Petrobangla</span></figcaption></figure>'
+  it('keeps a captioned figure, its alignment class and the credit span', () => {
+    const out = sanitizeBodyHtml(fig)
+    expect(out).toContain('class="article-figure"')
+    expect(out).toContain('class="article-img--full"')
+    expect(out).toContain('<figcaption class="article-figure__caption">')
+    expect(out).toContain('class="article-figure__credit"')
+  })
+  it('drops an unknown image class and a non-http source', () => {
+    expect(sanitizeBodyHtml('<img src="https://a.com/p.png" class="evil big">')).toBe('<img src="https://a.com/p.png">')
+    expect(sanitizeBodyHtml('<img src="blob:http://x/1">')).toBe('')
+  })
+  it('keeps pictures and captions out of the plain story text', () => {
+    expect(htmlToPlain('<p>One.</p>' + fig + '<p>Two.</p>')).toBe('One.\n\nTwo.')
+  })
+})

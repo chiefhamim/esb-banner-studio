@@ -5,8 +5,10 @@ import type { EditorialDraft } from './editorialStore'
 
 const TAGS = new Set(['p', 'br', 'h1', 'h2', 'h3', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'sub', 'sup', 'ul', 'ol', 'li', 'blockquote', 'hr', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'figure', 'figcaption', 'img'])
 const DROP = new Set(['script', 'style', 'iframe', 'object', 'embed', 'noscript', 'template', 'head', 'title'])
-const BLOCK = new Set(['p', 'h1', 'h2', 'h3', 'li', 'blockquote', 'th', 'td', 'figcaption'])
-const CELL_CONTAINERS = new Set(['ul', 'ol', 'table', 'thead', 'tbody', 'tr', 'figure'])
+const BLOCK = new Set(['p', 'h1', 'h2', 'h3', 'li', 'blockquote', 'th', 'td'])
+const CELL_CONTAINERS = new Set(['ul', 'ol', 'table', 'thead', 'tbody', 'tr'])
+// a picture's caption and credit belong to the picture, not to the story's text (word count, facts, SEO)
+const SKIP = new Set(['hr', 'img', 'figure', 'figcaption'])
 
 const SAFE_URL = /^(https?:|mailto:)/i
 const IMG_ALIGN = new Set(['article-img--full', 'article-img--left', 'article-img--center', 'article-img--right'])
@@ -57,8 +59,10 @@ function cleanNode(node: Node, doc: Document): Node[] {
   if (tag === 'span' || tag === 'p' || tag === 'h1' || tag === 'h2' || tag === 'h3') {
     const st = cleanStyle(el.getAttribute('style') ?? ''); if (st) out.setAttribute('style', st)
   }
-  if (tag === 'span' && !out.getAttribute('style')) return kids
+  if (tag === 'span' && el.classList.contains('article-figure__credit')) out.setAttribute('class', 'article-figure__credit')
+  else if (tag === 'span' && !out.getAttribute('style')) return kids
   if (tag === 'figure') out.setAttribute('class', 'article-figure')
+  if (tag === 'figcaption') out.setAttribute('class', 'article-figure__caption')
   for (const k of kids) out.appendChild(k)
   return [out]
 }
@@ -76,8 +80,7 @@ export function sanitizeBodyHtml(html: string): string {
 function blockTexts(el: Element, out: string[]) {
   for (const child of Array.from(el.children)) {
     const tag = child.tagName.toLowerCase()
-    if (tag === 'hr') continue
-    if (tag === 'img') continue
+    if (SKIP.has(tag)) continue
     if (CELL_CONTAINERS.has(tag)) { blockTexts(child, out); continue }
     if (tag === 'blockquote' && child.querySelector('p, li')) { blockTexts(child, out); continue }
     if (BLOCK.has(tag)) {

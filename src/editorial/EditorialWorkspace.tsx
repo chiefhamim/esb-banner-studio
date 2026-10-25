@@ -22,7 +22,7 @@ import { SeoPanel } from './SeoPanel'
 import { SignInSheet } from './SignInSheet'
 import { StoryQueueList } from './StoryQueueList'
 import { useStoryQueue } from './storyQueue'
-import { canUploadToSite, refreshSite, uploadBannerToSite } from './siteConnect'
+import { canUploadToSite, refreshSite, uploadBannerToSite, uploadBodyImage } from './siteConnect'
 import { renderBanner } from '../export'
 import { suggestKeyphrases } from './seo'
 import { FeaturedImage } from './FeaturedImage'
@@ -1266,7 +1266,7 @@ export function EditorialWorkspace() {
                         <textarea id="draft-body" hidden readOnly value={draft.body} />
                       </div>
                     ) : (
-                      <RichBodyEditor body={draft.body} bodyHtml={richOf(draft)} onChange={(html, plain) => { setDraftField('bodyHtml', html); setDraftField('body', plain) }} />
+                      <RichBodyEditor accent={catData.accent} uploadImage={async (blob) => { if (!canUploadToSite()) return { ok: false, error: 'Pictures upload from the desktop app, signed in to esbpowerline.com.' }; const r = await uploadBodyImage(staffSession, blob, draft.slug || draft.headline); return r.ok ? r : { ok: false, error: r.error } }} body={draft.body} bodyHtml={richOf(draft)} onChange={(html, plain) => { setDraftField('bodyHtml', html); setDraftField('body', plain) }} />
                     )}
                   </div>
                 )}

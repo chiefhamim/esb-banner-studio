@@ -25,7 +25,7 @@ export const MAX_BANNER_UPLOAD_BYTES = 4 * 1024 * 1024
 export type BannerUpload = { ok: true; url: string } | { ok: false; skipped?: boolean; error: string }
 
 /** Upload one rendered banner to the site's media library as the signed-in editor. */
-export async function uploadBannerToSite(session: StaffSession | null, banner: Blob, slug: string): Promise<BannerUpload> {
+export async function uploadBannerToSite(session: StaffSession | null, banner: Blob, slug: string, suffix = 'web'): Promise<BannerUpload> {
   const b = bridge()
   if (!b?.siteUpload) return { ok: false, skipped: true, error: 'Only the desktop app can upload to the site.' }
   const fresh = await ensureFreshSession(session)
@@ -34,12 +34,16 @@ export async function uploadBannerToSite(session: StaffSession | null, banner: B
   const name = (slug || 'banner').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'banner'
   const bytes = new Uint8Array(await banner.arrayBuffer())
   try {
-    const res = await b.siteUpload(siteSessionCookies(fresh), bytes, banner.type || 'image/jpeg', `${name}-web`)
+    const res = await b.siteUpload(siteSessionCookies(fresh), bytes, banner.type || 'image/jpeg', `${name}-${suffix}`)
     return res.ok && res.url ? { ok: true, url: res.url } : { ok: false, error: res.error || 'Upload failed.' }
   } catch {
     return { ok: false, error: 'The upload could not be sent.' }
   }
 }
+
+/** A picture inside the story (photo or chart): the same upload, named after the story with a unique tail so nothing overwrites. */
+export const uploadBodyImage = (session: StaffSession | null, image: Blob, slug: string): Promise<BannerUpload> =>
+  uploadBannerToSite(session, image, slug, 'fig-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5))
 
 /**
  * After the Studio saves an article straight into the database, ask the site to refresh its cached public pages for it
