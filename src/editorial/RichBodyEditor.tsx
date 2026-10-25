@@ -177,7 +177,8 @@ function Toolbar({ editor, onFile, onChart, msg }: { editor: Editor; onFile: (f:
   )
 }
 
-export function RichBodyEditor({ body, bodyHtml, onChange, uploadImage, accent }: { body: string; bodyHtml: string | null; onChange: (html: string, plain: string) => void; uploadImage: ImageUploader; accent: string }) {
+export function RichBodyEditor({ body, bodyHtml, onChange, uploadImage, accent, ideas, onIdeas }: { body: string; bodyHtml: string | null; onChange: (html: string, plain: string) => void; uploadImage: ImageUploader; accent: string; ideas: ChartSpec[]; onIdeas: (list: ChartSpec[]) => void }) {
+  const [chartFrom, setChartFrom] = useState<number | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [chartOpen, setChartOpen] = useState(false)
   const [chartBusy, setChartBusy] = useState(false)
@@ -228,6 +229,7 @@ export function RichBodyEditor({ body, bodyHtml, onChange, uploadImage, accent }
     }
   }
   const insertChart = async (spec: ChartSpec) => {
+    const from = chartFrom
     const ed = edRef.current
     if (!ed) return
     setChartBusy(true); setChartErr(null)
@@ -237,6 +239,8 @@ export function RichBodyEditor({ body, bodyHtml, onChange, uploadImage, accent }
       if (!up.ok) { setChartErr(up.error); return }
       ed.chain().focus().insertContent({ type: 'image', attrs: { src: up.url, alt: chartAlt(spec), caption: spec.title, credit: '', align: 'full' } }).run()
       setChartOpen(false)
+      if (from !== null) onIdeas(ideas.filter((_, i) => i !== from))
+      setChartFrom(null)
     } catch (err) {
       setChartErr(err instanceof Error ? err.message : 'The chart could not be added.')
     } finally {
@@ -255,9 +259,21 @@ export function RichBodyEditor({ body, bodyHtml, onChange, uploadImage, accent }
   if (!editor) return null
   return (
     <div className="rb">
-      <Toolbar editor={editor} onFile={(f) => void addRef.current(f)} onChart={() => { setChartErr(null); setChartOpen(true) }} msg={msg} />
+      <Toolbar editor={editor} onFile={(f) => void addRef.current(f)} onChart={() => { setChartErr(null); setChartFrom(null); setChartOpen(true) }} msg={msg} />
+      {ideas.length > 0 && (
+        <div className="rb-ideas" role="group" aria-label="Chart ideas from the AI">
+          <Icon name="sparkle" size={13} />
+          <span className="rb-ideas-k">AI chart idea{ideas.length > 1 ? 's' : ''} — numbers taken from the source</span>
+          {ideas.map((c, i) => (
+            <span key={i} className="rb-idea">
+              <button type="button" className="rb-idea-add" title="Open this chart to review and insert it" onClick={() => { setChartErr(null); setChartFrom(i); setChartOpen(true) }}><Icon name="chart" size={13} /><span>{c.title}</span></button>
+              <button type="button" className="rb-idea-x" aria-label="Dismiss this idea" title="Dismiss" onClick={() => onIdeas(ideas.filter((_, k) => k !== i))}><Icon name="x" size={12} /></button>
+            </span>
+          ))}
+        </div>
+      )}
       <EditorContent editor={editor} className="rb-scroll" />
-      {chartOpen && <ChartDialog accent={accent} busy={chartBusy} error={chartErr} onInsert={(s) => void insertChart(s)} onClose={() => setChartOpen(false)} />}
+      {chartOpen && <ChartDialog initial={chartFrom !== null ? ideas[chartFrom] : undefined} accent={accent} busy={chartBusy} error={chartErr} onInsert={(s) => void insertChart(s)} onClose={() => setChartOpen(false)} />}
     </div>
   )
 }

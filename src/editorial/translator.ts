@@ -9,6 +9,10 @@ import { aiFor, aiJson, geminiLabel, listModels, loadAiSettings, providerMeta, r
 import type { AiProviderId, AiSchema, AiSettings } from './aiProviders'
 import { DESCRIPTION_MAX, buildMetaDescription, buildMetaTitle, buildSlug, countPhrase, headlineGram, suggestKeyphrases } from './seo'
 
+import { storyFromMarkup, hasStoryMarks } from './blocks'
+import { validateChartIdeas } from './chart'
+import type { ChartSpec } from './chart'
+
 export interface EditorialTranslationResult {
   headline: string          // strictly <= 104 characters
   deck: string              // strictly <= 200 characters
@@ -17,6 +21,10 @@ export interface EditorialTranslationResult {
   metaTitle: string         // SEO meta title
   metaDescription: string   // SEO meta description
   body: string              // full English story body
+  /** The same story as the site's HTML when the AI structured it (headings, bullets, tables…); `body` is then exactly its plain text. */
+  bodyHtml?: string
+  /** Charts the AI suggests from numbers the source prints; the editor adds one on request. */
+  charts?: ChartSpec[]
   /** The Facebook Page caption the same AI call wrote (no link; text, then one line of hashtags). Absent for free translation. */
   facebook?: string
   /** Which AI provider wrote it, or the free machine translation ('neural'), or nothing reachable ('offline'). */
@@ -375,10 +383,23 @@ export function translationPrompt(s: AiSettings = loadAiSettings()): string {
   return s.prompt.trim() || JOURNALISTIC_TRANSLATOR_PROMPT
 }
 
+// How the body may be laid out. The marks are plain text, so a model that ignores them still returns a normal story, and
+// every number in a table or chart is checked against the source afterwards.
+const LAYOUT_RULES = [
+  'Story layout (inside the body field only): write plain paragraphs separated by blank lines. Where the source supports it, structure the story with these line-start marks:',
+  '- "## Heading" for a section sub-heading, only in a story of five or more paragraphs with clearly separate parts; never a heading on a short story.',
+  '- Lines starting "- " for a list of three or more parallel items the source states (projects, figures, conditions); lines starting "1. " when the order matters.',
+  '- A line starting "> " for ONE direct quotation of a full sentence or more worth featuring; the quotation then appears only there, with the speaker named in the next paragraph or on a second line "> — Name, role".',
+  '- A table (rows of "| a | b |", the first row the header) only when the source gives the same figures for three or more years, projects or places, for example output by year. Never put figures in a table that the source does not state.',
+  '- **bold** for at most two key figures or names and ==highlight== for at most one key phrase (a number or one to three words). Both are optional.',
+  'Structure never changes the facts: every number, name and claim comes from the source, and nothing is added or dropped for the layout. Use no marks at all when the story is short or plain.',
+  'charts field: a JSON array, written as text, of at most two chart ideas, or [] when the source does not give three or more comparable numbers (a time series, a split between places or companies). Shape: {"type":"bar|hbar|line|pie","title":"sentence-case headline of the chart","unit":"MMCFD","source":"who the source credits","labels":["2023","2024"],"series":[{"name":"","values":[15.8,16.9]}]}. Every value must be a number printed in the source, copied exactly: never calculate, round, convert or estimate one.',
+].join('\n')
+
 // Where each part of the answer goes. The editor's prompt (or the newsroom default) decides how to translate and write;
 // this only maps the answer onto the desk's fields — and says so, because the built-in prompt still describes a labelled
 // text layout and a meta block "at the end", which the structured reply replaces.
-const REPLY_RULES = 'Reply format (this replaces any "Output Format" or labelled layout in the instructions above): answer only with the requested JSON fields, with no HEADLINE:/BODY: labels and no commentary. The meta title, meta description and keywords go in their own fields, never at the end of the body; the body is the complete article and nothing else. Follow every instruction above exactly: the field descriptions only add the site\'s character limits. Cover the whole story, including its last paragraphs: every fact of the source stays, in your own editing. No site name in any field.'
+const REPLY_RULES = 'Reply format (this replaces any "Output Format" or labelled layout in the instructions above): answer only with the requested JSON fields, with no HEADLINE:/BODY: labels and no commentary. The meta title, meta description and keywords go in their own fields, never at the end of the body; the body is the complete article and nothing else. Follow every instruction above exactly: the field descriptions only add the site\'s character limits. Cover the whole story, including its last paragraphs: every fact of the source stays, in your own editing. No site name in any field.\n\n' + LAYOUT_RULES
 
 /** The model's body as written: trailing spaces and runs of blank lines tidied, no word of it rewritten. */
 const tidyBody = (t: string) => t.replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim()
@@ -393,16 +414,17 @@ export const TRANSLATION_SCHEMA: AiSchema = {
     metaTitle: { type: 'string', description: 'At most 60 characters, the main keyphrase early, no site name.' },
     metaDescription: { type: 'string', description: '120 to 160 characters, states the news, contains the main keyphrase naturally.' },
     facebook: { type: 'string', description: FACEBOOK_FIELD },
-    body: { type: 'string', description: 'The complete finished English story: every fact of the source, edited as instructed, paragraphs separated by blank lines. Never drop the ending.' },
+    body: { type: 'string', description: 'The complete finished English story: every fact of the source, edited as instructed, paragraphs separated by blank lines, with the layout marks described in the reply rules where the source supports them. Never drop the ending.' },
+    charts: { type: 'string', description: 'JSON array as text of at most two chart ideas built only from numbers the source prints, or [] when there are none.' },
   },
-  required: ['headline', 'deck', 'slug', 'focusKeywords', 'metaTitle', 'metaDescription', 'facebook', 'body'],
+  required: ['headline', 'deck', 'slug', 'focusKeywords', 'metaTitle', 'metaDescription', 'facebook', 'body', 'charts'],
 }
 
 async function translateWithAi(
   articleText: string,
   ai: { provider: AiProviderId; key: string; model: string },
   onProgress?: (status: string) => void,
-): Promise<Partial<EditorialTranslationResult> & { modelUsed?: string }> {
+): Promise<Partial<EditorialTranslationResult> & { modelUsed?: string; chartsJson?: string }> {
   let listed: Awaited<ReturnType<typeof listModels>> = []
   try { listed = await listModels(ai.provider, ai.key) } catch { /* the call below reports the real error */ }
   const first = resolveModel(ai.provider, ai.model, listed)
@@ -434,6 +456,7 @@ async function translateWithAi(
         metaDescription: data.metaDescription?.trim(),
         facebook: data.facebook?.trim(),
         body: String(data.body).trim(),
+        chartsJson: data.charts,
         modelUsed: used,
       }
     } catch (err) {
@@ -477,12 +500,14 @@ export async function translateNewsArticle(
 
       if (parsed.headline && parsed.body) {
         // Completeness guard: a reply with far fewer paragraphs than the source has dropped part of the story.
-        const outParas = parsed.body.split(/\n\s*\n/).filter((p) => p.trim()).length
+        const marked = tidyBody(parsed.body)
+        const rich = hasStoryMarks(marked) ? storyFromMarkup(marked) : null
+        const outParas = (rich ? rich.plain : parsed.body).split(/\n\s*\n/).filter((p) => p.trim()).length
         const srcParas = input.paragraphs.filter((p) => p.trim()).length
         const incomplete = srcParas >= 4 && outParas < Math.ceil(srcParas * 0.6)
         const headline = enforceHeadlineLength(parsed.headline, 104)
         const deck = enforceDeckLength(parsed.deck || input.deck || '', 200)
-        const body = tidyBody(parsed.body)
+        const body = rich && rich.plain ? rich.plain : marked
         const focusKeywords = alignKeywords(headline, body, parsed.metaTitle, parsed.focusKeywords || extractFocusKeywords(headline, `${deck} ${body}`))
         const slug = cleanSlug(parsed.slug ?? '') || buildSlug(headline, firstKeyphrase(focusKeywords)) || generateSlug(headline, 80)
         const { metaTitle, metaDescription } = seoFields(headline, deck, body, focusKeywords, parsed.metaTitle, parsed.metaDescription)
@@ -495,6 +520,8 @@ export async function translateNewsArticle(
           metaTitle,
           metaDescription,
           body,
+          bodyHtml: rich && rich.plain ? rich.html : undefined,
+          charts: validateChartIdeas(parsed.chartsJson ?? '', combinedBengaliText),
           facebook: parsed.facebook ? sanitizeFacebook(parsed.facebook, headline) : undefined,
           provider: ai.provider,
           modelUsed: parsed.modelUsed,

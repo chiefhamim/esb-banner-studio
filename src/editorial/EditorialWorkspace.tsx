@@ -13,6 +13,7 @@ import { useEditorialStore } from './editorialStore'
 import { BannerCard } from './BannerCard'
 import { bodyForPublish, richOf } from './richBody'
 import { RichBodyEditor } from './RichBodyEditor'
+import { RichReview } from './RichReview'
 import { useWidth } from '../ui/useWidth'
 import { Splitter } from '../ui/layout'
 import { BN_FONTS, useBnFont } from './bnFont'
@@ -527,6 +528,8 @@ export function EditorialWorkspace() {
       setTranslationMeta(translation.provider, translation.modelUsed)
       setDraftField('headline', translation.headline)
       setDraftField('deck', translation.deck)
+      setDraftField('bodyHtml', translation.bodyHtml ?? '')
+      setDraftField('chartIdeas', translation.charts ?? [])
       setDraftField('body', translation.body)
       setDraftField('slug', translation.slug)
       setDraftField('focusKeywords', translation.focusKeywords)
@@ -583,6 +586,8 @@ export function EditorialWorkspace() {
         // headline); only the body and the search fields are refreshed, built around the existing headline
         const kw = alignKeywords(cur.headline, res.body, res.metaTitle, res.focusKeywords)
         const seo = seoFields(cur.headline, cur.deck, res.body, kw, res.metaTitle, res.metaDescription)
+        setDraftField('bodyHtml', res.bodyHtml ?? '')
+        setDraftField('chartIdeas', res.charts ?? [])
         setDraftField('body', res.body)
         setDraftField('focusKeywords', kw)
         setDraftField('focusKeyphrase', kw.split(',')[0]?.trim() ?? '')
@@ -591,6 +596,8 @@ export function EditorialWorkspace() {
       } else {
         setDraftField('headline', res.headline)
         setDraftField('deck', res.deck)
+        setDraftField('bodyHtml', res.bodyHtml ?? '')
+        setDraftField('chartIdeas', res.charts ?? [])
         setDraftField('body', res.body)
         setDraftField('slug', res.slug)
         setDraftField('focusKeywords', res.focusKeywords)
@@ -1243,7 +1250,13 @@ export function EditorialWorkspace() {
                     </div>
                     {bodyMode === 'review' ? (
                       <div className="ed-story-doc-view" onDoubleClick={() => setBodyMode('edit')} title="Double-click to edit">
-                        {draft.body ? (
+                        {richOf(draft) ? (
+                          <RichReview html={richOf(draft) ?? ''} text={(t) => parseParagraphWithFacts(t, factTable, sourceAscii).map((sp, sIdx) => {
+                            if (!sp.isFact) return <span key={sIdx}>{sp.text}</span>
+                            const digits = sp.text.replace(/[^0-9]/g, '')
+                            return <span key={sIdx} className={sp.isVerified ? 'fact-verified' : 'fact-unverified'} title={sp.tooltip} data-fact-digits={digits} onClick={() => handleBodyFactClick(digits)}>{sp.text}</span>
+                          })} />
+                        ) : draft.body ? (
                           draft.body.split(/\n{2,}/).map((p, pIdx) => {
                             const spans = parseParagraphWithFacts(p, factTable, sourceAscii)
                             return (
@@ -1266,7 +1279,7 @@ export function EditorialWorkspace() {
                         <textarea id="draft-body" hidden readOnly value={draft.body} />
                       </div>
                     ) : (
-                      <RichBodyEditor accent={catData.accent} uploadImage={async (blob) => { if (!canUploadToSite()) return { ok: false, error: 'Pictures upload from the desktop app, signed in to esbpowerline.com.' }; const r = await uploadBodyImage(staffSession, blob, draft.slug || draft.headline); return r.ok ? r : { ok: false, error: r.error } }} body={draft.body} bodyHtml={richOf(draft)} onChange={(html, plain) => { setDraftField('bodyHtml', html); setDraftField('body', plain) }} />
+                      <RichBodyEditor ideas={draft.chartIdeas ?? []} onIdeas={(l) => setDraftField('chartIdeas', l)} accent={catData.accent} uploadImage={async (blob) => { if (!canUploadToSite()) return { ok: false, error: 'Pictures upload from the desktop app, signed in to esbpowerline.com.' }; const r = await uploadBodyImage(staffSession, blob, draft.slug || draft.headline); return r.ok ? r : { ok: false, error: r.error } }} body={draft.body} bodyHtml={richOf(draft)} onChange={(html, plain) => { setDraftField('bodyHtml', html); setDraftField('body', plain) }} />
                     )}
                   </div>
                 )}

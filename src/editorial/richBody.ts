@@ -81,6 +81,12 @@ function blockTexts(el: Element, out: string[]) {
   for (const child of Array.from(el.children)) {
     const tag = child.tagName.toLowerCase()
     if (SKIP.has(tag)) continue
+    // a table row reads as one line, so a table is a few paragraphs rather than one per cell
+    if (tag === 'tr') {
+      const cells = Array.from(child.children).map((x) => (x.textContent ?? '').replace(/s+/g, ' ').trim()).filter(Boolean)
+      if (cells.length) out.push(cells.join(' | '))
+      continue
+    }
     if (CELL_CONTAINERS.has(tag)) { blockTexts(child, out); continue }
     if (tag === 'blockquote' && child.querySelector('p, li')) { blockTexts(child, out); continue }
     if (BLOCK.has(tag)) {

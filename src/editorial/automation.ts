@@ -427,6 +427,8 @@ export async function automateNewsFromUrl(
   edStore.setDraftField('metaDescription', metaDescription)
   edStore.setDraftField('byline', byline)
   edStore.setDraftField('credit', credit)
+  edStore.setDraftField('bodyHtml', translation.bodyHtml ?? '')
+  edStore.setDraftField('chartIdeas', translation.charts ?? [])
   edStore.setDraftField('body', englishBody)
   edStore.setSocialCaption('facebook', socialCaptions.facebook)
   edStore.setSocialCaption('x', socialCaptions.x)

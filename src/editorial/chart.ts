@@ -226,3 +226,46 @@ export function renderChart(spec: ChartSpec, accent: string): HTMLCanvasElement 
 
 export const chartToBlob = (spec: ChartSpec, accent: string): Promise<Blob> =>
   new Promise((resolve, reject) => renderChart(spec, accent).toBlob((b) => (b ? resolve(b) : reject(new Error('The chart could not be drawn.'))), 'image/png'))
+
+const BN_DIGITS = '০১২৩৪৫৬৭৮৯'
+const asciiDigits = (s: string) => s.replace(/[০-৯]/g, (d) => String(BN_DIGITS.indexOf(d)))
+
+/** Every number written in the source, as plain numbers (commas and Bengali digits normalised). */
+function sourceNumbers(text: string): Set<number> {
+  const out = new Set<number>()
+  for (const m of asciiDigits(text).matchAll(/\d[\d,]*(?:\.\d+)?/g)) {
+    const n = Number(m[0].replace(/,/g, ''))
+    if (Number.isFinite(n)) out.add(n)
+  }
+  return out
+}
+
+const TYPES: ChartType[] = ['bar', 'hbar', 'line', 'pie']
+
+/**
+ * The AI's chart ideas (JSON text) → charts that are safe to offer. A chart is kept only when it is well formed and every
+ * number in it is a number the source article itself prints: the AI may choose what to chart, never invent or work out a value.
+ */
+export function validateChartIdeas(json: string, sourceText: string): ChartSpec[] {
+  let raw: unknown
+  try { raw = JSON.parse(json || '[]') } catch { return [] }
+  if (!Array.isArray(raw)) return []
+  const known = sourceNumbers(sourceText)
+  const out: ChartSpec[] = []
+  for (const r of raw.slice(0, 2)) {
+    if (!r || typeof r !== 'object') continue
+    const o = r as Record<string, unknown>
+    const type = TYPES.includes(o.type as ChartType) ? (o.type as ChartType) : 'bar'
+    const labels = Array.isArray(o.labels) ? o.labels.map((l) => String(l).trim()).filter(Boolean) : []
+    const series = (Array.isArray(o.series) ? o.series : []).slice(0, 3).map((s) => {
+      const so = (s ?? {}) as Record<string, unknown>
+      return { name: String(so.name ?? '').trim(), values: Array.isArray(so.values) ? so.values.map(Number) : [] }
+    })
+    const title = String(o.title ?? '').trim()
+    if (!title || labels.length < 2 || labels.length > 12 || !series.length) continue
+    if (series.some((s) => s.values.length !== labels.length || s.values.some((v) => !Number.isFinite(v)))) continue
+    if (series.some((s) => s.values.some((v) => !known.has(Math.abs(v))))) continue
+    out.push({ type, title: title.slice(0, 110), subtitle: o.subtitle ? String(o.subtitle).slice(0, 120) : undefined, unit: o.unit ? String(o.unit).slice(0, 16) : undefined, source: o.source ? String(o.source).slice(0, 80) : undefined, labels, series })
+  }
+  return out
+}

@@ -539,3 +539,24 @@
 .rb-doc figure.article-figure img { margin: 0 auto 8px; }
 .rb-doc figure.article-figure figcaption { font-size: 13.5px; line-height: 1.5; color: var(--text-2); text-align: center; }
 .rb-doc .article-figure__credit { display: block; font-size: 12px; color: var(--text-3); }
+
+/* chart ideas the AI built from the source's numbers */
+.rb-ideas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; background: color-mix(in srgb, var(--ink) 8%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent); color: var(--text-2); font-size: 12.5px; }
+.rb-ideas-k { font-weight: 700; color: var(--text); }
+.rb-idea { display: inline-flex; align-items: center; border-radius: 8px; background: var(--fill); }
+.rb-idea button { appearance: none; border: 0; background: transparent; color: var(--text); cursor: pointer; font: 600 12.5px/1 var(--ui); height: 28px; display: inline-flex; align-items: center; gap: 6px; }
+.rb-idea-add { padding: 0 6px 0 10px; border-radius: 8px 0 0 8px; max-width: 360px; } .rb-idea-add span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rb-idea-x { width: 26px; justify-content: center; border-radius: 0 8px 8px 0; color: var(--text-3); }
+.rb-idea button:hover { background: var(--fill-hover); }
+
+/* Verified view of a formatted story */
+.rv { font-size: 15px; line-height: 1.7; }
+.rv p { margin: 0 0 12px; } .rv h2 { font-size: 19px; line-height: 1.3; font-weight: 700; margin: 20px 0 8px; } .rv h3 { font-size: 16.5px; line-height: 1.35; font-weight: 700; margin: 16px 0 6px; }
+.rv ul, .rv ol { margin: 0 0 12px; padding-left: 24px; } .rv ul { list-style: disc; } .rv ol { list-style: decimal; } .rv li > p { margin: 0 0 3px; }
+.rv blockquote { margin: 14px 0; padding: 2px 0 2px 16px; border-left: 3px solid var(--ink); font-style: italic; }
+.rv table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+.rv th, .rv td { border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); padding: 6px 10px; text-align: left; vertical-align: top; }
+.rv th { background: var(--fill); font-weight: 700; } .rv td > p, .rv th > p { margin: 0; }
+.rv hr { border: 0; border-top: 1px solid color-mix(in srgb, var(--text) 22%, transparent); margin: 18px 0; }
+.rv img { display: block; max-width: 68%; height: auto; margin: 14px auto; border-radius: 8px; } .rv img.article-img--full { max-width: 100%; }
+.rv figcaption { font-size: 13px; color: var(--text-2); text-align: center; } .rv .article-figure__credit { display: block; font-size: 12px; color: var(--text-3); }

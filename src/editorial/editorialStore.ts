@@ -1,5 +1,6 @@
 // Editorial Desk Zustand store with undo, fact tracking, banner coordination,
 // and full live integration with esbpowerline.com CMS.
+import type { ChartSpec } from './chart'
 import { create } from 'zustand'
 import type { ExtractedArticle, ExtractedImage, ExtractionMeta } from './extract'
 import { extractFactTable, verifyDraftAgainstSource } from './facts'
@@ -39,6 +40,8 @@ export interface EditorialDraft {
   body: string              // full English story body
   /** The same story with its formatting (headings, lists, tables…) as the site's HTML; ignored once the plain text changes (see richBody.richOf). */
   bodyHtml: string
+  /** Charts the AI suggested from the source's own numbers; the Body editor offers each one and the editor dismisses or adds it. */
+  chartIdeas: ChartSpec[]
   byline: string
   /** Credit the story to "ESB News Desk" instead of the signed-in editor (the CMS's tick option). */
   postAsNewsDesk: boolean
@@ -159,6 +162,7 @@ const DEFAULT_DRAFT: EditorialDraft = {
   metaDescription: '',
   body: '',
   bodyHtml: '',
+  chartIdeas: [],
   byline: '',
   postAsNewsDesk: false,
   credit: '',
@@ -380,6 +384,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
         metaDescription: seo.metaDescription,
         body: bodyStr,
         bodyHtml: '',
+        chartIdeas: [],
         byline: article.byline || currentDraft.byline || '',
         postAsNewsDesk: currentDraft.postAsNewsDesk,
         credit: article.images[0]?.credit || article.publisher || currentDraft.credit || '',

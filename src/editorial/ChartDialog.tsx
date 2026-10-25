@@ -6,6 +6,7 @@ import { Icon } from '../ui/Icon'
 import { parseChartData, renderChart } from './chart'
 import type { ChartSpec, ChartType } from './chart'
 
+const toText = (c: Partial<ChartSpec>) => (c.labels && c.series?.length ? [['Label', ...c.series.map((x, i) => x.name || `Series ${i + 1}`)].join(', '), ...c.labels.map((l, i) => [l, ...c.series!.map((x) => x.values[i])].join(', '))].join('\n') : '')
 const SAMPLE = 'Year, Generation\n2022, 14.2\n2023, 15.8\n2024, 16.9\n2025, 18.4'
 
 export function ChartDialog({ accent, initial, busy, error, onInsert, onClose }: { accent: string; initial?: Partial<ChartSpec>; busy: boolean; error: string | null; onInsert: (spec: ChartSpec) => void; onClose: () => void }) {
@@ -14,7 +15,7 @@ export function ChartDialog({ accent, initial, busy, error, onInsert, onClose }:
   const [subtitle, setSubtitle] = useState(initial?.subtitle ?? '')
   const [unit, setUnit] = useState(initial?.unit ?? '')
   const [source, setSource] = useState(initial?.source ?? '')
-  const [data, setData] = useState(SAMPLE)
+  const [data, setData] = useState(toText(initial ?? {}) || SAMPLE)
   const canvasRef = useRef<HTMLDivElement>(null)
 
   const parsed = useMemo(() => parseChartData(data), [data])

@@ -24,7 +24,7 @@ describe('sanitizeBodyHtml', () => {
 describe('plain text', () => {
   it('round-trips paragraphs', () => { expect(htmlToPlain(plainToHtml('One.\n\nTwo & three.'))).toBe('One.\n\nTwo & three.') })
   it('turns lists, quotes and tables into paragraphs', () => {
-    expect(htmlToPlain('<h2>H</h2><ul><li><p>a</p></li><li><p>b</p></li></ul><blockquote><p>q</p></blockquote><table><tbody><tr><td>x</td><td>y</td></tr></tbody></table>')).toBe('H\n\na\n\nb\n\nq\n\nx\n\ny')
+    expect(htmlToPlain('<h2>H</h2><ul><li><p>a</p></li><li><p>b</p></li></ul><blockquote><p>q</p></blockquote><table><tbody><tr><td>x</td><td>y</td></tr></tbody></table>')).toBe('H\n\na\n\nb\n\nq\n\nx | y')
   })
 })
 
