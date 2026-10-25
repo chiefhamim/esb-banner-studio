@@ -4,7 +4,7 @@
 // Publishing posts the 4:5 banner as a photo with the Facebook caption, which already ends with the article link.
 
 const KEY = 'esb-banner-studio/facebook'
-const GRAPH = 'https://graph.facebook.com/v21.0'
+const GRAPH = 'https://graph.facebook.com/v26.0'
 
 export interface FacebookConfig { pageId: string; token: string; pageName?: string }
 
