@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
-import { IconButton, Select, Tabs } from '../ui/controls'
+import { IconButton, Select, Slider, Tabs } from '../ui/controls'
 import type { AspectRatio, Clip, MediaAsset, OverlayTemplate } from './timeline'
 import {
   deserializeVideoProject,
@@ -667,7 +667,7 @@ export function VideoWorkspace() {
             value={activeTab}
             onChange={setActiveTab}
             options={[
-              { value: 'media', label: mediaAssets.length ? `Media ${mediaAssets.length}` : 'Media' },
+              { value: 'media', label: 'Media' },
               { value: 'overlays', label: 'Overlays' },
               { value: 'captions', label: 'Captions' },
               { value: 'audio', label: 'Audio' },
@@ -856,7 +856,7 @@ export function VideoWorkspace() {
             <div className="vw-inspector">
               <div className="vw-inspector-head">
                 <span className="vw-inspector-title">Clip Inspector</span>
-                <button type="button" className="ibtn" title="Delete Clip" onClick={deleteSelectedClip}>
+                <button type="button" className="ibtn" aria-label="Delete clip" data-tip="Delete clip (Del)" onClick={deleteSelectedClip}>
                   <Icon name="trash" size={13} />
                 </button>
               </div>
@@ -902,28 +902,14 @@ export function VideoWorkspace() {
                 {selectedClip.kind === 'audio' && (
                   <div className="vw-field">
                     <label>Volume ({Math.round((selectedClip.volume ?? 1) * 100)}%)</label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={selectedClip.volume ?? 1}
-                      onChange={(e) => updateClip({ ...selectedClip, volume: parseFloat(e.target.value) })}
-                    />
+                    <Slider min={0} max={1} step={0.05} value={selectedClip.volume ?? 1} onChange={(v) => updateClip({ ...selectedClip, volume: v })} />
                   </div>
                 )}
                 <div className="vw-field">
                   <label>Opacity ({Math.round((selectedClip.opacity ?? 1) * 100)}%)</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={selectedClip.opacity ?? 1}
-                    onChange={(e) => updateClip({ ...selectedClip, opacity: parseFloat(e.target.value) })}
-                  />
+                  <Slider min={0} max={1} step={0.05} value={selectedClip.opacity ?? 1} onChange={(v) => updateClip({ ...selectedClip, opacity: v })} />
                 </div>
-                <div className="vw-metrics mono">
+                <div className="vw-metrics">
                   <span>Start: {formatShortTime(selectedClip.start)}</span>
                   <span>Duration: {selectedClip.duration.toFixed(1)}s</span>
                   <span>In: {selectedClip.in.toFixed(1)}s</span>

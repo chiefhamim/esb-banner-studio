@@ -621,7 +621,7 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 .app > .corner-join { position: absolute; left: 45px; top: 45px; z-index: 7; width: calc(var(--corner) + 1px); height: calc(var(--corner) + 1px); overflow: visible; pointer-events: none; fill: none; stroke: var(--line); stroke-width: 1; }
 /* Graphics: Home is centred over the rail (like Select below it) and the switcher starts on the left edge of the Story tabs */
 .app > .topbar { padding-left: 7px; }
-.app .ws-wrap { gap: 17px; }
+.app .ws-wrap { gap: 15px; } /* 7 + 32 + 15 = 54: the Story tabs' left edge */
 
 /* ---------------------------------------------------------------- shortcuts and menu hints: UI font, not mono
    Menu shortcuts are quiet right-aligned text on one column; key chips (shortcuts dialog, buttons) use the same face. */
@@ -1145,7 +1145,7 @@ label.switch:active i { filter: brightness(.94); }
 .right > .insp > .pnl.open:only-child { display: flex; flex-direction: column; min-height: 100%; }
 .right > .insp > .pnl.open:only-child > .pnl-body:has(> .empty:only-child) { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
 /* five tabs in a 312 px column: each takes its own word's width, so none is cut */
-.vw-bin-panel .side-tabs button { flex: 1 1 auto; padding: 0 6px; }
+.vw-bin-panel .side-tabs button { flex: 1 1 auto; padding: 0 4px; font-size: 12.5px; }
 .asp-tag { display: inline-flex; align-items: center; gap: 4px; color: var(--success); background: var(--success-soft); font-weight: 600; }
 .asp-close { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border-radius: 6px; }
 .asp-close:hover { background: var(--fill-hover); }
@@ -1179,3 +1179,14 @@ label.switch:active i { filter: brightness(.94); }
 /* a narrow Video header gives up the timecode chip first (the transport under the monitor shows the same time) */
 @container vwh (max-width: 1040px) { .vw-header .vw-timecode { display: none; } }
 :root[data-theme=dark] .topbar .pv-btn kbd, :root[data-theme=dark] .topbar .dpc-tag { color: #c8c8d0; }
+/* clip inspector: the same field, label and slider language as the Graphics inspector */
+.vw-inspector { padding: 10px 10px 12px; background: var(--side); border-top: 1px solid var(--card-line); }
+.vw-inspector-head { margin-bottom: 8px; }
+.vw-inspector-title { font: 600 10.5px/16px var(--ui); letter-spacing: .08em; color: var(--text-3); }
+.vw-inspector-body { gap: 10px; }
+.vw-field { gap: 4px; }
+.vw-field label { font: 500 12px/16px var(--ui); color: var(--text-2); }
+.vw-field input[type=text] { height: 32px; padding: 0 10px; font: 400 13px/1 var(--ui); color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); }
+.vw-field input[type=text]:hover { background: var(--field-hover); }
+.vw-field input[type=text]:focus { outline: 0; box-shadow: 0 0 0 2px var(--focus-ring); }
+.vw-metrics { margin-top: 2px; font: 400 11.5px/16px var(--ui); font-variant-numeric: tabular-nums; color: var(--text-3); }
