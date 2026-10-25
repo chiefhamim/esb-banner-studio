@@ -5,6 +5,7 @@ import { useStore } from '../store'
 import { useEditorialStore } from './editorialStore'
 import { suggestHighlight } from '../core/newsroom'
 import { isAutoDeskWrite } from './deskFlag'
+import { defaultDoc } from '../core/templates'
 
 let installed = false
 
@@ -31,6 +32,13 @@ export function installBannerLink() {
     }
     if (Object.keys(patch).length) banner.setContent(patch)
   })
+
+  // At launch the desk reopens its last story but Graphics starts on the template, so a linked banner showed the
+  // placeholder headline beside a real story. Bring it in step once - only over the untouched template text.
+  setTimeout(() => {
+    const ed = useEditorialStore.getState()
+    if (ed.bannerLink && ed.draft.headline.trim() && useStore.getState().doc.content.headline === defaultDoc().content.headline) ed.applyDraftToBanner()
+  }, 0)
 
   // Graphics banner -> Editorial draft
   useStore.subscribe((s, prev) => {

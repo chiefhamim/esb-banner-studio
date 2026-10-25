@@ -158,7 +158,7 @@ export function StoryPanel() {
           <input
             type="url"
             className="input sm"
-            placeholder="Paste news link (e.g. bonikbarta.com, esbpowerline.com)…"
+            placeholder="Paste a news link…"
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleImportUrl()}
@@ -172,9 +172,9 @@ export function StoryPanel() {
         {articleResult && (
           <div className="article-studio-preview">
             <div className="asp-header">
-              <span className="asp-tag">✓ English Processed</span>
+              <span className="asp-tag"><Icon name="check" size={12} /> English processed</span>
               <small>{articleResult.images.length} article photos found</small>
-              <button className="asp-close" onClick={() => setArticleResult(null)} title="Dismiss">×</button>
+              <button type="button" className="asp-close" onClick={() => setArticleResult(null)} aria-label="Dismiss" data-tip="Dismiss"><Icon name="x" size={13} /></button>
             </div>
             {articleResult.rawHeadline && articleResult.rawHeadline !== articleResult.headline && (
               <div className="asp-orig">Original: <i>{articleResult.rawHeadline}</i></div>

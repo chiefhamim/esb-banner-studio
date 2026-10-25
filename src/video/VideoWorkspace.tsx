@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
-import { IconButton, Select } from '../ui/controls'
+import { IconButton, Select, Tabs } from '../ui/controls'
 import type { AspectRatio, Clip, MediaAsset, OverlayTemplate } from './timeline'
 import {
   deserializeVideoProject,
@@ -600,18 +600,10 @@ export function VideoWorkspace() {
         </div>
 
         <div className="vw-header-actions">
-          <IconButton
-            icon="undo"
-            tip="Undo (Ctrl+Z)"
-            disabled={history.length === 0}
-            onClick={undo}
-          />
-          <IconButton
-            icon="redo"
-            tip="Redo (Ctrl+Y)"
-            disabled={future.length === 0}
-            onClick={redo}
-          />
+          <div className="pillbar">
+            <IconButton icon="undo" tip="Undo (Ctrl+Z)" disabled={history.length === 0} onClick={undo} />
+            <IconButton icon="redo" tip="Redo (Ctrl+Y)" disabled={future.length === 0} onClick={redo} />
+          </div>
 
           <button
             type="button"
@@ -667,53 +659,21 @@ export function VideoWorkspace() {
         </div>
       </header>
 
-      {saveStatus && (
-        <div style={{ padding: '2px 12px', background: '#064e3b', color: '#6ee7b7', fontSize: 11, textAlign: 'center' }}>
-          {saveStatus}
-        </div>
-      )}
-
       {/* 2. Middle Body: Asset Bin + Canvas Monitor */}
       <div className="vw-stage-row">
         {/* Left: Asset Library & Broadcast Overlay Bin */}
         <aside className="vw-bin-panel">
-          <div className="vw-bin-tabs">
-            <button
-              type="button"
-              className={activeTab === 'media' ? 'active' : ''}
-              onClick={() => setActiveTab('media')}
-            >
-              Media Bin ({mediaAssets.length})
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'overlays' ? 'active' : ''}
-              onClick={() => setActiveTab('overlays')}
-            >
-              Overlays
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'captions' ? 'active' : ''}
-              onClick={() => setActiveTab('captions')}
-            >
-              Captions
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'audio' ? 'active' : ''}
-              onClick={() => setActiveTab('audio')}
-            >
-              Audio
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'story' ? 'active' : ''}
-              onClick={() => setActiveTab('story')}
-            >
-              Story
-            </button>
-          </div>
+          <Tabs<typeof activeTab>
+            value={activeTab}
+            onChange={setActiveTab}
+            options={[
+              { value: 'media', label: mediaAssets.length ? `Media ${mediaAssets.length}` : 'Media' },
+              { value: 'overlays', label: 'Overlays' },
+              { value: 'captions', label: 'Captions' },
+              { value: 'audio', label: 'Audio' },
+              { value: 'story', label: 'Story' },
+            ]}
+          />
 
           <div className="vw-bin-content">
             {activeTab === 'media' && (
@@ -727,11 +687,9 @@ export function VideoWorkspace() {
                     handleImportFiles(e.dataTransfer.files)
                   }}
                 >
-                  <div className="vw-dropzone-icon">
-                    <Icon name="photos" size={24} />
-                  </div>
-                  <p>Click or drag video, audio &amp; images here</p>
-                  <span>Supports MP4, WebM, MOV, MP3, WAV, PNG, JPG</span>
+                  <span className="vw-dropzone-icon"><Icon name="upload" size={18} /></span>
+                  <p>Import media</p>
+                  <span>Click or drop video, audio or images · MP4, WebM, MOV, MP3, WAV, PNG, JPG</span>
                 </div>
 
                 {mediaAssets.map((asset) => (
@@ -753,11 +711,11 @@ export function VideoWorkspace() {
                     </div>
                     <button
                       type="button"
-                      className="btn xs primary"
+                      className="btn xs"
                       onClick={() => handleAddAssetToTimeline(asset)}
-                      title="Add to Timeline at Playhead"
+                      data-tip="Add to the timeline at the playhead"
                     >
-                      + Add
+                      <Icon name="plus" size={12} />Add
                     </button>
                     <button
                       type="button"
@@ -779,10 +737,10 @@ export function VideoWorkspace() {
                     <span className="vw-tag lower-third">Lower Third</span>
                     <button
                       type="button"
-                      className="btn xs primary"
+                      className="btn xs"
                       onClick={() => handleAddOverlay('lower-third', 'Engr. Rezwanul Khan', 'Chairman, Power Development Board')}
                     >
-                      + Add
+                      <Icon name="plus" size={12} />Add
                     </button>
                   </div>
                   <div className="vw-preset-name">Speaker Name &amp; Title</div>
@@ -794,10 +752,10 @@ export function VideoWorkspace() {
                     <span className="vw-tag breaking">Breaking</span>
                     <button
                       type="button"
-                      className="btn xs primary"
+                      className="btn xs"
                       onClick={() => handleAddOverlay('breaking', 'জাতীয় গ্রিডে ৩০ মিলিয়ন ঘনফুট গ্যাস', 'সরাসরি সম্প্রচার · ESB News')}
                     >
-                      + Add
+                      <Icon name="plus" size={12} />Add
                     </button>
                   </div>
                   <div className="vw-preset-name">Breaking News Ticker Bar</div>
@@ -806,13 +764,13 @@ export function VideoWorkspace() {
 
                 <div className="vw-preset-card">
                   <div className="vw-preset-header">
-                    <span className="vw-tag" style={{ background: 'rgba(14, 165, 233, 0.2)', color: '#38bdf8' }}>Logo Overlay</span>
+                    <span className="vw-tag logo">Logo Overlay</span>
                     <button
                       type="button"
-                      className="btn xs primary"
+                      className="btn xs"
                       onClick={() => handleAddOverlay('logo', 'ESB PowerLine Monogram')}
                     >
-                      + Add
+                      <Icon name="plus" size={12} />Add
                     </button>
                   </div>
                   <div className="vw-preset-name">Official ESB Monogram</div>
@@ -824,10 +782,10 @@ export function VideoWorkspace() {
                     <span className="vw-tag attribution">Attribution</span>
                     <button
                       type="button"
-                      className="btn xs primary"
+                      className="btn xs"
                       onClick={() => handleAddOverlay('lower-third', 'Petrobangla Briefing', 'Offshore Drilling Updates 2026')}
                     >
-                      + Add
+                      <Icon name="plus" size={12} />Add
                     </button>
                   </div>
                   <div className="vw-preset-name">Press Briefing Card</div>
@@ -843,10 +801,10 @@ export function VideoWorkspace() {
                     <span className="vw-tag caption">Subtitle</span>
                     <button
                       type="button"
-                      className="btn xs primary"
+                      className="btn xs"
                       onClick={() => handleAddCaption('গ্রিডে দৈনিক ৩০ মিলিয়ন ঘনফুট গ্যাস সরবরাহ শুরু')}
                     >
-                      + Add
+                      <Icon name="plus" size={12} />Add
                     </button>
                   </div>
                   <div className="vw-preset-name">Gas Supply Subtitle</div>
@@ -858,10 +816,10 @@ export function VideoWorkspace() {
                     <span className="vw-tag caption">Subtitle</span>
                     <button
                       type="button"
-                      className="btn xs primary"
+                      className="btn xs"
                       onClick={() => handleAddCaption('Electricity peak demand reaches 16,500 MW today')}
                     >
-                      + Add
+                      <Icon name="plus" size={12} />Add
                     </button>
                   </div>
                   <div className="vw-preset-name">Power Demand Metric</div>
@@ -875,14 +833,14 @@ export function VideoWorkspace() {
               <div className="vw-preset-list">
                 <div className="vw-preset-card">
                   <div className="vw-preset-header">
-                    <span className="vw-tag" style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#c084fc' }}>Voiceover</span>
+                    <span className="vw-tag voice">Voiceover</span>
                     {isRecordingVoiceover ? (
                       <button type="button" className="btn xs danger" onClick={handleStopVoiceover}>
                         Stop ({recordingSeconds}s)
                       </button>
                     ) : (
-                      <button type="button" className="btn xs primary" onClick={handleStartVoiceover}>
-                        Record Mic
+                      <button type="button" className="btn xs" onClick={handleStartVoiceover}>
+                        <Icon name="mic" size={12} />Record
                       </button>
                     )}
                   </div>
@@ -1053,17 +1011,21 @@ export function VideoWorkspace() {
                     type="button"
                     className={`vw-th-btn ${t.muted ? 'active' : ''}`}
                     onClick={() => toggleTrackMute(t.id)}
-                    title="Mute Track"
+                    aria-label={`${t.muted ? 'Unmute' : 'Mute'} ${t.id.toUpperCase()}`}
+                    aria-pressed={!!t.muted}
+                    data-tip={t.muted ? 'Unmute track' : 'Mute track'}
                   >
-                    M
+                    <Icon name={t.muted ? 'volumeX' : 'volume'} size={13} />
                   </button>
                   <button
                     type="button"
                     className={`vw-th-btn ${t.locked ? 'active' : ''}`}
                     onClick={() => toggleTrackLock(t.id)}
-                    title="Lock Track"
+                    aria-label={`${t.locked ? 'Unlock' : 'Lock'} ${t.id.toUpperCase()}`}
+                    aria-pressed={!!t.locked}
+                    data-tip={t.locked ? 'Unlock track' : 'Lock track'}
                   >
-                    L
+                    <Icon name={t.locked ? 'lock' : 'unlock'} size={13} />
                   </button>
                 </div>
               </div>
@@ -1077,7 +1039,7 @@ export function VideoWorkspace() {
               ref={rulerRef}
               className="vw-ruler"
               onPointerDown={handleRulerPointerDown}
-              style={{ width: `${project.duration * zoom}px` }}
+              style={{ width: `${project.duration * zoom}px`, '--vw-sec': `${zoom}px` } as React.CSSProperties}
             >
               {Array.from({ length: Math.ceil(project.duration / 5) + 1 }).map((_, i) => {
                 const sec = i * 5
@@ -1156,6 +1118,14 @@ export function VideoWorkspace() {
             </div>
           </div>
         </div>
+      </footer>
+
+      <footer className="statusbar vw-statusbar">
+        <span>{project.clips.length} {project.clips.length === 1 ? 'clip' : 'clips'} · {project.tracks.length} tracks</span>
+        {selectedClip && <><span className="sep" /><span className="vw-sb-sel">{selectedClip.title}</span></>}
+        {saveStatus && <><span className="sep" /><span className="vw-sb-note">{saveStatus}</span></>}
+        <div className="spacer" />
+        <span className="muted">{project.width} × {project.height} · {project.fps} fps · {formatShortTime(project.duration)}</span>
       </footer>
 
       {/* 4. Export */}

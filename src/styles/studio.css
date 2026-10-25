@@ -349,7 +349,7 @@
   .topbar .back-to-desk .back-label { display: none; }
 }
 /* the aspect picker drops its pixel size before anything is cut mid-word */
-@container vwh (max-width: 1180px) { .vw-aspect .select { max-width: 132px; } }
+@container vwh (max-width: 1180px) { .vw-aspect .select { max-width: 152px; } }
 .vw-aspect .select-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* under 1000 px: undo, redo and copy-image live on in the Edit/File menus and their shortcuts; Drag to Post has no
    other home, so it stays */
@@ -357,7 +357,7 @@
   .topbar:not(.ed-head) .pillbar > .ibtn, .topbar:not(.ed-head) .pillbar > .pill-sep { display: none; }
 }
 @container topbar (max-width: 920px) { .topbar .menubar .mb-item { padding-left: 7px; padding-right: 7px; } }
-@container vwh (max-width: 920px) { .vw-aspect .select { max-width: 108px; } .vw-timecode { padding: 3px 6px; font-size: 13px; } }
+@container vwh (max-width: 920px) { .vw-aspect .select { max-width: 120px; } .vw-header .vw-timecode { padding: 0 8px; font-size: 12px; } }
 
 /* ---------------------------------------------------------------- empty photo slot: say only what fits at this zoom */
 .slot-box.empty { container: slot / size; }
@@ -1075,3 +1075,96 @@ label.switch:active i { filter: brightness(.94); }
 .eng-usage { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 8px; padding: 8px 10px; background: var(--fill); border-radius: var(--r-2); font-variant-numeric: tabular-nums lining-nums; }
 .eng-usage-k { font: 600 10.5px/1 var(--ui); letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
 .eng-usage-v { font: 500 12px/16px var(--ui); color: var(--text-2); text-align: right; overflow-wrap: anywhere; }
+
+/* ============================================================================
+   Video desk: the same chrome as Editorial and Graphics
+   (shared side tabs, 32 px header controls, a status bar, quiet track controls)
+   ============================================================================ */
+.video-workspace { background: var(--bg-0); }
+.vw-bin-panel { width: 312px; background: var(--side); border-right: 1px solid var(--card-line); }
+.vw-bin-content { padding: 6px 10px 10px; }
+.vw-header .vw-title-input { height: 32px; padding: 0 10px; font: 600 13px/1 var(--ui); color: var(--text); background: transparent; border: 0; border-radius: var(--r-2); box-shadow: none; transition: background var(--t-1) var(--ease); }
+.vw-header .vw-title-input:hover { background: var(--fill); border: 0; }
+.vw-header .vw-title-input:focus { background: var(--field); border: 0; box-shadow: 0 0 0 2px var(--focus-ring); outline: 0; }
+.vw-header .vw-timecode { display: inline-flex; align-items: center; height: 32px; padding: 0 10px; font: 600 13px/1 var(--mono); letter-spacing: .04em; font-variant-numeric: tabular-nums; color: var(--text); background: var(--fill); border: 0; border-radius: var(--r-2); }
+.vw-header-actions { gap: 6px; }
+
+/* the import well: one quiet surface, one clear verb */
+.vw-dropzone { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 0 0 8px; padding: 16px 12px 14px; text-align: center; background: var(--fill); border: 1px dashed color-mix(in srgb, var(--text) 18%, transparent); border-radius: var(--r-3); transition: background var(--t-1) var(--ease), border-color var(--t-1) var(--ease); }
+.vw-dropzone:hover, .vw-dropzone.dragover { background: var(--fill-hover); border-color: color-mix(in srgb, var(--text) 34%, transparent); }
+.vw-dropzone-icon { display: grid; place-items: center; width: 32px; height: 32px; margin: 0 0 6px; color: var(--text-2); background: var(--raised); border-radius: var(--r-2); box-shadow: var(--raised-shadow); }
+.vw-dropzone p { margin: 0; font: 600 13px/18px var(--ui); color: var(--text); }
+.vw-dropzone span { font: 400 11.5px/16px var(--ui); color: var(--text-3); }
+.vw-media-card { gap: 10px; padding: 6px; background: transparent; border: 0; border-radius: var(--r-2); margin-bottom: 2px; }
+.vw-media-card:hover { background: var(--fill); }
+.vw-media-thumb { border: 0; border-radius: 6px; background: var(--fill); }
+.vw-media-title { font-size: 12px; font-weight: 500; color: var(--text); }
+.vw-media-meta { font-size: 10.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.vw-preset-card { background: var(--card); border: 0; border-radius: var(--r-3); box-shadow: var(--card-shadow); padding: 10px 12px; margin-bottom: 8px; }
+.vw-preset-card:hover { box-shadow: var(--card-shadow-open); }
+
+/* the monitor stays dark in both appearances (a picture is judged on a neutral dark surround), so its controls carry dark colours */
+.vw-monitor-panel { background: #0c0c0e; padding: 12px 12px 8px; }
+.vw-canvas { border-radius: 4px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 12px 32px rgba(0, 0, 0, 0.45); }
+.vw-transport { --text: #f4f4f5; --text-2: #b4b4bc; --text-3: #8a8a94; --fill-hover: rgba(255, 255, 255, 0.09); --fill-active: rgba(255, 255, 255, 0.14); height: 44px; margin-top: 8px; gap: 4px; padding: 0 8px; color: var(--text-2); background: transparent; border-radius: 0; }
+.vw-transport .ibtn { width: 32px; height: 32px; border-radius: var(--r-2); color: var(--text-2); }
+.vw-transport .ibtn:hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
+.vw-transport .play-btn, .vw-transport .play-btn:hover { height: 32px; margin: 0 4px; color: #131316; background: #f4f4f5; box-shadow: none; }
+.vw-transport-sep { height: 16px; margin: 0 8px; background: rgba(255, 255, 255, 0.12); }
+.vw-current-time, .vw-total-time { font: 600 12px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.vw-total-time { font-weight: 400; color: var(--text-3); }
+
+/* timeline */
+.vw-timeline-footer { background: var(--side); border-top: 1px solid var(--card-line); }
+.vw-timeline-toolbar { height: 40px; padding: 0 8px; background: var(--side); border-bottom: 1px solid var(--card-line); }
+.vw-tl-tools-left, .vw-tl-tools-right { gap: 4px; }
+.vw-zoom-label { min-width: 60px; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-3); }
+.vw-track-headers { width: 168px; background: var(--side); border-right: 1px solid var(--card-line); }
+.vw-ruler-header { height: 28px; padding: 0 12px; font: 600 10.5px/1 var(--ui); letter-spacing: .08em; color: var(--text-3); background: var(--side); border-bottom: 1px solid var(--card-line); }
+.vw-track-head { height: 48px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--card-line); }
+.vw-th-actions { gap: 2px; }
+.vw-th-btn { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; color: var(--text-3); background: transparent; border: 0; border-radius: 6px; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
+.vw-th-btn:hover { color: var(--text); background: var(--fill-hover); }
+.vw-th-btn.active, .vw-th-btn.active:hover { color: var(--sel-ink); background: var(--sel); border: 0; }
+.vw-ruler { background-color: var(--side); border-bottom: 1px solid var(--card-line); background-image: repeating-linear-gradient(90deg, color-mix(in srgb, var(--text) 22%, transparent) 0 1px, transparent 1px var(--vw-sec, 40px)); background-size: 100% 5px; background-position: 0 100%; background-repeat: no-repeat; }
+.vw-ruler-mark { border-left-color: color-mix(in srgb, var(--text) 34%, transparent); padding-left: 4px; }
+.vw-ruler-label { display: block; font-size: 10px; line-height: 16px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.vw-track-lane { background: var(--bg-0); border-bottom: 1px solid var(--card-line); }
+.vw-playhead-line { width: 1px; background: #ef4444; }
+.vw-playhead-handle { width: 11px; height: 11px; transform: translateX(-5px); }
+
+/* status bar: the same 28 px strip the other desks end with */
+.vw-statusbar { height: 28px; flex: none; }
+.vw-statusbar::before { display: none; }
+.vw-statusbar .muted { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.vw-sb-sel { max-width: 320px; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.vw-sb-note { color: var(--success); }
+
+/* Graphics right column: the Inspector card reaches the Elements dock, so the column is two stacked surfaces with no dead gap;
+   with nothing selected its hint sits in the middle of the card */
+.right > .insp > .pnl.open:only-child { display: flex; flex-direction: column; min-height: 100%; }
+.right > .insp > .pnl.open:only-child > .pnl-body:has(> .empty:only-child) { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
+/* five tabs in a 312 px column: each takes its own word's width, so none is cut */
+.vw-bin-panel .side-tabs button { flex: 1 1 auto; padding: 0 6px; }
+.asp-tag { display: inline-flex; align-items: center; gap: 4px; color: var(--success); background: var(--success-soft); font-weight: 600; }
+.asp-close { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border-radius: 6px; }
+.asp-close:hover { background: var(--fill-hover); }
+
+/* Elements list: an element this format does not have is quieter, but its words stay readable (whole-row opacity took
+   "Label pill" and "Not set" below 3 : 1) */
+.el-row.absent { opacity: 1; }
+.el-row.absent .name { color: var(--text-2); }
+.el-row.absent .icon, .el-row.absent .tgl, .el-row.absent .switch { opacity: .5; }
+.el-row .note { color: var(--text-3); }
+/* header key and ratio tags read at 4.5 : 1 */
+.topbar .pv-btn kbd, .topbar .dpc-tag { color: var(--text-2); }
+/* publish sheet: Website and Facebook are one pair, so the two cards share a height (the Facebook note no longer makes it the taller box) */
+.bp.wide { align-items: stretch; }
+/* Video > Story: the build button stays in reach while the outline scrolls */
+.vw-story-build { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 0 0 8px var(--side); }
+/* overlay presets: a quiet label with a colour dot (the old tinted 10 px tags fell to ~2.5 : 1 in light); Add is secondary */
+.vw-preset-header .vw-tag { display: inline-flex; align-items: center; gap: 6px; padding: 0; font: 600 10.5px/16px var(--ui); letter-spacing: .07em; color: var(--text-2); background: none; }
+.vw-preset-header .vw-tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--tag, var(--text-3)); }
+.vw-tag.lower-third { --tag: #10b981; } .vw-tag.breaking { --tag: #ef4444; } .vw-tag.attribution { --tag: #3b82f6; }
+.vw-tag.logo { --tag: #0ea5e9; } .vw-tag.caption { --tag: #f59e0b; } .vw-tag.voice { --tag: #8b5cf6; } .vw-tag.footage { --tag: #0e75dd; }
+.vw-preset-header .btn.xs { gap: 4px; }
