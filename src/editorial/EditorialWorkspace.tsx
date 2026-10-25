@@ -707,10 +707,9 @@ export function EditorialWorkspace() {
               if (!c.ok) jobError = `Posted to Facebook, but the link comment failed: ${c.error}`
             }
             if (fbStory) {
-              jobLog.step(jobId, 'Rendering the Story banner')
-              const sblob = await renderBanner(useStore.getState().doc, 'story', baseAssets, 1, 'jpeg', 0.9).catch(() => null)
+              // the same banner as the post: Facebook fits it into the Story on its own
               jobLog.step(jobId, 'Sharing to the Page Story')
-              const st = sblob ? await postPhotoStory(fbCfg, sblob) : { ok: false as const, error: 'The Story banner could not be rendered.' }
+              const st = photo ? await postPhotoStory(fbCfg, photo) : { ok: false as const, error: 'The banner could not be rendered.' }
               fbNote += st.ok ? ' Shared to the Page Story.' : ` The Story failed: ${st.error}`
               if (!st.ok && !jobError) jobError = `Posted to Facebook, but the Story failed: ${st.error}`
             }
