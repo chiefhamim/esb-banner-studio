@@ -3989,7 +3989,7 @@ html[data-theme="dark"] .fb-action-btn:hover {
   display: flex;
   gap: 2px;
   padding: 2px;
-  background: var(--bg-3);
+  background: var(--fill);
   border-radius: var(--r-2);
 }
 
@@ -4017,8 +4017,9 @@ html[data-theme="dark"] .fb-action-btn:hover {
 .ed-intake-tabs > button.on {
   color: var(--text);
   font-weight: 600;
-  background: var(--bg-1);
-  box-shadow: var(--shadow-1), 0 0 0 1px var(--line-2);
+  /* the selected chip is the sliding .pill-slide behind the button (studio.css); a background here would cover it */
+  background: transparent;
+  box-shadow: none;
 }
 
 .ed-intake-body {
