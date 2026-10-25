@@ -717,3 +717,18 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 
 /* AI chip: the fill covers the whole pill. A gradient is sized to the padding box by default, so it tiled into the 1 px border and showed the opposite colour on each edge; paint it from the border box and never repeat it. */
 .ed-ai-chip.on[data-provider], .ed-ai-chip.on[data-provider]:hover, .ed-ai-chip.on[data-provider]:active, .ed-ai-chip.on[data-provider]:focus-visible, .btn.ai-btn[data-provider], .btn.ai-btn[data-provider]:hover:not(:disabled) { background-origin: border-box; background-clip: border-box; background-repeat: no-repeat; background-size: 100% 100%; }  /* the hover rules re-declare `background:` (which resets origin), so every state restates it */
+
+/* footer: CMS state in colour (green connected + the editor's name, red disconnected); engine highlights when an AI key is live */
+.ed-statusbar .sb-cms { display: inline-flex; align-items: center; gap: 6px; }
+.ed-statusbar .sb-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.ed-statusbar .sb-cms.on { color: #1f9d57; }
+.ed-statusbar .sb-cms.off { color: #e5484d; }
+:root[data-theme=dark] .ed-statusbar .sb-cms.on { color: #3ddc84; }
+:root[data-theme=dark] .ed-statusbar .sb-cms.off { color: #ff6b6f; }
+.ed-statusbar .sb-cms b { font-weight: 600; }
+.ed-statusbar .sb-engine.ai b { color: var(--text); }
+/* header account: avatar + the editor's name */
+.ed-account .ed-account-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12.5px/1 var(--ui); color: var(--text-2); }
+.ed-account.in { gap: 8px; padding: 0 10px 0 4px; }
+@media (max-width: 1280px) { .ed-account .ed-account-name { display: none; } .ed-account.in { padding: 0 4px; } }
+.ed-statusbar::before { display: none; }  /* the CMS dot in the footer replaces the old category dot */

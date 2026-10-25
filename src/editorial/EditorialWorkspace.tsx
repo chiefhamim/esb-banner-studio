@@ -823,6 +823,7 @@ export function EditorialWorkspace() {
         <MenuBar menus={menus} />
         <div className="spacer" />
         <div className="fmtgroup ed-head-group">
+          <IconButton icon="refresh" tip={syncing ? 'Syncing…' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
           {hasStory && (
             <button type="button" className={'pv-btn' + (sourceOpen ? ' on' : '')} onClick={() => setSourceOpen(!sourceOpen)} aria-pressed={sourceOpen} data-tip={sourceOpen ? `Hide the source column — ${sourceHost}` : `Show the original article — ${sourceHost}`}>
               <Icon name="newspaper" size={15} />
@@ -844,18 +845,13 @@ export function EditorialWorkspace() {
         </div>
         <div className="spacer" />
         <TranslateProgress status={progressStatus} />
-        {/* the desk's own tools: stories, the translation engine and the editor's account — each says its state */}
-        <div className="pillbar ed-tools">
-          <IconButton icon="plus" tip="New story — the current one stays under Stories" onClick={handleNewStory} />
-          <IconButton icon="refresh" tip={syncing ? 'Syncing…' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
-        </div>
         <button type="button" className={'ed-ai-chip' + (mainAi ? ' on' : '')} data-provider={ai.provider} onClick={() => setShowApiKeyModal(true)} aria-label="AI keys and roles" data-tip={mainAi ? `Main: ${aiName} · ${aiModelLabel}${seoAi ? ` — SEO: ${providerMeta(seoAi.provider).name}` : ''}${socialAi ? ` — Social: ${providerMeta(socialAi.provider).name}` : ''}. Click to change` : 'AI is off — add a Gemini, Claude, OpenAI or OpenRouter key'}>
           <Icon name={mainAi ? 'sparkle' : 'link'} size={14} />
           <span className="ed-ai-label">{mainAi ? aiName : 'Connect AI'}</span>
         </button>
         <button type="button" className={'ed-account' + (staffSession ? ' in' : '')} onClick={() => setShowLoginModal(true)} aria-label={staffSession ? 'Staff sign-in' : 'Staff sign-in'} data-tip={staffSession ? `${staffSession.name} · ${staffSession.email} — account and connection check` : 'Sign in with your esbpowerline.com newsroom account'}>
           {staffSession
-            ? <span className="ed-avatar">{(staffSession.name || staffSession.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span>
+            ? <><span className="ed-avatar">{(staffSession.name || staffSession.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span><span className="ed-account-name">{staffSession.name || staffSession.email}</span></>
             : <><Icon name="user" size={14} /><span className="ed-account-label">Sign in</span></>}
         </button>
         <button type="button" className="btn primary" onClick={openPublish} disabled={!draft.headline.trim()} data-tip="Review the checklist and publish to esbpowerline.com">
@@ -1257,17 +1253,18 @@ export function EditorialWorkspace() {
           3. BOTTOM STATUS BAR — Minimal & quiet (Requirement 7)
           ========================================================================= */}
       <footer className="statusbar ed-statusbar">
-        <span>
-          CMS: <b>{siteStatus.connected ? 'esbpowerline.com Connected' : 'Offline Mode'}</b>
+        <span className={'sb-cms ' + (siteStatus.connected ? 'on' : 'off')}>
+          <i className="sb-dot" aria-hidden />
+          CMS: <b>esbpowerline.com</b> · <b>{siteStatus.connected ? (staffSession?.name ? `Connected · ${staffSession.name}` : 'Connected') : 'Disconnected'}</b>
         </span>
         <div className="sep" />
-        <span>
+        <span className={'sb-engine' + (mainAi ? ' ai' : '')}>
           Engine:{' '}
           <b>
-            {isAiProvider(translationProvider)
-              ? `${providerMeta(translationProvider).name} · ${modelUsed || 'auto'}`
-              : translationProvider === 'offline'
-                ? 'Offline — manual translation needed'
+            {translationProvider === 'offline'
+              ? 'Offline — manual translation needed'
+              : mainAi
+                ? `${aiName} · ${isAiProvider(translationProvider) && modelUsed ? modelUsed : aiModelLabel}`
                 : 'Neural GTX'}
           </b>
         </span>
@@ -1275,8 +1272,6 @@ export function EditorialWorkspace() {
         <span>
           {wordCount} words · ~{readTimeMin} min read
         </span>
-        <div className="sep" />
-        <span>Editor: {staffSession?.name || 'Mehedi Hasan Hamim'}</span>
       </footer>
 
       {/* =========================================================================
