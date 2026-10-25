@@ -15,7 +15,8 @@ import { bodyForPublish, richOf } from './richBody'
 import { RichBodyEditor } from './RichBodyEditor'
 import { RichReview } from './RichReview'
 import { CatMark } from './CatMark'
-import { BannerThumb } from './BannerThumb'
+import { EditorialSide } from './EditorialSide'
+import type { ReadyFix } from './readiness'
 import { useWidth } from '../ui/useWidth'
 import { Splitter } from '../ui/layout'
 import { BN_FONTS, useBnFont } from './bnFont'
@@ -867,6 +868,18 @@ export function EditorialWorkspace() {
     [liveArticles, catData.name, draft.slug],
   )
   const suggestTags = () => suggestKeyphrases(draft.headline, draft.deck, draft.body, 6).map((k) => k.phrase)
+  // an open item in the sidebar takes the editor to where it is fixed
+  const fixReady = (fix: ReadyFix) => {
+    const focus = (id: string) => requestAnimationFrame(() => { const el = document.getElementById(id); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus() })
+    if (fix === 'headline') focus('draft-headline')
+    else if (fix === 'deck') focus('draft-deck')
+    else if (fix === 'body' || fix === 'bengali') { setStoryTab('body'); setBodyMode('edit') }
+    else if (fix === 'facts') { setStoryTab('body'); setBodyMode('review') }
+    else if (fix === 'seo') setStoryTab('seo')
+    else if (fix === 'photo') window.dispatchEvent(new CustomEvent('esb:open-panel', { detail: 'ed-image' }))
+    else if (fix === 'tags') window.dispatchEvent(new CustomEvent('esb:open-panel', { detail: 'ed-organize' }))
+    else setShowLoginModal(true)
+  }
   const openPublish = () => { setPublishResult(null); setPublishJobId(null); setFbCfg(getFacebook()); setFbOn(!linked && !!getFacebook()); setShowPublishModal(true) }
 
   // Intake form: the empty-desk launcher and the source column's "New link" tab are the same form.
@@ -1375,35 +1388,35 @@ export function EditorialWorkspace() {
           {/* RIGHT — the CMS sidebar: publish, featured image, organise; then the outputs Graphics shares */}
           <aside className="right ed-side" aria-label="Publishing and image">
             <Splitter axis="vert" side="l" label="Resize the sidebar" value={cols.side} min={280} max={560} reset={COLS_DEFAULT.side} onLive={liveCol('side')} onCommit={commitCol('side')} root={() => wsRef.current} />
-            <div className="scroll ed-side-scroll">
-            <BannerThumb base={baseAssets} cat={catData} />
-            <Panel id="ed-side-publish" icon="upload" title="Publish" sub={linked ? 'Live' : 'Draft'} persist={false}>
-              <dl className="ed-kv">
-                <dt>Website</dt>
-                <dd><span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />{linked ? 'Live — Publish will update it' : siteStatus.connected ? 'Ready to publish' : 'Offline'}</dd>
-                <dt>Facebook</dt>
-                <dd><span className={`site-dot ${fbCfg ? 'online' : 'offline'}`} />{fbCfg ? fbCfg.pageName || 'Connected' : <button type="button" className="btn-link" onClick={() => setShowFbDialog(true)}>Connect a Page</button>}</dd>
-                <dt>Signed in</dt>
-                <dd><span className={`site-dot ${staffSession ? 'online' : 'offline'}`} />{staffSession ? staffSession.name : <button type="button" className="btn-link" onClick={() => setShowLoginModal(true)}>Sign in</button>}</dd>
-              </dl>
-              {lastPublish && lastPublish.story === (activeStory?.id ?? null) && (
+            <EditorialSide
+              base={baseAssets}
+              cat={catData}
+              words={wordCount}
+              readTime={readTimeMin}
+              hasImage={!!bannerLeadImage}
+              tagCount={tagList.length}
+              linked={linked}
+              fbCfg={fbCfg}
+              fbOn={fbOn}
+              onFbOn={setFbOn}
+              onConnectFb={() => setShowFbDialog(true)}
+              onPublish={openPublish}
+              onFix={fixReady}
+              onToast={showToast}
+              last={lastPublish && lastPublish.story === (activeStory?.id ?? null) ? (
                 <p className={'ed-last ' + (lastPublish.ok ? 'ok' : 'bad')}><Icon name={lastPublish.ok ? 'check' : 'info'} size={12} /><span>{lastPublish.text} · {new Date(lastPublish.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></p>
-              )}
-              <button type="button" className="btn primary ed-publish-btn" onClick={openPublish} disabled={!draft.headline.trim()}>
-                <Icon name="upload" size={15} />
-                <span>{linked ? 'Review & update' : 'Review & publish'}</span>
-              </button>
-            </Panel>
-
-            <Panel id="ed-image" icon="image" title="Banner" defaultOpen={false} persist={false}>
-              <BannerCard base={baseAssets} heroMode={heroMode} onHeroMode={setHeroMode} onToast={showToast} />
-              <details className="ed-more">
-                <summary>Photo, credit &amp; alt text</summary>
-                <FeaturedImage onToast={showToast} />
-              </details>
-            </Panel>
-
-            <Panel id="ed-organize" icon="folder" title="Details" sub={catData.name} defaultOpen={false} persist={false}>
+              ) : null}
+              banner={
+                <>
+                  <BannerCard heroMode={heroMode} onHeroMode={setHeroMode} onToast={showToast} />
+                  <details className="ed-more">
+                    <summary>Photo, credit &amp; alt text</summary>
+                    <FeaturedImage onToast={showToast} />
+                  </details>
+                </>
+              }
+              details={
+                <>
               <Field label="Category">
                 <div className="row">
                   <Select
@@ -1443,8 +1456,9 @@ export function EditorialWorkspace() {
                 <input type="text" className="input" value={draft.byline} placeholder={staffSession?.name || 'Reporter name'} onChange={(e) => setDraftField('byline', e.target.value)} />
               </Field>
               <Check checked={!!draft.postAsNewsDesk} onChange={(v) => setDraftField('postAsNewsDesk', v)} label="Post as ESB News Desk" hint="Credited to the desk instead of the signed-in editor." />
-            </Panel>
-            </div>
+                </>
+              }
+            />
           </aside>
         </div>
       )}
