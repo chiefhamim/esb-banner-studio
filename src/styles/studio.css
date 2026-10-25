@@ -714,3 +714,6 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .ed-tp-history:hover, .ed-tp-history.on { color: var(--text); background: var(--fill-hover); }
 .ed-tp-count { position: absolute; top: -3px; right: -3px; min-width: 15px; height: 15px; padding: 0 4px; display: grid; place-items: center; font-size: 9.5px; font-weight: 600; color: var(--on-ink, #fff); background: var(--ink); border-radius: 999px; box-shadow: 0 0 0 2px var(--bg-1); }
 .ed-tp-empty { margin: 0; padding: 14px 12px; font-size: 12.5px; line-height: 18px; color: var(--text-3); }
+
+/* AI chip: the fill covers the whole pill. A gradient is sized to the padding box by default, so it tiled into the 1 px border and showed the opposite colour on each edge; paint it from the border box and never repeat it. */
+.ed-ai-chip.on[data-provider] { background-origin: border-box; background-clip: border-box; background-repeat: no-repeat; background-size: 100% 100%; }
