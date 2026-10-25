@@ -3,6 +3,7 @@
 // highlighted figure, the news label, the headline backdrop), the live link to the story, and Edit / Save / Copy.
 
 import { useState } from 'react'
+import type { CSSProperties } from 'react'
 import { useStore } from '../store'
 import { useEditorialStore } from './editorialStore'
 import { useBannerImage } from './useBannerImage'
@@ -18,11 +19,10 @@ import type { Assets } from '../core/render'
 import type { FormatId } from '../core/types'
 import type { HeroMode } from './heroMode'
 
-type Channel = 'web' | 'fb45' | 'sq'
+type Channel = 'web' | 'fb45'
 const CHANNELS: { value: Channel; label: string; sub: string }[] = [
   { value: 'web', label: 'Website', sub: '16:9' },
   { value: 'fb45', label: 'Facebook', sub: '4:5' },
-  { value: 'sq', label: 'Square', sub: '1:1' },
 ]
 const labelOptions = [
   { value: 'none', label: 'No label' },
@@ -38,7 +38,7 @@ export function BannerCard({ base, heroMode, onHeroMode, onToast }: { base: Asse
   const source = useEditorialStore((s) => s.source)
   const headline = useEditorialStore((s) => s.draft.headline)
   const [channel, setChannel] = useState<Channel>(() => {
-    try { const v = localStorage.getItem('esb-banner-studio/editorial/channel'); return v === 'fb45' || v === 'sq' ? v : 'web' } catch { return 'web' }
+    try { const v = localStorage.getItem('esb-banner-studio/editorial/channel'); return v === 'fb45' ? v : 'web' } catch { return 'web' }
   })
   const pick = (c: Channel) => { setChannel(c); try { localStorage.setItem('esb-banner-studio/editorial/channel', c) } catch { /* ignore */ } }
   const fmtId: FormatId = channel
@@ -77,7 +77,7 @@ export function BannerCard({ base, heroMode, onHeroMode, onToast }: { base: Asse
     <div className="bc">
       <Seg<Channel> className="block bc-seg" value={channel} onChange={pick} options={CHANNELS.map((c) => ({ value: c.value, label: c.label }))} />
 
-      <div className="bc-frame" style={{ aspectRatio: `${FORMATS[fmtId].w} / ${FORMATS[fmtId].h}` }}>
+      <div className="bc-frame" style={{ ['--r' as string]: FORMATS[fmtId].w / FORMATS[fmtId].h } as CSSProperties}>
         {url ? <img src={url} alt={`The ${fmt.name} banner`} /> : <span className="hint">Drawing the banner…</span>}
       </div>
       <div className="bc-meta">

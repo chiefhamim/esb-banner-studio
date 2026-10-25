@@ -445,3 +445,7 @@
 .ed-more[open] > summary::before { transform: rotate(45deg); }
 .ed-more[open] > summary { margin-bottom: 10px; }
 .ed-card .ed-kv { grid-template-columns: 68px minmax(0, 1fr); }
+
+/* the banner is shown whole, at its own proportions, centred - it fits the card and the window height, never cropped or stretched */
+.bc-frame { width: min(100%, calc(min(320px, 38vh) * var(--r, 1.78))); aspect-ratio: var(--r, 1.78); max-height: none; margin: 0 auto; background: var(--fill); }
+.bc-frame img { object-fit: contain; }
