@@ -895,3 +895,27 @@ label.switch:active i { filter: brightness(.94); }
 .ed-tp-steps li .ed-tp-ms { color: var(--text-3); }
 .ed-tp-job.live .ed-tp-ms { color: var(--sel-text); }
 .ed-tp-head-t span { font-variant-numeric: tabular-nums; }
+
+/* ---- dark mode: the selected control must be unmistakable. A grey-on-grey raised chip (about 1.6 : 1 against its
+   track) is not; the selected segment/tab is a light chip with dark ink (well over 3 : 1 against the track, the WCAG
+   floor for a state indicator) and a heavier weight, so it reads at a glance and without colour. Unselected stay dim,
+   hover only lifts them to a soft fill. ---- */
+:root[data-theme=dark] { --chip-on-bg: #e6e6ec; --chip-on-fg: #131316; }
+:root[data-theme=dark] .pill-slide { background: var(--chip-on-bg); box-shadow: 0 1px 2px rgba(0, 0, 0, .55), 0 0 0 .5px rgba(255, 255, 255, .5); }
+:root[data-theme=dark] .seg-ctl button.on, :root[data-theme=dark] .side-tabs button.on, :root[data-theme=dark] .ws-switch .ws-btn.on { color: var(--chip-on-fg); font-weight: 600; }
+:root[data-theme=dark] .seg-ctl button.on svg, :root[data-theme=dark] .side-tabs button.on svg, :root[data-theme=dark] .ws-switch .ws-btn.on svg { color: var(--chip-on-fg); }
+:root[data-theme=dark] .seg-ctl button:not(.on), :root[data-theme=dark] .side-tabs button:not(.on), :root[data-theme=dark] .ws-switch .ws-btn:not(.on) { color: var(--text-2); }
+:root[data-theme=dark] .dock-tabs > button.on { color: var(--chip-on-fg); background: var(--chip-on-bg); font-weight: 600; }
+:root[data-theme=dark] .ed-tp-kind-btn.on { color: var(--chip-on-fg); background: var(--chip-on-bg); box-shadow: none; font-weight: 600; }
+:root[data-theme=dark] .ed-tp-kind-btn.on .mono { color: var(--chip-on-fg); opacity: .7; }
+:root[data-theme=dark] .ed-link-pill.on { color: var(--sel-ink); background: var(--sel); box-shadow: none; }
+:root[data-theme=dark] .ed-link-pill.on:hover { background: color-mix(in oklab, var(--sel) 88%, #fff); }
+:root[data-theme=dark] .pv-btn.on, :root[data-theme=dark] .ed-head .pv-btn.on { color: var(--chip-on-fg); background: var(--chip-on-bg); }
+:root[data-theme=dark] .pv-btn.on svg, :root[data-theme=dark] .ed-head .ed-head-group .pv-btn.on > svg { color: var(--chip-on-fg); }
+:root[data-theme=dark] .pv-btn.on .dpc-tag { color: var(--chip-on-fg); background: rgba(0, 0, 0, .12); }
+:root[data-theme=dark] .ed-tp-history.on { color: var(--chip-on-fg); background: var(--chip-on-bg); }
+:root[data-theme=dark] .ed-tp-history.on .ed-tp-count { color: var(--chip-on-fg); }
+:root[data-theme=dark] .sb-engine-btn.on { background: var(--fill-active); }
+:root[data-theme=dark] .select.open { background: var(--fill-active); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22); }
+:root[data-theme=dark] .menu-item.current .mi-check { color: var(--sel-text); }
+:root[data-theme=dark] .btn:active:not(:disabled), :root[data-theme=dark] .ibtn:active:not(:disabled) { background: var(--fill-active); }
