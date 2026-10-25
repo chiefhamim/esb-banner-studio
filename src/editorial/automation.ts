@@ -1,6 +1,7 @@
 // Full newsroom automation pipeline: from pasted news link to ready-to-publish banner & editorial draft.
 
 import { parseArticleDocument } from './extract'
+import { adapterFor } from './siteAdapters'
 import type { ExtractedArticle, ExtractedImage } from './extract'
 import { extractFactTable, verifyDraftAgainstSource } from './facts'
 import type { DiscrepancyFlag, FactItem } from './facts'
@@ -339,7 +340,23 @@ export async function automateNewsFromUrl(
 
   // 2. Extract Document & Images
   onProgress?.('Extracting article content & media…')
-  const article: ExtractedArticle = parseArticleDocument(html, cleanUrl)
+  let article: ExtractedArticle = parseArticleDocument(html, cleanUrl)
+
+  // A page that is built in the browser arrives with no story in its HTML. When the publisher's own JSON endpoint is
+  // known (siteAdapters.ts), read the story from there — the request the page itself would make.
+  if (article.paragraphs.length < 2 && typeof window !== 'undefined' && window.esb?.fetchUrl) {
+    const hit = adapterFor(cleanUrl)
+    if (hit) {
+      onProgress?.('The page loads its story in the browser — reading it from the site’s own feed…')
+      const api = await window.esb.fetchUrl(hit.apiUrl, { allowedTypes: ['application/json'], timeoutMs: 20000 })
+      if (api.ok && api.html) {
+        try {
+          const built = hit.adapter.build(JSON.parse(api.html), cleanUrl, html.length)
+          if (built) article = built
+        } catch { /* not JSON: keep what the page itself gave */ }
+      }
+    }
+  }
 
   const originalTitle = article.title || 'Untitled Story'
   const originalDeck = article.deck || ''

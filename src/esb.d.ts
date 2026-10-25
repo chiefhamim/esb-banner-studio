@@ -30,7 +30,7 @@ export interface EsbBridge {
   saveProject: (name: string, text: string, existingPath: string | null) => Promise<string | null>
   openProject: () => Promise<EsbOpenProjectResult | null>
   readProject: (path: string) => Promise<string | null>
-  fetchUrl: (url: string, options?: { timeoutMs?: number }) => Promise<EsbFetchUrlResult>
+  fetchUrl: (url: string, options?: { timeoutMs?: number; allowedTypes?: string[] }) => Promise<EsbFetchUrlResult>
   fetchImageData: (url: string, options?: { timeoutMs?: number }) => Promise<EsbFetchImageDataResult>
   prepareDragFile: (name: string, bytes: Uint8Array) => Promise<string | null>
   startDrag: (filePathOrName: string, bytes?: Uint8Array) => void

@@ -269,8 +269,14 @@ ipcMain.handle('esb:reveal', (_e, p) => {
   }
 })
 
+// The renderer may ask for a longer wait and for a JSON feed, nothing else: every other net-guard option (loopback,
+// custom DNS, size caps) stays out of its reach.
 ipcMain.handle('esb:fetch-url', async (_e, rawUrl, options) => {
-  return await fetchArticleHtml(String(rawUrl), options || {})
+  const o = options && typeof options === 'object' ? options : {}
+  const safe = {}
+  if (Number.isFinite(o.timeoutMs)) safe.timeoutMs = Math.min(30000, Math.max(1000, o.timeoutMs))
+  if (Array.isArray(o.allowedTypes) && o.allowedTypes.length && o.allowedTypes.every((t) => t === 'application/json')) safe.allowedTypes = ['application/json']
+  return await fetchArticleHtml(String(rawUrl), safe)
 })
 
 ipcMain.handle('esb:fetch-image-data', async (_e, rawUrl, options) => {

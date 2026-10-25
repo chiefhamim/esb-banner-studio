@@ -11,6 +11,7 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 const MAX_HTML_BYTES = 5 * 1024 * 1024 // 5 MB
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024 // 25 MB
 const DEFAULT_TIMEOUT_MS = 8000 // 8 seconds default
+const ARTICLE_TIMEOUT_MS = 20000 // a news page on a slow host can take longer than a plain request
 const DEFAULT_IMAGE_TIMEOUT_MS = 4000 // 4 seconds for images
 const MAX_REDIRECTS = 5
 
@@ -255,6 +256,12 @@ async function safeFetch(targetUrl, options = {}) {
           'Host': parsed.host,
           'User-Agent': USER_AGENT,
           'Accept': options.acceptHeader || '*/*',
+          // what a real browser sends with a page request; sites that screen out bare clients look for these
+          'Accept-Language': 'bn-BD,bn;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
           'Referer': `${parsed.protocol}//${parsed.host}/`,
           'Connection': 'close',
         },
@@ -406,7 +413,7 @@ async function fetchArticleHtml(rawUrl, options = {}) {
     allowedTypes: options.allowedTypes || ALLOWED_HTML_TYPES,
     acceptHeader: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
     dnsResolver: options.dnsResolver,
-    timeoutMs: options.timeoutMs,
+    timeoutMs: options.timeoutMs || ARTICLE_TIMEOUT_MS,
     allowLoopbackForTesting: options.allowLoopbackForTesting,
   })
 
