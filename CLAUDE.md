@@ -338,6 +338,9 @@ Video must not destabilise working Editorial and Graphics features.
   - Treat all extracted article HTML and external URLs as untrusted data.
   - Never put API secrets or Supabase service-role keys in renderer code.
   - No scripts executed from scraped pages.
+  - **IPC guards (`electron/ipc-guard.cjs`, tested in `tools/unit/ipc-guard.test.ts`):** every bridge call is checked in the main process as if the renderer were hostile — image saves need a real PNG/JPEG/WebP header and get an image extension whatever name is sent; drag-out files are images or MP4/WebM only; project paths the renderer names must end in `.esb` and lie inside the allowed folders (Pictures/ESB Banners, userData, the drag staging folder — never the whole temp directory); image fetches may shorten the wait or the size cap and nothing else (no loopback, no custom DNS); the editor window may navigate only to its own index.html, `<webview>` is blocked everywhere, the microphone permission is granted to the editor window alone, and the CSP sets `object-src 'none'; base-uri 'self'`.
+  - **Stored HTML is not trusted:** `richOf()` sanitises `draft.bodyHtml` every time it is read for the page or for publishing, not only when it was written, because localStorage and project files can be edited outside the app.
+  - **Known remaining risks (by design, documented for the editor):** AI keys, the Facebook Page token and the site session live in plain text in the app's localStorage profile (`AppData\Roaming\ESB Banner Studio`) — anyone with that Windows account can read them; the free translation path sends article text to translate.googleapis.com; `Launch ESB Studio.bat` and `tools/auto-sync.ps1` pull and run whatever is on `origin/main`, so write access to the GitHub repo is code execution on this PC — keep the repo's collaborators and tokens tight.
 
 ---
 

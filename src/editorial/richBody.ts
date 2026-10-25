@@ -118,7 +118,9 @@ export function plainToHtml(body: string): string {
 /** The rich copy of the story, if the draft still has one that matches its plain text (any other change to the text makes it stale and it is ignored). */
 export function richOf(d: Pick<EditorialDraft, 'body' | 'bodyHtml'>): string | null {
   if (!d.bodyHtml) return null
-  return htmlToPlain(d.bodyHtml) === d.body.trim() ? d.bodyHtml : null
+  // sanitised again here, not only when it was written: the stored copy (localStorage, a project file) is not trusted on the way to the page
+  const clean = sanitizeBodyHtml(d.bodyHtml)
+  return htmlToPlain(clean) === d.body.trim() ? clean : null
 }
 
 /** What gets published: the rich HTML when it is current, otherwise the plain paragraphs. */

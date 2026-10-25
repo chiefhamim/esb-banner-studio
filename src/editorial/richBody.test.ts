@@ -59,3 +59,11 @@ describe('pictures', () => {
     expect(htmlToPlain('<p>One.</p>' + fig + '<p>Two.</p>')).toBe('One.\n\nTwo.')
   })
 })
+
+describe('richOf sanitises what was stored', () => {
+  it('strips a script that was planted in the stored HTML before it reaches the page', () => {
+    const d = { body: 'Hello', bodyHtml: '<p>Hello</p><script>alert(1)</script><img src="x" onerror="alert(1)">' }
+    const out = richOf(d)
+    expect(out).toBe('<p>Hello</p>')
+  })
+})

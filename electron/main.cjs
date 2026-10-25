@@ -5,6 +5,8 @@ const fs = require('node:fs')
 const { FsScope } = require('./fs-scope.cjs')
 const { fetchArticleHtml, fetchImageData } = require('./net-guard.cjs')
 const siteUpload = require('./site-upload.cjs')
+const guard = require('./ipc-guard.cjs')
+const { pathToFileURL } = require('node:url')
 
 // Last line of defence: a stray network or stream error in the main process is logged (userData/main-errors.log) instead
 // of stopping the editor with Electron's "A JavaScript error occurred in the main process" dialog. Each cause found is
@@ -33,6 +35,9 @@ if (!gotTheLock) {
 }
 
 const DEV_URL = process.env.ESB_DEV_URL
+const INDEX_FILE = path.join(__dirname, '..', 'dist', 'index.html')
+// the only pages the editor window may show: its own index.html (or the dev server); a taken-over page cannot load another file: URL
+const APP_URLS = [DEV_URL, pathToFileURL(INDEX_FILE).href]
 const defaultDir = () => path.join(app.getPath('pictures'), 'ESB Banners')
 let win
 
@@ -76,18 +81,19 @@ function createWindow() {
     } catch {}
   })
   if (DEV_URL) win.loadURL(DEV_URL)
-  else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+  else win.loadFile(INDEX_FILE)
   // never navigate the editor away from itself; open links in the default browser
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); return { action: 'deny' } })  // only web links ever leave the app (never file:, ms-settings:, custom schemes)
-  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file:') && url !== DEV_URL) e.preventDefault() })
+  win.webContents.on('will-navigate', (e, url) => { if (!guard.isAppUrl(url, APP_URLS)) e.preventDefault() })
 
   // S3: Install permission handlers: only microphone (media) for app origin, deny everything else
   const ses = win.webContents.session
-  ses.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(permission === 'media')
+  // the microphone, for the editor window only (the CMS window shares no session, and gets nothing)
+  ses.setPermissionRequestHandler((wc, permission, callback) => {
+    callback(permission === 'media' && wc === win.webContents)
   })
-  ses.setPermissionCheckHandler((_webContents, permission) => {
-    return permission === 'media'
+  ses.setPermissionCheckHandler((wc, permission) => {
+    return permission === 'media' && wc === win.webContents
   })
 }
 
@@ -158,9 +164,9 @@ ipcMain.handle('esb:site-sign-out', async () => {
 
 // Save one rendered banner. With `dir` (batch export) it is written straight there; otherwise ask where.
 ipcMain.handle('esb:save-image', async (_e, name, bytes, dir) => {
-  if (!bytes) return null
+  if (!guard.isImageBytes(bytes)) throw new Error('Not a PNG, JPEG or WebP image')
   if (bytes.length > 50 * 1024 * 1024) throw new Error('Payload too large')
-  const safe = path.basename(String(name))
+  const safe = guard.imageFileName(name)
   let target
   if (dir) {
     const dirStr = String(dir)
@@ -177,7 +183,7 @@ ipcMain.handle('esb:save-image', async (_e, name, bytes, dir) => {
     fsScope.allowFile(target)
   }
   fsScope.assertAllowed(target, 'save image target')
-  fs.writeFileSync(target, Buffer.from(bytes))
+  fs.writeFileSync(target, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length))
   return target
 })
 
@@ -219,6 +225,7 @@ ipcMain.handle('esb:pick-folder', async () => {
 // Project files (.esb)
 ipcMain.handle('esb:save-project', async (_e, name, text, existingPath) => {
   if (typeof text !== 'string' || text.length > 25 * 1024 * 1024) throw new Error('Project text too large')
+  if (existingPath != null && !guard.isProjectPath(existingPath)) throw new Error('Not a project file')
   let target = existingPath ? String(existingPath) : null
   if (!target) {
     fs.mkdirSync(defaultDir(), { recursive: true })
@@ -253,6 +260,7 @@ ipcMain.handle('esb:open-project', async () => {
 
 ipcMain.handle('esb:read-project', (_e, p) => {
   try {
+    if (!guard.isProjectPath(p)) return null
     const target = String(p)
     if (!fsScope.isAllowed(target)) return null
     return fs.readFileSync(target, 'utf8')
@@ -280,8 +288,9 @@ ipcMain.handle('esb:fetch-url', async (_e, rawUrl, options) => {
   return await fetchArticleHtml(String(rawUrl), safe)
 })
 
+// as above: a shorter wait and a smaller cap are the renderer's to choose; loopback, DNS and content types are not
 ipcMain.handle('esb:fetch-image-data', async (_e, rawUrl, options) => {
-  return await fetchImageData(String(rawUrl), options || {})
+  return await fetchImageData(String(rawUrl), guard.safeImageFetchOptions(options))
 })
 
 ipcMain.handle('esb:prepare-drag-file', async (_e, name, bytes) => {
@@ -289,10 +298,11 @@ ipcMain.handle('esb:prepare-drag-file', async (_e, name, bytes) => {
     if (!bytes || bytes.length > 50 * 1024 * 1024) throw new Error('Payload too large')
     const tmpDir = path.join(app.getPath('temp'), 'esb-studio-drag')
     fs.mkdirSync(tmpDir, { recursive: true })
-    const safe = path.basename(String(name || 'ESB-Banner.png'))
+    if (!(bytes instanceof Uint8Array)) throw new Error('Bad payload')
+    const safe = guard.dragFileName(name)
     const filePath = path.join(tmpDir, safe)
     fsScope.allowFile(filePath)
-    fs.writeFileSync(filePath, Buffer.from(bytes))
+    fs.writeFileSync(filePath, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length))
     return filePath
   } catch (err) {
     console.error('prepare-drag-file error:', err)
@@ -309,10 +319,11 @@ ipcMain.on('esb:start-drag', (event, arg) => {
       if (arg.bytes.length > 50 * 1024 * 1024) throw new Error('Payload too large')
       const tmpDir = path.join(app.getPath('temp'), 'esb-studio-drag')
       fs.mkdirSync(tmpDir, { recursive: true })
-      const safe = path.basename(String(arg.name || 'ESB-Banner.png'))
+      if (!(arg.bytes instanceof Uint8Array)) throw new Error('Bad payload')
+      const safe = guard.dragFileName(arg.name)
       filePath = path.join(tmpDir, safe)
       fsScope.allowFile(filePath)
-      fs.writeFileSync(filePath, Buffer.from(arg.bytes))
+      fs.writeFileSync(filePath, Buffer.from(arg.bytes.buffer, arg.bytes.byteOffset, arg.bytes.length))
     }
     if (!filePath || !fsScope.isAllowed(filePath) || !fs.existsSync(filePath)) return
     const iconPath = path.join(__dirname, '..', 'build', 'icon.png')
@@ -325,12 +336,17 @@ ipcMain.on('esb:start-drag', (event, arg) => {
   }
 })
 
+// no page in this app may embed a <webview>, and any window not covered above opens nothing
+app.on('web-contents-created', (_e, contents) => {
+  contents.on('will-attach-webview', (e) => e.preventDefault())
+  contents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); return { action: 'deny' } })
+})
+
 app.whenReady().then(() => {
   // Allow-list app default folders
   fsScope.allow(defaultDir())
   fsScope.allow(app.getPath('userData'))
-  fsScope.allow(path.join(app.getPath('temp'), 'esb-studio-drag'))
-  fsScope.allow(app.getPath('temp'))
+  fsScope.allow(path.join(app.getPath('temp'), 'esb-studio-drag')) // the drag staging folder only, never the whole temp directory
 
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
