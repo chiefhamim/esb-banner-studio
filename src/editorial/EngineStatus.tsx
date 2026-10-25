@@ -8,6 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import { Icon } from '../ui/Icon'
+import { Select } from '../ui/controls'
 import { AI_PROVIDERS, aiFor, modelLabel, providerMeta, roleProvider, testAiKey } from './aiProviders'
 import type { AiProviderId, AiRole, AiSettings } from './aiProviders'
 import { useEditorialStore } from './editorialStore'
@@ -65,7 +66,7 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    const onDown = (e: PointerEvent) => { const t = e.target as Node; if (!pop.current?.contains(t) && !btn.current?.contains(t)) setOpen(false) }
+    const onDown = (e: PointerEvent) => { const t = e.target as Node; if (!pop.current?.contains(t) && !btn.current?.contains(t) && !(t as Element).closest?.('.popover')) setOpen(false) }
     window.addEventListener('keydown', onKey); window.addEventListener('pointerdown', onDown)
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('pointerdown', onDown) }
   }, [open])
@@ -106,11 +107,11 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
               <div key={role} className={'eng-row ' + (a ? c?.state ?? 'busy' : 'free')}>
                 <span className="eng-role">{label}</span>
                 <div className="eng-who">
-                  <select className="eng-select" value={role === 'main' ? ai.provider : ai[role]} aria-label={`${label} company`} data-provider={chosen}
-                    onChange={(e) => setRole(role, e.target.value)}>
-                    {role !== 'main' && <option value="">Same as main</option>}
-                    {AI_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  <Select<string> className="eng-select" value={role === 'main' ? ai.provider : ai[role]} title={`${label} company`} onChange={(v) => setRole(role, v)}
+                    options={[
+                      ...(role !== 'main' ? [{ value: '', label: 'Same as main', hint: providerMeta(ai.provider).name }] : []),
+                      ...AI_PROVIDERS.map((p) => ({ value: p.id as string, label: p.name, swatch: p.color, hint: ai.keys[p.id]?.trim() ? '' : 'no key' })),
+                    ]} />
                   <span className="eng-model">{a ? (c?.state === 'ok' ? modelLabel(c.model) : ai.models[chosen] === 'auto' ? 'Auto model' : modelLabel(ai.models[chosen])) : `no ${providerMeta(chosen).name} key — free translation is used`}</span>
                 </div>
                 <div className="eng-state">
