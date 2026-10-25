@@ -993,3 +993,14 @@ label.switch:active i { filter: brightness(.94); }
 .bp.wide { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .bp.wide .bp-frame.fb { width: min(100%, calc(236px * 0.8)); }
 @media (max-width: 800px) { .bp.wide, .pub-stats-row { grid-template-columns: minmax(0, 1fr); } }
+
+/* SEO / social checklists: score, fix row, source tag */
+.seo-score { font-variant-numeric: tabular-nums; }
+.seo-score.all { color: var(--success); font-weight: 600; }
+.seo-fixrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 2px 0 8px; }
+.seo-fixrow .hint { flex: 1; min-width: 180px; font-size: 11.5px; }
+.seo-fixbtns { display: flex; gap: 6px; }
+.seo-fixnote { margin: 0 0 8px; padding: 8px 10px; font: 500 12px/17px var(--ui); color: var(--text-2); background: var(--fill); border-radius: var(--r-2); overflow-wrap: anywhere; }
+.seo-src { margin-left: 8px; padding: 1px 6px; font: 600 9.5px/14px var(--ui); letter-spacing: .05em; text-transform: uppercase; font-style: normal; border-radius: var(--r-pill); color: var(--text-3); background: var(--fill); vertical-align: 1px; }
+.seo-src.google { color: var(--info, #6ea0ff); background: color-mix(in srgb, #4f8cff 14%, transparent); }
+.soc-checks { margin-top: 14px; }

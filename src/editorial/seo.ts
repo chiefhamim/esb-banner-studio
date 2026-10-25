@@ -156,7 +156,40 @@ export function suggestKeyphrases(headline: string, deck: string, body: string, 
 // ---------------------------------------------------------------- checks
 
 export type SeoStatus = 'good' | 'warn' | 'bad'
-export interface SeoCheck { id: string; group: 'Keyphrase' | 'Search snippet' | 'Content'; status: SeoStatus; label: string; detail: string }
+export interface SeoCheck {
+  id: string
+  group: 'Keyphrase' | 'Search snippet' | 'Content'
+  status: SeoStatus
+  label: string
+  detail: string
+  /** Why it matters, in a line, and where the rule comes from. */
+  why?: string
+  /** 'google': stated in Google Search Central's documentation. 'practice': current newsroom SEO practice. */
+  src?: 'google' | 'practice'
+  /** What can repair it: the SEO fields, the story's wording/structure (no new facts), a photo (manual), or reporting (manual). */
+  fix?: 'fields' | 'body' | 'photo' | 'reporting'
+}
+
+const CHECK_META: Record<string, { why: string; src: 'google' | 'practice'; fix: 'fields' | 'body' | 'photo' | 'reporting' }> = {
+  'kp-set': { why: 'Write for the words readers actually search for (Google SEO Starter Guide).', src: 'google', fix: 'fields' },
+  'kp-h1': { why: 'The page heading is a title-link source: it should say what the page is about (Google, title links).', src: 'google', fix: 'fields' },
+  'kp-title': { why: 'Google builds the result title from the <title>; the main phrase belongs in the part that shows (Google, title links).', src: 'google', fix: 'fields' },
+  'kp-desc': { why: 'Google bolds the words a reader searched for in the snippet (Google, snippets).', src: 'google', fix: 'fields' },
+  'kp-slug': { why: 'Readable words in the URL help readers and appear in results (Google, URL structure).', src: 'google', fix: 'fields' },
+  'kp-intro': { why: 'The opening paragraph should state the topic plainly (people-first, inverted-pyramid news writing).', src: 'practice', fix: 'body' },
+  'kp-density': { why: 'No ideal density exists; stuffing breaks Google’s spam policies, so use it naturally.', src: 'google', fix: 'body' },
+  'kp-unique': { why: 'Two stories chasing one query compete with each other.', src: 'practice', fix: 'fields' },
+  'title-len': { why: 'Titles should be concise and descriptive; Google cuts long ones (Google, title links).', src: 'google', fix: 'fields' },
+  'desc-len': { why: 'No set limit, but Google truncates to the device width; the site cuts at 160 (Google, snippets).', src: 'google', fix: 'fields' },
+  'desc-own': { why: 'A description written for the page is more accurate than a sentence Google picks (Google, snippets).', src: 'google', fix: 'fields' },
+  'slug': { why: 'Short, readable, lowercase words joined by hyphens (Google, URL structure).', src: 'google', fix: 'fields' },
+  'length': { why: 'Google sets no minimum word count: cover the story fully, for people first (Google Search Essentials).', src: 'google', fix: 'reporting' },
+  'lede': { why: 'A news lede answers who, what and where at once; it helps readers and snippets.', src: 'practice', fix: 'body' },
+  'sentences': { why: 'Clear, well-organised writing is the people-first standard (Google SEO Starter Guide).', src: 'google', fix: 'body' },
+  'paragraphs': { why: 'Short paragraphs read better on a phone, where most readers are.', src: 'practice', fix: 'body' },
+  'image': { why: 'A sharp photo near the text with short descriptive alt text (Google, image SEO).', src: 'google', fix: 'fields' },
+  'tags': { why: 'A few specific tags name the organisations, places and topic for readers and topic pages.', src: 'practice', fix: 'fields' },
+}
 
 export interface SeoInput {
   headline: string
@@ -265,7 +298,7 @@ export function analyzeSeo(i: SeoInput): SeoCheck[] {
   add({ id: 'slug', group: 'Search snippet', status: !i.slug ? 'bad' : !slugOk || i.slug.length > 75 || slugWords.length > 10 ? 'warn' : 'good', label: 'URL slug', detail: !i.slug ? 'No slug yet.' : !slugOk ? 'Use lowercase words joined by hyphens.' : i.slug.length > 75 ? `${i.slug.length} characters — shorter URLs are easier to share.` : slugWords.length > 10 ? `${slugWords.length} words — trim it to the essentials.` : `${slugWords.length} words, ${i.slug.length} characters.` })
 
   // Content
-  add({ id: 'length', group: 'Content', status: bodyWords < 150 ? 'bad' : bodyWords < 300 ? 'warn' : 'good', label: 'Story length', detail: `${bodyWords} words${bodyWords < 150 ? ' — very short for search; add context or background.' : bodyWords < 300 ? ' — fine for a brief; 300+ ranks better.' : '.'}` })
+  add({ id: 'length', group: 'Content', status: bodyWords < 80 ? 'bad' : bodyWords < 150 ? 'warn' : 'good', label: 'Story length', detail: `${bodyWords} words${bodyWords < 80 ? ' — too thin to cover the story; report more.' : bodyWords < 150 ? ' — short; add the context a reader would ask for (Google sets no minimum).' : '.'}` })
   const lede = words(paras[0] ?? '').length
   add({ id: 'lede', group: 'Content', status: !lede ? 'warn' : lede > 60 ? 'warn' : 'good', label: 'Lede', detail: !lede ? 'No opening paragraph yet.' : lede > 60 ? `${lede} words — a news lede reads best under 45; move detail down.` : `${lede} words.` })
   const sents = sentencesOf(i.body)
@@ -277,7 +310,11 @@ export function analyzeSeo(i: SeoInput): SeoCheck[] {
   const alt = (i.imageAlt ?? '').trim()
   add({ id: 'image', group: 'Content', status: !i.hasImage ? 'warn' : !alt ? 'warn' : 'good', label: 'Featured image', detail: !i.hasImage ? 'No featured image — stories with one get more clicks from search and social.' : !alt ? 'No alt text — the site falls back to the headline. Describe what the photo shows.' : `Alt text: “${alt.length > 70 ? alt.slice(0, 68) + '…' : alt}”.` })
   add({ id: 'tags', group: 'Content', status: i.tags.length >= 3 && i.tags.length <= 8 ? 'good' : 'warn', label: 'Tags', detail: `${i.tags.length} tag${i.tags.length === 1 ? '' : 's'}${i.tags.length < 3 ? ' — add 3 to 8 that name the organisations, places and topic.' : i.tags.length > 8 ? ' — keep it to the 8 that matter most.' : '.'}` })
-  return checks
+  return checks.map((c) => {
+    const m = CHECK_META[c.id]
+    // no photo cannot be fixed by writing: it needs a picture
+    return m ? { ...c, ...m, fix: c.id === 'image' && !i.hasImage ? 'photo' : m.fix } : c
+  })
 }
 
 /**

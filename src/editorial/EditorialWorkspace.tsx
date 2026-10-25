@@ -49,6 +49,11 @@ import type { PublishOutcome } from './PublishDialog'
 import { FacebookDialog } from './FacebookDialog'
 import { EngineStatus } from './EngineStatus'
 import { commentOnPost, getFacebook, postBannerToFacebook } from './facebook'
+import { fixSeoWithAi } from './seoFix'
+import type { SeoDraft } from './seoFix'
+import type { EditorialDraft } from './editorialStore'
+import { analyzeSocial, socialFixList } from './socialChecks'
+import { SocialChecks } from './SocialCheckList'
 import { sanitizeFacebook } from './facebookCaption'
 import { usePublishImage } from './publishImage'
 import { openArticleForEdit } from './liveEdit'
@@ -280,6 +285,61 @@ export function EditorialWorkspace() {
     }
   }
   const handleAiSeo = () => runAi('seo')
+
+  // Fix every failing SEO check with the AI provider (Google's checklist). Undoable; the story's facts are never changed.
+  const [seoUndo, setSeoUndo] = useState<SeoDraft | null>(null)
+  const [socialUndo, setSocialUndo] = useState<EditorialDraft['social'] | null>(null)
+  const [fixBusy, setFixBusy] = useState<null | 'seo' | 'social'>(null)
+  const [seoFixNote, setSeoFixNote] = useState<string | null>(null)
+  const seoFieldsOf = (d: EditorialDraft): SeoDraft => ({ headline: d.headline, deck: d.deck, body: d.body, slug: d.slug, metaTitle: d.metaTitle, metaDescription: d.metaDescription, focusKeyphrase: d.focusKeyphrase, focusKeywords: d.focusKeywords, imageAlt: d.imageAlt })
+  const applySeo = (s: SeoDraft) => { for (const k of ['body', 'slug', 'metaTitle', 'metaDescription', 'focusKeyphrase', 'focusKeywords', 'imageAlt'] as const) setDraftField(k, s[k]) }
+  const handleFixSeo = async () => {
+    if (!seoAi) { setShowApiKeyModal(true); return }
+    const d = useEditorialStore.getState().draft
+    const before = seoFieldsOf(d)
+    const who = providerMeta(seoAi.provider).name
+    setFixBusy('seo'); setSeoFixNote(null)
+    const log = useJobLog.getState()
+    const jobId = log.begin('seo', 'Fixing SEO', 'Choosing the model')
+    try {
+      const out = await fixSeoWithAi(seoAi, before, { hasImage: !!bannerLeadImage, publishedTitles: liveArticles.filter((a) => a.slug !== d.slug).map((a) => a.title) }, (l) => log.step(jobId, l))
+      setSeoUndo(before)
+      applySeo(out.draft)
+      log.finish(jobId, { by: `${who} · ${out.model}` })
+      const left = out.remaining.map((c) => c.label)
+      setSeoFixNote(`${out.before} → ${out.after} of ${out.total} pass${out.bodyChanged ? ' · the story was reworded for structure (facts untouched)' : ''}${out.bodySkipped ? ' · a rewrite that changed facts was refused' : ''}${left.length ? ` · still open: ${left.join(', ')} (${out.remaining.some((c) => c.fix === 'photo') ? 'add a photo; ' : ''}${out.remaining.some((c) => c.fix === 'reporting') ? 'the story needs more reporting; ' : ''}fix by hand or run again)` : ''}`)
+      showToast(out.after === out.total ? `SEO ${out.after}/${out.total} — every check passes` : `SEO ${out.after}/${out.total} — see what is left in the checks`)
+    } catch (e) {
+      log.finish(jobId, { by: who, error: (e as Error).message })
+      showToast(`${who} could not finish: ${(e as Error).message}`)
+    } finally {
+      setFixBusy(null)
+    }
+  }
+  const handleFixSocial = async () => {
+    if (!socialAi) { setShowApiKeyModal(true); return }
+    const d = useEditorialStore.getState().draft
+    const problems = socialFixList(analyzeSocial(d.social, d.slug))
+    if (!problems.length) return
+    const who = providerMeta(socialAi.provider).name
+    setFixBusy('social')
+    const log = useJobLog.getState()
+    const jobId = log.begin('social', 'Fixing captions', 'Choosing the model')
+    try {
+      const desk = CATEGORIES.find((c) => c.id === useStore.getState().doc.content.categoryId)?.name ?? 'Energy'
+      const r = await aiCaptions(socialAi, { headline: d.headline, deck: d.deck, body: d.body, slug: d.slug, desk }, (l) => log.step(jobId, l), { current: d.social, problems })
+      setSocialUndo(d.social)
+      for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, r[k])
+      log.finish(jobId, { by: `${who} · ${r.model}` })
+      const after = analyzeSocial(useEditorialStore.getState().draft.social, d.slug)
+      showToast(`Captions: ${after.filter((c) => c.status === 'good').length} of ${after.length} checks pass`)
+    } catch (e) {
+      log.finish(jobId, { by: who, error: (e as Error).message })
+      showToast(`${who} could not finish: ${(e as Error).message}`)
+    } finally {
+      setFixBusy(null)
+    }
+  }
   const handleAiCaptions = () => runAi('social')
 
   // Load Base Assets for Mock Renderers
@@ -1167,7 +1227,7 @@ export function EditorialWorkspace() {
                 )}
 
                 {storyTab === 'seo' && (
-                  <SeoPanel hasImage={!!bannerLeadImage} slugStatus={slugStatus} onCheckSlug={() => void checkSlug(draft.slug)} onAiSeo={() => void handleAiSeo()} aiBusy={aiBusy === 'seo'} aiProvider={seoAi?.provider ?? null} />
+                  <SeoPanel hasImage={!!bannerLeadImage} slugStatus={slugStatus} onCheckSlug={() => void checkSlug(draft.slug)} onAiSeo={() => void handleAiSeo()} aiBusy={aiBusy === 'seo'} aiProvider={seoAi?.provider ?? null} onFix={() => void handleFixSeo()} fixBusy={fixBusy === 'seo'} onUndo={seoUndo ? () => { applySeo(seoUndo); setSeoUndo(null); setSeoFixNote(null); showToast('SEO fix undone') } : undefined} fixNote={seoFixNote} />
                 )}
 
                 {storyTab === 'social' && (
@@ -1197,7 +1257,7 @@ export function EditorialWorkspace() {
                     </div>
                     <textarea className="ed-input ed-input-social" rows={7} value={draft.social[activeSocialTab] || ''} onChange={(e) => setSocialCaption(activeSocialTab, e.target.value)} />
                     <div className="ed-card-actions">
-                      {!(draft.social[activeSocialTab] || '').includes(articleUrl(draft.slug)) && draft.slug.trim() && (
+                      {activeSocialTab !== 'facebook' && !(draft.social[activeSocialTab] || '').includes(articleUrl(draft.slug)) && draft.slug.trim() && (
                         <button type="button" className="btn sm" onClick={() => setSocialCaption(activeSocialTab, `${(draft.social[activeSocialTab] || '').trim()}\n\n${articleUrl(draft.slug)}`.trim())} data-tip="Add the article link to the end of this caption">
                           <Icon name="link" size={13} /><span>Add link</span>
                         </button>
@@ -1207,6 +1267,7 @@ export function EditorialWorkspace() {
                         <span>Copy caption</span>
                       </button>
                     </div>
+                    <SocialChecks checks={analyzeSocial(draft.social, draft.slug)} active={activeSocialTab} onFix={() => void handleFixSocial()} busy={fixBusy === 'social'} onUndo={socialUndo ? () => { for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, socialUndo[k]); setSocialUndo(null); showToast('Caption fix undone') } : undefined} />
                   </div>
                 )}
 

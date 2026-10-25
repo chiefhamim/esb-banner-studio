@@ -16,15 +16,15 @@ export const SITE_ORIGIN = 'https://esbpowerline.com'
 /** The article's public address — esbpowerline.com serves every story at /articles/{slug}. */
 export const articleUrl = (slug: string) => `${SITE_ORIGIN}/articles/${slug.trim() || 'story-slug'}`
 
-type Ai = { provider: AiProviderId; key: string; model: string }
-interface Story { headline: string; deck: string; body: string }
+export type Ai = { provider: AiProviderId; key: string; model: string }
+export interface Story { headline: string; deck: string; body: string }
 
 const storyText = (s: Story) => `Headline: ${s.headline}\n\nDeck: ${s.deck}\n\nStory:\n${s.body}`
 
 /** Tells the history panel which part of a job is running, so it can show where the time went. */
-type OnStep = (label: string) => void
+export type OnStep = (label: string) => void
 
-async function modelFor(ai: Ai) {
+export async function modelFor(ai: Ai) {
   let listed: Awaited<ReturnType<typeof listModels>> = []
   try { listed = await listModels(ai.provider, ai.key) } catch { /* the call reports the real error */ }
   return resolveModel(ai.provider, ai.model, listed)
@@ -165,14 +165,14 @@ export function relinkCaptions(social: Captions, newSlug: string): Captions {
   return Object.fromEntries(Object.entries(social).map(([k, v]) => [k, (v ?? '').replace(/https:\/\/esbpowerline\.com\/articles\/[a-z0-9-]*/g, to)])) as Captions
 }
 
-export async function aiCaptions(ai: Ai, story: Story & { slug: string; desk: string }, onStep?: OnStep): Promise<Captions & { model: string }> {
+export async function aiCaptions(ai: Ai, story: Story & { slug: string; desk: string }, onStep?: OnStep, fix?: { current: Captions; problems: string[] }): Promise<Captions & { model: string }> {
   const url = articleUrl(story.slug)
   onStep?.('Choosing the model')
   const model = await modelFor(ai)
   onStep?.(`Writing with ${providerMeta(ai.provider).name} · ${model}`)
   const { data, model: used } = await aiJson<Record<string, string>>({
     provider: ai.provider, key: ai.key, model, system: SOCIAL_SYSTEM,
-    user: `${storyText(story)}\n\nDesk: ${story.desk}\nArticle link: ${url}`,
+    user: `${storyText(story)}\n\nDesk: ${story.desk}\nArticle link: ${url}` + (fix ? `\n\nThe captions below were checked and have problems. Rewrite all four so every problem is fixed and nothing else gets worse.\nProblems:\n${fix.problems.join('\n')}\n\nCurrent captions:\nFacebook: ${fix.current.facebook}\nX: ${fix.current.x}\nLinkedIn: ${fix.current.linkedin}\nTelegram: ${fix.current.telegram}` : ''),
     schema: SOCIAL_SCHEMA, maxTokens: 8000, timeoutMs: 120_000, effort: 'low',
   })
   onStep?.("Checking it against the site's rules")

@@ -13,10 +13,12 @@ import siteIcon from '../assets/images/site/site-icon.png'
 
 const GROUPS: SeoCheck['group'][] = ['Keyphrase', 'Search snippet', 'Content']
 
-export function SeoPanel({ hasImage, onCheckSlug, slugStatus, onAiSeo, aiBusy = false, aiProvider = null }: {
+export function SeoPanel({ hasImage, onCheckSlug, slugStatus, onAiSeo, aiBusy = false, aiProvider = null, onFix, fixBusy = false, onUndo, fixNote }: {
   hasImage: boolean; onCheckSlug: () => void; slugStatus: string
   /** Ask the editor's AI provider for keyphrase, tags, title, description and slug (held to the site's rules after). */
   onAiSeo?: () => void; aiBusy?: boolean; aiProvider?: AiProviderId | null
+  /** Repair every failing check with the AI provider (fields and, where a check needs it, the story's wording). */
+  onFix?: () => void; fixBusy?: boolean; onUndo?: () => void; fixNote?: string | null
 }) {
   const aiName = aiProvider ? providerMeta(aiProvider).name : null
   const draft = useEditorialStore((s) => s.draft)
@@ -121,16 +123,30 @@ export function SeoPanel({ hasImage, onCheckSlug, slugStatus, onAiSeo, aiBusy = 
       <div className="seo-checks">
         <div className="seo-checks-head">
           <b>Checks</b>
-          <span>{good} of {checks.length} pass</span>
+          <span className={'seo-score' + (good === checks.length ? ' all' : '')}>{good} of {checks.length} pass</span>
           <span className="seo-bar" aria-hidden><i style={{ width: `${(good * 100) / checks.length}%` }} /></span>
         </div>
+        <div className="seo-fixrow">
+          <span className="hint">From Google Search Central and current newsroom practice. Each point says where it comes from.</span>
+          <div className="seo-fixbtns">
+            {onUndo && <button type="button" className="btn sm" onClick={onUndo} disabled={fixBusy}><Icon name="undo" size={13} /><span>Undo</span></button>}
+            {onFix && (
+              <button type="button" className="btn sm ai-btn" data-provider={aiProvider ?? undefined} onClick={onFix} disabled={fixBusy || good === checks.length || !draft.headline.trim()}
+                data-tip={good === checks.length ? 'Every check passes' : aiName ? `${aiName} repairs each failing check; the story's facts are never changed` : 'Open AI settings'}>
+                <Icon name="sparkle" size={13} className={fixBusy ? 'spin' : ''} />
+                <span>{fixBusy ? 'Fixing…' : good === checks.length ? 'All fixed' : 'Fix all with AI'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+        {fixNote && <p className="seo-fixnote">{fixNote}</p>}
         {GROUPS.map((g) => (
           <div key={g} className="seo-group">
             <span className="seo-group-title">{g}</span>
             {checks.filter((c) => c.group === g).map((c) => (
-              <div key={c.id} className={'seo-check ' + c.status} data-check={c.id}>
+              <div key={c.id} className={'seo-check ' + c.status} data-check={c.id} data-tip={c.why ? `${c.why} (${c.src === 'google' ? 'Google Search Central' : 'newsroom practice'})` : undefined}>
                 <Icon name={c.status === 'good' ? 'check' : 'info'} size={13} />
-                <span className="seo-check-label">{c.label}</span>
+                <span className="seo-check-label">{c.label}{c.src && <i className={'seo-src ' + c.src}>{c.src === 'google' ? 'Google' : 'Practice'}</i>}</span>
                 <span className="seo-check-detail">{c.detail}</span>
               </div>
             ))}
