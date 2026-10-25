@@ -9,7 +9,8 @@ import { Panel, Switch } from '../ui/controls'
 import { useEditorialStore } from './editorialStore'
 import { BannerHero } from './BannerThumb'
 import { analyzeSeo } from './seo'
-import { buildReadiness } from './readiness'
+import { buildReadiness, triage } from './readiness'
+import { useIgnoredChecks } from './ignoredChecks'
 import type { ReadyCheck, ReadyFix } from './readiness'
 import { canUploadToSite } from './siteConnect'
 import type { Assets } from '../core/render'
@@ -32,6 +33,8 @@ function Ring({ done, total, state }: { done: number; total: number; state: stri
 }
 
 export function EditorialSide(p: {
+  /** The story these checks belong to; what is ignored is remembered per story. */
+  storyId: string
   base: Assets | null
   cat: Category
   words: number
@@ -67,29 +70,34 @@ export function EditorialSide(p: {
     unverified: discrepancies.length, seo, signedIn: !!staff, siteOnline: site.connected, canUpload: canUploadToSite(),
   }), [draft, p.words, p.hasImage, p.tagCount, discrepancies.length, seo, staff, site.connected])
 
-  const open = ready.checks.filter((c) => c.status !== 'ok')
-  const title = ready.state === 'ready' ? 'Ready to publish' : ready.state === 'review' ? `${ready.warnings} to check first` : `${ready.blockers} required to fix`
+  const ignoredIds = useIgnoredChecks((s) => s.byStory[p.storyId])
+  const ignore = useIgnoredChecks((s) => s.ignore)
+  const restore = useIgnoredChecks((s) => s.restore)
+  const t = useMemo(() => triage(ready, new Set(ignoredIds ?? [])), [ready, ignoredIds])
+  const open = t.open
+  const title = t.state === 'ready' ? 'Ready to publish' : t.state === 'review' ? `${t.warnings} to check first` : `${t.blockers} required to fix`
   const sub = p.linked ? 'Live on esbpowerline.com · Publish updates it' : `${p.cat.name} · ${p.words} words · ${p.readTime} min read`
   const rank = (c: ReadyCheck) => (c.group === 'Required' ? 0 : 2) + (c.status === 'bad' ? 0 : 1)
   const todo = open.slice().sort((a, b) => rank(a) - rank(b))
-  const passed = ready.checks.filter((c) => c.status === 'ok')
+  const passed = t.passed
   const [showPassed, setShowPassed] = useState(false)
+  const [showIgnored, setShowIgnored] = useState(false)
 
   return (
     <>
       <div className="scroll es-scroll">
-        <section className={'es-status ' + ready.state} style={{ ['--cat' as string]: p.cat.accent } as CSSProperties}>
-          <Ring done={ready.ok} total={ready.total} state={ready.state} />
-          <div className="es-status-t"><h3>{title}</h3><p>{sub}</p></div>
+        <section className={'es-status ' + t.state} style={{ ['--cat' as string]: p.cat.accent } as CSSProperties}>
+          <Ring done={t.done} total={ready.total} state={t.state} />
+          <div className="es-status-t"><h3>{title}</h3><p>{sub}{t.ignored.length > 0 && ` · ${t.ignored.length} ignored`}</p></div>
         </section>
 
         <BannerHero base={p.base} onToast={p.onToast} />
 
         <Panel id="ed-side-publish" icon="check" title="Before you publish" persist={false}
-          actions={<span className={'es-count ' + ready.state}>{open.length ? `${open.length} open` : 'All clear'}</span>}>
+          actions={<>{open.length > 1 && <button type="button" className="btn xs ghost" data-tip="Set every open item aside for this story" onClick={() => ignore(p.storyId, open.map((c) => c.id))}>Ignore all</button>}<span className={'es-count ' + t.state}>{open.length ? `${open.length} open` : t.ignored.length ? `${t.ignored.length} ignored` : 'All clear'}</span></>}>
           <div className="es-todo">
             {todo.length === 0 ? (
-              <div className="es-clear"><span><Icon name="check" size={14} /></span><div><b>Nothing left to fix</b><p>All {ready.total} checks pass.</p></div></div>
+              <div className="es-clear"><span><Icon name="check" size={14} /></span><div><b>{t.ignored.length ? 'Checklist set aside' : 'Nothing left to fix'}</b><p>{t.ignored.length ? `${t.passed.length} pass, ${t.ignored.length} ignored.` : `All ${ready.total} checks pass.`}</p></div></div>
             ) : (
               <ul>
                 {todo.map((c) => (
@@ -97,9 +105,23 @@ export function EditorialSide(p: {
                     <i className="es-dot" aria-hidden />
                     <div className="es-todo-t"><b>{c.label}{c.group === 'Required' && <em>Required</em>}</b><span>{c.detail}</span></div>
                     {c.fix && <button type="button" className="btn xs" onClick={() => p.onFix(c.fix!)}>{ACTION[c.fix]}</button>}
+                    <button type="button" className="ibtn es-ign" aria-label={`Ignore ${c.label}`} data-tip="Ignore this check" onClick={() => ignore(p.storyId, [c.id])}><Icon name="eyeOff" size={14} /></button>
                   </li>
                 ))}
               </ul>
+            )}
+            {t.ignored.length > 0 && (
+              <>
+                <button type="button" className="es-passed ign" aria-expanded={showIgnored} onClick={() => setShowIgnored((v) => !v)}>
+                  <Icon name="eyeOff" size={13} /><span>{t.ignored.length} ignored</span><Icon name="chevDown" size={13} className="es-passed-chev" />
+                </button>
+                {showIgnored && (
+                  <ul className="es-ignored">
+                    {t.ignored.map((c) => <li key={c.id}><div className="es-todo-t"><b>{c.label}</b><span>{c.detail}</span></div><button type="button" className="btn xs ghost" onClick={() => restore(p.storyId, [c.id])}>Restore</button></li>)}
+                    {t.ignored.length > 1 && <li className="all"><button type="button" className="btn-link" onClick={() => restore(p.storyId)}>Restore all</button></li>}
+                  </ul>
+                )}
+              </>
             )}
             {passed.length > 0 && (
               <>
@@ -136,9 +158,9 @@ export function EditorialSide(p: {
       </div>
 
       <footer className="es-foot">
-        <p className={'es-foot-line ' + ready.state}>
-          {ready.state === 'blocked' ? <><b>{ready.blockers} required</b> to fix before it can go out.</> : ready.state === 'review' ? <><b>{ready.warnings} to check</b> — you can still publish.</> : <><b>Everything checks out.</b></>}
-          {ready.state !== 'ready' && <button type="button" className="btn-link" onClick={() => { const f = open[0]?.fix; if (f) p.onFix(f); else openPanel('ed-side-publish') }}>Go to the first</button>}
+        <p className={'es-foot-line ' + t.state}>
+          {t.state === 'blocked' ? <><b>{t.blockers} required</b> to fix before it can go out.</> : t.state === 'review' ? <><b>{t.warnings} to check</b> — you can still publish.</> : <><b>{t.ignored.length ? 'Ready.' : 'Everything checks out.'}</b>{t.ignored.length > 0 && ` ${t.ignored.length} check${t.ignored.length === 1 ? '' : 's'} ignored.`}</>}
+          {t.state !== 'ready' && <button type="button" className="btn-link" onClick={() => { const f = open[0]?.fix; if (f) p.onFix(f); else openPanel('ed-side-publish') }}>Go to the first</button>}
         </p>
         <button type="button" className="btn primary es-publish" onClick={p.onPublish} disabled={!draft.headline.trim()}>
           <Icon name="upload" size={15} />

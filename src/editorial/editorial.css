@@ -659,3 +659,11 @@
 .es-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 4px 2px; }
 .es-chips span { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px; font: 600 11.5px/1 var(--ui); color: var(--text-2); background: var(--fill); }
 .es-chips svg { color: var(--success, #10b981); }
+
+.es-todo li .ibtn.es-ign { flex: none; opacity: .55; } .es-todo li:hover .ibtn.es-ign, .es-todo li .ibtn.es-ign:focus-visible { opacity: 1; }
+.es-todo li .btn + .ibtn { margin-left: -4px; }
+.es-ignored { margin: 0; padding: 2px 4px 4px; list-style: none; }
+.es-ignored li { display: flex; align-items: center; gap: 10px; padding: 6px 0; } .es-ignored li + li { border-top: 1px solid var(--line); }
+.es-ignored li.all { justify-content: flex-end; border-top: 0; }
+.es-passed.ign svg:first-child { color: var(--text-3); }
+.pnl-actions .btn.xs.ghost { margin-right: 6px; }

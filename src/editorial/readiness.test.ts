@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildReadiness } from './readiness'
+import { buildReadiness, triage } from './readiness'
 import type { ReadyInput } from './readiness'
 
 const ok: ReadyInput = { headline: 'Petrobangla to drill two new wells in Sylhet', deck: 'Two wells at Tk 592 crore.', body: 'x', words: 400, hasImage: true, imageAlt: 'A rig', tagCount: 4, unverified: 0, seo: [{ status: 'good', label: 'a' }], signedIn: true, siteOnline: true, canUpload: true }
@@ -29,5 +29,24 @@ describe('buildReadiness', () => {
   it('asks for alt text when the photo is set without it, and notes the browser cannot upload', () => {
     expect(buildReadiness({ ...ok, imageAlt: '' }).checks.find((c) => c.id === 'photo')?.detail).toMatch(/alt text/)
     expect(buildReadiness({ ...ok, canUpload: false }).checks.find((c) => c.id === 'upload')?.status).toBe('warn')
+  })
+})
+
+describe('triage', () => {
+  const bad = buildReadiness({ ...ok, signedIn: false, hasImage: false })
+  it('counts open items until the editor ignores them', () => {
+    const t = triage(bad, new Set())
+    expect(t.state).toBe('blocked')
+    expect(t.open.map((c) => c.id).sort()).toEqual(['photo', 'signin'])
+  })
+  it('stops counting what is ignored, and keeps it listed to restore', () => {
+    const t = triage(bad, new Set(['signin', 'photo']))
+    expect(t.state).toBe('ready')
+    expect(t.open).toHaveLength(0)
+    expect(t.ignored.map((c) => c.id).sort()).toEqual(['photo', 'signin'])
+    expect(t.done).toBe(bad.total)
+  })
+  it('lets a required item be ignored on its own, leaving the quality items to review', () => {
+    expect(triage(bad, new Set(['signin'])).state).toBe('review')
   })
 })

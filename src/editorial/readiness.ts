@@ -109,3 +109,27 @@ export function buildReadiness(i: ReadyInput): Readiness {
   const ok = checks.filter((c) => c.status === 'ok').length
   return { checks, blockers, warnings, ok, total: checks.length, state: blockers ? 'blocked' : warnings ? 'review' : 'ready' }
 }
+
+export interface Triage {
+  /** Still needs the editor: not passing and not ignored. */
+  open: ReadyCheck[]
+  /** Not passing, and set aside by the editor. */
+  ignored: ReadyCheck[]
+  passed: ReadyCheck[]
+  /** Passed or ignored. */
+  done: number
+  blockers: number
+  warnings: number
+  state: Readiness['state']
+}
+
+/** Sort a readiness result by what the editor has chosen to ignore: ignored items stop counting against the story. */
+export function triage(r: Readiness, ignoredIds: ReadonlySet<string>): Triage {
+  const failing = r.checks.filter((c) => c.status !== 'ok')
+  const open = failing.filter((c) => !ignoredIds.has(c.id))
+  const ignored = failing.filter((c) => ignoredIds.has(c.id))
+  const passed = r.checks.filter((c) => c.status === 'ok')
+  const blockers = open.filter((c) => c.group === 'Required').length
+  const warnings = open.length - blockers
+  return { open, ignored, passed, done: passed.length + ignored.length, blockers, warnings, state: blockers ? 'blocked' : warnings ? 'review' : 'ready' }
+}

@@ -878,6 +878,7 @@ export function EditorialWorkspace() {
     else if (fix === 'seo') setStoryTab('seo')
     else if (fix === 'photo') window.dispatchEvent(new CustomEvent('esb:open-panel', { detail: 'ed-image' }))
     else if (fix === 'tags') window.dispatchEvent(new CustomEvent('esb:open-panel', { detail: 'ed-organize' }))
+    else if (fix === 'site') { void useEditorialStore.getState().checkConnection(); showToast('Checking esbpowerline.com…') }
     else setShowLoginModal(true)
   }
   const openPublish = () => { setPublishResult(null); setPublishJobId(null); setFbCfg(getFacebook()); setFbOn(!linked && !!getFacebook()); setShowPublishModal(true) }
@@ -1389,6 +1390,7 @@ export function EditorialWorkspace() {
           <aside className="right ed-side" aria-label="Publishing and image">
             <Splitter axis="vert" side="l" label="Resize the sidebar" value={cols.side} min={280} max={560} reset={COLS_DEFAULT.side} onLive={liveCol('side')} onCommit={commitCol('side')} root={() => wsRef.current} />
             <EditorialSide
+              storyId={activeStory?.id ?? 'draft'}
               base={baseAssets}
               cat={catData}
               words={wordCount}
