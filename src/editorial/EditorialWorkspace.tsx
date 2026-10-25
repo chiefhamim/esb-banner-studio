@@ -10,7 +10,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import './editorial.css'
 import { useEditorialStore } from './editorialStore'
-import { OutputsPanel } from './GraphicsRail'
+import { BannerCard } from './BannerCard'
 import { useWidth } from '../ui/useWidth'
 import { Splitter } from '../ui/layout'
 import { BN_FONTS, useBnFont } from './bnFont'
@@ -24,7 +24,7 @@ import { canUploadToSite, uploadBannerToSite } from './siteConnect'
 import { renderBanner } from '../export'
 import { suggestKeyphrases } from './seo'
 import { FeaturedImage } from './FeaturedImage'
-import { SitePreview, SITE_THEMES, formatArticleDate } from './SitePreview'
+import { SitePreview, SITE_THEMES } from './SitePreview'
 import type { SiteDevice, SiteTheme } from './SitePreview'
 import { useShellStore } from '../shell/shellStore'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
@@ -1210,44 +1210,33 @@ export function EditorialWorkspace() {
           <aside className="right ed-side" aria-label="Publishing and image">
             <Splitter axis="vert" side="l" label="Resize the sidebar" value={cols.side} min={280} max={560} reset={COLS_DEFAULT.side} onLive={liveCol('side')} onCommit={commitCol('side')} root={() => wsRef.current} />
             <div className="scroll ed-side-scroll">
-            <Panel id="ed-publish" icon="upload" defaultOpen={false} title="Publish" sub={linked ? 'Live' : 'Draft'}>
-              <dl className="ed-kv">
-                <dt>Status</dt>
-                <dd><span className={'ed-status ' + (linked ? 'live' : 'draft')}>{linked ? 'On the site' : 'Not on the site yet'}</span></dd>
-                <dt>Site</dt>
-                <dd title={siteStatus.statusText}><span className={`site-dot ${siteStatus.connected ? 'online' : 'offline'}`} />{siteStatus.connected ? 'esbpowerline.com' : 'Offline'}</dd>
-                <dt>Dateline</dt>
-                <dd title="What the article page shows if it is published now (Dhaka time)">{formatArticleDate(previewDate).replace(/^Published on /, '')}</dd>
-                <dt>Signed in</dt>
-                <dd>{staffSession ? staffSession.name : <button type="button" className="btn-link" onClick={() => setShowLoginModal(true)}>Sign in</button>}</dd>
-                <dt>Checks</dt>
-                <dd><span className={'ed-status ' + (checksDone === 3 ? 'live' : 'draft')}>{checksDone} of 3 done</span></dd>
-              </dl>
+            <section className="ed-card">
+              <h3>Publish</h3>
+              <div className={'ed-pubstat ' + (linked ? 'live' : 'draft')}>
+                <i aria-hidden />
+                <div>
+                  <b>{linked ? 'Live on esbpowerline.com' : 'Not published yet'}</b>
+                  <span>{checksDone === 3 ? 'All 3 checks done' : `${checksDone} of 3 checks done`}{fbCfg ? ' · Facebook ready' : ''}</span>
+                </div>
+              </div>
               <button type="button" className="btn primary ed-publish-btn" onClick={openPublish} disabled={!draft.headline.trim()}>
                 <Icon name="upload" size={15} />
                 <span>{linked ? 'Review & update' : 'Review & publish'}</span>
               </button>
-              <div className="ed-publish-row">
-                <button type="button" className="btn sm" onClick={handleCopyCmsPayload} disabled={!draft.headline.trim()} data-tip="Copy the CMS JSON">
-                  <Icon name={copiedPayload ? 'check' : 'copy'} size={13} />
-                  <span>{copiedPayload ? 'Copied' : 'JSON'}</span>
-                </button>
-                <button type="button" className="btn sm" onClick={handleOpenInSiteCms} data-tip="Open the site's CMS editor">
-                  <Icon name="externalLink" size={13} />
-                  <span>CMS</span>
-                </button>
-                <button type="button" className="btn sm" onClick={() => setShowFbDialog(true)} data-tip={fbCfg ? `Facebook: ${fbCfg.pageName || fbCfg.pageId}` : 'Connect a Facebook Page'}>
-                  <Icon name="link" size={13} />
-                  <span>{fbCfg ? 'Facebook ✓' : 'Facebook'}</span>
-                </button>
-              </div>
-            </Panel>
+              {!staffSession && <p className="hint">Sign in (top right) to publish.</p>}
+            </section>
 
-            <Panel id="ed-image" icon="image" defaultOpen={false} title="Featured image" sub={bannerLeadImage ? 'Set' : 'None'}>
-              <FeaturedImage onToast={showToast} />
-            </Panel>
+            <section className="ed-card">
+              <h3>Banner</h3>
+              <BannerCard base={baseAssets} onToast={showToast} />
+              <details className="ed-more">
+                <summary>Photo, credit &amp; alt text</summary>
+                <FeaturedImage onToast={showToast} />
+              </details>
+            </section>
 
-            <Panel id="ed-organize" icon="folder" title="Organize" sub={catData.name}>
+            <section className="ed-card">
+              <h3>Details</h3>
               <Field label="Category">
                 <div className="row">
                   <Select
@@ -1283,15 +1272,11 @@ export function EditorialWorkspace() {
                   />
                 </div>
               </Field>
-              <Check checked={!!draft.postAsNewsDesk} onChange={(v) => setDraftField('postAsNewsDesk', v)} label="Post as ESB News Desk" hint="The article is credited to the desk instead of the signed-in editor." />
               <Field label="Byline">
                 <input type="text" className="input" value={draft.byline} placeholder={staffSession?.name || 'Reporter name'} onChange={(e) => setDraftField('byline', e.target.value)} />
               </Field>
-            </Panel>
-
-            <Panel id="ed-outputs" icon="layers" defaultOpen={false} title="Outputs" sub="Banner · Web · Facebook">
-              {baseAssets ? <OutputsPanel base={baseAssets} onToast={showToast} /> : <p className="hint">Loading the banner…</p>}
-            </Panel>
+              <Check checked={!!draft.postAsNewsDesk} onChange={(v) => setDraftField('postAsNewsDesk', v)} label="Post as ESB News Desk" hint="Credited to the desk instead of the signed-in editor." />
+            </section>
             </div>
           </aside>
         </div>
