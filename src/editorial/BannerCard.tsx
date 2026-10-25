@@ -38,14 +38,8 @@ export function BannerCard({ heroMode, onHeroMode, onToast }: { heroMode: HeroMo
         </Field>
       )}
 
-      <div className="bc-link">
-        <button type="button" className={'ed-link-pill' + (bannerLink ? ' on' : '')} aria-pressed={bannerLink}
-          onClick={() => { setBannerLink(!bannerLink); onToast(bannerLink ? 'Live link paused' : 'Live link on — headline, credit and caption stay in step') }}
-          data-tip={bannerLink ? 'The banner follows the story. Click to pause.' : 'Paused. Click to follow the story again.'}>
-          <Icon name="link" size={12} /><span>{bannerLink ? 'Follows the story' : 'Link paused'}</span>
-        </button>
-        <button type="button" className="btn xs ghost" onClick={update} data-tip="Push the headline, category and story photos to the banner now"><Icon name="refresh" size={12} /><span>Update from story</span></button>
-      </div>
+      <Switch checked={bannerLink} onChange={(on) => { setBannerLink(on); onToast(on ? 'Banner follows the story — headline, credit and caption stay in step' : 'Banner paused — it no longer follows the story') }} label="Banner follows the story" />
+      <button type="button" className="btn sm bc-update" onClick={update} data-tip="Push the headline, category and story photos to the banner now"><Icon name="refresh" size={13} /><span>Update banner from the story</span></button>
 
       <Field label="Highlighted figure">
         <div className="row">

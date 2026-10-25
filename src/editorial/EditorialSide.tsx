@@ -167,7 +167,6 @@ export function EditorialSide(p: {
             <img className="es-dest-logo" src={siteIcon} alt="" />
             <div className="es-dest-t"><b>ESB PowerLine</b><span>esbpowerline.com · {p.linked ? 'updates the live article' : 'publishes a new article'}</span></div>
             <span className={'es-pill ' + (site.connected ? 'ok' : 'bad')}><i />{site.connected ? `Online${site.latencyMs ? ' · ' + site.latencyMs + ' ms' : ''}` : 'Offline'}</span>
-            {p.linked?.url && <a className="ibtn" href={p.linked.url} target="_blank" rel="noopener noreferrer" aria-label="View the live article" data-tip="View live"><Icon name="externalLink" size={14} /></a>}
           </div>
           <div className="es-dest">
             {p.fbCfg && !fbLogoBad

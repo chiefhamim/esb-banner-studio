@@ -686,3 +686,5 @@
 .es-todo-t b { flex-wrap: wrap; row-gap: 2px; } .es-lbl { white-space: nowrap; }
 .es-todo-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 6px; font: 600 12px/16px var(--ui); color: var(--text-3); }
 .es-todo-t b .es-lbl { font: inherit; color: inherit; }
+
+.bc-update { width: 100%; justify-content: center; gap: 8px; }
