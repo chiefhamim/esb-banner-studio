@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import lightBgUrl from '../assets/images/home/home-light.jpg'
 import darkBgUrl from '../assets/images/home/home-dark-gradient.jpg'
+import markLight from '../assets/images/home/esb-mark-light.png'
+import markDark from '../assets/images/home/esb-mark-dark.png'
 import { readRecent, openProject, openRecent } from '../project'
 import type { RecentProject } from '../project'
 import { useShellStore } from './shellStore'
@@ -201,7 +203,7 @@ export function HomeWorkspace() {
         <header className="home-header">
           <div className="home-header-brand">
             <div className="home-title-group">
-              <h1 className="home-title" aria-label="ESB PowerLine AI Studio">ESB <span className="home-pl" aria-hidden><span>Power</span><span>Line</span></span> <span className="home-ai">Ai</span> <span className="home-title-accent">Studio</span></h1>
+              <h1 className="home-title" aria-label="ESB PowerLine AI Studio"><img className="home-mark home-mark-light" src={markLight} alt="" aria-hidden draggable={false} /><img className="home-mark home-mark-dark" src={markDark} alt="" aria-hidden draggable={false} /> <span className="home-ai">Ai</span> <span className="home-title-accent">Studio</span></h1>
               <p className="home-subtitle">Where stories are written, imagination is designed and reality is cut</p>
             </div>
           </div>
@@ -268,12 +270,12 @@ export function HomeWorkspace() {
                 <div className="recent-card recovery-card" role="group" aria-label="Unsaved session found">
                   <div className="recent-icon"><Icon name="refresh" size={18} /></div>
                   <div className="recent-info">
-                    <span className="recent-name">Unsaved session · {recoverySnapshot.name}</span>
-                    <span className="recent-path">Found from {recoverySnapshot.time}</span>
+                    <span className="recent-name">Unsaved session</span>
+                    <span className="recent-path">{recoverySnapshot.name} · {recoverySnapshot.time}</span>
                   </div>
                   <div className="recovery-actions">
                     <button type="button" className="btn primary compact" onClick={handleRestoreRecovery}>Restore</button>
-                    <button type="button" className="btn subtle compact" onClick={handleDiscardRecovery}>Discard</button>
+                    <button type="button" className="ibtn" data-tip="Discard the unsaved session" aria-label="Discard the unsaved session" onClick={handleDiscardRecovery}><Icon name="trash" size={15} /></button>
                   </div>
                 </div>
               )}

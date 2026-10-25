@@ -609,11 +609,6 @@
 .home-shell .recovery-actions { margin-left: auto; display: flex; gap: 6px; flex: none; }
 .home-shell .recovery-actions .btn { height: 28px; padding: 0 12px; border-radius: 8px; font-size: 12px; }
 .home-shell .recovery-card:hover { transform: none; }
-.home-shell .recents-grid:has(.recovery-card) { grid-auto-rows: auto; align-content: start; }
-.home-shell .recovery-card { flex-wrap: wrap; row-gap: 10px; padding: 12px 14px; }
-.home-shell .recovery-card .recent-info { flex: 1 1 calc(100% - 56px); min-width: 0; }
-.home-shell .recovery-card .recent-name, .home-shell .recovery-card .recent-path { white-space: normal; overflow: visible; text-overflow: clip; }
-.home-shell .recovery-actions { margin-left: 52px; width: auto; }
 
 /* Title balance: a firm "ESB PowerLine" under a heavier, coloured "Studio" */
 .home-shell .home-title { font-weight: 500; }
@@ -696,3 +691,15 @@
 .home-shell .recent-name, .home-shell .recent-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .home-shell .recent-empty { border-style: dashed; background: transparent; }
 .home-shell .recent-empty .recent-name { color: var(--text-2); } .home-shell .recent-empty .recent-path { color: var(--text-3); }
+
+/* the original ESB Power Line monogram in the title, at the height of the old text (its letters are as tall as the old cap height); white letters on the dark theme */
+.home-shell .home-mark { display: inline-block; height: 1.15em; width: auto; vertical-align: middle; margin-right: .16em; user-select: none; }
+.home-shell .home-mark-dark { display: none; }
+:root[data-theme=dark] .home-shell .home-mark-light { display: none; }
+:root[data-theme=dark] .home-shell .home-mark-dark { display: inline-block; }
+
+/* an unsaved session is one slot like any project: icon, two lines, Restore and a discard button on the same row */
+.home-shell .recovery-card { flex-wrap: nowrap; padding: 0 12px 0 14px; row-gap: 0; }
+.home-shell .recovery-card .recent-info { flex: 1 1 0; min-width: 0; }
+.home-shell .recovery-actions { margin-left: auto; align-items: center; gap: 4px; }
+.home-shell .recovery-actions .btn { height: 28px; }
