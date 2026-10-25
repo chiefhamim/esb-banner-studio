@@ -404,7 +404,7 @@
 .acct-pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .acct-pill.ok { color: var(--success); background: var(--success-soft); }
 .acct-pill.bad { color: var(--danger); background: var(--danger-soft); }
-.acct-pill.checking { color: #3b6fd8; background: color-mix(in srgb, #4f8cff 14%, transparent); }
+.acct-pill.checking { color: var(--info, #6ea0ff); background: color-mix(in srgb, #4f8cff 16%, transparent); }
 .acct-pill.checking i { animation: sb-breathe 1.4s ease-in-out infinite; }
 .acct-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .acct .conn-hint { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-3); }
@@ -435,7 +435,7 @@
 .bc-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: -4px; font: 400 11.5px/16px var(--ui); color: var(--text-3); }
 .bc-flag { height: 20px; padding: 0 8px; font: 600 11px/20px var(--ui); border-radius: var(--r-pill); }
 .bc-flag.ok { color: var(--success); background: var(--success-soft); }
-.bc-flag.warn { color: #9a6a12; background: color-mix(in srgb, #e0a030 18%, transparent); }
+.bc-flag.warn { color: var(--warning); background: var(--warning-soft); }
 .bc-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .bc-actions { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 6px; padding-top: 2px; }
 .bc-actions .btn { justify-content: center; min-width: 0; padding-inline: 6px; }

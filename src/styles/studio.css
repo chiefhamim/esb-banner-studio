@@ -811,9 +811,9 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .eng-who b.free { color: var(--text-2); font-weight: 500; }
 .eng-model { font: 400 11.5px/1.2 var(--ui); color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .eng-tag { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px; font: 600 11px/1 var(--ui); color: var(--text-2); background: var(--fill); white-space: nowrap; }
-.eng-tag.ok { color: #137a45; background: color-mix(in srgb, #1f9d57 14%, transparent); }
-.eng-tag.bad { color: #b83c25; background: color-mix(in srgb, #d4553b 14%, transparent); }
-.eng-err { grid-column: 2 / -1; margin: 0; font: 400 11.5px/1.4 var(--ui); color: #b83c25; overflow-wrap: anywhere; }
+.eng-tag.ok { color: var(--success); background: var(--success-soft); }
+.eng-tag.bad { color: var(--danger); background: var(--danger-soft); }
+.eng-err { grid-column: 2 / -1; margin: 0; font: 400 11.5px/1.4 var(--ui); color: var(--danger); overflow-wrap: anywhere; }
 .eng-foot { margin: 4px 4px 0; font-size: 11px; }
 .eng-pop { width: min(430px, calc(100vw - 16px)); }
 .eng-head b, .eng-head .hint, .eng-head .btn { white-space: nowrap; }
@@ -853,3 +853,22 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .ed-tp-steps { margin: 0 8px 8px 40px; padding: 4px 0 4px 10px; border-left: 2px solid var(--card-line); }
 .ed-tp-steps li { grid-template-columns: 14px minmax(0, 1fr) auto; gap: 8px; padding: 4px 0; }
 .ed-tp-empty { padding: 18px 16px; }
+
+/* ---- one hover / press / selected language for every chip, tab and toggle (it was missing on tabs, segmented controls,
+   the link pill, switches and disclosure rows: only the text colour moved, so the pointer got no answer) ---- */
+.seg-ctl button, .side-tabs button, .ws-switch .ws-btn, .ed-link-pill, .ed-more > summary, .bc-actions .btn, .ed-steps li { transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), transform var(--t-1) var(--ease); }
+.seg-ctl button:not(.on):not(:disabled):hover, .side-tabs button:not(.on):not(:disabled):hover, .ws-switch .ws-btn:not(.on):hover { background: var(--fill-hover); color: var(--text); }
+.seg-ctl button.on:hover, .side-tabs button.on:hover, .ws-switch .ws-btn.on:hover { background: transparent; }
+.seg-ctl button:focus-visible, .side-tabs button:focus-visible, .ws-switch .ws-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.ed-link-pill:hover { background: var(--fill-hover); }
+.ed-link-pill.on:hover { background: color-mix(in srgb, var(--cat, var(--ink)) 22%, var(--fill-hover)); }
+.ed-more > summary { padding: 0 6px; margin: 0 -6px; border-radius: var(--r-2); }
+.ed-more > summary:hover { color: var(--text); background: var(--fill); }
+.ed-more > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+label.switch:hover i { filter: brightness(1.12); }
+label.switch:active i { filter: brightness(.94); }
+.ed-steps li:hover { color: var(--text-2); }
+.ed-steps li.done:hover { filter: brightness(1.06); }
+.pv-btn.on:hover, .ed-ai-chip.on:hover { filter: brightness(1.08); }
+.ed-account.in:hover { filter: brightness(1.12); }
+.btn:disabled, .ibtn:disabled { cursor: default; }
