@@ -159,7 +159,6 @@
 .ed-src .ed-extract-report { padding: 0; border-bottom: 0; }
 .ed-src-textarea { height: auto; padding: 8px 10px; font-family: var(--bn-font, 'Hind Siliguri'), var(--ui); line-height: 1.6; resize: vertical; }
 .ed-src-textarea.tall { min-height: 240px; }
-.ed-src-intake { padding: 4px 12px 16px; }
 .ed-src .ed-source-reader { gap: 8px; }
 .ed-src .source-reader-title-input, .ed-src .source-reader-title-input:hover, .ed-src .source-reader-title-input:focus { display: block; padding: 0; font-family: var(--bn-font, 'Hind Siliguri'), var(--ui); font-size: 17px; font-weight: 600; line-height: 1.5; background: transparent; border: 0; box-shadow: none; resize: none; overflow: hidden; field-sizing: content; overflow-wrap: anywhere; }
 .ed-src .source-reader-deck { font-family: var(--bn-font, 'Hind Siliguri'), var(--ui); font-size: 14px; font-weight: 400; font-style: normal; line-height: 1.6; }
@@ -463,20 +462,6 @@
 .acct-name h2 { min-width: 0; }
 .acct-name .acct-role { height: 22px; padding: 0 11px; font-size: 10px; margin-top: 1px; }
 
-/* New link intake in the source column: big, full-width, proportional */
-.ed-intake.compact { gap: 16px; }
-.ed-intake.compact .ed-intake-tabs { width: 100%; height: 40px; }
-.ed-intake.compact .ed-intake-tabs button { flex: 1 1 0; justify-content: center; font-size: 13px; }
-.ed-intake.compact .ed-intake-body { gap: 12px; }
-.ed-intake.compact .ed-url-input { height: 48px; font-size: 15px; padding: 0 14px; }
-.ed-intake.compact .ed-intake-url .btn, .ed-intake.compact .ed-intake-foot .btn { height: 46px; font-size: 14px; width: 100%; }
-.ed-intake.compact .ed-paste-area { min-height: 300px; height: 40vh; padding: 14px 16px; font-size: 15px; line-height: 1.7; }
-.ed-intake.compact .ed-intake-foot { flex-direction: column-reverse; align-items: stretch; gap: 10px; }
-.ed-intake.compact .ed-intake-foot .hint { text-align: right; }
-.ed-intake.compact .hint { font-size: 12.5px; line-height: 1.55; }
-.ed-intake.compact .ed-intake-tabs { display: flex; }
-.ed-intake.compact .ed-intake-tabs button { padding: 0 6px; gap: 6px; white-space: nowrap; overflow: hidden; }
-.ed-intake.compact .ed-intake-tabs button { height: 100%; min-width: 0; }
 .ed-intake.compact .ed-intake-tabs button svg { display: none; }
 
 /* Story editor (Body tab → Edit): a toolbar of the CMS's tools over a page that reads like the article */
@@ -583,7 +568,23 @@
 .bt-meta span { font: 500 11.5px/16px var(--ui); color: var(--text-3); }
 /* what the empty source column says: how a story is made */
 .ed-how { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 0; padding: 14px 0 0; list-style: none; border-top: 1px solid var(--line); }
-.ed-how li { display: flex; gap: 12px; align-items: flex-start; padding: 8px 4px; }
+.ed-how li { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; }
 .ed-how-n { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--fill); color: var(--text-2); }
 .ed-how b { display: block; font: 700 13.5px/18px var(--ui); color: var(--text); }
 .ed-how p { margin: 2px 0 0; font: 500 12.5px/1.5 var(--ui); color: var(--text-3); }
+
+/* New link intake in the source column — on the app's own scale: 10 px gutter like the tabs above, 32/36 px controls, 8 px gaps, 12 px between groups */
+.ed-src-intake { padding: 6px 0 16px; }
+.ed-intake.compact { gap: 12px; }
+.ed-intake.compact .ed-intake-tabs { display: flex; width: 100%; }
+.ed-intake.compact .ed-intake-tabs button { flex: 1 1 0; justify-content: center; min-width: 0; padding: 0 6px; }
+.ed-intake.compact .ed-intake-tabs button svg { display: none; }
+.ed-intake.compact .ed-intake-body { gap: 8px; }
+.ed-intake.compact .ed-intake-url { gap: 8px; }
+.ed-intake.compact .ed-intake-url .input { flex: none; width: 100%; }
+.ed-intake.compact .ed-intake-url .input, .ed-intake.compact .ed-intake-url .btn, .ed-intake.compact .ed-intake-foot .btn { height: var(--h-lg); }
+.ed-intake.compact .ed-intake-url .btn, .ed-intake.compact .ed-intake-foot .btn { width: 100%; gap: 8px; }
+.ed-intake.compact .ed-paste-area { min-height: 240px; padding: 10px 12px; font-size: 14.5px; line-height: 1.65; }
+.ed-intake.compact .ed-intake-foot { flex-direction: column-reverse; align-items: stretch; gap: 8px; }
+.ed-intake.compact .ed-intake-foot .hint { text-align: right; padding: 0 2px; }
+.ed-intake.compact .hint { font-size: 12px; line-height: 1.5; }

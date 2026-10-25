@@ -889,13 +889,13 @@ export function EditorialWorkspace() {
             <input
               type="url"
               className="input ed-url-input"
-              placeholder="https://bonikbarta.net/news/… or prothomalo.com/…"
+              placeholder={compact ? "Paste a news link…" : "https://bonikbarta.net/news/… or prothomalo.com/…"}
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
             />
             <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
-              <Icon name={loading ? 'refresh' : 'sparkle'} size={14} />
+              {loading ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
               <span>{loading ? 'Extracting…' : 'Fetch & Auto-Translate'}</span>
             </button>
           </div>
@@ -914,7 +914,7 @@ export function EditorialWorkspace() {
           <div className="ed-intake-foot">
             <span className="mono hint">{rawBengaliInput.trim().length} characters</span>
             <button type="button" className="btn primary" onClick={handleTranslateRawBengali} disabled={translating || !rawBengaliInput.trim()}>
-              <Icon name={translating ? 'refresh' : 'sparkle'} size={14} />
+              {translating ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
               <span>{translating ? 'Translating…' : 'Auto-Translate & Populate'}</span>
             </button>
           </div>
@@ -924,7 +924,7 @@ export function EditorialWorkspace() {
       {compact && launcherTab !== 'live_feed' && (
         <ol className="ed-how" aria-label="How a story is made">
           {([['link', 'Bring the story', 'A Bengali or English news link, or paste the text.'], ['sparkle', 'The AI writes it in English', 'Every figure kept, headline and SEO fields within the site’s limits, layout where the story needs it.'], ['check', 'Check the figures', 'Green is found in the source, amber needs your eye.'], ['upload', 'Review and publish', 'Banner, article and Facebook post go out together.']] as const).map(([icon, title, text], i) => (
-            <li key={title}><span className="ed-how-n"><Icon name={icon} size={14} /></span><div><b>{i + 1}. {title}</b><p>{text}</p></div></li>
+            <li key={title}><span className="ed-how-n">{icon === 'sparkle' && mainAi ? <ProviderMark id={ai.provider} size={14} /> : <Icon name={icon} size={14} />}</span><div><b>{i + 1}. {title}</b><p>{text}</p></div></li>
           ))}
         </ol>
       )}
