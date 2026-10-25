@@ -934,3 +934,33 @@ label.switch:active i { filter: brightness(.94); }
 .pp-label { min-width: 0; overflow-wrap: anywhere; }
 .pp-time { min-width: 44px; text-align: right; font: 500 12px/1 var(--ui); color: var(--text-3); }
 .pp-steps li.live .pp-time { color: var(--sel-text); }
+
+/* Engine panel, balanced: one table - job, company, model, status, refresh - on shared columns and one row height */
+.eng-pop { width: min(600px, calc(100vw - 16px)); gap: 0; padding: 14px; font-variant-numeric: tabular-nums lining-nums; }
+.eng-head { display: flex; align-items: center; gap: 10px; padding: 0 0 12px; }
+.eng-head-ic { display: grid; place-items: center; width: 28px; height: 28px; flex: none; color: var(--text-2); background: var(--fill); border-radius: var(--r-2); }
+.eng-head-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.eng-head-t b { font: 600 14px/18px var(--ui); }
+.eng-head-t span { font: 400 11.5px/15px var(--ui); color: var(--text-3); }
+.eng-cols, .eng-row { display: grid; grid-template-columns: 52px 168px minmax(0, 1fr) 128px 28px; column-gap: 12px; align-items: center; }
+.eng-cols { padding: 6px 8px; font: 600 10px/14px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); border-bottom: 1px solid var(--card-line); }
+.eng-cols .c { text-align: center; }
+.eng-row { min-height: 52px; padding: 8px; border-top: 0; border-bottom: 1px solid var(--card-line); }
+.eng-row:last-of-type { border-bottom: 0; }
+.eng-row:hover { background: var(--fill); border-radius: var(--r-2); }
+.eng-who { display: none; }
+.eng-role { font: 600 10.5px/1 var(--ui); letter-spacing: .07em; text-transform: uppercase; color: var(--text-2); }
+.eng-row .select.eng-select { width: 100%; min-width: 0; height: 32px; }
+.eng-model { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font: 400 12.5px/1.2 var(--ui); color: var(--text-2); }
+.eng-model > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eng-model[data-provider=gemini] .sb-pdot { background: linear-gradient(135deg, #4285f4, #d96570); }
+.eng-model[data-provider=anthropic] .sb-pdot { background: #d97757; }
+.eng-model[data-provider=openai] .sb-pdot { background: #10a37f; }
+.eng-model[data-provider=openrouter] .sb-pdot { background: #6467f2; }
+.eng-nokey { color: var(--text-3); }
+.eng-state { display: flex; justify-content: center; }
+.eng-tag { justify-content: center; min-width: 108px; height: 24px; }
+.eng-row .ibtn { justify-self: end; }
+.eng-err { grid-column: 3 / -1; margin: 2px 0 0; }
+.eng-foot { margin: 10px 2px 0; font-size: 11.5px; color: var(--text-3); }
+.eng-model .sb-pdot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-3); }

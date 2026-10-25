@@ -60,7 +60,7 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
 
   useLayoutEffect(() => {
     if (!open) return
-    const place = () => { const r = btn.current?.getBoundingClientRect(); if (r) setAt({ bottom: window.innerHeight - r.top + 8, left: Math.max(8, Math.min(r.left, window.innerWidth - 460)) }) }
+    const place = () => { const r = btn.current?.getBoundingClientRect(); if (r) setAt({ bottom: window.innerHeight - r.top + 8, left: Math.max(8, Math.min(r.left, window.innerWidth - 620)) }) }
     place(); window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
   }, [open])
@@ -97,24 +97,24 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
       {open && at && createPortal(
         <div ref={pop} className="eng-pop" role="dialog" aria-label="AI engines" style={{ bottom: at.bottom, left: at.left }}>
           <div className="eng-head">
-            <b>AI engines</b>
-            <span className="hint">{busy ? 'Checking…' : 'One tiny request per key'}</span>
-            <div className="spacer" />
-            <button type="button" className="btn xs" onClick={() => refresh()} disabled={busy || !distinct.length}><Icon name="refresh" size={12} /><span>Refresh all</span></button>
+            <span className="eng-head-ic"><Icon name="sparkle" size={15} /></span>
+            <div className="eng-head-t"><b>AI engines</b><span>{busy ? 'Checking each key…' : 'Each key is tested with one tiny request'}</span></div>
+            <button type="button" className="btn sm" onClick={() => refresh()} disabled={busy || !distinct.length}><Icon name="refresh" size={13} /><span>Refresh all</span></button>
           </div>
+          <div className="eng-cols" aria-hidden><span>Job</span><span>Company</span><span>Model</span><span className="c">Status</span><span /></div>
           {rows.map(({ role, label, chosen, a }) => {
             const c = stateOf(a)
             return (
               <div key={role} className={'eng-row ' + (a ? c?.state ?? 'busy' : 'free')}>
                 <span className="eng-role">{label}</span>
-                <div className="eng-who">
-                  <Select<string> className="eng-select" value={role === 'main' ? ai.provider : ai[role]} title={`${label} company`} onChange={(v) => setRole(role, v)}
-                    options={[
-                      ...(role !== 'main' ? [{ value: '', label: 'Same as main', hint: providerMeta(ai.provider).name }] : []),
-                      ...AI_PROVIDERS.map((p) => ({ value: p.id as string, label: p.name, swatch: p.color, hint: ai.keys[p.id]?.trim() ? '' : 'no key' })),
-                    ]} />
-                  <span className="eng-model">{a ? (c?.state === 'ok' ? modelLabel(c.model) : ai.models[chosen] === 'auto' ? 'Auto model' : modelLabel(ai.models[chosen])) : `no ${providerMeta(chosen).name} key — free translation is used`}</span>
-                </div>
+                <Select<string> className="eng-select" value={role === 'main' ? ai.provider : ai[role]} title={`${label} company`} onChange={(v) => setRole(role, v)}
+                  options={[
+                    ...(role !== 'main' ? [{ value: '', label: 'Same as main', hint: providerMeta(ai.provider).name }] : []),
+                    ...AI_PROVIDERS.map((p) => ({ value: p.id as string, label: p.name, swatch: p.color, hint: ai.keys[p.id]?.trim() ? '' : 'no key' })),
+                  ]} />
+                <span className="eng-model" data-provider={chosen}>
+                  {a ? <><i className="sb-pdot" aria-hidden /><span>{providerMeta(chosen).name} · {c?.state === 'ok' ? modelLabel(c.model) : ai.models[chosen] === 'auto' ? 'Auto' : modelLabel(ai.models[chosen])}</span></> : <span className="eng-nokey">No {providerMeta(chosen).name} key</span>}
+                </span>
                 <div className="eng-state">
                   {!a && <button type="button" className="btn xs" onClick={() => { setOpen(false); onAddKey() }}>Add key</button>}
                   {a && (!c || c.state === 'busy') && <span className="eng-tag busy"><span className="pulse-dot" />Checking</span>}
