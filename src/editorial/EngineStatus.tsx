@@ -1,42 +1,64 @@
-// The footer's Engine entry: one button that opens a small panel with the three AI jobs (Main · SEO · Social), the
-// provider and model each is set to, and — by actually making one tiny call with that key — whether it works right
-// now and how long it took. Refresh checks one row or all of them. A job with no key shows the free machine service.
+// The footer's Engine entry. Closed, it is one short word — Working / Checking / needs attention — because the detail
+// lives in the panel it opens: the three AI jobs (Main · SEO · Social), the company each one uses (changeable right
+// there), and — from one tiny real request per distinct key — whether it works now and how long it took.
+// Results are kept by provider + key + model, so a setting that did not change is not re-tested, and three jobs on
+// one provider cost one request.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { create } from 'zustand'
 import { Icon } from '../ui/Icon'
-import { aiFor, modelLabel, providerMeta, testAiKey } from './aiProviders'
-import type { AiRole, AiSettings } from './aiProviders'
+import { AI_PROVIDERS, aiFor, modelLabel, providerMeta, roleProvider, testAiKey } from './aiProviders'
+import type { AiProviderId, AiRole, AiSettings } from './aiProviders'
+import { useEditorialStore } from './editorialStore'
 
-type Check = { state: 'idle' } | { state: 'busy' } | { state: 'ok'; ms: number; model: string } | { state: 'bad'; error: string }
+type Check = { state: 'busy' } | { state: 'ok'; ms: number; model: string } | { state: 'bad'; error: string }
+type Active = { provider: AiProviderId; key: string; model: string }
 const ROLES: { role: AiRole; label: string }[] = [{ role: 'main', label: 'Main' }, { role: 'seo', label: 'SEO' }, { role: 'social', label: 'Social' }]
 
-export function EngineStatus({ ai, offline }: { ai: AiSettings; offline: boolean }) {
+/** Health of each distinct (provider, key, model) — shared by the footer word and the panel. */
+const useHealth = create<{ byKey: Record<string, Check>; set: (k: string, c: Check) => void }>((set) => ({
+  byKey: {},
+  set: (k, c) => set((s) => ({ byKey: { ...s.byKey, [k]: c } })),
+}))
+
+const sig = (a: Active) => `${a.provider}|${a.model}|${a.key.length}:${a.key.slice(-6)}`
+
+async function check(a: Active) {
+  const k = sig(a)
+  const h = useHealth.getState()
+  if (h.byKey[k]?.state === 'busy') return
+  h.set(k, { state: 'busy' })
+  const t0 = performance.now()
+  const r = await testAiKey(a.provider, a.key, a.model)
+  useHealth.getState().set(k, r.ok ? { state: 'ok', ms: Math.round(performance.now() - t0), model: r.model ?? a.model } : { state: 'bad', error: r.error ?? 'It did not answer.' })
+}
+
+const fmt = (ms: number) => (ms < 10_000 ? (ms / 1000).toFixed(1) : String(Math.round(ms / 1000))) + ' s'
+
+export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offline: boolean; onAddKey: () => void }) {
+  const setAiSettings = useEditorialStore((s) => s.setAiSettings)
+  const byKey = useHealth((s) => s.byKey)
   const [open, setOpen] = useState(false)
-  const [res, setRes] = useState<Record<AiRole, Check>>({ main: { state: 'idle' }, seo: { state: 'idle' }, social: { state: 'idle' } })
   const [at, setAt] = useState<{ bottom: number; left: number } | null>(null)
   const btn = useRef<HTMLButtonElement>(null)
   const pop = useRef<HTMLDivElement>(null)
 
-  const rows = ROLES.map((r) => ({ ...r, a: aiFor(r.role, ai) }))
+  const rows = useMemo(() => ROLES.map((r) => ({ ...r, chosen: roleProvider(ai, r.role), a: aiFor(r.role, ai) })), [ai])
+  const distinct = useMemo(() => {
+    const m = new Map<string, Active>()
+    for (const r of rows) if (r.a) m.set(sig(r.a), r.a)
+    return [...m.values()]
+  }, [rows])
 
-  const run = useCallback(async (role: AiRole) => {
-    const a = aiFor(role, ai)
-    if (!a) return
-    setRes((s) => ({ ...s, [role]: { state: 'busy' } }))
-    const t0 = performance.now()
-    const r = await testAiKey(a.provider, a.key, a.model)
-    setRes((s) => ({ ...s, [role]: r.ok ? { state: 'ok', ms: Math.round(performance.now() - t0), model: r.model ?? a.model } : { state: 'bad', error: r.error ?? 'It did not answer.' } }))
-  }, [ai])
+  // a new or changed key/model is tested as soon as it is set; an unchanged one is not tested again
+  useEffect(() => { for (const a of distinct) if (!useHealth.getState().byKey[sig(a)]) void check(a) }, [distinct])
 
-  const runAll = useCallback(() => { for (const r of ROLES) void run(r.role) }, [run])
-
-  // opening the panel checks every key that is set
-  useEffect(() => { if (open) runAll() }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  const refresh = useCallback((only?: Active) => { for (const a of only ? [only] : distinct) void check(a) }, [distinct])
 
   useLayoutEffect(() => {
     if (!open) return
-    const place = () => { const r = btn.current?.getBoundingClientRect(); if (r) setAt({ bottom: window.innerHeight - r.top + 8, left: Math.max(8, Math.min(r.left, window.innerWidth - 440)) }) }
+    const place = () => { const r = btn.current?.getBoundingClientRect(); if (r) setAt({ bottom: window.innerHeight - r.top + 8, left: Math.max(8, Math.min(r.left, window.innerWidth - 460)) }) }
     place(); window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
   }, [open])
@@ -48,60 +70,61 @@ export function EngineStatus({ ai, offline }: { ai: AiSettings; offline: boolean
     return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('pointerdown', onDown) }
   }, [open])
 
-  const anyBad = rows.some((r) => res[r.role].state === 'bad')
-  const busy = rows.some((r) => res[r.role].state === 'busy')
+  const stateOf = (a: Active | null): Check | null => (a ? byKey[sig(a)] ?? null : null)
+  const busy = distinct.some((a) => { const s = byKey[sig(a)]; return !s || s.state === 'busy' })
+  const bad = rows.filter((r) => stateOf(r.a)?.state === 'bad').length
+  const noKey = rows.filter((r) => !r.a).length
+  const summary = offline ? { cls: 'bad', text: 'Offline' }
+    : !distinct.length ? { cls: 'free', text: 'Free translation' }
+    : busy ? { cls: 'busy', text: 'Checking…' }
+    : bad ? { cls: 'bad', text: `${bad} of ${rows.length} need attention` }
+    : noKey ? { cls: 'warn', text: `Working · ${noKey} on free` }
+    : { cls: 'ok', text: 'Working' }
+
+  const setRole = (role: AiRole, v: string) => {
+    setAiSettings(role === 'main' ? { ...ai, provider: v as AiProviderId } : { ...ai, [role]: v as AiProviderId | '' })
+  }
 
   return (
     <>
-      <button ref={btn} type="button" className={'sb-engine-btn' + (open ? ' on' : '')} onClick={() => setOpen((o) => !o)} aria-expanded={open} data-tip="AI engines — check that each one is connected and working">
+      <button ref={btn} type="button" className={'sb-engine-btn ' + summary.cls + (open ? ' on' : '')} onClick={() => setOpen((o) => !o)} aria-expanded={open} data-tip="AI engines — see, test and change the company behind each job">
         <span className="sb-k">Engine</span>
-        {offline ? (
-          <b>Offline — manual translation needed</b>
-        ) : (
-          rows.map(({ role, label, a }, i) => (
-            <span key={role} className="sb-role">
-              {i > 0 && <i className="sb-chev" aria-hidden>›</i>}
-              <span className="sb-rname">{label}</span>
-              {a ? <b data-provider={a.provider}><i className="sb-pdot" aria-hidden />{providerMeta(a.provider).name} · {a.model === 'auto' ? 'Auto' : modelLabel(a.model)}</b> : <b className="free">Neural GTX</b>}
-            </span>
-          ))
-        )}
+        <span className="sb-eng-state"><i className="sb-dot" aria-hidden />{summary.text}</span>
         <Icon name="chevUp" size={12} className="sb-engine-chev" />
       </button>
       {open && at && createPortal(
         <div ref={pop} className="eng-pop" role="dialog" aria-label="AI engines" style={{ bottom: at.bottom, left: at.left }}>
           <div className="eng-head">
             <b>AI engines</b>
-            <span className="hint">{busy ? 'Checking…' : anyBad ? 'A key needs attention' : 'Each key is tested with one tiny request'}</span>
+            <span className="hint">{busy ? 'Checking…' : 'One tiny request per key'}</span>
             <div className="spacer" />
-            <button type="button" className="btn xs" onClick={runAll} disabled={busy}><Icon name="refresh" size={12} /><span>Refresh all</span></button>
+            <button type="button" className="btn xs" onClick={() => refresh()} disabled={busy || !distinct.length}><Icon name="refresh" size={12} /><span>Refresh all</span></button>
           </div>
-          {rows.map(({ role, label, a }) => {
-            const c = res[role]
+          {rows.map(({ role, label, chosen, a }) => {
+            const c = stateOf(a)
             return (
-              <div key={role} className={'eng-row ' + (a ? c.state : 'free')}>
+              <div key={role} className={'eng-row ' + (a ? c?.state ?? 'busy' : 'free')}>
                 <span className="eng-role">{label}</span>
                 <div className="eng-who">
-                  {a ? (
-                    <b data-provider={a.provider}><i className="sb-pdot" aria-hidden />{providerMeta(a.provider).name}</b>
-                  ) : (
-                    <b className="free">Neural GTX</b>
-                  )}
-                  <span className="eng-model">{a ? (c.state === 'ok' ? modelLabel(c.model) : a.model === 'auto' ? 'Auto' : modelLabel(a.model)) : 'free machine translation · no key set'}</span>
+                  <select className="eng-select" value={role === 'main' ? ai.provider : ai[role]} aria-label={`${label} company`} data-provider={chosen}
+                    onChange={(e) => setRole(role, e.target.value)}>
+                    {role !== 'main' && <option value="">Same as main</option>}
+                    {AI_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <span className="eng-model">{a ? (c?.state === 'ok' ? modelLabel(c.model) : ai.models[chosen] === 'auto' ? 'Auto model' : modelLabel(ai.models[chosen])) : `no ${providerMeta(chosen).name} key — free translation is used`}</span>
                 </div>
                 <div className="eng-state">
-                  {!a && <span className="eng-tag">Free</span>}
-                  {a && c.state === 'idle' && <span className="eng-tag">Not checked</span>}
-                  {a && c.state === 'busy' && <span className="eng-tag busy"><span className="pulse-dot" />Checking</span>}
-                  {a && c.state === 'ok' && <span className="eng-tag ok"><Icon name="check" size={11} />Working · {c.ms < 10_000 ? (c.ms / 1000).toFixed(1) : Math.round(c.ms / 1000)} s</span>}
-                  {a && c.state === 'bad' && <span className="eng-tag bad"><Icon name="info" size={11} />Failed</span>}
+                  {!a && <button type="button" className="btn xs" onClick={() => { setOpen(false); onAddKey() }}>Add key</button>}
+                  {a && (!c || c.state === 'busy') && <span className="eng-tag busy"><span className="pulse-dot" />Checking</span>}
+                  {a && c?.state === 'ok' && <span className="eng-tag ok"><Icon name="check" size={11} />Working · {fmt(c.ms)}</span>}
+                  {a && c?.state === 'bad' && <span className="eng-tag bad"><Icon name="info" size={11} />Failed</span>}
                 </div>
-                <button type="button" className="ibtn" aria-label={`Check ${label} again`} data-tip="Check again" disabled={!a || c.state === 'busy'} onClick={() => void run(role)}><Icon name="refresh" size={13} /></button>
-                {a && c.state === 'bad' && <p className="eng-err">{c.error}</p>}
+                <button type="button" className="ibtn" aria-label={`Check ${label} again`} data-tip="Check again" disabled={!a || c?.state === 'busy'} onClick={() => a && refresh(a)}><Icon name="refresh" size={13} /></button>
+                {a && c?.state === 'bad' && <p className="eng-err">{c.error}</p>}
               </div>
             )
           })}
-          <p className="hint eng-foot">Change a provider, key or model from the AI button in the header.</p>
+          <p className="hint eng-foot">Keys and models are set from the AI button in the header.</p>
         </div>,
         document.body,
       )}

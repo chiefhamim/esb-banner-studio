@@ -1308,7 +1308,7 @@ export function EditorialWorkspace() {
           <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.connected ? `Connected as ${staffSession?.name || 'Mehedi Hasan Hamim'} · ${siteStatus.latencyMs} ms` : 'Disconnected'}</span>
         </button>
         <div className="sep" />
-        <EngineStatus ai={ai} offline={translationProvider === 'offline'} />
+        <EngineStatus ai={ai} offline={translationProvider === 'offline'} onAddKey={() => setShowApiKeyModal(true)} />
         <div className="spacer" />
         <span>
           {wordCount} words · ~{readTimeMin} min read

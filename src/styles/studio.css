@@ -819,3 +819,12 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 .eng-head b, .eng-head .hint, .eng-head .btn { white-space: nowrap; }
 .eng-head .hint { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .eng-who { align-items: flex-start; }
+
+/* Engine: closed it is one word with a status dot; the company per job is a native select in the panel */
+.sb-engine-btn { --sb: var(--text-3); }
+.sb-engine-btn.ok { --sb: #10b9a0; } .sb-engine-btn.warn { --sb: #e0a030; } .sb-engine-btn.bad { --sb: #f0506e; } .sb-engine-btn.busy { --sb: #4f8cff; }
+.sb-eng-state { display: inline-flex; align-items: center; gap: 7px; font: 600 12px/16px var(--ui); color: var(--text); }
+.sb-engine-btn.busy .sb-dot { animation: sb-breathe 1.4s ease-in-out infinite; }
+.eng-select { appearance: none; -webkit-appearance: none; height: 28px; padding: 0 26px 0 10px; font: 600 12.5px/1 var(--ui); color: var(--text); background: var(--field, var(--fill)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 9px center; border: 0; border-radius: var(--r-2); cursor: pointer; max-width: 100%; }
+.eng-select:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.eng-select option { color: initial; }
