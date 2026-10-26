@@ -966,18 +966,18 @@ export function EditorialWorkspace() {
                   spellCheck={false}
                 />
               </div>
-              <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
-                {loading ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
-                <span>{loading ? 'Extracting…' : 'Fetch & Auto-Translate'}</span>
-              </button>
             </div>
+            <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
+                {loading ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
+                <span>{loading ? 'Extracting…' : 'Fetch & Process'}</span>
+              </button>
             <p className="ed-link-hint">Paste the address of a news story, Bengali or English.</p>
           </div>
           <ol className="ed-pipe" aria-label="What happens next">
             <li className="parse"><span className="pipe-top"><span className="pipe-ic"><Icon name="newspaper" size={16} /></span><i>01</i></span><b>Parse</b><small>Text and photos are read from the page</small></li>
-            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 22 10" width="22" height="10"><path d="M1 5h19M16 1.2 20.5 5 16 8.8" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg></li>
+            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 60 32" width="62" height="33"><path d="M2 25C10 29 20 25 26 19C32 12 28 4 22 6C16 8 18 19 28 23C38 27 48 19 54 11" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeDasharray="3 3.4" /><path d="M0 0L-6.5-3.4V3.4Z" transform="translate(57.5 8) rotate(-48)" fill="currentColor" /></svg></li>
             <li className="polish"><span className="pipe-top"><span className="pipe-ic"><Icon name="sparkle" size={16} /></span><i>02</i></span><b>Polish</b><small>Your AI writes newsroom English</small></li>
-            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 22 10" width="22" height="10"><path d="M1 5h19M16 1.2 20.5 5 16 8.8" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg></li>
+            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 60 32" width="62" height="33"><path d="M2 25C10 29 20 25 26 19C32 12 28 4 22 6C16 8 18 19 28 23C38 27 48 19 54 11" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeDasharray="3 3.4" /><path d="M0 0L-6.5-3.4V3.4Z" transform="translate(57.5 8) rotate(-48)" fill="currentColor" /></svg></li>
             <li className="publish"><span className="pipe-top"><span className="pipe-ic"><Icon name="upload" size={16} /></span><i>03</i></span><b>Publish</b><small>Send the article, banner and post</small></li>
           </ol>
         </div>

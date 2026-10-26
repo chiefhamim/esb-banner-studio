@@ -1421,3 +1421,13 @@ label.switch:active i { filter: brightness(.94); }
 .ed-pipe b { grid-area: 1 / 2; margin: 0; padding-top: 1px; font: 600 13.5px/18px var(--ui); }
 .ed-pipe small { grid-area: 2 / 2; margin-top: 3px; font: 400 12px/17px var(--ui); }
 .ed-pipe .pipe-arrow { align-self: start; padding: 12px 10px 0; color: color-mix(in srgb, var(--text) 28%, transparent); }
+
+/* link tab: a wide field with its action underneath; dashed looping arrows between the steps */
+.ed-link { gap: 20px; }
+.ed-link-paste { gap: 8px; }
+.ed-link-paste > .btn { width: 100%; height: 40px; justify-content: center; border-radius: 10px; }
+.ed-link-hint { margin-top: 0; }
+.ed-pipe { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); }
+.ed-pipe .pipe-arrow { padding: 0 2px 0; margin-top: -2px; color: color-mix(in srgb, var(--text) 55%, transparent); }
+.ed-pipe .pipe-arrow svg { display: block; overflow: visible; }
+.ed-pipe li:not(.pipe-arrow) { grid-template-rows: 19px auto; }
