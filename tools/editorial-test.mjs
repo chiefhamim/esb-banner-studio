@@ -106,7 +106,7 @@ try {
 প্রকল্পটিতে মোট ৫৯২ কোটি টাকা ব্যয় ধরা হয়েছে এবং ২০২৬ সালের মধ্যে দৈনিক ৩০ এমএমসিএফডি গ্যাস জাতীয় গ্রিডে সরবরাহ করা হবে।`
 
   await page.fill('.ed-paste-area', testStory)
-  await page.click('button:has-text("Auto-Translate & Populate")')
+  await page.click('button:has-text("Process Story")')
 
   // 4. Verify Left Column keeps Original Bengali and Right Column populates English Translation
   await page.waitForSelector('.ed-card-story', { timeout: 30000 })

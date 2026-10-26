@@ -587,7 +587,7 @@ export function EditorialWorkspace() {
       setProgressStatus(null)
       setRawBengaliInput(doc.text)
       setDocInfo({ name: doc.name, kind: doc.kind, pages: doc.pages, size: file.size, words: doc.words, warnings: doc.warnings })
-      showToast('File read — check the text, then press Auto-Translate')
+      showToast('File read — check the text, then press Process Story')
     } catch (err) {
       setProgressStatus(null)
       setErrorMsg(err instanceof DocumentImportError ? err.message : err instanceof Error ? err.message : 'This file could not be read.')
@@ -1041,7 +1041,7 @@ export function EditorialWorkspace() {
             <span className="mono hint">{rawBengaliInput.trim().length} characters</span>
             <button type="button" className="btn primary" onClick={() => void handleTranslateRawBengali()} disabled={translating || docBusy || !rawBengaliInput.trim()}>
               {translating ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
-              <span>{translating ? 'Translating…' : 'Auto-Translate & Populate'}</span>
+              <span>{translating ? 'Processing…' : 'Process Story'}</span>
             </button>
           </div>
         </div>
@@ -1601,7 +1601,7 @@ export function EditorialWorkspace() {
 
       {deskDrag && createPortal(
         <div className="ed-dropveil" aria-hidden>
-          <div className="ed-dropveil-card"><FileTypePair size={56} /><b>Drop a PDF or Word file</b><span>It is read here; nothing is translated until you press Auto-Translate</span></div>
+          <div className="ed-dropveil-card"><FileTypePair size={56} /><b>Drop a PDF or Word file</b><span>It is read here; nothing is processed until you press Process Story</span></div>
         </div>,
         document.body,
       )}

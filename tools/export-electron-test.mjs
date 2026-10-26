@@ -44,7 +44,7 @@ try {
   await page.click('.ws-btn[data-ws="editorial"]')
   await page.click('button:has-text("Paste Text or File")')
   await page.fill('.ed-paste-area', 'সিলেটে দুটি নতুন কূপ\nপ্রকল্পটিতে মোট ৫৯২ কোটি টাকা ব্যয় হবে।')
-  await page.click('button:has-text("Auto-Translate & Populate")')
+  await page.click('button:has-text("Process Story")')
   await page.waitForSelector('.ed-card-story', { timeout: 30000 })
   await page.click('[data-panel="ed-outputs"] > header')
   const b2 = snap()

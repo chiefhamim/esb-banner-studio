@@ -64,7 +64,7 @@ try {
       if (ws === 'editorial') {
         add('editorial-empty', await page.evaluate(measure))
         await page.click('button:has-text("Paste Text or File")'); await page.fill('.ed-paste-area', 'পেট্রোবাংলা সিলেট গ্যাসক্ষেত্রে দুটি নতুন কূপ খনন করবে\nপেট্রোবাংলা সিলেট গ্যাসক্ষেত্রে দুটি নতুন উন্নয়ন কূপ খননের উদ্যোগ নিয়েছে।')
-        await page.click('button:has-text("Auto-Translate & Populate")'); await page.waitForSelector('.ed-card-story', { timeout: 30000 }); await page.waitForTimeout(600)
+        await page.click('button:has-text("Process Story")'); await page.waitForSelector('.ed-card-story', { timeout: 30000 }); await page.waitForTimeout(600)
         for (const tab of ['body', 'seo', 'social']) {
           await page.evaluate((t) => [...document.querySelectorAll('.ed-story-tabs button')].find((x) => new RegExp(t, 'i').test(x.textContent + (x.getAttribute('aria-label') || '')))?.click(), tab); await page.waitForTimeout(300)
           add('editorial-' + tab, await page.evaluate(measure))
