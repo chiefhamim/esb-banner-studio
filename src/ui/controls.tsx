@@ -265,10 +265,10 @@ export function IconButton({ icon, tip, onClick, active, disabled, size = 15, ti
 
 /** Measures the active button so a single "thumb" can glide between options instead of the highlight jumping. */
 /**
- * The chip behind the selected tab. When the choice changes it does not just slide: it stretches toward the new option
- * (the leading edge arrives first, the trailing edge is pulled after it), overshoots a few pixels, settles, and a soft ring
- * ripples out where it lands. Hovering a tab also tugs it a couple of pixels toward the pointer (--mag-x/--mag-y, applied
- * with the `translate` property so it never fights the press-scale transform). All of it is skipped under reduced motion.
+ * The chip behind the selected tab. When the choice changes it stretches toward the new option (the leading edge arrives
+ * first, the trailing edge is pulled after it), overshoots a few pixels and settles. It can also be grabbed and dragged:
+ * it follows the pointer, the option it would land on lights up, and on release it slides on from where it was dropped
+ * (or springs back). Skipped under reduced motion.
  */
 export function useSlidingThumb(value: unknown) {
   const wrap = useRef<HTMLDivElement>(null)
@@ -277,6 +277,8 @@ export function useSlidingThumb(value: unknown) {
   const moved = useRef(false)
   const [pos, setPos] = useState<{ x: number; w: number } | null>(null)
   const [ready, setReady] = useState(false)
+  const posNow = useRef<{ x: number; w: number } | null>(null)
+  posNow.current = pos
   useLayoutEffect(() => {
     const el = wrap.current
     if (!el) return
@@ -305,38 +307,81 @@ export function useSlidingThumb(value: unknown) {
     const left = Math.min(from.x, pos.x)
     const stretch = Math.abs(pos.x - from.x) + Math.max(from.w, pos.w)
     const at = (x: number, w: number, offset: number) => ({ transform: `translateX(${x}px)`, width: `${w}px`, offset })
-    const anim = el.animate([
+    el.animate([
       at(from.x, from.w, 0),
       at(left, stretch, 0.42),                       // stretched across both options, leading edge already there
       at(pos.x + dir * 3, pos.w, 0.76),              // trailing edge catches up and overshoots
       at(pos.x, pos.w, 1),
     ], { duration: 620, easing: 'cubic-bezier(.33, 0, .2, 1)' })
-    anim.finished.then(() => {
-      el.classList.remove('ripple'); void el.offsetWidth; el.classList.add('ripple')
-      window.setTimeout(() => el.classList.remove('ripple'), 700)
-    }).catch(() => { /* interrupted by the next change */ })
   }, [pos, ready])
 
-  // magnetic tug: the tab under the pointer leans toward it
+  // grab the chip and drag it to another option
   useLayoutEffect(() => {
     const el = wrap.current
-    if (!el || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)')
-    let cur: HTMLButtonElement | null = null
-    const reset = (b: HTMLButtonElement | null) => { b?.style.removeProperty('--mag-x'); b?.style.removeProperty('--mag-y') }
-    const move = (e: PointerEvent) => {
-      const b = (e.target as Element).closest?.('button') as HTMLButtonElement | null
-      if (b !== cur) { reset(cur); cur = b }
-      if (!b || reduce.matches || b.disabled) return
-      const r = b.getBoundingClientRect()
-      const dx = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2)))
-      const dy = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (r.height / 2)))
-      b.style.setProperty('--mag-x', `${(dx * 3).toFixed(2)}px`)
-      b.style.setProperty('--mag-y', `${(dy * 1.5).toFixed(2)}px`)
+    if (!el) return
+    type Drag = { id: number; startX: number; x0: number; w: number; cur: number; active: boolean; btn: HTMLButtonElement }
+    let drag: Drag | null = null
+    let aim: HTMLButtonElement | null = null
+    const options = () => [...el.querySelectorAll<HTMLButtonElement>('button')].filter((b) => !b.disabled)
+    const nearest = (center: number) => options().reduce((best, b) => (Math.abs(b.offsetLeft + b.offsetWidth / 2 - center) < Math.abs(best.offsetLeft + best.offsetWidth / 2 - center) ? b : best))
+    const setAim = (b: HTMLButtonElement | null) => { if (aim === b) return; aim?.classList.remove('aim'); aim = b; aim?.classList.add('aim') }
+    const down = (e: PointerEvent) => {
+      if (e.button !== 0 || !pill.current) return
+      const b = (e.target as Element).closest('button') as HTMLButtonElement | null
+      if (!b || !b.classList.contains('on') || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+      drag = { id: e.pointerId, startX: e.clientX, x0: b.offsetLeft, w: b.offsetWidth, cur: b.offsetLeft, active: false, btn: b }
     }
-    const leave = () => { reset(cur); cur = null }
-    el.addEventListener('pointermove', move); el.addEventListener('pointerleave', leave)
-    return () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerleave', leave); reset(cur) }
+    const move = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id || !pill.current) return
+      const dx = e.clientX - drag.startX
+      if (!drag.active) {
+        if (Math.abs(dx) < 4) return
+        drag.active = true
+        el.setPointerCapture(e.pointerId)
+        el.classList.add('dragging')
+        pill.current.getAnimations().forEach((a) => a.cancel())
+      }
+      const opts = options()
+      const lastOpt = opts[opts.length - 1]
+      const min = opts[0].offsetLeft, max = lastOpt.offsetLeft + lastOpt.offsetWidth - drag.w
+      drag.cur = Math.max(min, Math.min(max, drag.x0 + dx))
+      pill.current.style.transform = `translateX(${drag.cur}px)`
+      setAim(nearest(drag.cur + drag.w / 2))
+    }
+    const end = (e: PointerEvent) => {
+      if (!drag || e.pointerId !== drag.id) return
+      const d = drag
+      drag = null
+      if (!d.active) return
+      const p = pill.current
+      el.classList.remove('dragging')
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId)
+      const target = e.type === 'pointercancel' ? d.btn : nearest(d.cur + d.w / 2)
+      setAim(null)
+      if (!p) return
+      if (target === d.btn) { // dropped back on its own option: spring home
+        const home = posNow.current
+        if (home) {
+          const spring = p.animate([{ transform: `translateX(${d.cur}px)` }, { transform: `translateX(${home.x + (home.x > d.cur ? 2 : -2)}px)`, offset: 0.65 }, { transform: `translateX(${home.x}px)` }], { duration: 420, easing: 'cubic-bezier(.22, 1, .36, 1)' })
+          p.style.transform = `translateX(${home.x}px)`
+          void spring
+        }
+        return
+      }
+      last.current = { x: d.cur, w: d.w } // the slide on to the new option starts from where the chip was dropped
+      moved.current = true
+      target.click()
+    }
+    const swallow = (e: Event) => { if (drag?.active) { e.preventDefault(); e.stopPropagation() } }
+    el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move)
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end)
+    el.addEventListener('click', swallow, true)
+    return () => {
+      el.removeEventListener('pointerdown', down); el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerup', end); el.removeEventListener('pointercancel', end)
+      el.removeEventListener('click', swallow, true)
+      setAim(null)
+    }
   }, [])
 
   const thumb = pos && <i ref={(node) => { pill.current = node }} className={'pill-slide' + (ready ? ' ready' : '')} style={{ width: pos.w, transform: `translateX(${pos.x}px)` }} />

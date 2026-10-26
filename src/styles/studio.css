@@ -466,7 +466,7 @@
 /* tiles answer the pointer with depth and an edge in their own colour — never by moving (no layout shift) */
 .pnl-body .cat:hover:not(.on) { box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.22), 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
 .collage-btn:hover:not(.on) .collage { border-color: color-mix(in srgb, var(--sel) 45%, transparent); }
-.ws-switch .ws-btn:not(.on):hover { background: color-mix(in srgb, var(--raised) 55%, transparent); }
+.ws-switch .ws-btn:not(.on):hover { background: transparent; }
 @media (prefers-reduced-motion: reduce) { .btn, .ibtn, .pv-btn, .cat, .pnl > header .pnl-chev { transition: none; } .btn:active, .ibtn:active, .cat:hover { transform: none !important; } }
 :root[data-theme=dark] .pnl:not(.open) > header:hover .pnl-icon { color: color-mix(in srgb, var(--cat, #fff) 55%, #fff); background: color-mix(in srgb, var(--sel) 28%, var(--card)); }
 /* Home's header has the room, and it is where you choose a desk: name all three */
@@ -857,7 +857,7 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 /* ---- one hover / press / selected language for every chip, tab and toggle (it was missing on tabs, segmented controls,
    the link pill, switches and disclosure rows: only the text colour moved, so the pointer got no answer) ---- */
 .seg-ctl button, .side-tabs button, .ws-switch .ws-btn, .ed-link-pill, .ed-more > summary, .bc-actions .btn, .ed-steps li { transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), transform var(--t-1) var(--ease); }
-.seg-ctl button:not(.on):not(:disabled):hover, .side-tabs button:not(.on):not(:disabled):hover, .ws-switch .ws-btn:not(.on):hover { background: var(--fill-hover); color: var(--text); }
+.seg-ctl button:not(.on):not(:disabled):hover, .side-tabs button:not(.on):not(:disabled):hover, .ws-switch .ws-btn:not(.on):hover { background: transparent; color: var(--text); }
 .seg-ctl button.on:hover, .side-tabs button.on:hover, .ws-switch .ws-btn.on:hover { background: transparent; }
 .seg-ctl button:focus-visible, .side-tabs button:focus-visible, .ws-switch .ws-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .ed-link-pill:hover { background: var(--fill-hover); }
@@ -1279,11 +1279,21 @@ label.switch:active i { filter: brightness(.94); }
 .ed-launcher-queue .sq-row { background: var(--fill); }
 .ed-launcher-queue .sq-row:hover { background: var(--fill-hover); }
 
-/* magnetic tabs: the pointer tugs a tab (translate is its own property, so the press-scale transform still works) and the chip
-   lands with a ripple ring. The sliding itself is a Web Animation in useSlidingThumb. */
-.seg-ctl button, .side-tabs button, .ws-switch .ws-btn { translate: var(--mag-x, 0) var(--mag-y, 0); transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), transform var(--t-2) var(--spring), translate 360ms cubic-bezier(.22, 1.2, .36, 1); }
+/* tabs: the chip is the only thing that moves. Hover only brightens the label; a dragged chip lifts, and the option it would land on lights up. */
 .pill-slide { will-change: transform, width; }
-.pill-slide::after { content: ''; position: absolute; inset: 0; border-radius: inherit; border: 1.5px solid color-mix(in srgb, var(--text) 38%, transparent); opacity: 0; pointer-events: none; }
-.pill-slide.ripple::after { animation: pill-ripple 640ms cubic-bezier(.2, .7, .2, 1) both; }
-@keyframes pill-ripple { 0% { opacity: .55; transform: scale(1, 1); } 100% { opacity: 0; transform: scale(1.14, 1.55); } }
-@media (prefers-reduced-motion: reduce) { .pill-slide.ripple::after { animation: none; } .seg-ctl button, .side-tabs button, .ws-switch .ws-btn { translate: none; } }
+.seg-ctl, .side-tabs { touch-action: pan-y; }
+.seg-ctl button.on, .side-tabs button.on { cursor: grab; }
+.seg-ctl.dragging, .side-tabs.dragging { cursor: grabbing; user-select: none; }
+.seg-ctl.dragging button, .side-tabs.dragging button { cursor: grabbing; }
+.seg-ctl.dragging .pill-slide, .side-tabs.dragging .pill-slide { box-shadow: 0 4px 14px rgba(16, 18, 28, .22), 0 0 0 .5px rgba(16, 18, 28, .12); }
+.seg-ctl.dragging button.on:not(.aim), .side-tabs.dragging button.on:not(.aim) { color: var(--text-2); }
+.seg-ctl.dragging button.aim, .side-tabs.dragging button.aim { color: var(--text); }
+:root[data-theme=dark] .seg-ctl.dragging button.aim, :root[data-theme=dark] .side-tabs.dragging button.aim { color: var(--chip-on-fg); }
+
+/* Editorial Story Desk: centred in the window with nothing to scroll; the story list shows three rows and scrolls for the rest;
+   the paste box starts at half height and grows to fit what is pasted (up to 44 % of the window, then it scrolls) */
+.ed-launcher-wrap { justify-content: safe center; align-items: center; padding: 20px 24px; gap: 14px; }
+.ed-launcher-wrap > .ed-launcher-card { padding: 24px 28px; gap: 16px; }
+.ed-launcher-wrap > .ed-launcher-queue { padding: 18px 20px 14px !important; gap: 10px !important; }
+.ed-launcher-wrap .sq.compact .sq-list { max-height: 206px; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area { min-height: 92px; max-height: 44vh; field-sizing: content; resize: none; }
