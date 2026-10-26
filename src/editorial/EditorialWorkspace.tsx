@@ -975,9 +975,9 @@ export function EditorialWorkspace() {
           </div>
           <ol className="ed-pipe" aria-label="What happens next">
             <li className="parse"><span className="pipe-top"><span className="pipe-ic"><Icon name="newspaper" size={16} /></span><i>01</i></span><b>Parse</b><small>Text &amp; photos are extracted</small></li>
-            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 56 30" width="56" height="30"><path d="M2 22C14 2 32 2 46 15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeDasharray="2.6 4" /><path d="M0 0L-8.5-4.2V4.2Z" transform="translate(48.2 17) rotate(42.9)" fill="currentColor" strokeLinejoin="round" /></svg></li>
+            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 64 62" width="60" height="58"><path d="M4 50C16 58 40 46 46 26C48 17 52 12 58 10" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeDasharray="2.6 4" /><path d="M0 0L-9.5-4.4Q-6.8 0-9.5 4.4Z" transform="translate(60.6 9.3) rotate(-18)" fill="currentColor" strokeLinejoin="round" /></svg></li>
             <li className="polish"><span className="pipe-top"><span className="pipe-ic"><Icon name="sparkle" size={16} /></span><i>02</i></span><b>Polish</b><small>AI refines it for the newsroom</small></li>
-            <li className="pipe-arrow s" aria-hidden><svg viewBox="0 0 56 30" width="56" height="30"><path d="M2 10C14 10 18 26 30 22C40 19 42 8 50 6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeDasharray="2.6 4" /><path d="M0 0L-8.5-4.2V4.2Z" transform="translate(52.9 5.3) rotate(-14)" fill="currentColor" strokeLinejoin="round" /></svg></li>
+            <li className="pipe-arrow s" aria-hidden><svg viewBox="0 0 64 62" width="60" height="58"><path d="M3 8C22 5 42 9 41 24C40 42 15 44 14 31C13 20 30 17 43 20C51 22 55 15 58 10" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeDasharray="2.6 4" /><path d="M0 0L-9.5-4.4Q-6.8 0-9.5 4.4Z" transform="translate(59.6 7.6) rotate(-56)" fill="currentColor" strokeLinejoin="round" /></svg></li>
             <li className="publish"><span className="pipe-top"><span className="pipe-ic"><Icon name="upload" size={16} /></span><i>03</i></span><b>Publish</b><small>Review &amp; publish right away</small></li>
           </ol>
         </div>
