@@ -1408,3 +1408,21 @@ label.switch:active i { filter: brightness(.94); }
 .ed-launcher-queue .sq-list::-webkit-scrollbar-track, .ed-launcher-wrap .ed-feed-list::-webkit-scrollbar-track { background: transparent; }
 .ed-launcher-queue .sq-list::-webkit-scrollbar-thumb, .ed-launcher-wrap .ed-feed-list::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 20%, transparent); background-clip: padding-box; border: 4px solid transparent; border-radius: 8px; }
 .ed-launcher-queue .sq-list::-webkit-scrollbar-thumb:hover, .ed-launcher-wrap .ed-feed-list::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text) 34%, transparent); background-clip: padding-box; }
+
+/* ---- Parse -> Polish -> Publish, premium: one gradient pipeline, three ring nodes, chevrons on the line, a light that runs along it ---- */
+.ed-link { gap: 26px; }
+.ed-flow { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.ed-flow-line { position: absolute; top: 25px; left: calc(100% / 6); right: calc(100% / 6); height: 2px; overflow: hidden; border-radius: 2px; background: linear-gradient(90deg, #3b82f6, #8b5cf6 52%, #10b981); opacity: .5; }
+.ed-flow-line::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 64px; background: linear-gradient(90deg, transparent, #fff, transparent); opacity: .9; animation: ed-flow-run 3.6s cubic-bezier(.45, 0, .25, 1) infinite; }
+@keyframes ed-flow-run { 0% { transform: translateX(-70px); } 70%, 100% { transform: translateX(calc(100cqw + 6px)); } }
+.ed-flow { container-type: inline-size; }
+.ed-flow li { --c: #3b82f6; --c2: #7db4ff; position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 8px; text-align: center; }
+.ed-flow li.polish { --c: #8b5cf6; --c2: #c39bff; }
+.ed-flow li.publish { --c: #10b981; --c2: #5fe0b4; }
+.ed-step-ic { position: relative; z-index: 1; display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 10px; color: var(--c); border: 1.5px solid transparent; border-radius: 50%; background: linear-gradient(color-mix(in srgb, var(--c) 9%, var(--card)), color-mix(in srgb, var(--c) 9%, var(--card))) padding-box, linear-gradient(135deg, var(--c), var(--c2)) border-box; }
+:root[data-theme=dark] .ed-step-ic { background: linear-gradient(color-mix(in srgb, var(--c) 16%, var(--card)), color-mix(in srgb, var(--c) 16%, var(--card))) padding-box, linear-gradient(135deg, var(--c), var(--c2)) border-box; }
+.ed-flow em { font: 700 9.5px/12px var(--ui); font-style: normal; letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--c); }
+.ed-flow b { margin-top: 1px; font: 700 14px/20px var(--ui); letter-spacing: -.005em; color: var(--text); }
+.ed-flow small { max-width: 150px; margin-top: 2px; font: 400 11.5px/16px var(--ui); color: var(--text-3); }
+.ed-flow-chev { position: absolute; z-index: 2; top: 25px; left: 0; display: grid; place-items: center; width: 20px; height: 20px; color: var(--c); background: var(--card); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); border-radius: 50%; transform: translate(-50%, -50%); }
+@media (prefers-reduced-motion: reduce) { .ed-flow-line::after { animation: none; opacity: 0; } }
