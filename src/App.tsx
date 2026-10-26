@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import './App.css'
 import { loadBaseAssets } from './core/assets'
 import type { Assets } from './core/render'
@@ -7,7 +7,8 @@ import { GraphicsWorkspace } from './shell/GraphicsWorkspace'
 import { EditorialWorkspace } from './editorial/EditorialWorkspace'
 import { VideoWorkspace } from './video/VideoWorkspace'
 import { ComponentGallery } from './ui/ComponentGallery'
-import { useShellStore } from './shell/shellStore'
+import { useShellStore, deskMotion } from './shell/shellStore'
+import { arriveFrames, reducedMotion } from './ui/motion'
 import { useStore } from './store'
 import { Tooltips } from './ui/controls'
 import { CATEGORIES } from './core/tokens'
@@ -27,6 +28,17 @@ export default function App() {
   useEffect(() => {
     loadBaseAssets().then((b) => setBase(b))
   }, [])
+
+  // A desk that arrives after a switch drifts in and settles with a soft overshoot, on the same spring as the tab chip
+  // (the desk that was showing has already eased out in shellStore.setWorkspace)
+  const lastDesk = useRef(workspace)
+  useLayoutEffect(() => {
+    if (lastDesk.current === workspace) return
+    lastDesk.current = workspace
+    const el = document.querySelector<HTMLElement>('.workspace-main > *')
+    if (!el || typeof el.animate !== 'function' || reducedMotion()) return
+    el.animate(arriveFrames(deskMotion.dir), { duration: 560, easing: 'linear' })
+  }, [workspace])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { flushSync } from 'react-dom'
+import { reducedMotion } from '../ui/motion'
 
 export type WorkspaceId = 'home' | 'graphics' | 'editorial' | 'video' | 'audio'
 
@@ -18,6 +18,10 @@ interface ShellState {
 }
 
 const STORAGE_KEY = 'esb-banner-studio/shell'
+let moving = false
+let queued: WorkspaceId | null = null
+/** Which way the last desk change went (+1 toward Video, -1 toward Home); App.tsx animates the arriving desk with it. */
+export const deskMotion = { dir: 1 as 1 | -1 }
 const ORDER: WorkspaceId[] = ['home', 'editorial', 'graphics', 'video', 'audio']
 
 /** The app always opens on Home, whichever workspace was open when it was closed. */
@@ -32,16 +36,20 @@ export const useShellStore = create<ShellState>((set, get) => ({
     // any move away from Graphics ends the round trip, so the back button never outlives it
     const apply = () => set((st) => ({ workspace: ws, returnTo: ws === 'graphics' ? st.returnTo : null }))
     const from = get().workspace
-    // Between desks the browser cross-dissolves a snapshot of the old desk into the new one (View Transitions), with the two
-    // sliding a few pixels in mirror image along the order Home, Editorial, Graphics, Video. Neither desk is mounted twice.
-    const vt = (document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } }).startViewTransition
-    if (from === ws || typeof vt !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { apply(); return }
-    const dir = ORDER.indexOf(ws) >= ORDER.indexOf(from) ? 1 : -1
-    const root = document.documentElement
-    root.style.setProperty('--ws-dir', String(dir))
-    root.dataset.vt = '1'
-    const t = vt.call(document, () => { flushSync(apply) })
-    t.finished.finally(() => { delete root.dataset.vt })
+    const el = document.querySelector<HTMLElement>('.workspace-main > *')
+    if (from === ws || !el || typeof el.animate !== 'function' || reducedMotion()) { apply(); return }
+    // the desk on screen eases out toward the side it came from, then the new desk drifts in and settles (App.tsx)
+    if (moving) { queued = ws; return }
+    moving = true
+    deskMotion.dir = ORDER.indexOf(ws) >= ORDER.indexOf(from) ? 1 : -1
+    el.style.pointerEvents = 'none'
+    const out = el.animate([{ opacity: 1, transform: 'translateX(0)' }, { opacity: 0, transform: `translateX(${-deskMotion.dir * 22}px)` }], { duration: 150, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' })
+    const done = () => {
+      apply()
+      moving = false
+      if (queued && queued !== ws) { const next = queued; queued = null; get().setWorkspace(next) } else queued = null
+    }
+    out.finished.then(done, done)
   },
   recoveryAvailable: false,
   recoveryTime: null,

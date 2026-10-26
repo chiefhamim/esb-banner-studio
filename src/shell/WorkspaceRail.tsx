@@ -22,7 +22,7 @@ const DESKS: WorkspaceItem[] = [
 export function WorkspaceSwitcher() {
   const current = useShellStore((s) => s.workspace)
   const setWorkspace = useShellStore((s) => s.setWorkspace)
-  const { wrap, thumb } = useSlidingThumb(current)
+  const { wrap, thumb } = useSlidingThumb(current, 'workspace-switch')
   return (
     <div className="ws-wrap">
       {/* the Home icon's hover sheen — same moving gradient and colours as the "Studio" word on the Home screen */}

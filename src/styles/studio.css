@@ -661,8 +661,6 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 /* Workspace switcher: calm, unhurried motion — the hover fade, the highlight glide and the workspace change all take their time */
 .ws-switch .pill-slide.ready { transition: transform 520ms cubic-bezier(.4, 0, .2, 1), width 520ms cubic-bezier(.4, 0, .2, 1); }
 .ws-switch .ws-btn, .ws-home-btn { transition: color 380ms cubic-bezier(.4, 0, .2, 1), background-color 380ms cubic-bezier(.4, 0, .2, 1), border-color 380ms cubic-bezier(.4, 0, .2, 1), box-shadow 380ms cubic-bezier(.4, 0, .2, 1), transform var(--t-2) var(--spring); }
-.workspace-main > * { animation: ws-in 360ms cubic-bezier(.4, 0, .2, 1) both; }
-@keyframes ws-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .ws-switch .pill-slide.ready, .ws-switch .ws-btn, .ws-home-btn, .workspace-main > * { transition: none; animation: none; } }
 
 /* ---------------------------------------------------------------- AI: the company's colour on the chip and the "Write with AI" buttons
@@ -1460,18 +1458,3 @@ label.switch:active i { filter: brightness(.94); }
 .ed-doc .btn, .ed-intake.compact .ed-doc .btn { height: 38px; padding: 0 20px; font-size: 13px; }
 .ed-doc .ibtn { width: 38px; height: 38px; }
 .ed-pipe .pipe-arrow.s svg { transform: translateX(-10px); }  /* the loop keeps its distance from "Publish" */
-
-/* ---- Moving between desks: a soft, mirrored cross-dissolve ---------------------------------------------------------------
-   The old desk dissolves out while drifting 14 px one way and the new desk dissolves in drifting from 14 px the other way,
-   both with a breath of blur, on the same slow curve, so the move is symmetric whichever way you go. The Editorial /
-   Graphics / Video switcher keeps its identity and glides in place instead of dissolving with the page. */
-.ws-wrap { view-transition-name: ws-switch; }
-html[data-vt] .workspace-main > * { animation: none; }
-::view-transition-group(root) { animation-duration: 560ms; animation-timing-function: cubic-bezier(.3, 0, .15, 1); }
-::view-transition-old(root) { animation: 560ms cubic-bezier(.3, 0, .15, 1) both ws-vt-out; }
-::view-transition-new(root) { animation: 560ms cubic-bezier(.3, 0, .15, 1) both ws-vt-in; }
-@keyframes ws-vt-out { to { opacity: 0; transform: translateX(calc(var(--ws-dir, 1) * -14px)) scale(.994); filter: blur(2.5px); } }
-@keyframes ws-vt-in { from { opacity: 0; transform: translateX(calc(var(--ws-dir, 1) * 14px)) scale(.994); filter: blur(2.5px); } }
-::view-transition-group(ws-switch) { animation-duration: 560ms; animation-timing-function: cubic-bezier(.3, 0, .15, 1); }
-::view-transition-old(ws-switch), ::view-transition-new(ws-switch) { animation-duration: 560ms; }
-@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }

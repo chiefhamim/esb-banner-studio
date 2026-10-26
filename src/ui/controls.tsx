@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
+import { step } from './motion'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
 import { CATEGORIES, INK, LINK_PILL, STRIPE_COLORS, WEEKDAY_RED } from '../core/tokens'
@@ -264,11 +265,8 @@ export function IconButton({ icon, tip, onClick, active, disabled, size = 15, ti
 }
 
 /** Measures the active button so a single "thumb" can glide between options instead of the highlight jumping. */
-/** Step response of a damped spring: 0 at t = 0, settling on 1 (a little past it first when zeta < 1). */
-const step = (t: number, zeta: number, omega: number) => {
-  const wd = omega * Math.sqrt(1 - zeta * zeta)
-  return 1 - Math.exp(-zeta * omega * t) * (Math.cos(wd * t) + ((zeta * omega) / wd) * Math.sin(wd * t))
-}
+/** Where a chip last sat, by name: a switcher that is re-created in another desk starts its glide from there. */
+const pillMemory = new Map<string, { x: number; w: number }>()
 
 /**
  * The chip behind the selected tab. When the choice changes it stretches toward the new option (the leading edge arrives
@@ -276,13 +274,13 @@ const step = (t: number, zeta: number, omega: number) => {
  * it follows the pointer, the option it would land on lights up, and on release it slides on from where it was dropped
  * (or springs back). Skipped under reduced motion.
  */
-export function useSlidingThumb(value: unknown) {
+export function useSlidingThumb(value: unknown, memoryKey?: string) {
   const wrap = useRef<HTMLDivElement>(null)
   const pill = useRef<HTMLElement | null>(null)
   const last = useRef<{ x: number; w: number } | null>(null)
   const moved = useRef(false)
   const [pos, setPos] = useState<{ x: number; w: number } | null>(null)
-  const [ready, setReady] = useState(false)
+  const [ready, setReady] = useState(() => !!(memoryKey && pillMemory.has(memoryKey)))
   const posNow = useRef<{ x: number; w: number } | null>(null)
   posNow.current = pos
   useLayoutEffect(() => {
@@ -302,8 +300,9 @@ export function useSlidingThumb(value: unknown) {
   }, [value])
 
   useLayoutEffect(() => {
-    const from = last.current
+    const from = last.current ?? (memoryKey ? pillMemory.get(memoryKey) ?? null : null)
     last.current = pos
+    if (memoryKey) { if (pos) pillMemory.set(memoryKey, pos); else pillMemory.delete(memoryKey) }
     const el = pill.current
     if (!pos || !from || !el || !moved.current || !ready) return
     moved.current = false
