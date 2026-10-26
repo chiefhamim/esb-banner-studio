@@ -37,6 +37,7 @@ import { useShellStore } from '../shell/shellStore'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
 import { FileTypeIcon, FileTypePair } from './FileTypeIcon'
+import { fmtPublished } from './fmtPublished'
 import { readDocument, readPdfWithAi, documentKind, fmtFileSize, DocumentImportError } from './importDocument'
 import { Field, Select, Check, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
@@ -943,11 +944,41 @@ export function EditorialWorkspace() {
         options={[
           { value: 'url', icon: 'link', label: compact ? 'Link' : 'Paste Story Link' },
           { value: 'paste', icon: 'edit', label: compact ? 'Text or file' : 'Paste Text or File' },
-          { value: 'live_feed', icon: 'globe', label: compact ? `Site (${liveArticles.length})` : `Site CMS Posts (${liveArticles.length})` },
+          { value: 'live_feed', icon: 'globe', label: compact ? 'Published' : `Published${liveArticles.length ? ` (${liveArticles.length})` : ''}` },
         ]}
       />
 
-      {launcherTab === 'url' && (
+      {launcherTab === 'url' && !compact && (
+        <div className="ed-intake-body ed-link">
+          <div className="ed-link-card">
+            <span className="ed-link-ic"><Icon name="link" size={18} /></span>
+            <div className="ed-link-field">
+              <label htmlFor="ed-link-input">Article link</label>
+              <input
+                id="ed-link-input"
+                type="url"
+                className="ed-link-input"
+                placeholder="Paste a Bengali or English news link"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
+                spellCheck={false}
+              />
+            </div>
+            <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
+              {loading ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
+              <span>{loading ? 'Extracting…' : 'Fetch & Auto-Translate'}</span>
+            </button>
+          </div>
+          <ol className="ed-link-steps" aria-label="What happens next">
+            <li><b>1</b><div><span>Extract</span><small>The story text and photos are read from the page</small></div></li>
+            <li><b>2</b><div><span>Translate</span><small>Your main AI writes it as newsroom English</small></div></li>
+            <li><b>3</b><div><span>Check</span><small>Every figure is compared with the source</small></div></li>
+          </ol>
+        </div>
+      )}
+
+      {launcherTab === 'url' && compact && (
         <div className="ed-intake-body">
           <div className="ed-intake-url">
             <input
@@ -1032,11 +1063,11 @@ export function EditorialWorkspace() {
             {filteredLiveArticles.length === 0 ? (
               <p className="hint ed-feed-empty">{liveArticles.length ? 'No published stories match that filter.' : 'No stories loaded from esbpowerline.com yet. Sync to fetch the latest.'}</p>
             ) : (
-              filteredLiveArticles.slice(0, 15).map((art) => (
+              filteredLiveArticles.slice(0, 50).map((art) => (
                 <div key={art.slug} className="ed-feed-item">
                   <div className="ed-feed-text">
                     <b>{art.title}</b>
-                    <span>{art.category} · {art.publishedAt || 'Published'}</span>
+                    <span><i className="ed-feed-cat">{art.category}</i>{fmtPublished(art.publishedAt)}</span>
                   </div>
                   <button type="button" className="btn sm" onClick={() => void handleEditLive(art)} disabled={editingLive === art.slug}>{editingLive === art.slug ? 'Opening…' : 'Edit'}</button>
                 </div>

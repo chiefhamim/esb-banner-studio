@@ -1309,3 +1309,49 @@ label.switch:active i { filter: brightness(.94); }
 .ed-launcher-queue .sq-list { box-sizing: border-box; height: 206px; max-height: none; overflow-y: auto; scroll-snap-type: y proximity; scroll-padding: 3px 0; }
 .ed-launcher-queue .sq-row { height: 64px; flex: none; justify-content: center; scroll-snap-align: start; }
 .ed-launcher-queue .sq-title { -webkit-line-clamp: 1; }
+
+/* ---- Story Desk, second pass ------------------------------------------------------------------------------------------
+   Rows carry their edge as a real 1 px border (a box-shadow ring is clipped by a scrolling list, which is what let the next row's
+   top edge show as a hair), lists are exactly three rows tall with no padding for a 4th row to show in, and rows have a soft
+   top-lit tint with a hairline highlight instead of a flat fill. */
+.ed-launcher-wrap { --row-bg: linear-gradient(180deg, color-mix(in srgb, var(--text) 2.5%, var(--card)), color-mix(in srgb, var(--text) 5.5%, var(--card))); --row-bg-hover: linear-gradient(180deg, color-mix(in srgb, var(--text) 4%, var(--card)), color-mix(in srgb, var(--text) 8%, var(--card))); --row-line: color-mix(in srgb, var(--text) 11%, transparent); --row-line-hover: color-mix(in srgb, var(--text) 22%, transparent); --row-hi: rgba(255, 255, 255, .7); }
+:root[data-theme=dark] .ed-launcher-wrap { --row-hi: rgba(255, 255, 255, .06); }
+.ed-launcher-queue .sq-list, .ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list { padding: 0; scroll-padding: 0; }
+.ed-launcher-queue .sq-list { height: 200px; }  /* 3 x 64 + 2 x 4 */
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list { flex: none; height: 204px; }  /* 3 x 64 + 2 x 6 */
+.ed-launcher-queue .sq-row, .ed-launcher-wrap .ed-feed-item { background: var(--row-bg); border: 1px solid var(--row-line); box-shadow: inset 0 1px 0 var(--row-hi); transition: border-color var(--t-2) var(--ease), box-shadow var(--t-2) var(--ease), background var(--t-2) var(--ease); }
+.ed-launcher-queue .sq-row:hover, .ed-launcher-wrap .ed-feed-item:hover { background: var(--row-bg-hover); border-color: var(--row-line-hover); box-shadow: inset 0 1px 0 var(--row-hi), 0 2px 8px rgba(16, 18, 28, .07); }
+.ed-launcher-queue .sq-row.on { border-color: var(--ink); box-shadow: inset 0 1px 0 var(--row-hi); }
+.ed-launcher-queue .sq-row { padding: 0 6px 0 4px; }
+.ed-launcher-wrap .ed-feed-item { padding: 0 12px 0 14px; }
+.ed-feed-text span { display: flex; align-items: center; gap: 8px; }
+.ed-feed-cat { font-style: normal; font: 600 10.5px/16px var(--ui); letter-spacing: .02em; padding: 0 7px; color: var(--text-2); background: color-mix(in srgb, var(--text) 7%, transparent); border-radius: 999px; }
+.ed-feed-text span { font: 400 12px/16px var(--ui); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.ed-feed-text b { font: 600 13px/18px var(--ui); }
+.ed-feed-text { gap: 4px; }
+
+/* Paste Story Link: one designed panel (icon, labelled field, action) over a three-step strip, balanced to fill the box */
+.ed-link { justify-content: space-between; gap: 14px; }
+.ed-link-card { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 16px; background: var(--row-bg); border: 1px solid var(--row-line); border-radius: var(--r-3); box-shadow: inset 0 1px 0 var(--row-hi); transition: border-color var(--t-2) var(--ease), box-shadow var(--t-2) var(--ease); }
+.ed-link-card:focus-within { border-color: var(--sel); box-shadow: inset 0 1px 0 var(--row-hi), 0 0 0 3px color-mix(in srgb, var(--sel) 18%, transparent); }
+.ed-link-ic { display: grid; place-items: center; width: 40px; height: 40px; color: var(--text-2); background: var(--raised); border-radius: 10px; box-shadow: var(--raised-shadow); }
+.ed-link-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ed-link-field label { font: 600 10.5px/14px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+.ed-link-input { width: 100%; height: 24px; padding: 0; font: 500 14px/24px var(--ui); color: var(--text); background: transparent; border: 0; outline: 0; text-overflow: ellipsis; }
+.ed-link-input::placeholder { color: var(--text-3); font-weight: 400; }
+.ed-link-card .btn { height: 36px; padding: 0 14px; }
+.ed-link-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0; padding: 0; list-style: none; }
+.ed-link-steps li { display: flex; align-items: flex-start; gap: 10px; padding: 0 14px; }
+.ed-link-steps li + li { border-left: 1px solid color-mix(in srgb, var(--text) 10%, transparent); }
+.ed-link-steps li:first-child { padding-left: 4px; }
+.ed-link-steps b { display: grid; place-items: center; flex: none; width: 22px; height: 22px; font: 700 11px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text-2); background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 50%; }
+.ed-link-steps div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ed-link-steps span { font: 600 12.5px/18px var(--ui); color: var(--text); }
+.ed-link-steps small { font: 400 11.5px/16px var(--ui); color: var(--text-3); }
+/* link tab, balance: the card and the steps are one group, centred in the box (no void between them); the field is bare text on the card */
+.ed-link { justify-content: center; gap: 22px; }
+.ed-link-card { padding: 20px; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 16px; }
+.ed-link-ic { width: 44px; height: 44px; border-radius: 12px; }
+.ed-link-card .ed-link-input { height: 26px; padding: 0; background: transparent !important; box-shadow: none !important; border: 0; font-size: 15px; line-height: 26px; }
+.ed-link-card .btn { height: 38px; }
+.ed-link-steps { padding: 0 4px; }
