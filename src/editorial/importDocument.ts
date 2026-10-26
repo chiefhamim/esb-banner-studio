@@ -219,7 +219,7 @@ Rules:
 export async function readPdfWithAi(file: File, reason: NonNullable<ImportedDocument['needsVision']>, pages: number, onStatus?: (s: string) => void): Promise<ImportedDocument> {
   const { aiFor, aiJson, providerMeta, resolveModel, listModels } = await import('./aiProviders')
   const { aiPaused } = await import('./aiProviders')
-  if (aiPaused()) throw new DocumentImportError("This PDF's own text cannot be used, and AI is switched off, so its pages cannot be read. Turn AI on (Engine panel or your account sheet) or paste the text instead.")
+  if (aiPaused()) throw new DocumentImportError("This PDF's own text cannot be used, and AI is OFF, so its pages cannot be read. Turn AI ON (Engine panel or your account sheet) or paste the text instead.")
   const ai = aiFor('main')
   const why = `This PDF's own text cannot be used (${VISION_REASON[reason]}).`
   if (!ai) throw new DocumentImportError(`${why} Add an AI key (the AI chip, top right) and choose Claude or Gemini as the main AI — it can read the pages — or convert the file to text and use "Paste Text or File".`)

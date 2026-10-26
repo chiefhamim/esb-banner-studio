@@ -144,7 +144,7 @@ export async function runConnectionCheck(session: StaffSession | null, onStep?: 
 
   // each AI provider a job is given — the key it holds, and whether it still answers
   const settings = loadAiSettings()
-  if (settings.paused) { push({ id: 'ai-off', label: 'AI providers', status: 'skip', detail: 'Switched off' }); return out }
+  if (settings.paused) { push({ id: 'ai-off', label: 'AI providers', status: 'skip', detail: 'AI is OFF' }); return out }
   const jobs: [AiRole, string][] = [['main', 'Main'], ['seo', 'SEO'], ['social', 'Social']]
   const providers = [...new Set(jobs.map(([role]) => roleProvider(settings, role)))]
   for (const provider of providers) {

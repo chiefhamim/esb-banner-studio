@@ -85,8 +85,8 @@ export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; on
           {saved.paused && (
             <div className="callout warn">
               <Icon name="power" size={14} />
-              <span>AI is switched off, so none of this is used and nothing is sent. Your keys and choices are kept.</span>
-              <button type="button" className="btn sm primary" onClick={() => { setAiPaused(false); onToast('AI is on') }}>Turn AI on</button>
+              <span>AI is OFF, so none of this is used and nothing is sent. Your keys and choices are kept.</span>
+              <button type="button" className="btn sm primary" onClick={() => { setAiPaused(false); onToast('AI is ON') }}>Turn AI ON</button>
             </div>
           )}
           <h4 className="ai-h">Who does what</h4>

@@ -80,7 +80,7 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
   const busy = distinct.some((a) => { const s = byKey[sig(a)]; return !s || s.state === 'busy' })
   const bad = rows.filter((r) => stateOf(r.a)?.state === 'bad').length
   const noKey = rows.filter((r) => !r.a).length
-  const summary = ai.paused ? { cls: 'off', text: 'AI off' }
+  const summary = ai.paused ? { cls: 'off', text: 'AI OFF' }
     : offline ? { cls: 'bad', text: 'Offline' }
     : !distinct.length ? { cls: 'free', text: 'Free translation' }
     : busy ? { cls: 'busy', text: 'Checking…' }
@@ -105,9 +105,9 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
             <span className="eng-head-ic"><Icon name="chip" size={16} /></span>
             <div className="eng-head-t"><b>AI engines</b><span>{busy ? 'Checking each key…' : 'Each key is tested with one tiny request'}</span></div>
             <button type="button" className="btn sm" onClick={() => refresh()} disabled={ai.paused || busy || !distinct.length}><Icon name="refresh" size={13} /><span>Refresh all</span></button>
-            <button type="button" role="switch" aria-checked={!ai.paused} className={'eng-power' + (ai.paused ? '' : ' on')} onClick={() => setAiPaused(!ai.paused)} data-tip={ai.paused ? 'Turn AI on' : 'Turn AI off: nothing is sent to any AI company'}><Icon name="power" size={13} /><span>{ai.paused ? 'Off' : 'On'}</span></button>
+            <button type="button" role="switch" aria-checked={!ai.paused} className={'eng-power' + (ai.paused ? '' : ' on')} onClick={() => setAiPaused(!ai.paused)} data-tip={ai.paused ? 'Turn AI ON' : 'Turn AI OFF: nothing is sent to any AI company'}><Icon name="power" size={13} /><span>{ai.paused ? 'OFF' : 'ON'}</span></button>
           </div>
-          {ai.paused && <p className="eng-off"><Icon name="power" size={13} /><span>AI is off. Nothing is sent to Gemini, Claude, OpenAI or OpenRouter, not even the check when the app starts. Translation uses the free service until you turn it on.</span></p>}
+          {ai.paused && <p className="eng-off"><Icon name="power" size={13} /><span>AI is OFF. Nothing is sent to Gemini, Claude, OpenAI or OpenRouter, not even the check when the app starts. Translation uses the free service until you turn it on.</span></p>}
           <div className="eng-cols" aria-hidden><span>Job</span><span>Company</span><span>Model</span><span className="c">Status</span><span /></div>
           {rows.map(({ role, label, chosen, a }) => {
             const c = stateOf(a)
@@ -123,7 +123,7 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
                   {ai.paused ? <span className="eng-nokey">{providerMeta(chosen).name} · paused</span> : a ? <><i className="sb-pdot" aria-hidden /><span>{providerMeta(chosen).name} · {c?.state === 'ok' ? modelLabel(c.model) : ai.models[chosen] === 'auto' ? 'Auto' : modelLabel(ai.models[chosen])}</span></> : <span className="eng-nokey">No {providerMeta(chosen).name} key</span>}
                 </span>
                 <div className="eng-state">
-                  {ai.paused && <span className="eng-tag off"><Icon name="power" size={11} />Off</span>}
+                  {ai.paused && <span className="eng-tag off"><Icon name="power" size={11} />OFF</span>}
                   {!ai.paused && !a && <button type="button" className="btn xs" onClick={() => { setOpen(false); onAddKey() }}>Add key</button>}
                   {!ai.paused && a && (!c || c.state === 'busy') && <span className="eng-tag busy"><span className="pulse-dot" />Checking</span>}
                   {!ai.paused && a && c?.state === 'ok' && <span className="eng-tag ok"><Icon name="check" size={11} />Working · {fmt(c.ms)}</span>}

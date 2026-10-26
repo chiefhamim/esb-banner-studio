@@ -197,10 +197,10 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
               <div className={'acct-card ' + (ai.paused ? 'none' : 'ok')}>
                 <span className="acct-logo aimark" aria-hidden><Icon name="chip" size={18} /></span>
                 <div className="acct-main">
-                  <div className="acct-title"><b>AI providers</b><span className={'acct-pill ' + (ai.paused ? 'bad' : 'ok')}><i />{ai.paused ? 'Off' : 'On'}</span></div>
-                  <p className="acct-fine">{ai.paused ? 'Nothing is sent to any AI company, not even the check when the app starts. The free translation service is used.' : 'Gemini, Claude, OpenAI or OpenRouter write the stories, SEO and captions you set them to. Turn off to stop every AI call.'}</p>
+                  <div className="acct-title"><b>AI providers</b><span className={'acct-pill ' + (ai.paused ? 'bad' : 'ok')}><i />{ai.paused ? 'OFF' : 'ON'}</span></div>
+                  <p className="acct-fine">{ai.paused ? 'Nothing is sent to any AI company, not even the check when the app starts. The free translation service is used.' : 'Gemini, Claude, OpenAI or OpenRouter write the stories, SEO and captions you set them to. Turn it OFF to stop every AI call.'}</p>
                   <div className="acct-actions">
-                    <button type="button" className={'btn acct-ai-btn' + (ai.paused ? ' off' : '')} onClick={() => setAiPaused(!ai.paused)}><Icon name="power" size={14} /><span>{ai.paused ? 'Turn AI on' : 'Turn AI off'}</span></button>
+                    <button type="button" className={'btn acct-ai-btn' + (ai.paused ? ' off' : '')} onClick={() => setAiPaused(!ai.paused)}><Icon name="power" size={14} /><span>{ai.paused ? 'Turn AI ON' : 'Turn AI OFF'}</span></button>
                   </div>
                 </div>
               </div>

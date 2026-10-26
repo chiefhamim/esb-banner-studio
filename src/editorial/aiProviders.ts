@@ -107,7 +107,7 @@ export function saveAiSettings(s: AiSettings) {
 /** The provider a job uses: its own choice, or the main one. */
 export const roleProvider = (s: AiSettings, role: AiRole): AiProviderId => (role === 'main' ? s.provider : s[role] || s.provider)
 
-export const AI_OFF_MESSAGE = 'AI is switched off. Turn it on in the Engine panel or your account sheet.'
+export const AI_OFF_MESSAGE = 'AI is OFF. Turn it ON in the Engine panel or your account sheet.'
 /** True while the master switch is off. Read from storage so every caller sees a change at once. */
 export const aiPaused = () => loadAiSettings().paused
 

@@ -23,7 +23,7 @@ describe('AI switched off', () => {
     expect(aiFor('seo')).toBeNull()
     expect(await listModels('gemini', 'test-key')).toEqual([])
     expect(await testAiKey('gemini', 'test-key', 'auto')).toMatchObject({ ok: false, error: AI_OFF_MESSAGE })
-    await expect(aiJson({ provider: 'gemini', key: 'test-key', model: 'm', system: '', user: '', schema: { type: 'object', properties: {}, required: [] } })).rejects.toThrow(/switched off/)
+    await expect(aiJson({ provider: 'gemini', key: 'test-key', model: 'm', system: '', user: '', schema: { type: 'object', properties: {}, required: [] } })).rejects.toThrow(/AI is OFF/)
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
   })
