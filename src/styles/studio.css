@@ -1249,3 +1249,22 @@ label.switch:active i { filter: brightness(.94); }
 .ed-doc.pdf.has { background: color-mix(in srgb, #d6453d 6%, var(--card)); border-color: color-mix(in srgb, #d6453d 26%, var(--card-line)); }
 .ed-doc.docx.has { background: color-mix(in srgb, #2f6fd6 6%, var(--card)); border-color: color-mix(in srgb, #2f6fd6 26%, var(--card-line)); }
 .ed-doc:not(.has):not(.busy) { min-height: 68px; border-radius: var(--r-3); }
+
+/* ============================================================================
+   Editorial footer: one 32 px strip on the same 8 px inset as the cards above it.
+   [CMS ● Connected as … 153 ms] │ [ENGINE ● Working ⌃]  ·····  485 words · ~3 min read
+   Every entry is a 24 px button with the same inner rhythm (label 8 · dot 7 · text), hairline dividers between groups.
+   ============================================================================ */
+.ed-statusbar { height: 32px; padding: 0 8px; gap: 2px; font-size: 12px; }
+.ed-statusbar > .sep { width: 1px; height: 14px; margin: 0 6px; background: color-mix(in srgb, var(--text) 14%, transparent); }
+.ed-statusbar button.sb-cms, .ed-statusbar .sb-engine-btn { display: inline-flex; align-items: center; gap: 8px; height: 24px; padding: 0 10px 0 9px; border-radius: 7px; min-width: 0; }
+.ed-statusbar .sb-k { margin: 0; font: 700 10px/16px var(--ui); letter-spacing: var(--track-kicker); color: var(--text-3); }
+.ed-statusbar .sb-pill, .ed-statusbar .sb-eng-state { display: inline-flex; align-items: center; gap: 7px; min-width: 0; font: 600 12px/16px var(--ui); color: var(--text); }
+.ed-statusbar .sb-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-statusbar .sb-ms { flex: none; margin-left: 2px; font: 500 11.5px/16px var(--ui); font-variant-numeric: tabular-nums lining-nums; color: var(--text-3); }
+.ed-statusbar .sb-dot { width: 7px; height: 7px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sb) 20%, transparent); }
+.ed-statusbar .sb-cms.on .sb-dot { animation: none; }
+.ed-statusbar .sb-engine-chev { margin-left: 1px; color: var(--text-3); }
+.ed-statusbar > .spacer { flex: 1 1 0; min-width: 8px; }
+.ed-statusbar > span:last-child { padding-right: 6px; font: 500 12px/16px var(--ui); font-variant-numeric: tabular-nums lining-nums; color: var(--text-3); }
+@media (max-width: 1100px) { .ed-statusbar .sb-ms { display: none; } }

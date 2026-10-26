@@ -1550,7 +1550,7 @@ export function EditorialWorkspace() {
         <button type="button" className={'sb-cms ' + (siteStatus.connected && !siteStatus.sessionEnded ? 'on' : 'off')} onClick={() => { if (siteStatus.sessionEnded) useEditorialStore.getState().logoutStaff(); setShowLoginModal(true) }}
           data-tip={`${siteStatus.statusText || (siteStatus.connected ? 'Connected' : 'Not reachable')} · checked ${siteStatus.lastChecked || 'now'} — open the connection check`}>
           <span className="sb-k">CMS</span>
-          <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.sessionEnded ? 'Sign-in ended · click to sign in' : siteStatus.connected ? (staffSession ? `Connected as ${staffSession.name || staffSession.email} · ${siteStatus.latencyMs} ms` : `Site online · not signed in · ${siteStatus.latencyMs} ms`) : 'Disconnected'}</span>
+          <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.sessionEnded ? 'Sign-in ended · click to sign in' : siteStatus.connected ? <><span className="sb-text">{staffSession ? `Connected as ${staffSession.name || staffSession.email}` : 'Site online · not signed in'}</span><span className="sb-ms">{siteStatus.latencyMs} ms</span></> : 'Disconnected'}</span>
         </button>
         <div className="sep" />
         <EngineStatus ai={ai} offline={translationProvider === 'offline'} onAddKey={() => setShowApiKeyModal(true)} />
