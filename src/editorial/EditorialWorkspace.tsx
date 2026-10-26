@@ -35,7 +35,7 @@ import type { SiteDevice, SiteTheme } from './SitePreview'
 import { useShellStore } from '../shell/shellStore'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
-import { readDocument, readPdfWithAi, documentKind, DocumentImportError } from './importDocument'
+import { readDocument, readPdfWithAi, documentKind, fmtFileSize, DocumentImportError } from './importDocument'
 import { Field, Select, Check, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
 import { useStore } from '../store'
@@ -217,7 +217,7 @@ export function EditorialWorkspace() {
   const [urlInput, setUrlInput] = useState('')
   const [rawBengaliInput, setRawBengaliInput] = useState('')
   const [docBusy, setDocBusy] = useState(false)
-  const [docInfo, setDocInfo] = useState<{ name: string; kind: 'pdf' | 'docx'; pages?: number; words: number; warnings: string[] } | null>(null)
+  const [docInfo, setDocInfo] = useState<{ name: string; kind: 'pdf' | 'docx'; pages?: number; size: number; words: number; warnings: string[] } | null>(null)
   const [docDrag, setDocDrag] = useState(false)
   const docInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
@@ -583,7 +583,7 @@ export function EditorialWorkspace() {
       if (doc.needsVision) doc = await readPdfWithAi(file, doc.needsVision, doc.pages ?? 0, (st) => setProgressStatus(st))
       setProgressStatus(null)
       setRawBengaliInput(doc.text)
-      setDocInfo({ name: doc.name, kind: doc.kind, pages: doc.pages, words: doc.words, warnings: doc.warnings })
+      setDocInfo({ name: doc.name, kind: doc.kind, pages: doc.pages, size: file.size, words: doc.words, warnings: doc.warnings })
       showToast('File read — check the text, then press Auto-Translate')
     } catch (err) {
       setProgressStatus(null)
@@ -959,8 +959,9 @@ export function EditorialWorkspace() {
             ) : docInfo ? (
               <>
                 <span className={'ed-doc-tile ' + docInfo.kind}>{docInfo.kind === 'pdf' ? 'PDF' : 'DOCX'}</span>
-                <div className="ed-doc-text"><b title={docInfo.name}>{docInfo.name}</b><span>{docInfo.kind === 'pdf' ? `${docInfo.pages} ${docInfo.pages === 1 ? 'page' : 'pages'} · ` : ''}{docInfo.words.toLocaleString()} words</span></div>
+                <div className="ed-doc-text"><b title={docInfo.name}>{docInfo.name}</b><span>{docInfo.kind === 'pdf' ? `${docInfo.pages} ${docInfo.pages === 1 ? 'page' : 'pages'} · ` : ''}{fmtFileSize(docInfo.size)} · {docInfo.words.toLocaleString()} words</span></div>
                 <button type="button" className="btn sm" onClick={() => docInputRef.current?.click()} disabled={translating}>Replace</button>
+                <button type="button" className="ibtn" aria-label="Remove file" data-tip="Remove file" disabled={translating} onClick={() => { setDocInfo(null); setRawBengaliInput(''); setErrorMsg(null) }}><Icon name="x" size={14} /></button>
               </>
             ) : (
               <>

@@ -19,6 +19,9 @@ export interface ImportedDocument {
 
 export class DocumentImportError extends Error {}
 
+/** 842 KB / 3.4 MB. */
+export const fmtFileSize = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(b >= 10485760 ? 0 : 1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
+
 export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024
 
 export function documentKind(name: string, type = ''): DocKind | null {

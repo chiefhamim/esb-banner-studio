@@ -43,7 +43,7 @@
 
   /* ---------------------------------------------------------------- Typography Scale */
   --font-ui: "ESB Sans", "Hind Siliguri", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+  --font-mono: var(--font-ui); /* one family across the app: figures stay aligned with tabular numerals, not a second typeface */
   --font-serif: "Source Serif 4", Georgia, serif;
 
   --t-caption: 600 11px/16px var(--font-ui);

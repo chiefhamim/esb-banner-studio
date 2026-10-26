@@ -1230,3 +1230,7 @@ label.switch:active i { filter: brightness(.94); }
 .topbar .menubar .mb-item { height: 32px; padding: 0 10px; justify-content: center; }
 .ed-head .menubar .mb-item { min-width: 60px; padding: 0 12px; }  /* Story, Site and View are identical containers */
 @container topbar (max-width: 1000px) { .topbar .menubar .mb-item { padding-left: 7px; padding-right: 7px; } .ed-head .menubar .mb-item { min-width: 52px; } }
+
+/* one typeface: what used to be monospace (counts, hex, timecodes, shortcuts) is Inter with tabular figures so columns still line up */
+.mono, .count, .mono-in, kbd, .token, .mi-hint, .colorfield input, .cp-hex input, .progress small, .vw-timecode, .vw-current-time, .vw-total-time, .vw-zoom-label, .vw-ruler-label, .vw-clip-duration, .vw-media-meta, .vw-metrics { font-variant-numeric: tabular-nums lining-nums; }
+.ed-doc .ibtn { flex: none; width: 28px; height: 28px; }
