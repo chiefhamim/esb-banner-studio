@@ -217,7 +217,8 @@ export function EditorialWorkspace() {
   const [urlInput, setUrlInput] = useState('')
   const [rawBengaliInput, setRawBengaliInput] = useState('')
   const [docBusy, setDocBusy] = useState(false)
-  const [docNote, setDocNote] = useState<string | null>(null)
+  const [docInfo, setDocInfo] = useState<{ name: string; kind: 'pdf' | 'docx'; pages?: number; words: number; warnings: string[] } | null>(null)
+  const [docDrag, setDocDrag] = useState(false)
   const docInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
   const [translating, setTranslating] = useState(false)
@@ -576,13 +577,13 @@ export function EditorialWorkspace() {
   // A PDF or Word file: read its text here, put it in the box for the editor to see, then write the story from it
   const handleDocumentFile = async (file: File | undefined) => {
     if (!file || translating || docBusy) return
-    setErrorMsg(null); setErrorDetail(null); setDocNote(null); setDocBusy(true)
+    setErrorMsg(null); setErrorDetail(null); setDocBusy(true)
     try {
       let doc = await readDocument(file)
       if (doc.needsVision) doc = await readPdfWithAi(file, doc.needsVision, doc.pages ?? 0, (st) => setProgressStatus(st))
       setProgressStatus(null)
       setRawBengaliInput(doc.text)
-      setDocNote(`${doc.name} · ${doc.kind === 'pdf' ? `${doc.pages} ${doc.pages === 1 ? 'page' : 'pages'} · ` : ''}${doc.words.toLocaleString()} words${doc.warnings.length ? ' · ' + doc.warnings.join(' ') : ''}`)
+      setDocInfo({ name: doc.name, kind: doc.kind, pages: doc.pages, words: doc.words, warnings: doc.warnings })
       setDocBusy(false)
       await handleTranslateRawBengali(doc.text)
     } catch (err) {
@@ -946,21 +947,39 @@ export function EditorialWorkspace() {
 
       {launcherTab === 'paste' && (
         <div className="ed-intake-body">
-          <textarea
-            className="input ed-paste-area"
-            placeholder="Paste the Bengali headline on the first line, then the story — or drop a PDF or Word file here…"
-            value={rawBengaliInput}
-            onChange={(e) => setRawBengaliInput(e.target.value)}
-            onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }}
-            onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f && documentKind(f.name, f.type)) { e.preventDefault(); void handleDocumentFile(f) } }}
-          />
           <input ref={docInputRef} type="file" hidden accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             onChange={(e) => { void handleDocumentFile(e.target.files?.[0]); e.target.value = '' }} />
+          <div
+            className={'ed-doc' + (docDrag ? ' drag' : '') + (docBusy ? ' busy' : '') + (docInfo && !docBusy ? ' has' : '')}
+            onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDocDrag(true) } }}
+            onDragLeave={() => setDocDrag(false)}
+            onDrop={(e) => { setDocDrag(false); const f = e.dataTransfer.files?.[0]; if (f && documentKind(f.name, f.type)) { e.preventDefault(); void handleDocumentFile(f) } }}
+          >
+            {docBusy ? (
+              <><span className="ed-doc-tile"><Icon name="refresh" size={16} className="spin" /></span><div className="ed-doc-text"><b>{progressStatus || 'Reading the file…'}</b><span>This takes a few seconds</span></div></>
+            ) : docInfo ? (
+              <>
+                <span className={'ed-doc-tile ' + docInfo.kind}>{docInfo.kind === 'pdf' ? 'PDF' : 'DOCX'}</span>
+                <div className="ed-doc-text"><b title={docInfo.name}>{docInfo.name}</b><span>{docInfo.kind === 'pdf' ? `${docInfo.pages} ${docInfo.pages === 1 ? 'page' : 'pages'} · ` : ''}{docInfo.words.toLocaleString()} words</span></div>
+                <button type="button" className="btn sm" onClick={() => docInputRef.current?.click()} disabled={translating}>Replace</button>
+              </>
+            ) : (
+              <>
+                <span className="ed-doc-tile"><Icon name="upload" size={16} /></span>
+                <div className="ed-doc-text"><b>Add a PDF or Word file</b><span>Drop it here or browse · 25 MB max</span></div>
+                <button type="button" className="btn sm" onClick={() => docInputRef.current?.click()} disabled={translating}>Browse</button>
+              </>
+            )}
+          </div>
+          {docInfo && !docBusy && docInfo.warnings.length > 0 && <p className="ed-doc-warn"><Icon name="info" size={13} /><span>{docInfo.warnings.join(' ')}</span></p>}
+          <textarea
+            className="input ed-paste-area"
+            placeholder="…or paste the Bengali headline on the first line, then the story"
+            value={rawBengaliInput}
+            onChange={(e) => { setRawBengaliInput(e.target.value); if (docInfo) setDocInfo(null) }}
+          />
           <div className="ed-intake-foot">
-            <button type="button" className="btn" onClick={() => docInputRef.current?.click()} disabled={translating || docBusy} data-tip="Read the story from a PDF or Word (.docx) file, then write it in English">
-              <Icon name={docBusy ? 'refresh' : 'filePlus'} size={14} className={docBusy ? 'spin' : undefined} /><span>{docBusy ? 'Reading…' : 'PDF or Word'}</span>
-            </button>
-            <span className="mono hint ed-doc-note">{docNote ?? `${rawBengaliInput.trim().length} characters`}</span>
+            <span className="mono hint">{rawBengaliInput.trim().length} characters</span>
             <button type="button" className="btn primary" onClick={() => void handleTranslateRawBengali()} disabled={translating || docBusy || !rawBengaliInput.trim()}>
               {translating ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
               <span>{translating ? 'Translating…' : 'Auto-Translate & Populate'}</span>
