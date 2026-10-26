@@ -1448,3 +1448,4 @@ label.switch:active i { filter: brightness(.94); }
 .ed-pipe li:not(.pipe-arrow) { column-gap: 10px; }
 .ed-pipe .pipe-arrow { padding: 0 2px; }
 .ed-pipe .pipe-arrow svg { width: 50px; height: 27px; }
+.ed-pipe .pipe-arrow { padding: 0 4px 0 8px; }

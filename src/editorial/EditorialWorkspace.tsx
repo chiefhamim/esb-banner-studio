@@ -974,11 +974,11 @@ export function EditorialWorkspace() {
             <p className="ed-link-hint">Paste the address of a news story, Bengali or English.</p>
           </div>
           <ol className="ed-pipe" aria-label="What happens next">
-            <li className="parse"><span className="pipe-top"><span className="pipe-ic"><Icon name="newspaper" size={16} /></span><i>01</i></span><b>Parse</b><small>Text and photos are read</small></li>
-            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 56 30" width="56" height="30"><path d="M3 25C13 9 29 5 43 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="3.2 3.6" /><path d="M0 0L-10-5V5Z" transform="translate(53 16) rotate(27)" fill="currentColor" strokeLinejoin="round" /></svg></li>
-            <li className="polish"><span className="pipe-top"><span className="pipe-ic"><Icon name="sparkle" size={16} /></span><i>02</i></span><b>Polish</b><small>Your AI writes newsroom English</small></li>
-            <li className="pipe-arrow loop" aria-hidden><svg viewBox="0 0 56 30" width="56" height="30"><path d="M2 24C9 28 17 24 22 18C27 12 24 4 19 6C14 8 16 18 25 22C33 25 40 20 44 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="3.2 3.6" /><path d="M0 0L-10-5V5Z" transform="translate(52 8.5) rotate(-50)" fill="currentColor" strokeLinejoin="round" /></svg></li>
-            <li className="publish"><span className="pipe-top"><span className="pipe-ic"><Icon name="upload" size={16} /></span><i>03</i></span><b>Publish</b><small>Send the article, banner and post</small></li>
+            <li className="parse"><span className="pipe-top"><span className="pipe-ic"><Icon name="newspaper" size={16} /></span><i>01</i></span><b>Parse</b><small>Text &amp; photos are extracted</small></li>
+            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 56 30" width="56" height="30"><path d="M2 22C14 2 32 2 46 15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeDasharray="2.6 4" /><path d="M0 0L-8.5-4.2V4.2Z" transform="translate(48.2 17) rotate(42.9)" fill="currentColor" strokeLinejoin="round" /></svg></li>
+            <li className="polish"><span className="pipe-top"><span className="pipe-ic"><Icon name="sparkle" size={16} /></span><i>02</i></span><b>Polish</b><small>AI refines it for the newsroom</small></li>
+            <li className="pipe-arrow s" aria-hidden><svg viewBox="0 0 56 30" width="56" height="30"><path d="M2 10C14 10 18 26 30 22C40 19 42 8 50 6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeDasharray="2.6 4" /><path d="M0 0L-8.5-4.2V4.2Z" transform="translate(52.9 5.3) rotate(-14)" fill="currentColor" strokeLinejoin="round" /></svg></li>
+            <li className="publish"><span className="pipe-top"><span className="pipe-ic"><Icon name="upload" size={16} /></span><i>03</i></span><b>Publish</b><small>Review &amp; publish right away</small></li>
           </ol>
         </div>
       )}
