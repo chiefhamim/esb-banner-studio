@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { flushSync } from 'react-dom'
 
 export type WorkspaceId = 'home' | 'graphics' | 'editorial' | 'video' | 'audio'
 
@@ -17,6 +18,7 @@ interface ShellState {
 }
 
 const STORAGE_KEY = 'esb-banner-studio/shell'
+const ORDER: WorkspaceId[] = ['home', 'editorial', 'graphics', 'video', 'audio']
 
 /** The app always opens on Home, whichever workspace was open when it was closed. */
 const loadSavedWorkspace = (): WorkspaceId => 'home'
@@ -28,7 +30,18 @@ export const useShellStore = create<ShellState>((set, get) => ({
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ workspace: ws }))
     } catch { /* ignore */ }
     // any move away from Graphics ends the round trip, so the back button never outlives it
-    set((st) => ({ workspace: ws, returnTo: ws === 'graphics' ? st.returnTo : null }))
+    const apply = () => set((st) => ({ workspace: ws, returnTo: ws === 'graphics' ? st.returnTo : null }))
+    const from = get().workspace
+    // Between desks the browser cross-dissolves a snapshot of the old desk into the new one (View Transitions), with the two
+    // sliding a few pixels in mirror image along the order Home, Editorial, Graphics, Video. Neither desk is mounted twice.
+    const vt = (document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } }).startViewTransition
+    if (from === ws || typeof vt !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { apply(); return }
+    const dir = ORDER.indexOf(ws) >= ORDER.indexOf(from) ? 1 : -1
+    const root = document.documentElement
+    root.style.setProperty('--ws-dir', String(dir))
+    root.dataset.vt = '1'
+    const t = vt.call(document, () => { flushSync(apply) })
+    t.finished.finally(() => { delete root.dataset.vt })
   },
   recoveryAvailable: false,
   recoveryTime: null,

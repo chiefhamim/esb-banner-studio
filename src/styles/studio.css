@@ -1460,3 +1460,18 @@ label.switch:active i { filter: brightness(.94); }
 .ed-doc .btn, .ed-intake.compact .ed-doc .btn { height: 38px; padding: 0 20px; font-size: 13px; }
 .ed-doc .ibtn { width: 38px; height: 38px; }
 .ed-pipe .pipe-arrow.s svg { transform: translateX(-10px); }  /* the loop keeps its distance from "Publish" */
+
+/* ---- Moving between desks: a soft, mirrored cross-dissolve ---------------------------------------------------------------
+   The old desk dissolves out while drifting 14 px one way and the new desk dissolves in drifting from 14 px the other way,
+   both with a breath of blur, on the same slow curve, so the move is symmetric whichever way you go. The Editorial /
+   Graphics / Video switcher keeps its identity and glides in place instead of dissolving with the page. */
+.ws-wrap { view-transition-name: ws-switch; }
+html[data-vt] .workspace-main > * { animation: none; }
+::view-transition-group(root) { animation-duration: 560ms; animation-timing-function: cubic-bezier(.3, 0, .15, 1); }
+::view-transition-old(root) { animation: 560ms cubic-bezier(.3, 0, .15, 1) both ws-vt-out; }
+::view-transition-new(root) { animation: 560ms cubic-bezier(.3, 0, .15, 1) both ws-vt-in; }
+@keyframes ws-vt-out { to { opacity: 0; transform: translateX(calc(var(--ws-dir, 1) * -14px)) scale(.994); filter: blur(2.5px); } }
+@keyframes ws-vt-in { from { opacity: 0; transform: translateX(calc(var(--ws-dir, 1) * 14px)) scale(.994); filter: blur(2.5px); } }
+::view-transition-group(ws-switch) { animation-duration: 560ms; animation-timing-function: cubic-bezier(.3, 0, .15, 1); }
+::view-transition-old(ws-switch), ::view-transition-new(ws-switch) { animation-duration: 560ms; }
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
