@@ -974,9 +974,11 @@ export function EditorialWorkspace() {
             <p className="ed-link-hint">Paste the address of a news story, Bengali or English.</p>
           </div>
           <ol className="ed-link-steps" aria-label="What happens next">
-            <li><b>1</b><span>Extract</span><small>Text and photos are read from the page</small></li>
-            <li><b>2</b><span>Translate</span><small>Your main AI writes newsroom English</small></li>
-            <li><b>3</b><span>Check</span><small>Figures are compared with the source</small></li>
+            <li className="parse"><span className="ed-step-ic"><Icon name="newspaper" size={20} /></span><b>Parse</b><small>Text and photos are read from the page</small></li>
+            <li className="arrow" aria-hidden><svg viewBox="0 0 44 12" width="44" height="12"><defs><linearGradient id="ed-arrow-1" x1="0" x2="1"><stop offset="0" stopColor="#3b82f6" /><stop offset="1" stopColor="#8b5cf6" /></linearGradient></defs><path d="M1 6h38M34 1.5 40 6l-6 4.5" fill="none" stroke="url(#ed-arrow-1)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></li>
+            <li className="polish"><span className="ed-step-ic"><Icon name="sparkle" size={20} /></span><b>Polish</b><small>Your main AI writes newsroom English</small></li>
+            <li className="arrow" aria-hidden><svg viewBox="0 0 44 12" width="44" height="12"><defs><linearGradient id="ed-arrow-2" x1="0" x2="1"><stop offset="0" stopColor="#8b5cf6" /><stop offset="1" stopColor="#10b981" /></linearGradient></defs><path d="M1 6h38M34 1.5 40 6l-6 4.5" fill="none" stroke="url(#ed-arrow-2)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></li>
+            <li className="publish"><span className="ed-step-ic"><Icon name="upload" size={20} /></span><b>Publish</b><small>Review, then send article, banner and post</small></li>
           </ol>
         </div>
       )}
