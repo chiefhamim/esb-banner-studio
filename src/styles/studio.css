@@ -1454,3 +1454,8 @@ label.switch:active i { filter: brightness(.94); }
 .ed-pipe { align-items: stretch; }
 .ed-pipe .pipe-arrow { align-self: stretch; display: block; padding: 0 2px; }
 .ed-pipe .pipe-arrow svg { width: 60px; height: 58px; }
+
+/* file card: one 12 px gap on the right, top and bottom around its button (the icon and the button are both 38 tall, so the gaps match) */
+.ed-doc, .ed-doc:not(.has):not(.busy) { min-height: 60px; padding: 12px; }
+.ed-doc .btn, .ed-intake.compact .ed-doc .btn { height: 38px; padding: 0 20px; font-size: 13px; }
+.ed-doc .ibtn { width: 38px; height: 38px; }
