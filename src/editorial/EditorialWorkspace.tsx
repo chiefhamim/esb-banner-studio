@@ -950,30 +950,33 @@ export function EditorialWorkspace() {
 
       {launcherTab === 'url' && !compact && (
         <div className="ed-intake-body ed-link">
-          <div className="ed-link-card">
-            <span className="ed-link-ic"><Icon name="link" size={18} /></span>
-            <div className="ed-link-field">
-              <label htmlFor="ed-link-input">Article link</label>
-              <input
-                id="ed-link-input"
-                type="url"
-                className="ed-link-input"
-                placeholder="Paste a Bengali or English news link"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
-                spellCheck={false}
-              />
+          <div className="ed-link-paste">
+            <label htmlFor="ed-link-input">Article link</label>
+            <div className="ed-link-row">
+              <div className="ed-link-field">
+                <Icon name="link" size={16} />
+                <input
+                  id="ed-link-input"
+                  type="url"
+                  className="ed-link-input"
+                  placeholder="https://…"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
+                  spellCheck={false}
+                />
+              </div>
+              <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
+                {loading ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
+                <span>{loading ? 'Extracting…' : 'Fetch & Auto-Translate'}</span>
+              </button>
             </div>
-            <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
-              {loading ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
-              <span>{loading ? 'Extracting…' : 'Fetch & Auto-Translate'}</span>
-            </button>
+            <p className="ed-link-hint">Paste the address of a news story, Bengali or English.</p>
           </div>
           <ol className="ed-link-steps" aria-label="What happens next">
-            <li><b>1</b><div><span>Extract</span><small>The story text and photos are read from the page</small></div></li>
-            <li><b>2</b><div><span>Translate</span><small>Your main AI writes it as newsroom English</small></div></li>
-            <li><b>3</b><div><span>Check</span><small>Every figure is compared with the source</small></div></li>
+            <li><b>1</b><span>Extract</span><small>Text and photos are read from the page</small></li>
+            <li><b>2</b><span>Translate</span><small>Your main AI writes newsroom English</small></li>
+            <li><b>3</b><span>Check</span><small>Figures are compared with the source</small></li>
           </ol>
         </div>
       )}
