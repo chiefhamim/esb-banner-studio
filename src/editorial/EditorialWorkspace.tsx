@@ -941,7 +941,7 @@ export function EditorialWorkspace() {
         onChange={(t) => { setLauncherTab(t); setErrorMsg(null); setErrorDetail(null) }}
         options={[
           { value: 'url', icon: 'link', label: compact ? 'Link' : 'Paste Story Link' },
-          { value: 'paste', icon: 'edit', label: compact ? 'Paste text' : 'Paste Bengali Story' },
+          { value: 'paste', icon: 'edit', label: compact ? 'Text or file' : 'Paste Text or File' },
           { value: 'live_feed', icon: 'globe', label: compact ? `Site (${liveArticles.length})` : `Site CMS Posts (${liveArticles.length})` },
         ]}
       />
@@ -971,7 +971,7 @@ export function EditorialWorkspace() {
           <input ref={docInputRef} type="file" hidden accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             onChange={(e) => { void handleDocumentFile(e.target.files?.[0]); e.target.value = '' }} />
           <div
-            className={'ed-doc' + (docDrag ? ' drag' : '') + (docBusy ? ' busy' : '') + (docInfo && !docBusy ? ' has' : '')}
+            className={'ed-doc' + (docInfo && !docBusy ? ' ' + docInfo.kind : '') + (docDrag ? ' drag' : '') + (docBusy ? ' busy' : '') + (docInfo && !docBusy ? ' has' : '')}
             onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) setDocDrag(true) }}
             onDragLeave={() => setDocDrag(false)}
             onDrop={() => setDocDrag(false)}
@@ -987,7 +987,7 @@ export function EditorialWorkspace() {
               </>
             ) : (
               <>
-                <span className="ed-doc-tile"><Icon name="upload" size={16} /></span>
+                <span className="ed-doc-pair" aria-hidden><i className="pdf">PDF</i><i className="docx">DOC</i></span>
                 <div className="ed-doc-text"><b>Add a PDF or Word file</b><span>Drop it here or browse · 25 MB max</span></div>
                 <button type="button" className="btn sm" onClick={() => docInputRef.current?.click()} disabled={translating}>Browse</button>
               </>
@@ -1561,7 +1561,7 @@ export function EditorialWorkspace() {
 
       {deskDrag && createPortal(
         <div className="ed-dropveil" aria-hidden>
-          <div className="ed-dropveil-card"><span className="ed-doc-tile"><Icon name="upload" size={18} /></span><b>Drop a PDF or Word file</b><span>It is read here; nothing is translated until you press Auto-Translate</span></div>
+          <div className="ed-dropveil-card"><span className="ed-doc-pair big" aria-hidden><i className="pdf">PDF</i><i className="docx">DOC</i></span><b>Drop a PDF or Word file</b><span>It is read here; nothing is translated until you press Auto-Translate</span></div>
         </div>,
         document.body,
       )}

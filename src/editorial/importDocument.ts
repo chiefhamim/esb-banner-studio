@@ -174,7 +174,7 @@ async function readDocx(data: ArrayBuffer, name: string): Promise<ImportedDocume
   const text = tidyExtractedText(res.value)
   if (!text || wordCount(text) < 5) throw new DocumentImportError('This Word file has no text in it.')
   if (looksLikeLegacyBangla(text)) {
-    throw new DocumentImportError('This Word file is typed in an old Bangla font (Bijoy / SutonnyMJ). Convert it to Unicode first, then paste it into "Paste Bengali Story".')
+    throw new DocumentImportError('This Word file is typed in an old Bangla font (Bijoy / SutonnyMJ). Convert it to Unicode first, then paste it into "Paste Text or File".')
   }
   const warnings = res.messages.filter((m) => m.type === 'warning').length ? ['Some formatting (pictures, text boxes) was skipped; only the text is used.'] : []
   return { kind: 'docx', name, text, words: wordCount(text), warnings }
@@ -220,8 +220,8 @@ export async function readPdfWithAi(file: File, reason: NonNullable<ImportedDocu
   const { aiFor, aiJson, providerMeta, resolveModel, listModels } = await import('./aiProviders')
   const ai = aiFor('main')
   const why = `This PDF's own text cannot be used (${VISION_REASON[reason]}).`
-  if (!ai) throw new DocumentImportError(`${why} Add an AI key (the AI chip, top right) and choose Claude or Gemini as the main AI — it can read the pages — or convert the file to text and use "Paste Bengali Story".`)
-  if (ai.provider !== 'anthropic' && ai.provider !== 'gemini') throw new DocumentImportError(`${why} ${providerMeta(ai.provider).name} cannot read PDF pages here: choose Claude or Gemini as the main AI (Engine panel, bottom of the window), or convert the file to text and use "Paste Bengali Story".`)
+  if (!ai) throw new DocumentImportError(`${why} Add an AI key (the AI chip, top right) and choose Claude or Gemini as the main AI — it can read the pages — or convert the file to text and use "Paste Text or File".`)
+  if (ai.provider !== 'anthropic' && ai.provider !== 'gemini') throw new DocumentImportError(`${why} ${providerMeta(ai.provider).name} cannot read PDF pages here: choose Claude or Gemini as the main AI (Engine panel, bottom of the window), or convert the file to text and use "Paste Text or File".`)
   if (file.size > MAX_VISION_BYTES) throw new DocumentImportError(`${why} It is also too big for the AI to read directly (${(file.size / 1048576).toFixed(0)} MB; the limit is ${MAX_VISION_BYTES / 1048576} MB).`)
   if (pages > MAX_VISION_PAGES) throw new DocumentImportError(`${why} It also has ${pages} pages; the AI can read up to ${MAX_VISION_PAGES}. Split out the story's pages first.`)
   const bytes = new Uint8Array(await file.arrayBuffer())

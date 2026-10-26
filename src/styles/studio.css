@@ -1240,3 +1240,14 @@ label.switch:active i { filter: brightness(.94); }
 .ed-dropveil-card b { font: 700 16px/22px var(--ui); color: var(--text); }
 .ed-dropveil-card > span:last-child { font: 400 12.5px/18px var(--ui); color: var(--text-2); }
 .ed-dropveil-card .ed-doc-tile { width: 44px; height: 44px; margin-bottom: 6px; }
+
+/* PDF is red, Word is blue wherever a file is shown: the idle card's two badges, the drag veil, the loaded card */
+.ed-doc-pair { display: inline-flex; flex: none; align-items: center; }
+.ed-doc-pair i { display: grid; place-items: center; width: 30px; height: 34px; font: 700 9px/1 var(--ui); font-style: normal; letter-spacing: .03em; color: #fff; border-radius: 6px; box-shadow: 0 0 0 2px var(--fill); }
+.ed-doc-pair i.pdf { background: #d6453d; }
+.ed-doc-pair i.docx { background: #2f6fd6; margin-left: 4px; }
+.ed-doc-pair.big i { width: 42px; height: 48px; font-size: 11px; box-shadow: 0 0 0 3px var(--card); }
+.ed-dropveil-card .ed-doc-pair { margin-bottom: 8px; }
+.ed-doc.pdf.has { background: color-mix(in srgb, #d6453d 7%, var(--card)); border-color: color-mix(in srgb, #d6453d 30%, var(--card-line)); }
+.ed-doc.docx.has { background: color-mix(in srgb, #2f6fd6 7%, var(--card)); border-color: color-mix(in srgb, #2f6fd6 30%, var(--card-line)); }
+.ed-doc.drag .ed-doc-pair i { box-shadow: 0 0 0 2px color-mix(in srgb, var(--sel) 12%, var(--fill)); }

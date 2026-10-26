@@ -42,7 +42,7 @@ try {
   // Editorial → Outputs → Export PNG (one file, through the save dialog)
   await page.evaluate(() => { window.__customTranslator = async (t) => t.replace(/[\u0980-\u09FF]+/g, 'gas') })
   await page.click('.ws-btn[data-ws="editorial"]')
-  await page.click('button:has-text("Paste Bengali Story")')
+  await page.click('button:has-text("Paste Text or File")')
   await page.fill('.ed-paste-area', 'সিলেটে দুটি নতুন কূপ\nপ্রকল্পটিতে মোট ৫৯২ কোটি টাকা ব্যয় হবে।')
   await page.click('button:has-text("Auto-Translate & Populate")')
   await page.waitForSelector('.ed-card-story', { timeout: 30000 })

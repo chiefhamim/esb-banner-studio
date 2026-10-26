@@ -342,7 +342,7 @@ export function parseArticleDocument(html: string, url?: string): ExtractedArtic
   }
   if (paragraphs.length === 0) {
     method = 'metadata-only'
-    warnings.push('No article text found on the page (it may render the story in the browser). Use "Paste Bengali Story".')
+    warnings.push('No article text found on the page (it may render the story in the browser). Use "Paste Text or File".')
   } else if (paragraphs.length < 3) {
     warnings.push(`Only ${paragraphs.length} paragraph${paragraphs.length === 1 ? '' : 's'} extracted — compare the source pane with the page.`)
   }

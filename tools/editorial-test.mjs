@@ -96,10 +96,10 @@ try {
   await page.reload()
   await page.waitForSelector('.studio-shell')
   await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]'))
-  await page.waitForSelector('button:has-text("Paste Bengali Story")')
+  await page.waitForSelector('button:has-text("Paste Text or File")')
 
-  // 3. Select Paste Bengali Story mode and enter Bengali story text
-  await page.click('button:has-text("Paste Bengali Story")')
+  // 3. Select Paste Text or File mode and enter Bengali story text
+  await page.click('button:has-text("Paste Text or File")')
   await page.waitForSelector('.ed-paste-area')
   const testStory = `৫৯২ কোটি টাকায় দুটি নতুন কূপ খনন করবে পেট্রোবাংলা, জাতীয় গ্রিডে যুক্ত হবে ৩০ এমএমসিএফডি গ্যাস
 সিলেট গ্যাস ফিল্ডের আওতায় দুটি নতুন উন্নয়ন কূপ খননের উদ্যোগ নিয়েছে পেট্রোবাংলা ও বাপেক্স।
