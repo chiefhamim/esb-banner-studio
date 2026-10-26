@@ -264,6 +264,12 @@ export function IconButton({ icon, tip, onClick, active, disabled, size = 15, ti
 }
 
 /** Measures the active button so a single "thumb" can glide between options instead of the highlight jumping. */
+/** Step response of a damped spring: 0 at t = 0, settling on 1 (a little past it first when zeta < 1). */
+const step = (t: number, zeta: number, omega: number) => {
+  const wd = omega * Math.sqrt(1 - zeta * zeta)
+  return 1 - Math.exp(-zeta * omega * t) * (Math.cos(wd * t) + ((zeta * omega) / wd) * Math.sin(wd * t))
+}
+
 /**
  * The chip behind the selected tab. When the choice changes it stretches toward the new option (the leading edge arrives
  * first, the trailing edge is pulled after it), overshoots a few pixels and settles. It can also be grabbed and dragged:
@@ -303,16 +309,21 @@ export function useSlidingThumb(value: unknown) {
     moved.current = false
     if (from.x === pos.x && from.w === pos.w) return
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof el.animate !== 'function') return
+    // Two edges, two springs: the leading edge is stiff and gets there first, the trailing edge is softer and is pulled after it.
+    // The chip's width is the gap between them, so it stretches by exactly as much as the edges lag - squash and stretch from
+    // physics, not from a hand-drawn curve.
     const dir = pos.x >= from.x ? 1 : -1
-    const left = Math.min(from.x, pos.x)
-    const stretch = Math.abs(pos.x - from.x) + Math.max(from.w, pos.w)
-    const at = (x: number, w: number, offset: number) => ({ transform: `translateX(${x}px)`, width: `${w}px`, offset })
-    el.animate([
-      at(from.x, from.w, 0),
-      at(left, stretch, 0.42),                       // stretched across both options, leading edge already there
-      at(pos.x + dir * 3, pos.w, 0.76),              // trailing edge catches up and overshoots
-      at(pos.x, pos.w, 1),
-    ], { duration: 620, easing: 'cubic-bezier(.33, 0, .2, 1)' })
+    const D = 0.7, N = 56
+    const fromL = from.x, fromR = from.x + from.w, toL = pos.x, toR = pos.x + pos.w
+    const frames: Keyframe[] = []
+    for (let i = 0; i <= N; i++) {
+      const t = (i / N) * D
+      const lead = step(t, 0.84, 19), trail = step(t, 0.92, 11.5)
+      const L = fromL + (toL - fromL) * (dir > 0 ? trail : lead)
+      const R = fromR + (toR - fromR) * (dir > 0 ? lead : trail)
+      frames.push({ transform: `translateX(${L.toFixed(2)}px)`, width: `${Math.max(8, R - L).toFixed(2)}px`, offset: i / N })
+    }
+    el.animate(frames, { duration: D * 1000, easing: 'linear' })
   }, [pos, ready])
 
   // grab the chip and drag it to another option
@@ -344,7 +355,9 @@ export function useSlidingThumb(value: unknown) {
       const opts = options()
       const lastOpt = opts[opts.length - 1]
       const min = opts[0].offsetLeft, max = lastOpt.offsetLeft + lastOpt.offsetWidth - drag.w
-      drag.cur = Math.max(min, Math.min(max, drag.x0 + dx))
+      const raw = drag.x0 + dx
+      // past either end the chip resists: a quarter of the extra distance, never more than 10 px
+      drag.cur = raw < min ? min - Math.min(10, (min - raw) * 0.25) : raw > max ? max + Math.min(10, (raw - max) * 0.25) : raw
       pill.current.style.transform = `translateX(${drag.cur}px)`
       setAim(nearest(drag.cur + drag.w / 2))
     }
@@ -362,9 +375,10 @@ export function useSlidingThumb(value: unknown) {
       if (target === d.btn) { // dropped back on its own option: spring home
         const home = posNow.current
         if (home) {
-          const spring = p.animate([{ transform: `translateX(${d.cur}px)` }, { transform: `translateX(${home.x + (home.x > d.cur ? 2 : -2)}px)`, offset: 0.65 }, { transform: `translateX(${home.x}px)` }], { duration: 420, easing: 'cubic-bezier(.22, 1, .36, 1)' })
+          const frames: Keyframe[] = []
+          for (let i = 0; i <= 40; i++) frames.push({ transform: `translateX(${(d.cur + (home.x - d.cur) * step((i / 40) * 0.55, 0.8, 20)).toFixed(2)}px)`, offset: i / 40 })
+          p.animate(frames, { duration: 550, easing: 'linear' })
           p.style.transform = `translateX(${home.x}px)`
-          void spring
         }
         return
       }

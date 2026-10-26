@@ -1295,5 +1295,17 @@ label.switch:active i { filter: brightness(.94); }
 .ed-launcher-wrap { justify-content: safe center; align-items: center; padding: 20px 24px; gap: 14px; }
 .ed-launcher-wrap > .ed-launcher-card { padding: 24px 28px; gap: 16px; }
 .ed-launcher-wrap > .ed-launcher-queue { padding: 18px 20px 14px !important; gap: 10px !important; }
-.ed-launcher-wrap .sq.compact .sq-list { max-height: 206px; }
-.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area { min-height: 92px; max-height: 44vh; field-sizing: content; resize: none; }
+
+/* Story Desk: the card never changes size. The intake block has one fixed height; link, paste and site tabs fill it and scroll
+   inside it when they have more. The story list is exactly three rows tall (rows are a fixed 64 px, one line of title). */
+.ed-launcher-wrap .ed-intake:not(.compact) { height: 304px; min-height: 0; }
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body { flex: 1 1 auto; min-height: 0; }
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body:has(> .ed-intake-url + p.hint) { justify-content: center; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area { flex: 1 1 auto; min-height: 0; height: auto; resize: none; overflow-y: auto; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list { flex: 1 1 auto; min-height: 0; max-height: none; box-sizing: border-box; gap: 6px; padding: 2px; scroll-snap-type: y proximity; scroll-padding: 2px 0; }
+.ed-launcher-wrap .ed-feed-item { height: 64px; flex: none; box-sizing: border-box; scroll-snap-align: start; background: var(--fill); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent); border-radius: var(--r-3); }
+.ed-launcher-wrap .ed-feed-item:hover { background: var(--fill-hover); }
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-error { flex: none; }
+.ed-launcher-queue .sq-list { box-sizing: border-box; height: 206px; max-height: none; overflow-y: auto; scroll-snap-type: y proximity; scroll-padding: 3px 0; }
+.ed-launcher-queue .sq-row { height: 64px; flex: none; justify-content: center; scroll-snap-align: start; }
+.ed-launcher-queue .sq-title { -webkit-line-clamp: 1; }
