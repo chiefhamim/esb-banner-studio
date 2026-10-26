@@ -35,6 +35,7 @@ import type { SiteDevice, SiteTheme } from './SitePreview'
 import { useShellStore } from '../shell/shellStore'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
+import { readDocument, readPdfWithAi, documentKind, DocumentImportError } from './importDocument'
 import { Field, Select, Check, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
 import { useStore } from '../store'
@@ -215,6 +216,9 @@ export function EditorialWorkspace() {
   // Intake & AI states
   const [urlInput, setUrlInput] = useState('')
   const [rawBengaliInput, setRawBengaliInput] = useState('')
+  const [docBusy, setDocBusy] = useState(false)
+  const [docNote, setDocNote] = useState<string | null>(null)
+  const docInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
   const [translating, setTranslating] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -495,8 +499,8 @@ export function EditorialWorkspace() {
   }
 
   // Translate Raw Pasted Bengali Story
-  const handleTranslateRawBengali = async () => {
-    const raw = rawBengaliInput.trim()
+  const handleTranslateRawBengali = async (rawOverride?: string) => {
+    const raw = (rawOverride ?? rawBengaliInput).trim()
     if (!raw) return
     useStoryQueue.getState().beginStory()
     setTranslating(true)
@@ -566,6 +570,26 @@ export function EditorialWorkspace() {
       setProgressStatus(null)
     } finally {
       setTranslating(false)
+    }
+  }
+
+  // A PDF or Word file: read its text here, put it in the box for the editor to see, then write the story from it
+  const handleDocumentFile = async (file: File | undefined) => {
+    if (!file || translating || docBusy) return
+    setErrorMsg(null); setErrorDetail(null); setDocNote(null); setDocBusy(true)
+    try {
+      let doc = await readDocument(file)
+      if (doc.needsVision) doc = await readPdfWithAi(file, doc.needsVision, doc.pages ?? 0, (st) => setProgressStatus(st))
+      setProgressStatus(null)
+      setRawBengaliInput(doc.text)
+      setDocNote(`${doc.name} · ${doc.kind === 'pdf' ? `${doc.pages} ${doc.pages === 1 ? 'page' : 'pages'} · ` : ''}${doc.words.toLocaleString()} words${doc.warnings.length ? ' · ' + doc.warnings.join(' ') : ''}`)
+      setDocBusy(false)
+      await handleTranslateRawBengali(doc.text)
+    } catch (err) {
+      setProgressStatus(null)
+      setErrorMsg(err instanceof DocumentImportError ? err.message : err instanceof Error ? err.message : 'This file could not be read.')
+    } finally {
+      setDocBusy(false)
     }
   }
 
@@ -924,13 +948,20 @@ export function EditorialWorkspace() {
         <div className="ed-intake-body">
           <textarea
             className="input ed-paste-area"
-            placeholder="Paste the Bengali headline on the first line, then the story…"
+            placeholder="Paste the Bengali headline on the first line, then the story — or drop a PDF or Word file here…"
             value={rawBengaliInput}
             onChange={(e) => setRawBengaliInput(e.target.value)}
+            onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }}
+            onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f && documentKind(f.name, f.type)) { e.preventDefault(); void handleDocumentFile(f) } }}
           />
+          <input ref={docInputRef} type="file" hidden accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            onChange={(e) => { void handleDocumentFile(e.target.files?.[0]); e.target.value = '' }} />
           <div className="ed-intake-foot">
-            <span className="mono hint">{rawBengaliInput.trim().length} characters</span>
-            <button type="button" className="btn primary" onClick={handleTranslateRawBengali} disabled={translating || !rawBengaliInput.trim()}>
+            <button type="button" className="btn" onClick={() => docInputRef.current?.click()} disabled={translating || docBusy} data-tip="Read the story from a PDF or Word (.docx) file, then write it in English">
+              <Icon name={docBusy ? 'refresh' : 'filePlus'} size={14} className={docBusy ? 'spin' : undefined} /><span>{docBusy ? 'Reading…' : 'PDF or Word'}</span>
+            </button>
+            <span className="mono hint ed-doc-note">{docNote ?? `${rawBengaliInput.trim().length} characters`}</span>
+            <button type="button" className="btn primary" onClick={() => void handleTranslateRawBengali()} disabled={translating || docBusy || !rawBengaliInput.trim()}>
               {translating ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
               <span>{translating ? 'Translating…' : 'Auto-Translate & Populate'}</span>
             </button>
@@ -940,7 +971,7 @@ export function EditorialWorkspace() {
 
       {compact && launcherTab !== 'live_feed' && (
         <ol className="ed-how" aria-label="How a story is made">
-          {([['link', 'Bring the story', 'A Bengali or English news link, or paste the text.'], ['sparkle', 'The AI writes it in English', 'Every figure kept, headline and SEO fields within the site’s limits, layout where the story needs it.'], ['check', 'Check the figures', 'Green is found in the source, amber needs your eye.'], ['upload', 'Review and publish', 'Banner, article and Facebook post go out together.']] as const).map(([icon, title, text], i) => (
+          {([['link', 'Bring the story', 'A Bengali or English news link, pasted text, or a PDF or Word file.'], ['sparkle', 'The AI writes it in English', 'Every figure kept, headline and SEO fields within the site’s limits, layout where the story needs it.'], ['check', 'Check the figures', 'Green is found in the source, amber needs your eye.'], ['upload', 'Review and publish', 'Banner, article and Facebook post go out together.']] as const).map(([icon, title, text], i) => (
             <li key={title}><span className="ed-how-n">{icon === 'sparkle' && mainAi ? <ProviderMark id={ai.provider} size={14} /> : <Icon name={icon} size={14} />}</span><div><b>{i + 1}. {title}</b><p>{text}</p></div></li>
           ))}
         </ol>

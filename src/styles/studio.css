@@ -1209,3 +1209,6 @@ label.switch:active i { filter: brightness(.94); }
 /* labels are Bold; body and footer text Medium */
 .ed-statusbar { font-weight: var(--w-body); }
 .rb-doc h1, .rb-doc h2, .rb-doc h3 { font-weight: var(--w-label); }
+/* paste tab: the file button, the file's note (or the character count) and the main action share one row */
+.ed-intake-foot { gap: 8px; }
+.ed-intake-foot .ed-doc-note { flex: 1 1 auto; min-width: 0; margin: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
