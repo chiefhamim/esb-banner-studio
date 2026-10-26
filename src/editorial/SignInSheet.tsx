@@ -24,6 +24,8 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const loginStaff = useEditorialStore((s) => s.loginStaff)
   const logoutStaff = useEditorialStore((s) => s.logoutStaff)
   const siteStatus = useEditorialStore((s) => s.siteStatus)
+  const ai = useEditorialStore((s) => s.ai)
+  const setAiPaused = useEditorialStore((s) => s.setAiPaused)
   const [email, setEmail] = useState(session?.email ?? '')
   const [password, setPassword] = useState('')
   const [show, setShow] = useState(false)
@@ -189,6 +191,16 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                   <div className="acct-actions">
                     <button type="button" className={'btn sm' + (fb ? '' : ' primary')} onClick={() => setFbDialog(true)}><Icon name="link" size={13} /><span>{fb ? 'Change Page or token' : 'Connect Page'}</span></button>
                     {fb && <button type="button" className="btn sm" onClick={() => void checkFb(fb, true)} disabled={fbState.s === 'checking'}><Icon name="refresh" size={13} /><span>{fbState.s === 'checking' ? 'Checking…' : 'Check again'}</span></button>}
+                  </div>
+                </div>
+              </div>
+              <div className={'acct-card ' + (ai.paused ? 'none' : 'ok')}>
+                <span className="acct-logo aimark" aria-hidden><Icon name="chip" size={18} /></span>
+                <div className="acct-main">
+                  <div className="acct-title"><b>AI providers</b><span className={'acct-pill ' + (ai.paused ? 'none' : 'ok')}><i />{ai.paused ? 'Off' : 'On'}</span></div>
+                  <p className="acct-fine">{ai.paused ? 'Nothing is sent to any AI company, not even the check when the app starts. The free translation service is used.' : 'Gemini, Claude, OpenAI or OpenRouter write the stories, SEO and captions you set them to. Turn off to stop every AI call.'}</p>
+                  <div className="acct-actions">
+                    <button type="button" className={'btn sm' + (ai.paused ? ' primary' : '')} onClick={() => setAiPaused(!ai.paused)}><Icon name="power" size={13} /><span>{ai.paused ? 'Turn AI on' : 'Turn AI off'}</span></button>
                   </div>
                 </div>
               </div>

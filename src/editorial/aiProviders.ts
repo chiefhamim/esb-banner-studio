@@ -69,6 +69,9 @@ export interface AiSettings {
   models: Record<AiProviderId, string>
   /** The editor's own translation prompt; empty means the built-in newsroom prompt. */
   prompt: string
+  /** The master switch. While true no AI company is contacted for anything: not translation, SEO, captions, PDF reading, the
+   *  launch health check, model lists or key tests. The free translation service is used instead. */
+  paused: boolean
 }
 
 const SETTINGS_KEY = 'esb-banner-studio/ai-settings'
@@ -77,7 +80,7 @@ const emptyRecord = (v: string): Record<AiProviderId, string> => ({ gemini: v, a
 const isProvider = (v: unknown): v is AiProviderId => AI_PROVIDERS.some((p) => p.id === v)
 
 export function loadAiSettings(): AiSettings {
-  const base: AiSettings = { provider: 'gemini', seo: '', social: '', keys: emptyRecord(''), models: emptyRecord('auto'), prompt: '' }
+  const base: AiSettings = { provider: 'gemini', seo: '', social: '', keys: emptyRecord(''), models: emptyRecord('auto'), prompt: '', paused: false }
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
@@ -89,6 +92,7 @@ export function loadAiSettings(): AiSettings {
         keys: { ...base.keys, ...(s.keys ?? {}) },
         models: { ...base.models, ...(s.models ?? {}) },
         prompt: typeof s.prompt === 'string' ? s.prompt : '',
+        paused: s.paused === true,
       }
     }
   } catch { /* storage blocked: defaults */ }
@@ -103,8 +107,13 @@ export function saveAiSettings(s: AiSettings) {
 /** The provider a job uses: its own choice, or the main one. */
 export const roleProvider = (s: AiSettings, role: AiRole): AiProviderId => (role === 'main' ? s.provider : s[role] || s.provider)
 
-/** The provider, key and model a job should call: the one chosen for it when it has a key, else nothing — no substitute. */
+export const AI_OFF_MESSAGE = 'AI is switched off. Turn it on in the Engine panel or your account sheet.'
+/** True while the master switch is off. Read from storage so every caller sees a change at once. */
+export const aiPaused = () => loadAiSettings().paused
+
+/** The provider, key and model a job should call: the one chosen for it when it has a key, else nothing — no substitute. Nothing at all while AI is switched off. */
 export function aiFor(role: AiRole = 'main', s: AiSettings = loadAiSettings()): { provider: AiProviderId; key: string; model: string } | null {
+  if (s.paused) return null
   const provider = roleProvider(s, role)
   const key = s.keys[provider]?.trim()
   return key ? { provider, key, model: s.models[provider] || 'auto' } : null
@@ -163,6 +172,7 @@ function claudeClient(key: string) {
 }
 
 export async function listModels(provider: AiProviderId, apiKey: string, signal?: AbortSignal): Promise<AiModelInfo[]> {
+  if (aiPaused()) return []
   const key = apiKey.trim()
   if (!key) return []
   const ck = `${provider}:${key}`
@@ -275,6 +285,7 @@ function parseJson(text: string): Record<string, unknown> {
 }
 
 export async function aiJson<T extends Record<string, unknown>>(req: AiJsonRequest): Promise<{ data: T; model: string }> {
+  if (aiPaused()) throw new Error(AI_OFF_MESSAGE)
   const { provider, key, system, user, schema, attachment } = req
   if (attachment && provider !== 'gemini' && provider !== 'anthropic') throw new Error(`${providerMeta(provider).name} cannot read a PDF file here — choose Claude or Gemini as the main AI.`)
   const maxTokens = req.maxTokens ?? 16000
@@ -353,6 +364,7 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
 
 /** Check a key: list its models, then make one tiny structured call on the model the desk would use. */
 export async function testAiKey(provider: AiProviderId, apiKey: string, chosen: string): Promise<{ ok: boolean; model?: string; error?: string; models?: AiModelInfo[] }> {
+  if (aiPaused()) return { ok: false, error: AI_OFF_MESSAGE }
   const key = apiKey.trim()
   if (!key) return { ok: false, error: 'Please enter an API key.' }
   for (const k of [...cache.keys()]) if (k.startsWith(provider + ':')) cache.delete(k)

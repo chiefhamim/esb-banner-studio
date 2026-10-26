@@ -18,6 +18,7 @@ const JOBS: { role: AiRole; name: string; note: string }[] = [
 export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; onToast: (msg: string) => void }) {
   const saved = useEditorialStore((s) => s.ai)
   const setAiSettings = useEditorialStore((s) => s.setAiSettings)
+  const setAiPaused = useEditorialStore((s) => s.setAiPaused)
   const [draft, setDraft] = useState<AiSettings>(() => ({ ...saved, prompt: saved.prompt || JOURNALISTIC_TRANSLATOR_PROMPT }))
   const [editing, setEditing] = useState<AiProviderId>(saved.provider)
   const [models, setModels] = useState<Partial<Record<AiProviderId, AiModelInfo[]>>>({})
@@ -81,6 +82,13 @@ export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; on
     >
       <div className="stack ai-settings" data-provider={p} style={{ gap: 16 }}>
         <section className="ai-section">
+          {saved.paused && (
+            <div className="callout warn">
+              <Icon name="power" size={14} />
+              <span>AI is switched off, so none of this is used and nothing is sent. Your keys and choices are kept.</span>
+              <button type="button" className="btn sm primary" onClick={() => { setAiPaused(false); onToast('AI is on') }}>Turn AI on</button>
+            </div>
+          )}
           <h4 className="ai-h">Who does what</h4>
           <div className="ai-roles">
             {JOBS.map((j) => (

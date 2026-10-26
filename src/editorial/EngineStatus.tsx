@@ -40,6 +40,7 @@ const fmt = fmtDuration
 
 export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offline: boolean; onAddKey: () => void }) {
   const setAiSettings = useEditorialStore((s) => s.setAiSettings)
+  const setAiPaused = useEditorialStore((s) => s.setAiPaused)
   const byKey = useHealth((s) => s.byKey)
   const usageCalls = useAiUsage((s) => s.calls)
   const usage = usageTotals(usageCalls)
@@ -79,7 +80,8 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
   const busy = distinct.some((a) => { const s = byKey[sig(a)]; return !s || s.state === 'busy' })
   const bad = rows.filter((r) => stateOf(r.a)?.state === 'bad').length
   const noKey = rows.filter((r) => !r.a).length
-  const summary = offline ? { cls: 'bad', text: 'Offline' }
+  const summary = ai.paused ? { cls: 'off', text: 'AI off' }
+    : offline ? { cls: 'bad', text: 'Offline' }
     : !distinct.length ? { cls: 'free', text: 'Free translation' }
     : busy ? { cls: 'busy', text: 'Checking…' }
     : bad ? { cls: 'bad', text: `${bad} of ${rows.length} need attention` }
@@ -102,8 +104,10 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
           <div className="eng-head">
             <span className="eng-head-ic"><Icon name="chip" size={16} /></span>
             <div className="eng-head-t"><b>AI engines</b><span>{busy ? 'Checking each key…' : 'Each key is tested with one tiny request'}</span></div>
-            <button type="button" className="btn sm" onClick={() => refresh()} disabled={busy || !distinct.length}><Icon name="refresh" size={13} /><span>Refresh all</span></button>
+            <button type="button" className="btn sm" onClick={() => refresh()} disabled={ai.paused || busy || !distinct.length}><Icon name="refresh" size={13} /><span>Refresh all</span></button>
+            <button type="button" role="switch" aria-checked={!ai.paused} className={'eng-power' + (ai.paused ? '' : ' on')} onClick={() => setAiPaused(!ai.paused)} data-tip={ai.paused ? 'Turn AI on' : 'Turn AI off: nothing is sent to any AI company'}><Icon name="power" size={13} /><span>{ai.paused ? 'Off' : 'On'}</span></button>
           </div>
+          {ai.paused && <p className="eng-off"><Icon name="power" size={13} /><span>AI is off. Nothing is sent to Gemini, Claude, OpenAI or OpenRouter, not even the check when the app starts. Translation uses the free service until you turn it on.</span></p>}
           <div className="eng-cols" aria-hidden><span>Job</span><span>Company</span><span>Model</span><span className="c">Status</span><span /></div>
           {rows.map(({ role, label, chosen, a }) => {
             const c = stateOf(a)
@@ -116,16 +120,17 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
                     ...AI_PROVIDERS.map((p) => ({ value: p.id as string, label: p.name, swatch: p.color, hint: ai.keys[p.id]?.trim() ? '' : 'no key' })),
                   ]} />
                 <span className="eng-model" data-provider={chosen}>
-                  {a ? <><i className="sb-pdot" aria-hidden /><span>{providerMeta(chosen).name} · {c?.state === 'ok' ? modelLabel(c.model) : ai.models[chosen] === 'auto' ? 'Auto' : modelLabel(ai.models[chosen])}</span></> : <span className="eng-nokey">No {providerMeta(chosen).name} key</span>}
+                  {ai.paused ? <span className="eng-nokey">{providerMeta(chosen).name} · paused</span> : a ? <><i className="sb-pdot" aria-hidden /><span>{providerMeta(chosen).name} · {c?.state === 'ok' ? modelLabel(c.model) : ai.models[chosen] === 'auto' ? 'Auto' : modelLabel(ai.models[chosen])}</span></> : <span className="eng-nokey">No {providerMeta(chosen).name} key</span>}
                 </span>
                 <div className="eng-state">
-                  {!a && <button type="button" className="btn xs" onClick={() => { setOpen(false); onAddKey() }}>Add key</button>}
-                  {a && (!c || c.state === 'busy') && <span className="eng-tag busy"><span className="pulse-dot" />Checking</span>}
-                  {a && c?.state === 'ok' && <span className="eng-tag ok"><Icon name="check" size={11} />Working · {fmt(c.ms)}</span>}
-                  {a && c?.state === 'bad' && <span className="eng-tag bad"><Icon name="info" size={11} />Failed</span>}
+                  {ai.paused && <span className="eng-tag off"><Icon name="power" size={11} />Off</span>}
+                  {!ai.paused && !a && <button type="button" className="btn xs" onClick={() => { setOpen(false); onAddKey() }}>Add key</button>}
+                  {!ai.paused && a && (!c || c.state === 'busy') && <span className="eng-tag busy"><span className="pulse-dot" />Checking</span>}
+                  {!ai.paused && a && c?.state === 'ok' && <span className="eng-tag ok"><Icon name="check" size={11} />Working · {fmt(c.ms)}</span>}
+                  {!ai.paused && a && c?.state === 'bad' && <span className="eng-tag bad"><Icon name="info" size={11} />Failed</span>}
                 </div>
-                <button type="button" className="ibtn" aria-label={`Check ${label} again`} data-tip="Check again" disabled={!a || c?.state === 'busy'} onClick={() => a && refresh(a)}><Icon name="refresh" size={13} /></button>
-                {a && c?.state === 'bad' && <p className="eng-err">{c.error}</p>}
+                <button type="button" className="ibtn" aria-label={`Check ${label} again`} data-tip="Check again" disabled={ai.paused || !a || c?.state === 'busy'} onClick={() => a && refresh(a)}><Icon name="refresh" size={13} /></button>
+                {!ai.paused && a && c?.state === 'bad' && <p className="eng-err">{c.error}</p>}
               </div>
             )
           })}

@@ -140,6 +140,8 @@ interface EditorialState {
   setSocialCaption: (platform: keyof EditorialDraft['social'], text: string) => void
   toggleChecklist: (key: keyof EditorialChecklist) => void
   setAiSettings: (s: AiSettings) => void
+  /** The master AI switch (true = off). */
+  setAiPaused: (paused: boolean) => void
   setBannerLink: (on: boolean) => void
   setDeskAuto: (on: boolean) => void
   /** Pick the sector desk by hand (updates the banner chip and stops auto-detection). */
@@ -504,6 +506,10 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
 
   setAiSettings: (ai) => {
     saveAiSettings(ai)
+    set({ ai: loadAiSettings() })
+  },
+  setAiPaused: (paused) => {
+    saveAiSettings({ ...loadAiSettings(), paused })
     set({ ai: loadAiSettings() })
   },
 
