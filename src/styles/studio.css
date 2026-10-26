@@ -1227,5 +1227,6 @@ label.switch:active i { filter: brightness(.94); }
 .ed-intake.compact .ed-doc .btn { width: auto; height: 28px; }
 
 /* the Story / Site / View menus get the same 32 px hover container as the Editorial / Graphics / Video switcher (it was 28) */
-.topbar .menubar .mb-item { height: 32px; min-width: 60px; padding: 0 12px; justify-content: center; }  /* one width for every menu word, so Story, Site and View are identical containers */
-@container topbar (max-width: 920px) { .topbar .menubar .mb-item { min-width: 52px; padding-left: 8px; padding-right: 8px; } }
+.topbar .menubar .mb-item { height: 32px; padding: 0 10px; justify-content: center; }
+.ed-head .menubar .mb-item { min-width: 60px; padding: 0 12px; }  /* Story, Site and View are identical containers */
+@container topbar (max-width: 1000px) { .topbar .menubar .mb-item { padding-left: 7px; padding-right: 7px; } .ed-head .menubar .mb-item { min-width: 52px; } }
