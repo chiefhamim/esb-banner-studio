@@ -264,16 +264,27 @@ export function IconButton({ icon, tip, onClick, active, disabled, size = 15, ti
 }
 
 /** Measures the active button so a single "thumb" can glide between options instead of the highlight jumping. */
+/**
+ * The chip behind the selected tab. When the choice changes it does not just slide: it stretches toward the new option
+ * (the leading edge arrives first, the trailing edge is pulled after it), overshoots a few pixels, settles, and a soft ring
+ * ripples out where it lands. Hovering a tab also tugs it a couple of pixels toward the pointer (--mag-x/--mag-y, applied
+ * with the `translate` property so it never fights the press-scale transform). All of it is skipped under reduced motion.
+ */
 export function useSlidingThumb(value: unknown) {
   const wrap = useRef<HTMLDivElement>(null)
+  const pill = useRef<HTMLElement | null>(null)
+  const last = useRef<{ x: number; w: number } | null>(null)
+  const moved = useRef(false)
   const [pos, setPos] = useState<{ x: number; w: number } | null>(null)
   const [ready, setReady] = useState(false)
   useLayoutEffect(() => {
     const el = wrap.current
     if (!el) return
+    moved.current = true // this run follows a change of choice (a resize alone must not replay the motion)
     const measure = () => {
       const b = el.querySelector<HTMLElement>('button.on')
-      setPos(b ? { x: b.offsetLeft, w: b.offsetWidth } : null)
+      const next = b ? { x: b.offsetLeft, w: b.offsetWidth } : null
+      setPos((cur) => (cur && next && cur.x === next.x && cur.w === next.w ? cur : next))  // same place: no new state, so nothing re-runs
     }
     measure()
     const ro = new ResizeObserver(measure)
@@ -281,7 +292,54 @@ export function useSlidingThumb(value: unknown) {
     const id = requestAnimationFrame(() => setReady(true)) // no glide on first paint
     return () => { ro.disconnect(); cancelAnimationFrame(id) }
   }, [value])
-  const thumb = pos && <i className={'pill-slide' + (ready ? ' ready' : '')} style={{ width: pos.w, transform: `translateX(${pos.x}px)` }} />
+
+  useLayoutEffect(() => {
+    const from = last.current
+    last.current = pos
+    const el = pill.current
+    if (!pos || !from || !el || !moved.current || !ready) return
+    moved.current = false
+    if (from.x === pos.x && from.w === pos.w) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof el.animate !== 'function') return
+    const dir = pos.x >= from.x ? 1 : -1
+    const left = Math.min(from.x, pos.x)
+    const stretch = Math.abs(pos.x - from.x) + Math.max(from.w, pos.w)
+    const at = (x: number, w: number, offset: number) => ({ transform: `translateX(${x}px)`, width: `${w}px`, offset })
+    const anim = el.animate([
+      at(from.x, from.w, 0),
+      at(left, stretch, 0.42),                       // stretched across both options, leading edge already there
+      at(pos.x + dir * 3, pos.w, 0.76),              // trailing edge catches up and overshoots
+      at(pos.x, pos.w, 1),
+    ], { duration: 620, easing: 'cubic-bezier(.33, 0, .2, 1)' })
+    anim.finished.then(() => {
+      el.classList.remove('ripple'); void el.offsetWidth; el.classList.add('ripple')
+      window.setTimeout(() => el.classList.remove('ripple'), 700)
+    }).catch(() => { /* interrupted by the next change */ })
+  }, [pos, ready])
+
+  // magnetic tug: the tab under the pointer leans toward it
+  useLayoutEffect(() => {
+    const el = wrap.current
+    if (!el || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)')
+    let cur: HTMLButtonElement | null = null
+    const reset = (b: HTMLButtonElement | null) => { b?.style.removeProperty('--mag-x'); b?.style.removeProperty('--mag-y') }
+    const move = (e: PointerEvent) => {
+      const b = (e.target as Element).closest?.('button') as HTMLButtonElement | null
+      if (b !== cur) { reset(cur); cur = b }
+      if (!b || reduce.matches || b.disabled) return
+      const r = b.getBoundingClientRect()
+      const dx = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width / 2)))
+      const dy = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (r.height / 2)))
+      b.style.setProperty('--mag-x', `${(dx * 3).toFixed(2)}px`)
+      b.style.setProperty('--mag-y', `${(dy * 1.5).toFixed(2)}px`)
+    }
+    const leave = () => { reset(cur); cur = null }
+    el.addEventListener('pointermove', move); el.addEventListener('pointerleave', leave)
+    return () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerleave', leave); reset(cur) }
+  }, [])
+
+  const thumb = pos && <i ref={(node) => { pill.current = node }} className={'pill-slide' + (ready ? ' ready' : '')} style={{ width: pos.w, transform: `translateX(${pos.x}px)` }} />
   return { wrap, thumb }
 }
 
