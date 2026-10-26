@@ -36,6 +36,7 @@ import type { SiteDevice, SiteTheme } from './SitePreview'
 import { useShellStore } from '../shell/shellStore'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
+import { FileTypeIcon, FileTypePair } from './FileTypeIcon'
 import { readDocument, readPdfWithAi, documentKind, fmtFileSize, DocumentImportError } from './importDocument'
 import { Field, Select, Check, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
@@ -980,14 +981,14 @@ export function EditorialWorkspace() {
               <><span className="ed-doc-tile"><Icon name="refresh" size={16} className="spin" /></span><div className="ed-doc-text"><b>{progressStatus || 'Reading the file…'}</b><span>This takes a few seconds</span></div></>
             ) : docInfo ? (
               <>
-                <span className={'ed-doc-tile ' + docInfo.kind}>{docInfo.kind === 'pdf' ? 'PDF' : 'DOCX'}</span>
+                <FileTypeIcon kind={docInfo.kind} size={38} />
                 <div className="ed-doc-text"><b title={docInfo.name}>{docInfo.name}</b><span>{docInfo.kind === 'pdf' ? `${docInfo.pages} ${docInfo.pages === 1 ? 'page' : 'pages'} · ` : ''}{fmtFileSize(docInfo.size)} · {docInfo.words.toLocaleString()} words</span></div>
                 <button type="button" className="btn sm" onClick={() => docInputRef.current?.click()} disabled={translating}>Replace</button>
                 <button type="button" className="ibtn" aria-label="Remove file" data-tip="Remove file" disabled={translating} onClick={() => { setDocInfo(null); setRawBengaliInput(''); setErrorMsg(null) }}><Icon name="x" size={14} /></button>
               </>
             ) : (
               <>
-                <span className="ed-doc-pair" aria-hidden><i className="pdf">PDF</i><i className="docx">DOC</i></span>
+                <FileTypePair size={38} />
                 <div className="ed-doc-text"><b>Add a PDF or Word file</b><span>Drop it here or browse · 25 MB max</span></div>
                 <button type="button" className="btn sm" onClick={() => docInputRef.current?.click()} disabled={translating}>Browse</button>
               </>
@@ -1561,7 +1562,7 @@ export function EditorialWorkspace() {
 
       {deskDrag && createPortal(
         <div className="ed-dropveil" aria-hidden>
-          <div className="ed-dropveil-card"><span className="ed-doc-pair big" aria-hidden><i className="pdf">PDF</i><i className="docx">DOC</i></span><b>Drop a PDF or Word file</b><span>It is read here; nothing is translated until you press Auto-Translate</span></div>
+          <div className="ed-dropveil-card"><FileTypePair size={56} /><b>Drop a PDF or Word file</b><span>It is read here; nothing is translated until you press Auto-Translate</span></div>
         </div>,
         document.body,
       )}
