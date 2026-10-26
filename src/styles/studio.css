@@ -1439,3 +1439,12 @@ label.switch:active i { filter: brightness(.94); }
 .ed-pipe .pipe-ic { grid-area: 2 / 1; }
 .ed-pipe small { grid-area: 2 / 2; margin: 0; align-self: center; }
 .ed-pipe .pipe-arrow { align-self: end; margin-top: 0; padding: 0 2px; }
+
+/* the three steps live in one dashed container, like the drop zone */
+.ed-pipe { padding: 16px 14px; border: 1.5px dashed color-mix(in srgb, var(--text) 24%, transparent); border-radius: 14px; align-items: end; }
+.ed-pipe .pipe-arrow { padding: 0 4px; color: color-mix(in srgb, var(--text) 62%, transparent); }
+.ed-pipe .pipe-arrow svg { width: 56px; height: 30px; }
+.ed-pipe { padding: 16px 12px; }
+.ed-pipe li:not(.pipe-arrow) { column-gap: 10px; }
+.ed-pipe .pipe-arrow { padding: 0 2px; }
+.ed-pipe .pipe-arrow svg { width: 50px; height: 27px; }
