@@ -574,7 +574,7 @@ export function EditorialWorkspace() {
     }
   }
 
-  // A PDF or Word file: read its text here, put it in the box for the editor to see, then write the story from it
+  // A PDF or Word file: read its text here and put it in the box for the editor to check; translating is a separate, deliberate press
   const handleDocumentFile = async (file: File | undefined) => {
     if (!file || translating || docBusy) return
     setErrorMsg(null); setErrorDetail(null); setDocBusy(true)
@@ -584,8 +584,7 @@ export function EditorialWorkspace() {
       setProgressStatus(null)
       setRawBengaliInput(doc.text)
       setDocInfo({ name: doc.name, kind: doc.kind, pages: doc.pages, words: doc.words, warnings: doc.warnings })
-      setDocBusy(false)
-      await handleTranslateRawBengali(doc.text)
+      showToast('File read — check the text, then press Auto-Translate')
     } catch (err) {
       setProgressStatus(null)
       setErrorMsg(err instanceof DocumentImportError ? err.message : err instanceof Error ? err.message : 'This file could not be read.')
