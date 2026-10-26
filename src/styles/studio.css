@@ -1473,3 +1473,13 @@ label.switch:active i { filter: brightness(.94); }
 .eng-off svg { flex: none; margin-top: 2px; color: var(--text-3); }
 .eng-tag.off { color: var(--text-3); background: var(--fill); }
 .acct-logo.aimark { display: grid; place-items: center; color: var(--text-2); background: var(--raised); border-radius: 10px; box-shadow: var(--raised-shadow); }
+
+/* AI switch button: one size in both states (132 x 32, icon and label centred as a pair); red while AI is off */
+.acct-ai-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 136px; height: 32px; padding: 0 16px; font: 600 13px/1 var(--ui); border-radius: 8px; }
+.acct-ai-btn.off, .acct-ai-btn.off:hover:not(:disabled) { color: #fff; background: var(--danger); box-shadow: none; }
+.acct-ai-btn.off:hover:not(:disabled) { filter: brightness(1.06); }
+.acct-card.ok .acct-ai-btn:not(.off) { color: var(--text); }
+.eng-power:not(.on) { color: var(--danger); background: var(--danger-soft); }
+.eng-power:not(.on):hover { background: color-mix(in srgb, var(--danger) 22%, transparent); }
+.acct-card .acct-ai-btn.off, .acct-card .acct-ai-btn.off:hover:not(:disabled), .acct-card .acct-ai-btn.off:active:not(:disabled) { color: #fff !important; background: var(--danger) !important; border-color: transparent; box-shadow: none; }
+:root[data-theme=dark] .acct-card .acct-ai-btn.off, :root[data-theme=dark] .acct-card .acct-ai-btn.off:hover:not(:disabled) { color: #1a0a0a !important; }
