@@ -6,6 +6,7 @@
 //          Organize (category, tags, byline), and Outputs (Banner · Web article · Facebook).
 //   Empty desk: a centred intake card (link / pasted Bengali / site CMS posts).
 
+import { createPortal } from 'react-dom'
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import './editorial.css'
@@ -593,6 +594,27 @@ export function EditorialWorkspace() {
     }
   }
 
+  // Drop a PDF or Word file anywhere on the desk: the Paste tab opens and the file is read
+  const dropHandler = useRef<(f: File) => void>(() => {})
+  dropHandler.current = (f) => { setSourceOpen(true); setLeftTab('intake'); setLauncherTab('paste'); void handleDocumentFile(f) }
+  const [deskDrag, setDeskDrag] = useState(false)
+  useEffect(() => {
+    let depth = 0
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
+    const enter = (e: DragEvent) => { if (!hasFiles(e)) return; depth++; setDeskDrag(true) }
+    const over = (e: DragEvent) => { if (hasFiles(e)) { e.preventDefault(); setDeskDrag(true); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy' } }
+    const leave = (e: DragEvent) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) setDeskDrag(false) }
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      e.preventDefault(); depth = 0; setDeskDrag(false)
+      const f = e.dataTransfer?.files?.[0]
+      if (f && documentKind(f.name, f.type)) dropHandler.current(f)
+      else if (f) showToast('Only PDF and Word (.docx) files can be added here')
+    }
+    window.addEventListener('dragenter', enter); window.addEventListener('dragover', over); window.addEventListener('dragleave', leave); window.addEventListener('drop', drop)
+    return () => { window.removeEventListener('dragenter', enter); window.removeEventListener('dragover', over); window.removeEventListener('dragleave', leave); window.removeEventListener('drop', drop) }
+  }, [showToast])
+
   // Re-translate current Source into English Draft
   const handleRetranslateSource = async () => {
     if (!source) return
@@ -950,9 +972,9 @@ export function EditorialWorkspace() {
             onChange={(e) => { void handleDocumentFile(e.target.files?.[0]); e.target.value = '' }} />
           <div
             className={'ed-doc' + (docDrag ? ' drag' : '') + (docBusy ? ' busy' : '') + (docInfo && !docBusy ? ' has' : '')}
-            onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDocDrag(true) } }}
+            onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) setDocDrag(true) }}
             onDragLeave={() => setDocDrag(false)}
-            onDrop={(e) => { setDocDrag(false); const f = e.dataTransfer.files?.[0]; if (f && documentKind(f.name, f.type)) { e.preventDefault(); void handleDocumentFile(f) } }}
+            onDrop={() => setDocDrag(false)}
           >
             {docBusy ? (
               <><span className="ed-doc-tile"><Icon name="refresh" size={16} className="spin" /></span><div className="ed-doc-text"><b>{progressStatus || 'Reading the file…'}</b><span>This takes a few seconds</span></div></>
@@ -1537,6 +1559,12 @@ export function EditorialWorkspace() {
         </span>
       </footer>
 
+      {deskDrag && createPortal(
+        <div className="ed-dropveil" aria-hidden>
+          <div className="ed-dropveil-card"><span className="ed-doc-tile"><Icon name="upload" size={18} /></span><b>Drop a PDF or Word file</b><span>It is read here; nothing is translated until you press Auto-Translate</span></div>
+        </div>,
+        document.body,
+      )}
       {/* =========================================================================
           4. DIALOGS (Staff Login, Live Publish to CMS, AI settings)
           ========================================================================= */}

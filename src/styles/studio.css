@@ -1234,3 +1234,9 @@ label.switch:active i { filter: brightness(.94); }
 /* one typeface: what used to be monospace (counts, hex, timecodes, shortcuts) is Inter with tabular figures so columns still line up */
 .mono, .count, .mono-in, kbd, .token, .mi-hint, .colorfield input, .cp-hex input, .progress small, .vw-timecode, .vw-current-time, .vw-total-time, .vw-zoom-label, .vw-ruler-label, .vw-clip-duration, .vw-media-meta, .vw-metrics { font-variant-numeric: tabular-nums lining-nums; }
 .ed-doc .ibtn { flex: none; width: 28px; height: 28px; }
+/* whole-desk drop target while a file is dragged over the window */
+.ed-dropveil { position: fixed; inset: 0; z-index: 2400; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--bg-0) 72%, transparent); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); pointer-events: none; }
+.ed-dropveil-card { display: flex; flex-direction: column; align-items: center; gap: 6px; width: min(460px, 100%); padding: 28px 24px; text-align: center; background: var(--card); border: 2px dashed var(--sel); border-radius: var(--r-4); box-shadow: var(--card-shadow-open); }
+.ed-dropveil-card b { font: 700 16px/22px var(--ui); color: var(--text); }
+.ed-dropveil-card > span:last-child { font: 400 12.5px/18px var(--ui); color: var(--text-2); }
+.ed-dropveil-card .ed-doc-tile { width: 44px; height: 44px; margin-bottom: 6px; }
