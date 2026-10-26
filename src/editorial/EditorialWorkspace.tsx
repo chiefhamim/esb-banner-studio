@@ -976,9 +976,9 @@ export function EditorialWorkspace() {
           <ol className="ed-pipe" aria-label="What happens next">
             <li className="parse"><span className="pipe-top"><span className="pipe-ic"><Icon name="newspaper" size={16} /></span><i>01</i></span><b>Parse</b><small>Text and photos are read from the page</small></li>
             <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 22 10" width="22" height="10"><path d="M1 5h19M16 1.2 20.5 5 16 8.8" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg></li>
-            <li className="polish"><span className="pipe-top"><span className="pipe-ic"><Icon name="sparkle" size={16} /></span><i>02</i></span><b>Polish</b><small>Your main AI writes newsroom English</small></li>
+            <li className="polish"><span className="pipe-top"><span className="pipe-ic"><Icon name="sparkle" size={16} /></span><i>02</i></span><b>Polish</b><small>Your AI writes newsroom English</small></li>
             <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 22 10" width="22" height="10"><path d="M1 5h19M16 1.2 20.5 5 16 8.8" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg></li>
-            <li className="publish"><span className="pipe-top"><span className="pipe-ic"><Icon name="upload" size={16} /></span><i>03</i></span><b>Publish</b><small>Review, then send article, banner and post</small></li>
+            <li className="publish"><span className="pipe-top"><span className="pipe-ic"><Icon name="upload" size={16} /></span><i>03</i></span><b>Publish</b><small>Send the article, banner and post</small></li>
           </ol>
         </div>
       )}
