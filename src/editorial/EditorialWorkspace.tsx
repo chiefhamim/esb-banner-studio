@@ -973,11 +973,12 @@ export function EditorialWorkspace() {
             </div>
             <p className="ed-link-hint">Paste the address of a news story, Bengali or English.</p>
           </div>
-          <ol className="ed-flow" aria-label="What happens next">
-            <span className="ed-flow-line" aria-hidden />
-            <li className="parse"><span className="ed-step-ic"><Icon name="newspaper" size={20} /></span><em>Step 1</em><b>Parse</b><small>Text and photos are read from the page</small></li>
-            <li className="polish"><i className="ed-flow-chev" aria-hidden><svg viewBox="0 0 12 12" width="10" height="10"><path d="M4 2.5 7.5 6 4 9.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></i><span className="ed-step-ic"><Icon name="sparkle" size={20} /></span><em>Step 2</em><b>Polish</b><small>Your main AI writes newsroom English</small></li>
-            <li className="publish"><i className="ed-flow-chev" aria-hidden><svg viewBox="0 0 12 12" width="10" height="10"><path d="M4 2.5 7.5 6 4 9.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></i><span className="ed-step-ic"><Icon name="upload" size={20} /></span><em>Step 3</em><b>Publish</b><small>Review, then send article, banner and post</small></li>
+          <ol className="ed-pipe" aria-label="What happens next">
+            <li className="parse"><Icon name="newspaper" size={18} /><b>Parse</b><small>Text and photos are read from the page</small></li>
+            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 22 10" width="22" height="10"><path d="M1 5h19M16 1.2 20.5 5 16 8.8" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg></li>
+            <li className="polish"><Icon name="sparkle" size={18} /><b>Polish</b><small>Your main AI writes newsroom English</small></li>
+            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 22 10" width="22" height="10"><path d="M1 5h19M16 1.2 20.5 5 16 8.8" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg></li>
+            <li className="publish"><Icon name="upload" size={18} /><b>Publish</b><small>Review, then send article, banner and post</small></li>
           </ol>
         </div>
       )}

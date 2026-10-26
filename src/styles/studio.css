@@ -1340,21 +1340,12 @@ label.switch:active i { filter: brightness(.94); }
 .ed-link-input { width: 100%; height: 24px; padding: 0; font: 500 14px/24px var(--ui); color: var(--text); background: transparent; border: 0; outline: 0; text-overflow: ellipsis; }
 .ed-link-input::placeholder { color: var(--text-3); font-weight: 400; }
 .ed-link-card .btn { height: 36px; padding: 0 14px; }
-.ed-link-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0; padding: 0; list-style: none; }
-.ed-link-steps li { display: flex; align-items: flex-start; gap: 10px; padding: 0 14px; }
-.ed-link-steps li + li { border-left: 1px solid color-mix(in srgb, var(--text) 10%, transparent); }
-.ed-link-steps li:first-child { padding-left: 4px; }
-.ed-link-steps b { display: grid; place-items: center; flex: none; width: 22px; height: 22px; font: 700 11px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text-2); background: color-mix(in srgb, var(--text) 8%, transparent); border-radius: 50%; }
-.ed-link-steps div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ed-link-steps span { font: 600 12.5px/18px var(--ui); color: var(--text); }
-.ed-link-steps small { font: 400 11.5px/16px var(--ui); color: var(--text-3); }
 /* link tab, balance: the card and the steps are one group, centred in the box (no void between them); the field is bare text on the card */
 .ed-link { justify-content: center; gap: 22px; }
 .ed-link-card { padding: 20px; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 16px; }
 .ed-link-ic { width: 44px; height: 44px; border-radius: 12px; }
 .ed-link-card .ed-link-input { height: 26px; padding: 0; background: transparent !important; box-shadow: none !important; border: 0; font-size: 15px; line-height: 26px; }
 .ed-link-card .btn { height: 38px; }
-.ed-link-steps { padding: 0 4px; }
 
 /* ---- Story Desk, third pass: flat and soft ---------------------------------------------------------------------------------
    No gradients, inner highlights or hover shadows. A row is a flat tint with a hairline; hover only deepens the tint a step. */
@@ -1376,28 +1367,8 @@ label.switch:active i { filter: brightness(.94); }
 .ed-link-field .ed-link-input::placeholder { color: var(--text-3); font-weight: 400; }
 .ed-link-row .btn { flex: none; height: 44px; padding: 0 18px; border-radius: 10px; }
 .ed-link-hint { margin: 0; font: 400 12px/16px var(--ui); color: var(--text-3); }
-.ed-link-steps { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
-.ed-link-steps li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 10px; text-align: center; }
-.ed-link-steps li + li::before { content: ''; position: absolute; top: 11px; right: 50%; width: 100%; height: 1px; background: color-mix(in srgb, var(--text) 14%, transparent); transform: translateX(-17px); width: calc(100% - 34px); }
-.ed-link-steps b { position: relative; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; margin-bottom: 5px; font: 600 11px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text-2); background: var(--card); border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); border-radius: 50%; }
-.ed-link-steps span { font: 600 12.5px/18px var(--ui); color: var(--text); }
-.ed-link-steps small { max-width: 150px; font: 400 11.5px/16px var(--ui); color: var(--text-3); }
 .ed-link-field { flex-direction: row; }
-.ed-link-steps li + li { border-left: 0; }
-.ed-link-steps li:first-child { padding-left: 10px; }
-.ed-link-steps { padding: 0; }
 
-/* ---- Parse -> Polish -> Publish: three tinted tiles joined by gradient arrows (blue -> violet -> green) ---------------------- */
-.ed-link-steps { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; padding: 0 2px; }
-.ed-link-steps li { padding: 0; gap: 2px; }
-.ed-link-steps li::before { display: none !important; }
-.ed-link-steps li.arrow { align-self: start; padding: 16px 6px 0; }
-.ed-link-steps li.arrow svg { display: block; }
-.ed-link-steps li.parse { --c: #3b82f6; } .ed-link-steps li.polish { --c: #8b5cf6; } .ed-link-steps li.publish { --c: #10b981; }
-.ed-step-ic { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 8px; color: var(--c); background: color-mix(in srgb, var(--c) 13%, var(--card)); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); border-radius: 13px; }
-.ed-link-steps li b { display: block; width: auto; height: auto; margin: 0; font: 700 13px/18px var(--ui); color: var(--text); background: none; border: 0; border-radius: 0; place-items: initial; }
-.ed-link-steps li small { max-width: 142px; }
-:root[data-theme=dark] .ed-step-ic { background: color-mix(in srgb, var(--c) 20%, var(--card)); }
 
 /* story lists: a quiet scrollbar with room on both sides. The browser's own thin bar (with its end arrows) is replaced by a 6 px
    rounded thumb, centred in a 14 px track; rows stop 6 px short of it, and the thumb sits exactly as far from the card's edge
@@ -1409,20 +1380,15 @@ label.switch:active i { filter: brightness(.94); }
 .ed-launcher-queue .sq-list::-webkit-scrollbar-thumb, .ed-launcher-wrap .ed-feed-list::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 20%, transparent); background-clip: padding-box; border: 4px solid transparent; border-radius: 8px; }
 .ed-launcher-queue .sq-list::-webkit-scrollbar-thumb:hover, .ed-launcher-wrap .ed-feed-list::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text) 34%, transparent); background-clip: padding-box; }
 
-/* ---- Parse -> Polish -> Publish, premium: one gradient pipeline, three ring nodes, chevrons on the line, a light that runs along it ---- */
 .ed-link { gap: 26px; }
-.ed-flow { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
-.ed-flow-line { position: absolute; top: 25px; left: calc(100% / 6); right: calc(100% / 6); height: 2px; overflow: hidden; border-radius: 2px; background: linear-gradient(90deg, #3b82f6, #8b5cf6 52%, #10b981); opacity: .5; }
-.ed-flow-line::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 64px; background: linear-gradient(90deg, transparent, #fff, transparent); opacity: .9; animation: ed-flow-run 3.6s cubic-bezier(.45, 0, .25, 1) infinite; }
-@keyframes ed-flow-run { 0% { transform: translateX(-70px); } 70%, 100% { transform: translateX(calc(100cqw + 6px)); } }
-.ed-flow { container-type: inline-size; }
-.ed-flow li { --c: #3b82f6; --c2: #7db4ff; position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 8px; text-align: center; }
-.ed-flow li.polish { --c: #8b5cf6; --c2: #c39bff; }
-.ed-flow li.publish { --c: #10b981; --c2: #5fe0b4; }
-.ed-step-ic { position: relative; z-index: 1; display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 10px; color: var(--c); border: 1.5px solid transparent; border-radius: 50%; background: linear-gradient(color-mix(in srgb, var(--c) 9%, var(--card)), color-mix(in srgb, var(--c) 9%, var(--card))) padding-box, linear-gradient(135deg, var(--c), var(--c2)) border-box; }
-:root[data-theme=dark] .ed-step-ic { background: linear-gradient(color-mix(in srgb, var(--c) 16%, var(--card)), color-mix(in srgb, var(--c) 16%, var(--card))) padding-box, linear-gradient(135deg, var(--c), var(--c2)) border-box; }
-.ed-flow em { font: 700 9.5px/12px var(--ui); font-style: normal; letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--c); }
-.ed-flow b { margin-top: 1px; font: 700 14px/20px var(--ui); letter-spacing: -.005em; color: var(--text); }
-.ed-flow small { max-width: 150px; margin-top: 2px; font: 400 11.5px/16px var(--ui); color: var(--text-3); }
-.ed-flow-chev { position: absolute; z-index: 2; top: 25px; left: 0; display: grid; place-items: center; width: 20px; height: 20px; color: var(--c); background: var(--card); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); border-radius: 50%; transform: translate(-50%, -50%); }
-@media (prefers-reduced-motion: reduce) { .ed-flow-line::after { animation: none; opacity: 0; } }
+
+/* ---- Parse > Polish > Publish: three flat cards in the same language as the story rows, joined by thin neutral arrows.
+   Colour is only the icon; no gradients, glows, rings or motion. */
+.ed-link { gap: 24px; }
+.ed-pipe { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; margin: 0; padding: 0; list-style: none; }
+.ed-pipe li:not(.pipe-arrow) { --c: #3b82f6; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 14px 14px 14px; background: var(--row-bg); border: 1px solid var(--row-line); border-radius: 12px; }
+.ed-pipe li.polish { --c: #8b5cf6; } .ed-pipe li.publish { --c: #0f9f73; }
+.ed-pipe li svg { margin-bottom: 7px; color: var(--c); }
+.ed-pipe b { font: 600 13px/18px var(--ui); color: var(--text); }
+.ed-pipe small { font: 400 12px/17px var(--ui); color: var(--text-3); }
+.ed-pipe .pipe-arrow { display: grid; place-items: center; padding: 0 8px; color: color-mix(in srgb, var(--text) 32%, transparent); }
