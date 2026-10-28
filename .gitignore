@@ -33,3 +33,6 @@ scratch/
 /*.png
 .env*
 tools/sync.log
+tools/*.log
+tools/*.pid
+tools/.sync.pid

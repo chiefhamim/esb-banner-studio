@@ -1,3 +1,4 @@
+const { spawn } = require('node:child_process')
 // ESB Studio — desktop shell. Everything runs locally; no network access is needed.
 const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron')
 const path = require('node:path')
@@ -353,6 +354,25 @@ app.on('web-contents-created', (_e, contents) => {
   contents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); return { action: 'deny' } })
 })
 
+
+let syncChild = null
+
+function initAutoSync() {
+  if (process.env.ESB_NO_SYNC) return
+  try {
+    const syncScript = path.join(__dirname, '..', 'tools', 'git-sync.mjs')
+    if (fs.existsSync(syncScript)) {
+      syncChild = spawn('node', [syncScript], {
+        cwd: path.join(__dirname, '..'),
+        stdio: 'ignore',
+        detached: false,
+        windowsHide: true,
+      })
+      syncChild.on('error', () => { /* ignore */ })
+    }
+  } catch {}
+}
+
 app.whenReady().then(() => {
   // Allow-list app default folders
   fsScope.allow(defaultDir())
@@ -364,6 +384,9 @@ app.whenReady().then(() => {
 })
 
 app.on('will-quit', () => {
+  if (syncChild) {
+    try { syncChild.kill() } catch {}
+  }
   try {
     const tmpDir = path.join(app.getPath('temp'), 'esb-studio-drag')
     fs.rmSync(tmpDir, { recursive: true, force: true })
