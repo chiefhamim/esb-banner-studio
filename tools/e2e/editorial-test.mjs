@@ -37,6 +37,14 @@ async function openPanel(page, id) {
   await page.waitForSelector(`${sel}.open > .pnl-body`)
 }
 
+// Banner → "Banner settings" (a <details> in the always-open Banner panel) holds BannerCard and the featured photo.
+async function openBannerSettings(page, photo = false) {
+  await page.waitForSelector('[data-panel="ed-image"].open > .pnl-body')
+  const outer = '[data-panel="ed-image"] details.es-more'
+  if (!(await page.locator(`${outer}[open]`).count())) await page.click(`${outer} > summary`)
+  if (photo && !(await page.locator(`${outer} details.ed-more[open]`).count())) await page.click(`${outer} details.ed-more > summary`)
+}
+
 try {
   await waitUp()
   browser = await launchBrowser(chromium)
@@ -69,8 +77,8 @@ try {
   check('Live site connection telemetry pill displayed', (await page.locator('.sb-cms').count()) === 1)
 
   // 2b. A link that cannot be fetched gets an honest message and the paste fallback, not a dead end
-  await page.fill('.ed-url-input', 'https://blocked.invalid/story')
-  await page.click('button:has-text("Fetch & Auto-Translate")')
+  await page.fill('.ed-link-input', 'https://blocked.invalid/story')
+  await page.click('.ed-link button:has-text("Fetch & Process")')
   await page.waitForSelector('.ed-intake-error', { timeout: 30000 })
   const intakeErr = await page.locator('.ed-intake-error').innerText()
   check('Unreachable link shows a specific intake error', /blocked\.invalid/.test(intakeErr) || /could not be reached|could not be found/.test(intakeErr), intakeErr.slice(0, 80))
@@ -80,8 +88,8 @@ try {
 
   // 2c. The real link pipeline end to end, against a fixture page Vite serves (no network): fetch → extract → translate → draft.
   await page.click('button:has-text("Paste Story Link")')
-  await page.fill('.ed-url-input', `http://localhost:${PORT}/tools/fixtures/jsonld-news.html`)
-  await page.click('button:has-text("Fetch & Auto-Translate")')
+  await page.fill('.ed-link-input', `http://localhost:${PORT}/tools/fixtures/jsonld-news.html`)
+  await page.click('.ed-link button:has-text("Fetch & Process")')
   await page.waitForSelector('.ed-card-story', { timeout: 30000 })
   await openPanel(page, 'ed-src-link')
   await page.waitForSelector('.ed-extract-report', { timeout: 30000 })
@@ -110,9 +118,10 @@ try {
 
   // 4. Verify Left Column keeps Original Bengali and Right Column populates English Translation
   await page.waitForSelector('.ed-card-story', { timeout: 30000 })
-  // 5b. Panels: a fresh session opens one section per column — Organize (category) on the right, the story on the left
-  const openNow = await page.evaluate(() => ({ right: [...document.querySelectorAll('.ed-side-scroll > .pnl.open')].map((p) => p.dataset.panel), left: [...document.querySelectorAll('.ed-src-scroll > .pnl.open')].map((p) => p.dataset.panel) }))
-  check('Only Publish starts open in the sidebar, only the story in the source column', openNow.right.join() === 'ed-side-publish' && openNow.left.join() === 'ed-src-body', JSON.stringify(openNow))
+  // 5b. Panels: a fresh session opens the Banner (always open, outside the accordion) and "Before you publish" on the
+  // right (EditorialSide.tsx), and only the story on the left
+  const openNow = await page.evaluate(() => ({ right: [...document.querySelectorAll('.ed-side .es-scroll > .pnl.open')].map((p) => p.dataset.panel), left: [...document.querySelectorAll('.ed-src-scroll > .pnl.open')].map((p) => p.dataset.panel) }))
+  check('Only the Banner and "Before you publish" start open in the sidebar, only the story in the source column', openNow.right.join() === 'ed-image,ed-side-publish' && openNow.left.join() === 'ed-src-body', JSON.stringify(openNow))
   await openPanel(page, 'ed-src-head')
   const sourceTitleVal = await page.inputValue('#source-title-input')
   check('Left column preserves original Bengali headline', /[\u0980-\u09FF]/.test(sourceTitleVal))
@@ -144,10 +153,11 @@ try {
   const shell = await page.evaluate(() => ({ sw: document.querySelectorAll('.editorial-workspace .topbar .ws-switch').length, rail: document.querySelectorAll('.workspace-rail').length, logo: document.querySelectorAll('.editorial-workspace img[src*="esb-logo"]').length, on: document.querySelector('.ws-btn.on')?.dataset.ws }))
   check('Header carries the workspace switcher; no rail, no logo', shell.sw === 1 && shell.rail === 0 && shell.logo === 0 && shell.on === 'editorial', JSON.stringify(shell))
 
-  await page.click('[data-panel="ed-image"] > header')
+  // the Banner panel opts out of the accordion (accordion={false}), so Details is the section that is opened here
+  await page.click('[data-panel="ed-organize"] > header')
   await page.waitForTimeout(250)
-  const acc = await page.evaluate(() => [...document.querySelectorAll('.ed-side-scroll > .pnl.open')].map((p) => p.dataset.panel))
-  check('Opening a section closes the other one in that column', acc.join() === 'ed-image', acc.join())
+  const acc = await page.evaluate(() => [...document.querySelectorAll('.ed-side .es-scroll > .pnl.open')].map((p) => p.dataset.panel))
+  check('Opening a section closes the other one in that column', acc.join() === 'ed-organize,ed-image', acc.join())
   await openPanel(page, 'ed-organize')
 
   // 5c. View menu: appearance and Bengali reading font
@@ -188,13 +198,14 @@ try {
   check('The article hero is the rendered 16:9 Web banner', !!hero && hero.src === 'blob:' && Math.abs(hero.w / hero.h - 16 / 9) < 0.01, JSON.stringify(hero))
   await page.click('.ed-story-tabs button:has-text("Body")')
 
-  // 6. Send Headline to Banner
+  // 6. Send Headline to Banner — the Outputs panel and its "Send to Banner" were removed (72743af); the same push is
+  // "Update banner from the story" under Banner → Banner settings (BannerCard.tsx), and Graphics opens from the banner's Edit
   await page.fill('#draft-headline', 'Official: Two New Wells to Add 30 MMCFD Gas to Grid for Tk 592 Crore')
-  await openPanel(page, 'ed-outputs')
-  await page.click('.ed-outputs button:has-text("Send to Banner")')
+  await openBannerSettings(page)
+  await page.click('.bc-update')
 
   // Asserts switch to Graphics workspace, with the way back offered
-  await page.click('.ed-outputs-link button:has-text("Graphics")')
+  await page.click('.bh-acts [aria-label="Edit in Graphics"]')
   await page.waitForSelector('.stage-canvas')
   check('Switched to Graphics workspace', (await page.locator('.stage-canvas').count()) === 1)
   check('Graphics offers the way back to the Editorial desk', (await page.locator('.back-to-desk').count()) === 1)
@@ -207,17 +218,19 @@ try {
   await page.click('.back-to-desk')
   await page.waitForSelector('.editorial-workspace')
 
-  // Outputs: one smooth segmented control, not three loose tabs
+  // The banner's channels: one smooth segmented control, not loose tabs (the Banner · Web article · Facebook tabs went with
+  // the Outputs panel; the banner hero's Website · Facebook switch is what is left of them)
+  await page.waitForSelector('.bh-seg')
   const segs = await page.evaluate(() => {
-    const seg = document.querySelector('.ed-outputs-tabs')
+    const seg = document.querySelector('.bh-seg')
     const btns = [...seg.querySelectorAll('button')].map((b) => b.getBoundingClientRect())
     return { isSeg: seg.classList.contains('seg-ctl'), thumb: !!seg.querySelector('.pill-slide'), tops: new Set(btns.map((b) => Math.round(b.top))).size, bottoms: new Set(btns.map((b) => Math.round(b.bottom))).size, n: btns.length }
   })
-  check('Banner / Web article / Facebook share one segmented control with level edges', segs.isSeg && segs.thumb && segs.n === 3 && segs.tops === 1 && segs.bottoms === 1, JSON.stringify(segs))
+  check('Banner Website / Facebook share one segmented control with level edges', segs.isSeg && segs.thumb && segs.n === 2 && segs.tops === 1 && segs.bottoms === 1, JSON.stringify(segs))
 
-  // Test Web Article Replica
-  await page.click('.ed-outputs-tabs button:has-text("Web article")')
-  await page.waitForSelector('.ed-outputs .esb-site-mock iframe')
+  // Test Web Article Replica — the site's article page now lives in Story → Preview
+  await page.click('.ed-story-tabs button:has-text("Preview")')
+  await page.waitForSelector('.ed-card-story .esb-site-mock iframe')
   check('Official esbpowerline.com website replica rendered', (await page.locator('.esb-site-mock').count()) === 1)
   // The preview is the site's own article template in an iframe with the site stylesheet (tools/site-css.mjs).
   const site = page.frameLocator('.esb-site-mock iframe')
@@ -229,19 +242,21 @@ try {
   })
   check('Site preview uses the site theme and headline font', siteInfo.theme.includes('theme-white') && /Space Grotesk/.test(siteInfo.h1Font) && siteInfo.bg === 'rgb(248, 250, 252)', JSON.stringify(siteInfo))
   check('Site preview binds the draft headline and desk ribbon', siteInfo.h1 === (await page.inputValue('#draft-headline')) && siteInfo.cells === 10 && siteInfo.active.length > 0, siteInfo.active)
-  await page.click('.ed-outputs-opts .select >> nth=1'); await page.click('.menu-item:has-text("Midnight")')
+  await page.click('.ed-card-story .ed-body-tools button:has-text("Midnight")')
   await page.waitForTimeout(300)
   check('Site preview switches to the Midnight theme', await page.evaluate(() => document.querySelector('.esb-site-mock iframe').contentDocument.documentElement.classList.contains('theme-midnight')))
-  await page.click('.ed-outputs-opts .select >> nth=1'); await page.click('.menu-item:has-text("White")')
+  await page.click('.ed-card-story .ed-body-tools button:has-text("White")')
+  await page.click('.ed-story-tabs button:has-text("Body")')
 
-  // Test Facebook Mock
-  await page.click('.ed-outputs-tabs button:has-text("Facebook")')
-  await page.waitForSelector('.ed-outputs .fb')
-  check('Facebook feed replica rendered', (await page.locator('.fb').count()) === 1)
+  // Test Facebook Mock — the Facebook preview is the 4:5 banner with its caption in the Review & publish sheet (PublishDialog.tsx)
+  await page.click('.ed-head button:has-text("Publish")')
+  await page.waitForSelector('.pub .bp-frame.fb img', { timeout: 10000 })
+  check('Facebook feed replica rendered', (await page.locator('.pub .bp-frame.fb img').count()) === 1 && (await page.locator('.pub .bp-card').count()) === 2)
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('.pub', { state: 'detached' })
 
   // 8. Banner output + live link
-  await page.click('.ed-outputs-tabs button:has-text("Banner")')
-  check('Outputs shows the live banner', (await page.locator('.ed-outputs-canvas canvas').count()) === 1)
+  check('Outputs shows the live banner', (await page.locator('.bh-frame img').count()) === 1)
   await page.fill('#draft-headline', 'Live link headline test')
   await page.waitForTimeout(250)
   check('Typing the headline updates the banner live', (await page.evaluate(() => window.__store.getState().doc.content.headline)) === 'Live link headline test')
@@ -251,12 +266,12 @@ try {
   await openPanel(page, 'ed-organize')
   await page.click('.ed-desk-select')
   await page.click('.menu-item:has-text("Consumers & Tariffs")')
-  await openPanel(page, 'ed-outputs')
-  await page.click('.ed-outputs button:has-text("Send to Banner")')
+  await openBannerSettings(page)
+  await page.click('.bc-update')
   check('A hand-picked category survives Send to Banner', (await page.evaluate(() => window.__store.getState().doc.content.categoryId)) === '07')
 
   // 8b. Featured image: add one from disk (this story was pasted, so it has no photos), reframe, round-trip through Graphics
-  await openPanel(page, 'ed-image')
+  await openBannerSettings(page, true)
   await page.setInputFiles('.fi input[type=file]', fixturePhoto)
   await page.waitForSelector('.fi-canvas', { timeout: 15000 })
   await page.waitForTimeout(400)
@@ -281,6 +296,8 @@ try {
   check('Edit in Graphics opens on the Photos tab with the photo selected', gfx.tab === 'Photos' && gfx.sel === 'photos', JSON.stringify(gfx))
   await page.evaluate(() => window.__store.getState().setSlot(0, { brightness: 30 }))
   await page.click('.back-to-desk')
+  await page.waitForSelector('.editorial-workspace')
+  await openBannerSettings(page, true)
   await page.waitForSelector('.fi-canvas')
   check('A tone edit made in Graphics shows in the Editorial image panel', /^30/.test(await page.locator('.fi .scrub:has-text("Exposure") input').inputValue()))
 
@@ -312,7 +329,7 @@ try {
   for (const ch of 'abc def') { await page.evaluate(() => window.__editorialStore.setState({ siteStatus: { ...window.__editorialStore.getState().siteStatus, latencyMs: Math.random() * 100 } })); await page.keyboard.type(ch) }
   const typed = await page.evaluate(() => ({ email: document.querySelector('.signin input[name=email]').value, pw: document.querySelector('.signin input[name=password]').value }))
   check('Typing the password while the desk re-renders keeps focus in the password field', typed.pw === 'abc def' && !typed.email.includes('abc'), JSON.stringify(typed))
-  await page.fill('.signin input[name=email]', 'editor@esbpowerline.com')
+  await page.fill('.signin input[name=email]', 'editor@example.com')
   await page.fill('.signin input[name=password]', 'wrong')
   await page.waitForFunction(() => !document.querySelector('.signin-submit')?.disabled) // the sheet focuses its field 60 ms after opening; a fill before that can be re-rendered away
   await page.click('.signin-submit')
@@ -322,7 +339,7 @@ try {
   await page.waitForFunction(() => !document.querySelector('.signin-submit')?.disabled) // the sheet focuses its field 60 ms after opening; a fill before that can be re-rendered away
   await page.click('.signin-submit')
   await page.waitForSelector('.signin-avatar')
-  const who = await page.evaluate(() => ({ name: document.querySelector('.signin-body h2').textContent, badges: document.querySelector('.signin-badges').innerText, stored: JSON.parse(localStorage.getItem('esb-banner-studio/site-session') || 'null') }))
+  const who = await page.evaluate(() => ({ name: document.querySelector('.acct-name h2').textContent, badges: document.querySelector('.acct-role').textContent, stored: JSON.parse(localStorage.getItem('esb-banner-studio/site-session') || 'null') }))
   check('Signed in: name and role come from the site profile; the password is not stored', who.name === 'Desk Editor' && /Editor/.test(who.badges) && !!who.stored && !JSON.stringify(who.stored).includes('correct horse'), JSON.stringify({ name: who.name, badges: who.badges }))
   // 8e. The connection check reports what each service answered (stubbed here; live in the desktop app)
   await page.route('**/auth/v1/health**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }))
@@ -333,7 +350,7 @@ try {
   await page.waitForSelector('.conn-row[data-check^="ai-"]')
   const conn = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll('.conn-row')].map((r) => [r.dataset.check, r.className.split(' ').pop()])))
   check('Connection check: each link reported as it answered; a refused table is a failure, upload is desktop-only',
-    conn.site === 'ok' && conn.auth === 'ok' && conn.session === 'ok' && conn.role === 'ok' && conn.articles === 'fail' && conn.upload === 'skip' && /1 to fix/.test(await page.locator('.conn-head em').innerText()), JSON.stringify(conn))
+    conn.site === 'ok' && conn.auth === 'ok' && conn.session === 'ok' && conn.role === 'ok' && conn.articles === 'fail' && conn.upload === 'skip' && /1 to fix/.test(await page.locator('.acct-sec-head em').innerText()), JSON.stringify(conn))
   await page.unroute('**/rest/v1/Article?select=id**')
 
   await page.click('.signin-signout')
@@ -391,20 +408,21 @@ try {
   await page.waitForFunction(() => window.__editorialStore.getState().draft.social.telegram.startsWith('Headline'))
   const caps = await page.evaluate(() => window.__editorialStore.getState().draft.social)
   const artUrl = `https://esbpowerline.com/articles/${aiSeoOut.s}`
-  check('Social: the article URL from the slug is shown, and every AI caption ends with it — guessed site links replaced', shownUrl === artUrl && Object.values(caps).every((c) => c.includes(artUrl) && (c.match(/esbpowerline\.com/g) || []).length === 1), JSON.stringify({ shownUrl, x: caps.x }))
+  // the Facebook caption carries no link by design (627cb05: the link is posted as the first comment; sanitizeFacebook strips it)
+  const linked3 = [caps.x, caps.linkedin, caps.telegram]
+  check('Social: the article URL from the slug is shown, X / LinkedIn / Telegram end with it, Facebook carries none — guessed site links replaced', shownUrl === artUrl && linked3.every((c) => c.includes(artUrl) && (c.match(/esbpowerline\.com/g) || []).length === 1) && !/https?:\/\/|esbpowerline\.com/.test(caps.facebook), JSON.stringify({ shownUrl, x: caps.x, fb: caps.facebook }))
   await page.unroute('https://api.openai.com/v1/models'); await page.unroute('https://api.openai.com/v1/chat/completions')
   await page.evaluate(() => { const s = window.__editorialStore.getState(); s.setAiSettings({ ...s.ai, provider: 'gemini', keys: { gemini: '', anthropic: '', openai: '', openrouter: '' } }) })
 
-  // 9. Publish pre-flight gates the live publish
-  await page.click('button:has-text("Publish")')
-  await page.waitForSelector('.ed-preflight')
-  check('Publish Live is blocked until the checklist is ticked', await page.locator('button:has-text("Publish Live to CMS")').isDisabled())
+  // 9. (removed) "Publish Live is blocked until the checklist is ticked": the pre-flight checklist was taken out of the
+  // publish sheet in 6720b0e and nothing gates Publish any more (CLAUDE.md, "Publish sheet"); readiness is advisory in the sidebar.
 
   // 10. Publishing from the browser preview: the banner cannot be uploaded here, so the article carries the original
   // photo and the result says so (the desktop app uploads it — tools/unit/site-upload.test.ts, electron-test)
-  await page.keyboard.press('Escape')
   await page.click('.editorial-workspace .ed-account')
-  await page.fill('.signin input[name=email]', 'rasel@esbpowerline.com')
+  // a synthetic author (dev-only hook in siteApi.ts): the shipped roster is keyed by hashed staff addresses
+  await page.evaluate(() => window.__addTestAuthor('reporter@example.com', { id: 'cmtestauthor000000000000', name: 'Test Reporter', role: 'EDITOR' }))
+  await page.fill('.signin input[name=email]', 'reporter@example.com')
   await page.fill('.signin input[name=password]', 'correct horse')
   await page.waitForFunction(() => !document.querySelector('.signin-submit')?.disabled) // the sheet focuses its field 60 ms after opening; a fill before that can be re-rendered away
   await page.click('.signin-submit')
@@ -416,24 +434,25 @@ try {
     posted = JSON.parse(r.request().postData() || '{}')
     r.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify([{ id: 'art1', slug: posted.slug }]) })
   })
-  await page.click('button:has-text("Publish")')
-  await page.waitForSelector('.ed-preflight')
-  for (const box of await page.locator('.ed-preflight input[type=checkbox]').all()) await box.check({ force: true })
-  await page.click('button:has-text("Publish Live to CMS")')
-  await page.waitForSelector('.callout.good, .callout.warn', { timeout: 20000 })
-  const pub = { msg: await page.locator('.callout').first().innerText(), image: posted && (Array.isArray(posted) ? posted[0] : posted).imageUrl }
+  await page.click('.ed-head button:has-text("Publish")')
+  await page.waitForSelector('.pub')
+  await page.click('.dialog .btn.primary:has-text("Publish")')
+  await page.waitForSelector('.pub .callout.good, .pub .callout.warn', { timeout: 20000 })
+  const pub = { msg: await page.locator('.pub .callout').first().innerText(), image: posted && (Array.isArray(posted) ? posted[0] : posted).imageUrl }
   check('Publish from the browser preview: never a blob: link as the article image, and the result says why', !!posted && !pub.image && /cannot upload the banner and the photo is a local file/.test(pub.msg), JSON.stringify(pub).slice(0, 300))
 
   // 11. Story queue: the published story is marked, a new story gets its own entry, switching swaps the editor and
   // the banner, and the queue survives a reload
   await page.keyboard.press('Escape')
   const firstHead = await page.inputValue('#draft-headline')
-  await page.click('.editorial-workspace .pillbar [aria-label^="New story"]')
+  // the header's New story pill went in bc13e0c ("simpler header"); New story is in the Story menu
+  await page.click('.editorial-workspace .mb-item:has-text("Story")')
+  await page.click('.menu-item:has-text("New story")')
   await page.waitForSelector('.ed-launcher-queue .sq-row')
   const launch = await page.evaluate(() => [...document.querySelectorAll('.ed-launcher-queue .sq-row')].map((r) => r.innerText.replace(/\s+/g, ' ')))
   check('New story keeps the last one: launcher lists it as Published', launch.length === 1 && launch[0].includes(firstHead) && /Published/.test(launch[0]), JSON.stringify(launch))
-  await page.fill('.ed-url-input', `http://localhost:${PORT}/tools/fixtures/next-data.html`)
-  await page.click('button:has-text("Fetch & Auto-Translate")')
+  await page.fill('.ed-link-input', `http://localhost:${PORT}/tools/fixtures/next-data.html`)
+  await page.click('.ed-link button:has-text("Fetch & Process")')
   await page.waitForSelector('.ed-card-story', { timeout: 30000 })
   await page.waitForTimeout(1200)
   const secondHead = await page.inputValue('#draft-headline')
