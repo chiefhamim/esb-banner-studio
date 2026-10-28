@@ -239,7 +239,7 @@ export function MenuBar({ menus }: { menus: MenuDef[] }) {
   )
 }
 
-export function MenuButton({ label, icon, items, align = 'start', className = '', menuClassName = '', title }: { label?: string; icon?: IconName; items: MenuEntry[]; align?: 'start' | 'end'; className?: string; menuClassName?: string; title?: string }) {
+export function MenuButton({ label, icon, items, align = 'start', className = '', menuClassName = '', title }: { label?: string; icon?: IconName; items: MenuEntry[]; align?: 'start' | 'center' | 'end'; className?: string; menuClassName?: string; title?: string }) {
   const btn = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
