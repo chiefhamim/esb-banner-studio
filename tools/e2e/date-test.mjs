@@ -14,10 +14,10 @@ try {
   const page = await (await b.newContext({ viewport: { width: 1600, height: 950 } })).newPage()
   page.setDefaultTimeout(6000)
   await page.goto(`http://localhost:${PORT}/`)
-  // a fresh profile opens on Home; this script works in Graphics
-  await page.evaluate(() => localStorage.setItem('esb-banner-studio/shell', JSON.stringify({ workspace: 'graphics' })))
-  await page.reload()
-  await page.waitForSelector('.topbar'); await page.waitForTimeout(500)
+  // the app always opens on Home (shellStore ignores the saved desk); this script works in Graphics, so open it from
+  // the Home launcher. Home's own header is also a .topbar, so wait for the Graphics desk's root, not the class alone.
+  await page.click('.launch-tile:has-text("Graphics")')
+  await page.waitForSelector('.app > .topbar'); await page.waitForTimeout(500)
   // panels open one at a time and start collapsed: open Date first
   await page.locator('.pnl > header', { hasText: 'Date' }).first().click()
   await page.click('.datefield'); await page.waitForSelector('.calpop')

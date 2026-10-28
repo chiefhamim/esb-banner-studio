@@ -24,11 +24,34 @@ try {
   const page = await ctx.newPage()
   await ctx.addInitScript(() => { try { if (!localStorage.getItem('esb-banner-studio/dock-tab')) localStorage.setItem('esb-banner-studio/dock-tab', 'layers') } catch {} })
   page.setDefaultTimeout(8000)
+  // The test never reaches the real network (and here it cannot). Two things in this suite would: the Link to News step
+  // sends the deck to the free translation services (translateNet.ts: GTX and MyMemory, raced) — the headline comes
+  // from the offline dictionary — and its tray shows the article's og:image and the sector photo suggestions, which
+  // are remote pictures. Both are answered here: a synthetic reply in each service's own shape, and the drawn fixture
+  // picture (tools/fixtures/media/synthetic-rig.jpg) for any remote image. Anything else remote still fails, and
+  // "no page errors" reports it.
+  const FAKE_DECK = 'Synthetic test deck: two new wells to be drilled'
+  const fixtureJpg = fs.readFileSync(path.join(root, 'tools/fixtures/media/synthetic-rig.jpg'))
+  await ctx.route((u) => u.protocol === 'https:', (route) => {
+    const req = route.request(), host = new URL(req.url()).hostname
+    if (host === 'translate.googleapis.com' || host === 'api.mymemory.translated.net') {
+      const gtx = host === 'translate.googleapis.com'
+      return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(gtx ? [[[FAKE_DECK, '', null, null]]] : { responseStatus: 200, responseData: { translatedText: FAKE_DECK } }) })
+    }
+    if (req.resourceType() === 'image') return route.fulfill({ status: 200, contentType: 'image/jpeg', headers: { 'access-control-allow-origin': '*' }, body: fixtureJpg })
+    return route.continue()
+  })
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text() + (m.location()?.url ? ` @ ${m.location().url}` : '')) })
+  // The app always opens on Home (shellStore ignores the saved desk) and Home's own header is also a .topbar, so every
+  // load goes through the Home launcher into Graphics and waits for the Graphics desk's root (.app) before it starts.
+  const enterGraphics = async () => {
+    await page.click('.launch-tile:has-text("Graphics")')
+    await page.waitForSelector('.app > .topbar')
+  }
   await page.goto(`http://localhost:${PORT}/`)
-  await page.waitForSelector('.topbar')
+  await enterGraphics()
   await page.waitForTimeout(500)
 
   // A fresh launch shows one open section on the Story tab — Category — and no logo in the header
@@ -44,7 +67,7 @@ try {
     } catch {}
   })
   await page.reload()
-  await page.waitForSelector('.topbar')
+  await enterGraphics()
   await page.waitForTimeout(500)
 
   // Side panels are an accordion: open the section a step needs, as a user would
@@ -473,7 +496,7 @@ try {
   // ---- theme + shortcuts + export
   await page.click('[aria-label="Dark theme"]')
   check('dark theme toggles', (await page.getAttribute('html', 'data-theme')) === 'dark')
-  check('no logo in the header (it lives on Home and in About)', (await page.locator('.topbar .logo-wrap, .topbar img[src*="esb-logo"]').count()) === 0)
+  check('no logo in the header (it lives in About only)', (await page.locator('.topbar .logo-wrap, .topbar img[src*="esb-logo"]').count()) === 0)
   check('no product text beside the menu bar', (await page.locator('.brand-name').count()) === 0)
   await page.screenshot({ path: path.join(out, 'ui-dark.png') })
   await page.click('[aria-label="Light theme"]')
@@ -565,8 +588,11 @@ try {
   await page.mouse.move(5, 5)
   const tb = await page.evaluate(() => new Promise((res) => { const seen = new Set(); const t0 = performance.now(); document.querySelectorAll('.side-tabs button')[1].click(); const loop = () => { seen.add(Math.round(new DOMMatrix(getComputedStyle(document.querySelector('.side-tabs .pill-slide')).transform).m41 / 10)); if (performance.now() - t0 < 360) requestAnimationFrame(loop); else res(seen.size) }; loop() }))
   check('the tab thumb glides (several in-between positions), not a jump', tb >= 5, `${tb} distinct positions`)
+  // the chip moves on two springs over 700 ms (controls.tsx useSlidingThumb, commit 58d6be3) and overshoots a little on
+  // the way, so it is measured once its animation has finished rather than at the end of the 360 ms sampling window
+  await page.locator('.side-tabs .pill-slide').evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
   const th = await page.locator('.side-tabs .pill-slide').boundingBox(), ab = await page.locator('.side-tabs button.on').boundingBox()
-  check('and lands exactly under the active tab', Math.abs(th.x - ab.x) <= 2 && Math.abs(th.width - ab.width) <= 2)
+  check('and lands exactly under the active tab', Math.abs(th.x - ab.x) <= 2 && Math.abs(th.width - ab.width) <= 2, JSON.stringify({ thumb: [th.x, th.width], tab: [ab.x, ab.width] }))
   await page.click('.side-tabs button:has-text("Story")'); await page.waitForTimeout(300)
   check('format picker shows platform icons, not a placeholder box', (await page.locator('.fmtpick .ratio-glyph svg').count()) === 1 && (await page.locator('.fmtpick .ratio-glyph i').count()) === 0)
 
@@ -650,7 +676,7 @@ try {
   check('dragging the dock handle up makes the Elements list taller', (await h('.dock')) > dk0 + 40, `${dk0} -> ${await h('.dock')}`)
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/layout')))
   check('sizes are remembered between launches', saved.rw === rw0 + 48 && saved.lw === 312, JSON.stringify(saved))
-  await page.reload(); await page.waitForSelector('.topbar'); await page.waitForTimeout(400)
+  await page.reload(); await enterGraphics(); await page.waitForTimeout(400)
   check('and applied again after a reload', (await w('.right')) === rw0 + 48)
   await page.locator('.right > .splitter').dblclick()
   await page.locator('.dock > .splitter').dblclick()
@@ -793,6 +819,8 @@ try {
   await page.click('.side-tabs button:has-text("Story")')
   await page.waitForSelector('.url-importer')
   await page.evaluate(() => {
+    // the translator seam, as every other runner uses: the app itself never answers with a canned translation
+    window.__customTranslator = async (t) => (/^৫৯২/.test(t.normalize('NFC')) ? 'Drilling two new wells for Tk 592 crore, 30 MMCFD Gas to National Grid' : t)
     window.esb = {
       fetchUrl: async () => ({
         ok: true,

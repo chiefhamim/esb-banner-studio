@@ -219,11 +219,6 @@ export function setCustomTranslator(fn: TranslatorFn | null) {
   customTranslator = fn
 }
 
-// Offline deterministic fallback dictionary for verified newsroom headlines
-const OFFLINE_HEADLINE_DICT: Record<string, string> = {
-  '৫৯২ কোটি টাকায় নতুন দুটি কূপ খনন, গ্রিডে দৈনিক ৩০ মিলিয়ন ঘনফুট গ্যাস': 'Drilling two new wells for Tk 592 crore, 30 MMCFD Gas to National Grid',
-}
-
 /** Translate Bengali text into natural English with zero setup/keys required. */
 export async function translateBengaliToEnglish(text: string): Promise<string> {
   const clean = text.trim()
@@ -239,17 +234,14 @@ export async function translateBengaliToEnglish(text: string): Promise<string> {
     return (window as unknown as { __customTranslator: TranslatorFn }).__customTranslator(clean)
   }
 
-  if (OFFLINE_HEADLINE_DICT[clean]) {
-    return OFFLINE_HEADLINE_DICT[clean]
-  }
-
   if (typeof navigator === 'undefined' || navigator.onLine !== false) {
     const translated = await translateComplete(clean)
     if (translated) return polishJournalisticEnglish(translated)
   }
-  // Last resort: known-headline dictionary, else digits/units normalised only
-  // (the Bengali prose is left as-is rather than fabricated — caller must flag for review).
-  return OFFLINE_HEADLINE_DICT[clean] || bengaliToAsciiDigits(clean)
+  // Last resort: digits and units normalised only. The Bengali prose is left as-is rather than fabricated, and the
+  // caller flags it for review. (A hard-coded answer for one test headline used to sit here; tests now use the
+  // __customTranslator seam above, and the app never returns a canned translation.)
+  return bengaliToAsciiDigits(clean)
 }
 
 // ---------------------------------------------------------------- Article URL Scraper / Parser

@@ -40,10 +40,11 @@ try {
   page.on('pageerror', (err) => console.error('PAGE ERROR:', err))
 
   await page.goto(`http://localhost:${PORT}/`)
-  await page.waitForSelector('.topbar')
+  // the app always opens on Home; the desk switcher (.ws-btn) only exists inside a desk's header
+  await page.waitForSelector('.launch-tile')
 
-  // 1. Switch to Video Studio via Workspace Rail
-  await page.click('.ws-btn[data-ws="video"]')
+  // 1. Open the Video desk from the Home launcher (Video is lazy-loaded, so wait for its root)
+  await page.click('.launch-tile:has-text("Video")')
   await page.waitForSelector('.video-workspace')
   check('Video Studio workspace mounted', (await page.locator('.video-workspace').count()) === 1)
 
@@ -70,8 +71,9 @@ try {
   check('Timeline initialised with multi-track clips', clipCountBefore >= 4, `found ${clipCountBefore} clips`)
 
   // 5. Add a new Lower-Third overlay clip
-  await page.click('.vw-bin-tabs button:has-text("Overlays")')
-  await page.click('.vw-preset-card:has-text("Speaker Name") button:has-text("+ Add")')
+  // the bin uses the shared Tabs (.side-tabs) now, and the add buttons read "Add" with a plus icon
+  await page.click('.vw-bin-panel .side-tabs button:has-text("Overlays")')
+  await page.click('.vw-preset-card:has-text("Speaker Name") button:has-text("Add")')
   await page.waitForTimeout(150)
   const clipCountAfter = await page.locator('.vw-clip-block').count()
   check('Added broadcast lower-third overlay clip', clipCountAfter === clipCountBefore + 1)
@@ -87,7 +89,7 @@ try {
   check('Trim handles rendered on timeline clips', trimHandles >= 4)
 
   // 8. Media bin tab & dropzone
-  await page.click('.vw-bin-tabs button:has-text("Media Bin")')
+  await page.click('.vw-bin-panel .side-tabs button:has-text("Media")')
   const hasDropzone = await page.locator('.vw-dropzone').count()
   check('Media library dropzone rendered', hasDropzone === 1)
 
@@ -155,7 +157,7 @@ try {
     ed.setDraftField('deck', 'Two new wells in Sylhet are set to raise gas supply this winter.')
     ed.setDraftField('body', 'Petrobangla will drill two new wells in Sylhet this winter. The wells are expected to add 30 MMCFD to the grid.')
   })
-  await page.click('.vw-bin-tabs button:has-text("Story")')
+  await page.click('.vw-bin-panel .side-tabs button:has-text("Story")')
   await page.waitForSelector('.vw-story-points')
   check('Story tab previews the cut from the draft', (await page.locator('.vw-story-points li').count()) === 5, String(await page.locator('.vw-story-points li').count()))
   await page.click('.vw-story-build')
@@ -169,9 +171,10 @@ try {
   check('The banner still is in the exported frames (not the empty-footage placeholder)', bannerPx.length === 3 && bannerPx.reduce((a, b) => a + b, 0) / 3 > 150, JSON.stringify(bannerPx))
 
   // 12. Switch back to Graphics workspace
-  await page.click('.ws-btn[data-ws="graphics"]')
-  await page.waitForSelector('.topbar')
-  check('Switched back to Graphics workspace', (await page.locator('.topbar').count()) === 1)
+  // the header switcher lives in the Video desk's header; Graphics' root is .app (Home's header is a .topbar too)
+  await page.click('.vw-header .ws-btn[data-ws="graphics"]')
+  await page.waitForSelector('.app > .topbar')
+  check('Switched back to Graphics workspace', (await page.locator('.app > .topbar').count()) === 1 && (await page.locator('.video-workspace').count()) === 0)
 
   await browser.close()
 } catch (err) {
