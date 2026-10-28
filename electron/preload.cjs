@@ -17,4 +17,6 @@ contextBridge.exposeInMainWorld('esb', {
   siteUploadProbe: (cookies) => ipcRenderer.invoke('esb:site-upload-probe', cookies),
   siteRevalidate: (cookies, slugs) => ipcRenderer.invoke('esb:site-revalidate', cookies, slugs),
   startDrag: (filePath) => ipcRenderer.send('esb:start-drag', filePath),
+  sendOutreachEmail: (config, mail) => ipcRenderer.invoke('esb:send-outreach-email', config, mail),
+  loadMailingList: (filePath) => ipcRenderer.invoke('esb:load-mailing-list', filePath),
 })

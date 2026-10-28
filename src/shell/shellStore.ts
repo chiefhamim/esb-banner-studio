@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { reducedMotion } from '../ui/motion'
 
-export type WorkspaceId = 'home' | 'graphics' | 'editorial' | 'video' | 'audio'
+export type WorkspaceId = 'home' | 'graphics' | 'editorial' | 'video' | 'outreach' | 'audio'
 
 interface ShellState {
   workspace: WorkspaceId
@@ -22,7 +22,7 @@ let moving = false
 let queued: WorkspaceId | null = null
 /** Which way the last desk change went (+1 toward Video, -1 toward Home); App.tsx animates the arriving desk with it. */
 export const deskMotion = { dir: 1 as 1 | -1 }
-const ORDER: WorkspaceId[] = ['home', 'editorial', 'graphics', 'video', 'audio']
+const ORDER: WorkspaceId[] = ['home', 'editorial', 'graphics', 'video', 'outreach', 'audio']
 
 /** The app always opens on Home, whichever workspace was open when it was closed. */
 const loadSavedWorkspace = (): WorkspaceId => 'home'

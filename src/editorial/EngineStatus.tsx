@@ -16,7 +16,7 @@ import { fmtDuration } from './jobLog'
 
 type Check = { state: 'busy' } | { state: 'ok'; ms: number; model: string } | { state: 'bad'; error: string }
 type Active = { provider: AiProviderId; key: string; model: string }
-const ROLES: { role: AiRole; label: string }[] = [{ role: 'main', label: 'Main' }, { role: 'seo', label: 'SEO' }, { role: 'social', label: 'Social' }]
+const ROLES: { role: AiRole; label: string }[] = [{ role: 'main', label: 'Main' }, { role: 'seo', label: 'SEO' }, { role: 'social', label: 'Social' }, { role: 'outreach', label: 'Outreach' }]
 
 /** Health of each distinct (provider, key, model) — shared by the footer word and the panel. */
 const useHealth = create<{ byKey: Record<string, Check>; set: (k: string, c: Check) => void }>((set) => ({

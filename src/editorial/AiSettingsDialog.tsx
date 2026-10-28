@@ -13,6 +13,7 @@ const JOBS: { role: AiRole; name: string; note: string }[] = [
   { role: 'main', name: 'Main', note: 'Translation, headline, deck, story and tags' },
   { role: 'seo', name: 'SEO', note: 'Write with AI on the SEO tab' },
   { role: 'social', name: 'Social', note: 'Write with AI on the captions' },
+  { role: 'outreach', name: 'Outreach', note: 'Promotional pitches and subject lines' },
 ]
 
 export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; onToast: (msg: string) => void }) {

@@ -336,6 +336,17 @@ ipcMain.on('esb:start-drag', (event, arg) => {
   }
 })
 
+// --- Outreach Desk IPC Handlers ---
+const mailer = require('./mailer.cjs')
+
+ipcMain.handle('esb:send-outreach-email', async (_e, config, mail) => {
+  return await mailer.sendOutreachEmail(config, mail)
+})
+
+ipcMain.handle('esb:load-mailing-list', async (_e, filePath) => {
+  return mailer.loadWorkbookFile(filePath)
+})
+
 // no page in this app may embed a <webview>, and any window not covered above opens nothing
 app.on('web-contents-created', (_e, contents) => {
   contents.on('will-attach-webview', (e) => e.preventDefault())

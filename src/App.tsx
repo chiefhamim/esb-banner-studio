@@ -6,6 +6,7 @@ import { HomeWorkspace } from './shell/HomeWorkspace'
 import { GraphicsWorkspace } from './shell/GraphicsWorkspace'
 import { EditorialWorkspace } from './editorial/EditorialWorkspace'
 import { VideoWorkspace } from './video/VideoWorkspace'
+import { OutreachWorkspace } from './outreach/OutreachWorkspace'
 import { ComponentGallery } from './ui/ComponentGallery'
 import { useShellStore, deskMotion } from './shell/shellStore'
 import { arriveFrames, reducedMotion } from './ui/motion'
@@ -16,6 +17,7 @@ import { installBannerLink } from './editorial/bannerLink'
 // the design layer loads after every other stylesheet so it is the last word on shared chrome
 import './styles/studio.css'
 import './styles/home.css'
+import './styles/outreach.css'
 
 installBannerLink()
 
@@ -72,6 +74,7 @@ export default function App() {
         {workspace === 'home' && <HomeWorkspace />}
         {workspace === 'editorial' && <EditorialWorkspace />}
         {workspace === 'video' && <VideoWorkspace />}
+        {workspace === 'outreach' && <OutreachWorkspace />}
         {workspace === 'graphics' && (
           base ? <GraphicsWorkspace base={base} /> : (
             <div className="loading"><div className="spinner" />Loading fonts and artwork…</div>

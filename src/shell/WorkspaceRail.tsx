@@ -12,6 +12,7 @@ const DESKS: WorkspaceItem[] = [
   { id: 'editorial', label: 'Editorial', icon: 'newspaper', title: 'Editorial — source, translation, CMS' },
   { id: 'graphics', label: 'Graphics', icon: 'layers', title: 'Graphics — banners and social images' },
   { id: 'video', label: 'Video', icon: 'video', title: 'Video — timeline editor' },
+  { id: 'outreach', label: 'Outreach', icon: 'send', title: 'Outreach — promotional campaigns, directory & tracking' },
 ]
 
 /**

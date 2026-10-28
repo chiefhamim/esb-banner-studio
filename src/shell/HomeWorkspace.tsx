@@ -223,7 +223,7 @@ export function HomeWorkspace() {
 
         <svg className="home-defs" aria-hidden focusable="false">
           <defs>
-            {([['1', '#0aa37a', '#1fd3a8', '#3b82f6'], ['2', '#3b82f6', '#7c5cff', '#d946ef'], ['3', '#ff7a1a', '#ff3b6b', '#b24bf3']] as const).map(([n, c1, c2, c3]) => (
+            {([['1', '#0aa37a', '#1fd3a8', '#3b82f6'], ['2', '#3b82f6', '#7c5cff', '#d946ef'], ['3', '#ff7a1a', '#ff3b6b', '#b24bf3'], ['4', '#0284c7', '#38bdf8', '#818cf8']] as const).map(([n, c1, c2, c3]) => (
               <linearGradient key={n} id={`home-ig-${n}`} gradientUnits="userSpaceOnUse" x1="-24" y1="0" x2="0" y2="24" spreadMethod="reflect">
                 <stop offset="0" stopColor={c1} /><stop offset=".5" stopColor={c2} /><stop offset="1" stopColor={c3} />
                 <animate attributeName="x1" values="-24;0;-24" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
@@ -237,6 +237,7 @@ export function HomeWorkspace() {
             { id: 'editorial', icon: 'newspaper', name: 'Editorial', note: 'Link in, English story out', run: () => setWorkspace('editorial') },
             { id: 'graphics', icon: 'layers', name: 'Graphics', note: 'Banners and cards', run: () => setWorkspace('graphics') },
             { id: 'video', icon: 'video', name: 'Video', note: 'Timeline, titles and export', run: () => setWorkspace('video') },
+            { id: 'outreach', icon: 'send', name: 'Outreach', note: 'Promotions and campaigns', run: () => setWorkspace('outreach') },
             { id: 'open', icon: 'folder', name: 'Open project', note: 'Continue a saved project', run: () => void handleOpenProject() },
           ] as const).map((w) => (
             <button key={w.id} type="button" className="launch-tile" onClick={w.run}>
