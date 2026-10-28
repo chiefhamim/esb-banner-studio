@@ -1,11 +1,11 @@
 // Frame cost of the interactions that must feel instant on a 120–144 Hz display.
 // Runs Edge with the frame-rate cap off, so the rAF interval *is* the cost of one frame (budget: 8.3 ms @120 Hz, 6.9 ms @144 Hz).
-// node tools/perf-ui.mjs   (THROTTLE=4 to simulate a slower CPU)
+// node tools/audit/perf-ui.mjs   (THROTTLE=4 to simulate a slower CPU)
 import { chromium } from 'playwright-core'
-import { launchBrowser } from './launch-browser.mjs'
+import { launchBrowser } from '../launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
-const PORT = 5199, root = path.resolve(import.meta.dirname, '..')
+const PORT = 5199, root = path.resolve(import.meta.dirname, '../..')
 const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), 'preview', '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
 let b

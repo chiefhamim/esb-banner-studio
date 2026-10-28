@@ -28,7 +28,7 @@ Everything runs locally and offline (fonts and artwork are bundled). The UI foll
 * **Everything is movable straight away** (nothing is locked by default). Shift = keep proportions, Alt = from the centre, Shift+Alt = both. Ctrl+drag marquee, Alt+click picks the layer underneath.
 * **Menu bar** (File / Edit / Insert / Arrange / View / Help) showing every shortcut, copy / cut / paste layers, projects (`.esb`, Ctrl+S / Ctrl+O) with photos embedded, recent list.
 * **Everyday tools**: photo credit line, post-caption generator with hashtags, one-click highlight suggestion, *Next story - keep this layout* (Ctrl+Shift+N), crop guides showing how Facebook trims the banner, export preflight, an editable project saved beside every export (desktop app), per-layer reset.
-* Tests: `npm run test:ui` (57 checks), `node tools/fuzz.mjs 350 <seed>` (random-operation bug hunt), `node tools/overflow-audit.mjs` (clipped-text audit), `node tools/golden-test.mjs` (pixel match to Figma).
+* Tests: `npm run test:ui` (57 checks), `node tools/e2e/fuzz.mjs 350 <seed>` (random-operation bug hunt), `node tools/audit/overflow-audit.mjs` (clipped-text audit), `node tools/e2e/golden-test.mjs` (pixel match to Figma).
 
 ## New in 1.2
 * Formats: **YouTube Thumbnail 1280x720** added. Photos can **zoom out below 1x** (down to 0.1x) with a blurred / black / white / tint backdrop, plus Fill and Fit-whole-photo buttons.
@@ -55,7 +55,7 @@ Electron's own binary is fetched by `node node_modules/electron/install.js` (npm
 
 ## How exactness is guaranteed
 `src/core/*` is a custom canvas renderer of the Figma templates (Inter 3.19, Figma text metrics, layer blur,
-gradients). `tools/golden-test.mjs` diffs it against Figma's own exports: Facebook ≤ 0.025 % of pixels,
+gradients). `tools/e2e/golden-test.mjs` diffs it against Figma's own exports: Facebook ≤ 0.025 % of pixels,
 Web ≤ 0.17 %, all of it glyph anti-aliasing.
 
 ## v1.4
@@ -71,4 +71,4 @@ Web ≤ 0.17 %, all of it glyph anti-aliasing.
 - **Elements panel**: every part of the banner (logo, date, category chip, photo area, label, credit, headline, headline icon, link pill, footer socials, stripes, edge line…) plus your custom layers has an on/off switch, per group and per item, one undo step each. "Show all" brings everything back. The raw layer stack is the neighbouring *Layers* tab.
 - **Refresh-rate smooth**: panel resizing, layer dragging and the preview window run one write per animation frame (compositor transforms, grid track changes — no whole-tree restyles); while dragging, everything above/below the moving layer is frozen into bitmaps. Measured on the production build: 2–3 ms of main-thread work per frame (budget 6.9 ms at 144 Hz).
 - **Preview window**: opens beside the right panel, drags by its title bar, resizes from its corner (50–160 %), dark-mode toggle in the zoom group.
-- Tools: `tools/perf-ui.mjs` (frame cost), `tools/audit-ui.mjs` (type/radius/spacing census), `tools/shot-*.mjs` (review screenshots).
+- Tools: `tools/audit/perf-ui.mjs` (frame cost), `tools/audit/audit-ui.mjs` (type/radius/spacing census), `tools/shot-*.mjs` (review screenshots).

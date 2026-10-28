@@ -32,7 +32,7 @@ Labels used throughout: **[V]** verified by reading code or running something; *
 | State | One Zustand store (`src/store.ts`, 754 lines): `doc`, `format`, selection, history (`past/future`, limit 150), images | `src/store.ts` |
 | Persistence | `localStorage` key `esb-banner-studio/doc/v1` (250 ms debounce) + IndexedDB `esb-banner-studio/idb` store `kv`, **one record `images` rewritten wholesale on every image-list change**; `.esb` JSON project files with images inlined as base64 data URLs; recents in `localStorage` | `store.ts` ~l.655-750, `project.ts` |
 | Node-side | Main process: save/open dialogs, `fs.writeFileSync`, `fetch()` (Node/undici) for URL + image import, temp file for drag-out | `electron/main.cjs` |
-| Tests | Playwright-core driving system Edge + Electron: `tools/ui-test.mjs`, `date-test.mjs`, `golden-test.mjs` (pixelmatch), `fuzz.mjs`, `electron-test.mjs`, `packaged-check.mjs`, `perf-ui.mjs`, `overflow-audit.mjs`, `audit-ui.mjs`. **No unit-test framework** (no vitest/jest in `node_modules`). **No CI.** | `package.json`, `tools/` |
+| Tests | Playwright-core driving system Edge + Electron: `tools/e2e/ui-test.mjs`, `date-test.mjs`, `golden-test.mjs` (pixelmatch), `fuzz.mjs`, `electron-test.mjs`, `packaged-check.mjs`, `perf-ui.mjs`, `overflow-audit.mjs`, `audit-ui.mjs`. **No unit-test framework** (no vitest/jest in `node_modules`). **No CI.** | `package.json`, `tools/` |
 | Auth / DB / API / AI | **None** | grep of `src/` and `electron/` |
 
 Code size: `src/` ≈ 7,470 TS/TSX lines. Large files: `Stage.tsx` 1,177 · `Panels.tsx` 1,024 · `store.ts` 754 · `templates.ts` 594 · `App.tsx` 572 · `controls.tsx` 590.
@@ -194,8 +194,8 @@ Rejected: `MediaRecorder` real-time capture as the export engine (real-time only
 | `npx vite build --outDir <scratch>` | success, 132 ms; `index-*.js` 458.46 kB (gzip 144.10 kB), `index-*.css` 83.79 kB |
 | `npm run test:golden` | exit 0 — `social-01` 292 px differ (0.013 %), `web-01` 988 px differ (0.048 %) |
 | `npm run test:ui` | exit 0 — 167 PASS lines, "ALL PASS"; then `date-test.mjs` 6 PASS |
-| `node tools/electron-test.mjs` | 7 PASS (isolated temp profile) |
-| Not run | `tools/fuzz.mjs`, `tools/packaged-check.mjs`, `tools/perf-ui.mjs`, `tools/overflow-audit.mjs`, `npm run dist` |
+| `node tools/e2e/electron-test.mjs` | 7 PASS (isolated temp profile) |
+| Not run | `tools/e2e/fuzz.mjs`, `tools/e2e/packaged-check.mjs`, `tools/audit/perf-ui.mjs`, `tools/audit/overflow-audit.mjs`, `npm run dist` |
 
 The golden test currently exercises 2 cases (the memory notes describe 10 categories); coverage of the other categories by pixel diff is [U].
 

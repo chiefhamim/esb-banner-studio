@@ -3,7 +3,7 @@ import { _electron as electron } from 'playwright-core'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
-const root = path.resolve(import.meta.dirname, '..')
+const root = path.resolve(import.meta.dirname, '../..')
 const win = process.platform === 'win32'
 const exe = path.join(root, 'node_modules', 'electron', 'dist', win ? 'electron.exe' : 'electron')
 // isolated profile so the test never touches the user's saved work

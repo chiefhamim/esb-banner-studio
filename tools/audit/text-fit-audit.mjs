@@ -7,17 +7,17 @@
 //   hidden     text cut by a clipping ancestor (it scrolls nowhere, so it is simply lost)
 // Ellipsis truncation is listed separately (`trunc`) — it is a choice, but every one should be a deliberate one.
 //
-//   node tools/text-fit-audit.mjs            # 1280 1366 1600 1920
-//   W=1366 node tools/text-fit-audit.mjs     # one width
-//   SHOTS=dir node tools/text-fit-audit.mjs  # also screenshot each state
+//   node tools/audit/text-fit-audit.mjs            # 1280 1366 1600 1920
+//   W=1366 node tools/audit/text-fit-audit.mjs     # one width
+//   SHOTS=dir node tools/audit/text-fit-audit.mjs  # also screenshot each state
 import { chromium } from 'playwright-core'
-import { launchBrowser } from './launch-browser.mjs'
+import { launchBrowser } from '../launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 
 const PORT = 5196
-const root = path.resolve(import.meta.dirname, '..')
+const root = path.resolve(import.meta.dirname, '../..')
 const widths = process.env.W ? process.env.W.split(',').map(Number) : [1280, 1366, 1600, 1920]
 const shots = process.env.SHOTS
 if (shots) fs.mkdirSync(shots, { recursive: true })

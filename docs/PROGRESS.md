@@ -22,7 +22,7 @@
   - `npx vite build --outDir <scratch> --emptyOutDir`: exit code 0 (JS ~458.46 kB, CSS ~83.79 kB).
   - `npm run test:golden`: exit code 0 (`social-01` 0.013%, `web-01` 0.048% diff, well within tolerance).
   - `npm run test:ui`: 167 PASS "ALL PASS" + 6 PASS `date-test`.
-  - `node tools/electron-test.mjs`: 7 of 7 tests pass.
+  - `node tools/e2e/electron-test.mjs`: 7 of 7 tests pass.
 * **Changes**:
   - `package.json`: Added `vitest@5.0.5` as devDependency.
     - *Justification*: Vitest is the lowest-friction unit test runner for Vite 8 and TypeScript 6, sharing identical transform pipeline and tsconfig settings. Verified peer dependency on Vite `^8.0.0`, MIT license, 0 vulnerabilities, zero additional runtime overhead.
@@ -38,8 +38,8 @@
 ### Phase 1 — Security Hardening, Workspace Shell, Video Templates & Project v2 (Complete)
 * **Date/Time**: 2026-10-22 21:25 +06:00
 * **Acceptance Criteria Verification**:
-  - `tools/golden-test.mjs`: 0.013% diff on `social-01`, 0.048% diff on `web-01` (Pass).
-  - `tools/electron-test.mjs`: 13 of 13 tests pass (Pass).
+  - `tools/e2e/golden-test.mjs`: 0.013% diff on `social-01`, 0.048% diff on `web-01` (Pass).
+  - `tools/e2e/electron-test.mjs`: 13 of 13 tests pass (Pass).
   - `tools/unit/security.test.ts`: 28 of 28 unit tests pass (Pass).
   - `tools/unit/templates.test.ts`: 8 of 8 unit tests pass (Pass).
   - `tools/unit/project-v2.test.ts`: 4 of 4 unit tests pass (Pass).
@@ -58,7 +58,7 @@
 ### Phase 2 — Editorial Desk & Fact Verification Engine (Complete)
 * **Date/Time**: 2026-10-22 21:35 +06:00
 * **Acceptance Criteria Verification**:
-  - `npm run test:editorial`: 7 of 7 checks pass in `tools/editorial-test.mjs` (Pass).
+  - `npm run test:editorial`: 7 of 7 checks pass in `tools/e2e/editorial-test.mjs` (Pass).
     - Workspace navigation to Editorial Desk.
     - Article text ingestion & metadata parsing.
     - Fact strip generation with currency and energy capacity metrics.
@@ -68,7 +68,7 @@
     - Send Headline to Banner action with automatic workspace transition to Graphics.
   - `npm run test:unit`: 61 of 61 unit tests pass in 185ms (Pass).
     - `tools/unit/editorial.test.ts` (7 tests): Bengali digit normalisation, currency amount parsing (crore, lakh, BDT, USD), DOMParser article extraction, fact table extraction, seeded figure discrepancy flagging, unverified quote detection.
-  - `tools/electron-test.mjs`: 14 of 14 checks pass, verifying 3-way workspace switching (`Home` <-> `Editorial` <-> `Graphics`) in the packaged Electron environment.
+  - `tools/e2e/electron-test.mjs`: 14 of 14 checks pass, verifying 3-way workspace switching (`Home` <-> `Editorial` <-> `Graphics`) in the packaged Electron environment.
   - `npm run test:golden`: 0.013% diff on `social-01`, 0.048% diff on `web-01` (Pass).
   - `npm run test:ui`: All 167+ UI tests pass (Pass).
   - `npx oxlint`: 0 errors, 46 warnings (all baseline).
@@ -91,7 +91,7 @@
     - 4-point verification checklist (attribution, figures, quotes, entities).
     - Direct "Send Headline to Banner" connection to Graphics Studio.
   - **Injectable Translation & Offline Isolation (`src/core/newsroom.ts`)**:
-    - Added `setCustomTranslator` and `OFFLINE_HEADLINE_DICT` fallback map so `tools/ui-test.mjs` no longer depends on live network availability of `api.mymemory.translated.net`.
+    - Added `setCustomTranslator` and `OFFLINE_HEADLINE_DICT` fallback map so `tools/e2e/ui-test.mjs` no longer depends on live network availability of `api.mymemory.translated.net`.
 * **Open Issues**: None.
 * **Next 3 Tasks (Phase 3 — Media Library & Playback Foundation)**:
   1. Build `src/media/` workspace module and store (`useMediaStore`).
@@ -103,7 +103,7 @@
 ### Phase 3 & 4 — Video Studio, Welcome Screen & Clean Session Architecture (Complete)
 * **Date/Time**: 2026-10-22 22:20 +06:00
 * **Acceptance Criteria Verification**:
-  - `npm run test:video`: 9 of 9 checks pass in `tools/video-test.mjs` (Pass).
+  - `npm run test:video`: 9 of 9 checks pass in `tools/e2e/video-test.mjs` (Pass).
     - Workspace navigation to Video Studio via left rail.
     - Video canvas monitor rendered and frame-accurate SMPTE timecode readout initialized.
     - Transport playback started and paused.
@@ -113,11 +113,11 @@
     - Seamless navigation back to Graphics workspace.
   - `npm run test:unit`: 70 of 70 unit tests pass across 6 files in 188ms (Pass).
     - `tools/unit/video.test.ts` (9 tests): timeline creation, SMPTE timecode formatting and parsing, clip addition and duration expansion, clip move clamping, clip trimming, clip splitting, clip deletion, active clips at timecode lookup, snapping to clip boundaries.
-  - `tools/electron-test.mjs`: 15 of 15 checks pass, verifying 4-way workspace switching (`Home` <-> `Editorial` <-> `Video` <-> `Graphics`) in the packaged Electron environment with 0 console errors.
+  - `tools/e2e/electron-test.mjs`: 15 of 15 checks pass, verifying 4-way workspace switching (`Home` <-> `Editorial` <-> `Video` <-> `Graphics`) in the packaged Electron environment with 0 console errors.
   - `npm run test:golden`: 0.013% diff on `social-01`, 0.048% diff on `web-01` (Pass).
   - `npm run test:ui`: All 167+ UI tests pass (Pass).
-  - `node tools/contrast-audit.mjs`: 100% WCAG 2.2 AA compliant across all workspaces in Light & Dark themes (Pass).
-  - `node tools/a11y-audit.mjs`: 100% accessible names and 0 page overflow (Pass).
+  - `node tools/audit/contrast-audit.mjs`: 100% WCAG 2.2 AA compliant across all workspaces in Light & Dark themes (Pass).
+  - `node tools/audit/a11y-audit.mjs`: 100% accessible names and 0 page overflow (Pass).
   - `npx oxlint`: 0 errors.
   - `npx tsc -b`: exit code 0.
 * **Architectural Changes**:
@@ -171,7 +171,7 @@
     - `npm run test:video`: 13 of 13 checks pass, including real video export validation.
     - `npm run test:unit`: 73 of 73 unit tests pass in 193ms.
     - `npm run test:editorial`: 7 of 7 checks pass.
-    - `node tools/electron-test.mjs`: 15 of 15 checks pass with 0 console errors.
+    - `node tools/e2e/electron-test.mjs`: 15 of 15 checks pass with 0 console errors.
     - `npm run test:golden`: 0.013% diff on `social-01`, 0.048% diff on `web-01`.
     - `npm run test:ui`: All 167+ UI tests pass ("ALL PASS").
     - `npx oxlint`: 0 errors.
@@ -184,7 +184,7 @@
 * **Acceptance Criteria Verification**:
   - `npm run test:video`: 13 of 13 checks pass (Pass).
   - `npm run test:editorial`: 7 of 7 checks pass (Pass).
-  - `node tools/electron-test.mjs`: 15 of 15 checks pass with 0 console errors (Pass).
+  - `node tools/e2e/electron-test.mjs`: 15 of 15 checks pass with 0 console errors (Pass).
   - `npm run test:golden`: 0.013% diff on `social-01`, 0.048% diff on `web-01` (Pass).
   - `npm run test:unit`: 73 of 73 unit tests pass (Pass).
   - `npm run test:ui`: All 167+ UI tests pass ("ALL PASS").
@@ -211,7 +211,7 @@
 * **Acceptance Criteria Verification**:
   - `npm run test:editorial`: 7 of 7 checks pass (Pass).
   - `npm run test:video`: 13 of 13 checks pass (Pass).
-  - `node tools/electron-test.mjs`: 15 of 15 checks pass with 0 console errors (Pass).
+  - `node tools/e2e/electron-test.mjs`: 15 of 15 checks pass with 0 console errors (Pass).
   - `npm run test:golden`: 0.013% diff on `social-01`, 0.048% diff on `web-01` (Pass).
   - `npm run test:unit`: 73 of 73 unit tests pass (Pass).
   - `npm run test:ui`: All 167+ UI tests pass ("ALL PASS").
@@ -241,7 +241,7 @@
 * **Acceptance Criteria Verification**:
   - `npm run test:editorial`: 7 of 7 checks pass (Pass).
   - `npm run test:video`: 13 of 13 checks pass (Pass).
-  - `node tools/electron-test.mjs`: 15 of 15 checks pass with 0 console errors (Pass).
+  - `node tools/e2e/electron-test.mjs`: 15 of 15 checks pass with 0 console errors (Pass).
   - `npm run test:golden`: 0.013% diff on `social-01`, 0.048% diff on `web-01` (Pass).
   - `npm run test:unit`: 77 of 77 unit tests pass (Pass).
   - `npm run test:ui`: All 167+ UI tests pass ("ALL PASS").
@@ -278,7 +278,7 @@
 * **Acceptance Criteria Verification**:
   - `npm run test:editorial`: 10 of 10 checks pass (Pass).
   - `npm run test:video`: 13 of 13 checks pass (Pass).
-  - `node tools/electron-test.mjs`: 15 of 15 checks pass with 0 console errors (Pass).
+  - `node tools/e2e/electron-test.mjs`: 15 of 15 checks pass with 0 console errors (Pass).
   - `npm run test:golden`: 0.013% diff on `social-01`, 0.048% diff on `web-01` (Pass).
   - `npm run test:unit`: 79 of 79 unit tests pass (Pass).
   - `npm run test:ui`: All 167+ UI tests pass ("ALL PASS").
@@ -319,7 +319,7 @@
 * **Acceptance Criteria Verification**:
   - `npm run test:editorial`: 10 of 10 checks pass (Pass).
   - `npm run test:video`: 13 of 13 checks pass (Pass).
-  - `node tools/electron-test.mjs`: 15 of 15 checks pass with 0 console errors (Pass).
+  - `node tools/e2e/electron-test.mjs`: 15 of 15 checks pass with 0 console errors (Pass).
   - `npm run test:golden`: 0.013% diff on `social-01`, 0.048% diff on `web-01` (Pass).
   - `npm run test:unit`: 79 of 79 unit tests pass (Pass).
   - `npm run test:ui`: All 167+ UI tests pass ("ALL PASS").
@@ -380,7 +380,7 @@
 * **Category colour out of the chrome**: focus rings, inputs, side/dock tabs, tool-rail selection, quick-bar selection, layer rows, menus, panel focus and the canvas well no longer tint with `--cat`; they use ink. The banner, category tiles/chip, headline-highlight words and the status dot keep the desk colour.
 * **Layout defects**: format pill no longer wraps (nowrap; dims hidden < 1500 px; key caps/drag tag hidden < 1400 px so the Export button stays inside the bar at 1366 px); Editorial headline textarea auto-sizes (`field-sizing: content`, min 96 px) instead of clipping; word-count meta and the headline label no longer wrap; "Banner line breaks" label replaces the 9.5 px kicker; export-dialog format tags wrap instead of overflowing.
 * **Video monitor**: the canvas now fills the monitor at the project's aspect ratio (`--vw-ar` + container units) and re-renders on resize; previously it rendered at the intrinsic 300 × 150 box. Clip tints are muted uniformly in CSS (data unchanged).
-* **Test infrastructure**: all 32 browser scripts in `tools/` use `launchBrowser()`; `tools/electron-test.mjs` is platform-aware and its stale `h2` selector now checks `.ed-topbar-title`; new `tools/css-census.mjs` (`npm run census`).
+* **Test infrastructure**: all 32 browser scripts in `tools/` use `launchBrowser()`; `tools/e2e/electron-test.mjs` is platform-aware and its stale `h2` selector now checks `.ed-topbar-title`; new `tools/audit/css-census.mjs` (`npm run census`).
 * Not changed (by design): nested 6 px radii (DESIGN_NOTES nesting rule); Facebook/web mock palettes; security items from the audit (newsroom bypass sign-in, Gemini key in localStorage, spoofed UA in net-guard) — these need an explicit decision because they change how publishing and source fetching behave.
 
 ### Phase 2a (2026-10-23) — Authentic esbpowerline.com "Web Article" preview
@@ -425,7 +425,7 @@
 
 ### Phase 2e (2026-10-23) — Design layer, the editor connection, Export
 * **Design layer** (`src/styles/studio.css`, new tokens in `tokens.css`, light and dark): rounded panel cards with an icon tile that inverts when open, a right-hand disclosure chevron and a short spring-in for the body; borderless filled toolbar controls, all 32 px and vertically centred in the 40 px header; the selected item in any group is the same raised chip; filled fields with a focus ring; dialogs as sheets (blurred backdrop, no footer band). Editorial panels got icons; the Graphics card-type switch, link importer, category tiles, Elements/Layers tabs and the Video media-bin tabs moved onto the same pieces. Home's logo sits on a white plate in dark mode (artwork untouched).
-* **Export**: the split button rendered as two mismatched buttons (square-cornered Export beside a separately rounded caret); it is now one control with a hairline divider. Functionally: "Quick: this banner only" did nothing on the first click whenever a photo slot was empty (it only posted "run it again"); quick exports now always export and report empty slots in the result. `tools/export-electron-test.mjs` drives the Export dialog, the quick menu and Editorial's Export PNG in Electron and checks real PNG files land on disk.
+* **Export**: the split button rendered as two mismatched buttons (square-cornered Export beside a separately rounded caret); it is now one control with a hairline divider. Functionally: "Quick: this banner only" did nothing on the first click whenever a photo slot was empty (it only posted "run it again"); quick exports now always export and report empty slots in the result. `tools/e2e/export-electron-test.mjs` drives the Export dialog, the quick menu and Editorial's Export PNG in Electron and checks real PNG files land on disk.
 * **Outputs panel**: the preview sits in an inset well; the web article's three stacked segmented bars became one row of three compact menus (screen, theme, hero).
 * **Sign-in and the site connection**: the old dialog (unstyled inputs, a "Verified Newsroom Bypass" checkbox that signed known emails in without a password, hard-coded names and roles) is replaced. Sign-in is the site's own Supabase Auth password grant plus the `profiles` role/status check, with the site's error copy; members and suspended accounts are refused; tokens refresh. "New article in the CMS" / "Open the CMS dashboard" open esbpowerline.com in a separate signed-in window (Electron writes the site's `@supabase/ssr` cookie into a dedicated profile; validated names/values only; the app's own session never holds site cookies). Publishing requires a signed-in session — the anonymous-key write path and the "default to Hamim" author fallback are gone.
 * **Not verified here**: a live sign-in against esbpowerline.com/Supabase (this environment cannot reach either). The cookie format was verified with the site's exact `@supabase/ssr` version reading it back; the auth calls are unit-tested against a stand-in.

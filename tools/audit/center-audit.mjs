@@ -1,12 +1,12 @@
 // Centering audit: every button-like control's content (icons, labels, chips) measured against its padding box, in
 // Home, Graphics, Video, the Editorial tabs and the AI dialog, at W= widths (default 900,1280,1920) in both themes.
 // Reports a vertical offset over 1.5 px, a horizontal one over 1.5 px where the control centres its content, and any
-// content that leaves its box. Usage: node tools/center-audit.mjs   (W=1024,1366 to choose widths)
+// content that leaves its box. Usage: node tools/audit/center-audit.mjs   (W=1024,1366 to choose widths)
 import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { launchBrowser } from './launch-browser.mjs'
-const PORT = 5217, root = fileURLToPath(new URL('..', import.meta.url))
+import { launchBrowser } from '../launch-browser.mjs'
+const PORT = 5217, root = fileURLToPath(new URL('../..', import.meta.url))
 const vite = spawn(process.execPath, [root + 'node_modules/vite/bin/vite.js', '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
 const widths = (process.env.W || '900,1280,1920').split(',').map(Number)

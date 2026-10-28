@@ -1,11 +1,11 @@
 // Automated Accessibility & Keyboard Focus Audit for ESB Studio.
 import { chromium } from 'playwright-core'
-import { launchBrowser } from './launch-browser.mjs'
+import { launchBrowser } from '../launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 
 const PORT = 5191
-const root = path.resolve(import.meta.dirname, '..')
+const root = path.resolve(import.meta.dirname, '../..')
 const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
 
 const waitUp = async () => {

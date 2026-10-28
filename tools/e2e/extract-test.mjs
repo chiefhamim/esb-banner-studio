@@ -4,10 +4,10 @@ import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { launchBrowser } from './launch-browser.mjs'
+import { launchBrowser } from '../launch-browser.mjs'
 
 const PORT = 5192
-const root = path.resolve(import.meta.dirname, '..')
+const root = path.resolve(import.meta.dirname, '../..')
 const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
 const waitUp = async () => { for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) return } catch {} await new Promise((r) => setTimeout(r, 500)) } throw new Error('Vite did not start') }
 

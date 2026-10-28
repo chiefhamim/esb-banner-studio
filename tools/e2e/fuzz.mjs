@@ -1,7 +1,7 @@
 // Fuzz test: random operations (store + real mouse/keyboard), invariants checked after every step.
-//   node tools/fuzz.mjs [ops=350] [seed=1]
+//   node tools/e2e/fuzz.mjs [ops=350] [seed=1]
 import { chromium } from 'playwright-core'
-import { launchBrowser } from './launch-browser.mjs'
+import { launchBrowser } from '../launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 
@@ -10,7 +10,7 @@ let seed = Number(process.argv[3] ?? 1)
 const rnd = () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
 const pick = (a) => a[Math.floor(rnd() * a.length)]
 const PORT = 5189
-const root = path.resolve(import.meta.dirname, '..')
+const root = path.resolve(import.meta.dirname, '../..')
 const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
 

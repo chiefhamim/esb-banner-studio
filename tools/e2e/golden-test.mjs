@@ -5,10 +5,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { PNG } from 'pngjs'
 import pixelmatch from 'pixelmatch'
-import { launchBrowser } from './launch-browser.mjs'
+import { launchBrowser } from '../launch-browser.mjs'
 
 const PORT = 5199
-const root = path.resolve(import.meta.dirname, '..')
+const root = path.resolve(import.meta.dirname, '../..')
 const outDir = path.join(root, 'tools', 'out')
 fs.mkdirSync(outDir, { recursive: true })
 

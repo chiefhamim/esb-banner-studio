@@ -1,11 +1,11 @@
 // Design-token census for the Quiet Studio stylesheet layer (pure Node, no browser).
 // Reports duplicate token definitions across files, undefined var() names, off-scale
 // radii / font sizes / weights, colour literal counts and z-index spread.
-// Usage: node tools/css-census.mjs [--strict]   (--strict exits 1 on (a) or (b) findings)
+// Usage: node tools/audit/css-census.mjs [--strict]   (--strict exits 1 on (a) or (b) findings)
 import fs from 'node:fs'
 import path from 'node:path'
 
-const root = path.resolve(import.meta.dirname, '..')
+const root = path.resolve(import.meta.dirname, '../..')
 const FILES = ['src/styles/tokens.css', 'src/styles/base.css', 'src/styles/primitives.css', 'src/App.css']
 const strict = process.argv.includes('--strict')
 

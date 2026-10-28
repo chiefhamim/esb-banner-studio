@@ -1,12 +1,12 @@
 // Capture after-screenshots of all workspaces and key states at 1366 and 1920, light + dark, DPR 1 & 1.5
 import { chromium } from 'playwright-core'
-import { launchBrowser } from './launch-browser.mjs'
+import { launchBrowser } from '../launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 
 const PORT = 5194
-const root = path.resolve(import.meta.dirname, '..')
+const root = path.resolve(import.meta.dirname, '../..')
 const outDir = path.join(root, 'tools', 'out', 'ui-after')
 fs.mkdirSync(outDir, { recursive: true })
 

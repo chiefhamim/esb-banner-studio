@@ -3,7 +3,7 @@
 // Run on Linux under `xvfb-run -a`. Needs a fresh `npm run build`.
 import { _electron as electron } from 'playwright-core'
 import path from 'node:path'; import fs from 'node:fs'; import os from 'node:os'
-const root = path.resolve(import.meta.dirname, '..')
+const root = path.resolve(import.meta.dirname, '../..')
 const win = process.platform === 'win32'
 let failed = 0
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'esb-profile-'))
