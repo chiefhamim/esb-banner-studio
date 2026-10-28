@@ -27,6 +27,8 @@ const REPEAT_DAYS = 7
 const FOLLOW_MIN_DAYS = 2
 const FOLLOW_ONCE_DAYS = 30
 const TESTS_PER_HOUR = 10
+// tests skip the campaign cap but may go to any address, so they get a ceiling of their own for the day
+const TESTS_PER_DAY = 30
 /** Gmail refuses a message over 25 MB; base64 adds a third, so the raw files must stay under about 18 MB. */
 const MAX_ATTACH_BYTES = 18 * 1024 * 1024
 const MAX_ATTACHMENTS = 10
@@ -108,7 +110,9 @@ function ledgerCheck(ledger, now, settings, mail) {
   const recent = ledger.filter((e) => now - e.t < DAY)
   if (mail.isTest) {
     const lastHour = ledger.filter((e) => e.kind === 'test' && now - e.t < 3600 * 1000).length
-    return lastHour >= TESTS_PER_HOUR ? { ok: false, reason: `Test limit reached (${TESTS_PER_HOUR} an hour)` } : { ok: true }
+    if (lastHour >= TESTS_PER_HOUR) return { ok: false, reason: `Test limit reached (${TESTS_PER_HOUR} an hour)` }
+    const today = recent.filter((e) => e.kind === 'test').length
+    return today >= TESTS_PER_DAY ? { ok: false, reason: `Test limit reached (${TESTS_PER_DAY} a day)` } : { ok: true }
   }
   // first letters and follow-ups both count toward the day and the gap; tests do not
   const campaign = recent.filter((e) => e.kind !== 'test').sort((a, b) => a.t - b.t)
@@ -164,7 +168,10 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
   function saveSettings(input, password) {
     const s = validateSmtpSettings(input)
     const prev = read(settingsFile, null)
-    let enc = prev && prev.user === s.user && prev.host === s.host ? prev.password : null
+    // the stored password is kept only for the same account on the same servers: changing the IMAP host (or port) and
+    // keeping the password would let one save point the next inbox check — and the password — at any server
+    const same = prev && prev.user === s.user && prev.host === s.host && prev.port === s.port && (prev.imapHost || '') === (s.imapHost || '')
+    let enc = same ? prev.password : null
     if (typeof password === 'string' && password.trim()) {
       if (!safeStorage.isEncryptionAvailable()) throw new Error('This computer cannot encrypt the password, so it is not saved')
       // Google shows app passwords in groups of four; the spaces are not part of it
@@ -204,7 +211,17 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     return lastVerify
   }
 
-  async function send(raw) {
+  // one send at a time: the ledger is read, checked, sent against and written back as one step. Two overlapping calls
+  // (a double-click, or a renderer firing many at once) each passed the daily cap, the gap and the repeat check against
+  // the same ledger, and the last writer then dropped the others' entries.
+  let sendChain = Promise.resolve()
+  function send(raw) {
+    const run = sendChain.then(() => sendNow(raw))
+    sendChain = run.catch(() => {})
+    return run
+  }
+
+  async function sendNow(raw) {
     let mail
     try { mail = validateMail(raw) } catch (e) { return { ok: false, error: e.message } }
     const saved = read(settingsFile, null)

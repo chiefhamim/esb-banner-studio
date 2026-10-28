@@ -65,8 +65,39 @@ function isPrivateIPv4(ip) {
  * Validates whether an IPv6 address belongs to a loopback, unspecified,
  * link-local, unique local, IPv4-mapped private, or multicast range.
  */
+/** '::7f00:1' → [0,0,0,0,0,0,0x7f00,1]; a dotted IPv4 tail becomes its two groups. null when it is not IPv6 text. */
+function ipv6Groups(ip) {
+  let s = ip.toLowerCase().trim().replace(/%.*$/, '')
+  const v4 = s.match(/(\d+\.\d+\.\d+\.\d+)$/)
+  if (v4) {
+    const o = v4[1].split('.').map(Number)
+    if (o.some((n) => n > 255)) return null
+    s = s.slice(0, -v4[1].length) + ((o[0] << 8) | o[1]).toString(16) + ':' + ((o[2] << 8) | o[3]).toString(16)
+  }
+  const halves = s.split('::')
+  if (halves.length > 2) return null
+  const head = halves[0] ? halves[0].split(':') : []
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : []
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0
+  const all = [...head, ...Array(Math.max(0, fill)).fill('0'), ...tail]
+  if (all.length !== 8 || all.some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return null
+  return all.map((g) => parseInt(g, 16))
+}
+const v4Of = (hi, lo) => `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`
+
 function isPrivateIPv6(ip) {
   const s = ip.toLowerCase().trim()
+  // forms that carry an IPv4 address inside them are judged by that address: IPv4-compatible (::a.b.c.d, ::7f00:1),
+  // IPv4-mapped (::ffff:…), NAT64 (64:ff9b::/96) and 6to4 (2002::/16). They were read as public, so ::127.0.0.1
+  // passed the loopback check on any host that routes it.
+  const g = ipv6Groups(s)
+  if (g) {
+    const zero = (from, to) => g.slice(from, to).every((x) => x === 0)
+    if (zero(0, 6) && (g[6] || g[7] > 1)) return isPrivateIPv4(v4Of(g[6], g[7]))
+    if (zero(0, 5) && g[5] === 0xffff) return isPrivateIPv4(v4Of(g[6], g[7]))
+    if (g[0] === 0x64 && g[1] === 0xff9b && zero(2, 6)) return isPrivateIPv4(v4Of(g[6], g[7]))
+    if (g[0] === 0x2002) return isPrivateIPv4(v4Of(g[1], g[2]))
+  }
   if (s === '::' || s === '0:0:0:0:0:0:0:0') return true
   if (s === '::1' || s === '0:0:0:0:0:0:0:1') return true
   if (s.startsWith('::ffff:')) {
@@ -244,8 +275,10 @@ async function safeFetch(targetUrl, options = {}) {
     const client = isHttps ? https : http
     const port = parsed.port ? parseInt(parsed.port, 10) : (isHttps ? 443 : 80)
 
-    const result = await new Promise((resolve) => {
+    const result = await new Promise((settle) => {
       let aborted = false
+      let wall = null
+      const resolve = (v) => { clearTimeout(wall); settle(v) }
       const req = client.request({
         protocol: parsed.protocol,
         host: hostCheck.ip,
@@ -277,6 +310,15 @@ async function safeFetch(targetUrl, options = {}) {
         req.removeAllListeners()
         req.on('error', () => {})
       }
+
+      // `timeout` above is an idle timeout: a server that drips a byte every few seconds never trips it. This is the
+      // whole request's budget, headers and body together.
+      wall = setTimeout(() => {
+        aborted = true
+        req.destroy()
+        cleanup()
+        resolve({ ok: false, code: 'timeout', error: `Gave up after ${remainingTime}ms` })
+      }, remainingTime)
 
       req.on('timeout', () => {
         aborted = true

@@ -30,9 +30,9 @@ class FsScope {
   allowFile(p) {
     if (!p) return
     const norm = this.normalize(p)
+    // the exact file only. This used to allow its whole folder as well, so saving one banner to the Desktop or the
+    // home folder opened every subfolder of it to save-image, save-project, read-project and start-drag.
     this.allowedFiles.add(norm)
-    // Also allow its parent directory
-    this.allowedRoots.add(path.dirname(norm))
   }
 
   /**

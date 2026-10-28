@@ -59,6 +59,7 @@ describe('createInbox against a stand-in server', () => {
   const opened: Record<string, unknown>[] = []
   class FakeImap {
     constructor(o: Record<string, unknown>) { opened.push(o) }
+    on() { return this } // ImapFlow is an EventEmitter
     async connect() {}
     async getMailboxLock(_p: string, o: { readOnly: boolean }) { opened.push({ lock: o }); return { release() {} } }
     async search() { return msgs.map((x) => x.uid) }

@@ -134,6 +134,23 @@ describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on eve
     expect(mailer.inboxAccount()).toMatchObject({ user: 'desk@example.com', pass: 'abcdefghijklmnop', imapHost: 'imap.gmail.com' })
     expect(JSON.stringify(mailer.status())).not.toContain('abcdefgh')
   })
+  it('drops the saved password when the inbox server changes, so one save cannot point it at another host', () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
+    mailer.saveSettings({ ...settings, imapHost: 'imap.gmail.com' }, 'abcdefghijklmnop')
+    expect(mailer.saveSettings({ ...settings, imapHost: 'imap.gmail.com', name: 'Desk' }).hasPassword).toBe(true)
+    expect(mailer.saveSettings({ ...settings, imapHost: 'imap.example.org' }).hasPassword).toBe(false)
+    mailer.saveSettings(settings, 'abcdefghijklmnop')
+    expect(mailer.saveSettings({ ...settings, port: 465 }).hasPassword).toBe(false)
+  })
+  it('overlapping sends run one at a time, so the daily cap and the ledger hold', async () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
+    mailer.saveSettings(settings, 'abcdefghijklmnop')
+    // five at once: before, all five passed the same ledger check and went out together
+    const rs = await Promise.all([1, 2, 3, 4, 5].map((i) => mailer.send({ to: `md${i}@example.com`, subject: 'S', body: 'B' })))
+    expect(rs.filter((r: { ok: boolean }) => r.ok)).toHaveLength(1)
+    expect(sent).toHaveLength(1)
+    expect(mailer.ledger()).toHaveLength(1)
+  })
   it('sends nothing before a password is saved', async () => {
     const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
     expect(await mailer.send({ to: 'a@example.com', subject: 's', text: 't' })).toMatchObject({ ok: false })

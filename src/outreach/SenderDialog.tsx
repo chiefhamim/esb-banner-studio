@@ -29,6 +29,10 @@ export function SenderDialog({ onClose }: { onClose: () => void }) {
   const save = async () => {
     const b = window.esb
     if (!b?.outreachSave) return
+    // the main process drops a saved password whenever the account or either server changes, so ask for it here rather
+    // than saving a sender that silently has none
+    const moved = !!cur && (cur.user !== f.user.trim() || cur.host !== f.host.trim() || (cur.imapHost || '') !== f.imapHost.trim().toLowerCase() || cur.port !== Number(f.port))
+    if (mail?.hasPassword && moved && !password.trim()) { setError('The account or a server changed, so type the app password again. It is only kept for the servers it was saved with.'); return }
     setSaving(true)
     setError(null)
     const r = await b.outreachSave({ name: f.name, user: f.user.trim(), host: f.host.trim(), imapHost: f.imapHost.trim(), port: Number(f.port), dailyLimit: Number(f.dailyLimit), minDelaySec: Math.round(f.minMin * 60), maxDelaySec: Math.round(f.maxMin * 60) }, password || undefined)

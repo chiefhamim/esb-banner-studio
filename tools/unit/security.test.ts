@@ -69,6 +69,11 @@ describe('Security Hardening — S1 SSRF & Network Guard', () => {
       expect(isPrivateIp('::1')).toBe(true)
     })
 
+    it('judges IPv6 forms that carry an IPv4 address by that address', () => {
+      for (const a of ['::127.0.0.1', '::7f00:1', '64:ff9b::10.0.0.1', '64:ff9b::a00:1', '2002:c0a8:101::1', '::ffff:192.168.1.1']) expect(isPrivateIPv6(a)).toBe(true)
+      for (const a of ['64:ff9b::8.8.8.8', '2002:808:808::1', '2606:4700::1111']) expect(isPrivateIPv6(a)).toBe(false)
+    })
+
     it('rejects link-local IPv6 (fe80::/10)', () => {
       expect(isPrivateIPv6('fe80::1')).toBe(true)
       expect(isPrivateIPv6('fe90::1234')).toBe(true)
@@ -244,6 +249,9 @@ describe('Security Hardening — S2 File System Path Scoping', () => {
     scope.allowFile('C:/Users/test/Documents/my-project.esb')
 
     expect(scope.isAllowed('C:/Users/test/Documents/my-project.esb')).toBe(true)
+    // the file only — not its folder, which would open every sibling and subfolder
+    expect(scope.isAllowed('C:/Users/test/Documents/other.esb')).toBe(false)
+    expect(scope.isAllowed('C:/Users/test/Documents/sub/x.png')).toBe(false)
   })
 
   it('throws an EACCES error when assertAllowed is called on a disallowed path', () => {

@@ -128,6 +128,9 @@ function createInbox({ ledger, account, ImapFlow, clock = () => Date.now() }) {
       const since = new Date(Math.min(...sends.map((e) => e.t)) - DAY)
 
       const client = new ImapFlow({ host: acct.imapHost, port: 993, secure: true, auth: { user: acct.user, pass: acct.pass }, logger: false, disableAutoIdle: true, tls: { rejectUnauthorized: true, minVersion: 'TLSv1.2' } })
+      // ImapFlow emits 'error' when the socket drops mid-check; with no listener that is an uncaught exception in the
+      // main process. The awaited calls below reject on their own, which is where it is reported.
+      client.on('error', () => {})
       const replies = [], bounces = []
       let scanned = 0
       try {

@@ -89,7 +89,7 @@ function createWindow() {
 
   // S3: Install permission handlers: only microphone (media) for app origin, deny everything else
   const ses = win.webContents.session
-  // the microphone, for the editor window only (the CMS window shares no session, and gets nothing)
+  // the microphone, for the editor window only (the CMS window has its own session, which denies everything)
   ses.setPermissionRequestHandler((wc, permission, callback) => {
     callback(permission === 'media' && wc === win.webContents)
   })
@@ -131,6 +131,11 @@ ipcMain.handle('esb:open-site-as', async (_e, cookies, sitePath) => {
     width: 1360, height: 900, minWidth: 900, minHeight: 600, title: 'esbpowerline.com — CMS', autoHideMenuBar: true, backgroundColor: '#0b0b0d',
     webPreferences: { partition: SITE_PARTITION, contextIsolation: true, nodeIntegration: false, sandbox: true },
   })
+  // the CMS profile asks for nothing: without these, Electron grants every permission request (camera, microphone,
+  // location, notifications, clipboard) to esbpowerline.com and anything it loads
+  const siteSes = siteWin.webContents.session
+  siteSes.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+  siteSes.setPermissionCheckHandler(() => false)
   siteWin.setMenuBarVisibility(false)
   siteWin.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith(SITE_ORIGIN + '/')) { siteWin.loadURL(url); return { action: 'deny' } }
@@ -279,6 +284,17 @@ ipcMain.handle('esb:reveal', (_e, p) => {
   }
 })
 
+// At most six renderer fetches in flight; the rest wait their turn. Each one may buffer up to its size cap (and an image
+// is copied again to base64), so a renderer firing a hundred at once could run the main process out of memory.
+const MAX_FETCHES = 6
+let fetching = 0
+const waiting = []
+async function oneAtATime(job) {
+  if (fetching >= MAX_FETCHES) await new Promise((r) => waiting.push(r))
+  fetching++
+  try { return await job() } finally { fetching--; waiting.shift()?.() }
+}
+
 // The renderer may ask for a longer wait and for a JSON feed, nothing else: every other net-guard option (loopback,
 // custom DNS, size caps) stays out of its reach.
 ipcMain.handle('esb:fetch-url', async (_e, rawUrl, options) => {
@@ -286,14 +302,17 @@ ipcMain.handle('esb:fetch-url', async (_e, rawUrl, options) => {
   const safe = {}
   if (Number.isFinite(o.timeoutMs)) safe.timeoutMs = Math.min(30000, Math.max(1000, o.timeoutMs))
   if (Array.isArray(o.allowedTypes) && o.allowedTypes.length && o.allowedTypes.every((t) => t === 'application/json')) safe.allowedTypes = ['application/json']
-  return await fetchArticleHtml(String(rawUrl), safe)
+  return await oneAtATime(() => fetchArticleHtml(String(rawUrl), safe))
 })
 
 // as above: a shorter wait and a smaller cap are the renderer's to choose; loopback, DNS and content types are not
 ipcMain.handle('esb:fetch-image-data', async (_e, rawUrl, options) => {
-  return await fetchImageData(String(rawUrl), guard.safeImageFetchOptions(options))
+  return await oneAtATime(() => fetchImageData(String(rawUrl), guard.safeImageFetchOptions(options)))
 })
 
+// only files this process staged for a drag (prepare-drag-file, or the bytes form below) may be dragged out — never
+// an arbitrary allowed path, so a drag cannot hand a project file or anything else in a scoped folder to the OS
+const stagedDrags = new Set()
 ipcMain.handle('esb:prepare-drag-file', async (_e, name, bytes) => {
   try {
     if (!bytes || bytes.length > 50 * 1024 * 1024) throw new Error('Payload too large')
@@ -303,6 +322,7 @@ ipcMain.handle('esb:prepare-drag-file', async (_e, name, bytes) => {
     const safe = guard.dragFileName(name)
     const filePath = path.join(tmpDir, safe)
     fsScope.allowFile(filePath)
+    stagedDrags.add(path.resolve(filePath))
     fs.writeFileSync(filePath, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length))
     return filePath
   } catch (err) {
@@ -315,7 +335,7 @@ ipcMain.on('esb:start-drag', (event, arg) => {
   try {
     let filePath
     if (typeof arg === 'string') {
-      filePath = arg
+      filePath = stagedDrags.has(path.resolve(arg)) ? arg : null
     } else if (arg && arg.bytes) {
       if (arg.bytes.length > 50 * 1024 * 1024) throw new Error('Payload too large')
       const tmpDir = path.join(app.getPath('temp'), 'esb-studio-drag')
@@ -324,6 +344,7 @@ ipcMain.on('esb:start-drag', (event, arg) => {
       const safe = guard.dragFileName(arg.name)
       filePath = path.join(tmpDir, safe)
       fsScope.allowFile(filePath)
+      stagedDrags.add(path.resolve(filePath))
       fs.writeFileSync(filePath, Buffer.from(arg.bytes.buffer, arg.bytes.byteOffset, arg.bytes.length))
     }
     if (!filePath || !fsScope.isAllowed(filePath) || !fs.existsSync(filePath)) return
