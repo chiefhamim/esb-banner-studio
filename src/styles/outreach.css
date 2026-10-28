@@ -411,3 +411,9 @@
 .or-file-chip .or-file-open { display: inline-flex; flex: 1 1 auto; width: auto; height: auto; min-width: 0; color: inherit; }
 .or-file-chip .or-file-open:hover { color: inherit; background: var(--fill-hover); }
 .or-file-open .or-file-name { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+/* the New menu: a compact card, each item's hint on its own line under the name, cut to one line, not a long strip */
+.menu.or-new-menu { width: 264px; max-width: 264px; }
+.menu.or-new-menu .menu-item { height: auto; min-height: 44px; align-items: flex-start; padding-top: 7px; padding-bottom: 7px; line-height: 18px; }
+.menu.or-new-menu .menu-item .icon, .menu.or-new-menu .menu-item > svg { margin-top: 2px; }
+.menu.or-new-menu .mi-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.menu.or-new-menu .mi-label small { display: block; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

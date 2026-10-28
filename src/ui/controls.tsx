@@ -239,7 +239,7 @@ export function MenuBar({ menus }: { menus: MenuDef[] }) {
   )
 }
 
-export function MenuButton({ label, icon, items, align = 'start', className = '', title }: { label?: string; icon?: IconName; items: MenuEntry[]; align?: 'start' | 'end'; className?: string; title?: string }) {
+export function MenuButton({ label, icon, items, align = 'start', className = '', menuClassName = '', title }: { label?: string; icon?: IconName; items: MenuEntry[]; align?: 'start' | 'end'; className?: string; menuClassName?: string; title?: string }) {
   const btn = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
@@ -248,7 +248,7 @@ export function MenuButton({ label, icon, items, align = 'start', className = ''
       <button ref={btn} type="button" title={title} className={'btn ' + className + (open ? ' open' : '')} onClick={() => setOpen((o) => !o)}>
         {icon && <Icon name={icon} size={15} />}{label}<Icon name="chevDown" size={13} className="chev" />
       </button>
-      {open && btn.current && <Popover anchor={{ el: btn.current }} onClose={close} align={align} className="menu" minWidth={210}><MenuList items={items} onDone={close} /></Popover>}
+      {open && btn.current && <Popover anchor={{ el: btn.current }} onClose={close} align={align} className={'menu ' + menuClassName} minWidth={210}><MenuList items={items} onDone={close} /></Popover>}
     </>
   )
 }

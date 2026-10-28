@@ -25,7 +25,7 @@ export function CampaignsTab() {
       {/* one way to start either kind; the desk stays on Campaigns and the letter's To line takes the cursor —
           the old "Email" button jumped to Contacts, which shows nothing for an email to typed addresses */}
       <div className="or-left-head or-new">
-        <MenuButton label="New" icon="plus" className="primary or-wide" align="start" items={[
+        <MenuButton label="New" icon="plus" className="primary or-wide" menuClassName="or-new-menu" align="start" items={[
           { label: 'Campaign to a list', icon: 'users', hint: 'One letter to an audience from your mailing list', disabled: !idle, onClick: () => void s.createCampaign() },
           { label: 'Email to addresses', icon: 'mail', hint: 'An ordinary email to people you type', disabled: !idle, onClick: async () => { await s.createCampaign({ kind: 'direct', name: 'New email', listId: null, sheet: '', blueprint: 'blank', subject: '', body: '' }); ui.set({ view: 'edit' }); requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.or-line input[aria-label="Recipients"]')?.focus()) } },
         ]} />
