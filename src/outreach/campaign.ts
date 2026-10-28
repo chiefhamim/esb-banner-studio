@@ -7,7 +7,7 @@
 // the settings allow.
 
 import { useOutreachStore } from './outreachStore'
-import { buildMessage, skipReason } from './compose'
+import { buildMessage, missingFields, skipReason } from './compose'
 import type { Campaign, Contact } from './types'
 import type { EsbOutreachMail } from '../esb'
 
@@ -51,51 +51,96 @@ const sleepUntil = (t: number, id: number) => new Promise<boolean>((resolve) => 
 
 const attachmentsOf = () => useOutreachStore.getState().attachments.map((a) => ({ name: a.name, dataUrl: a.dataUrl }))
 
+// ------------------------------------------------------------------ follow-ups
+const DAY = 24 * 3600_000
+
+export const FOLLOW_UP_DEFAULT: Record<'en' | 'bn', string> = {
+  en: 'Dear {name},\n\nI wrote to you recently on behalf of ESB PowerLine and wanted to make sure my letter reached you.\n\nIf it is of interest, a short reply is all we need. If not, there is no need to answer, and we will not write about it again.',
+  bn: 'শ্রদ্ধেয় {name},\n\nসম্প্রতি ইএসবি পাওয়ারলাইনের পক্ষ থেকে আপনাকে একটি চিঠি পাঠিয়েছিলাম; সেটি আপনার কাছে পৌঁছেছে কি না, তা নিশ্চিত হতে চাইছি।\n\nআগ্রহী হলে একটি সংক্ষিপ্ত উত্তরই যথেষ্ট। আগ্রহী না হলে উত্তর দেওয়ার প্রয়োজন নেই; এ বিষয়ে আমরা আর লিখব না।',
+}
+
+/** The follow-up letter as it will go: the editor's, else the default, with "Re:" on the first letter's subject. */
+export function followUpLetter(c: Campaign): { subject: string; body: string } {
+  return { subject: c.followUp.subject.trim() || `Re: ${c.subject.replace(/^re:\s*/i, '')}`, body: c.followUp.body.trim() || FOLLOW_UP_DEFAULT[c.lang] }
+}
+
+/**
+ * Why this contact gets no follow-up, or null. Only someone the campaign wrote to at least `afterDays` ago, who has
+ * not answered, bounced or opted out, and has not had one. The main process checks the first letter and "once a
+ * month" again on its own ledger.
+ */
+export function followUpReason(x: Contact, c: Campaign, now = Date.now()): string | null {
+  const sentAt = c.sent[x.email]
+  if (!sentAt) return 'Not sent the first letter'
+  if (x.status === 'OPTED_OUT') return 'Asked not to be emailed'
+  if (x.status === 'BOUNCED' || c.bounced[x.email]) return 'Bounced'
+  if (c.replied[x.email]) return 'Replied'
+  if (c.followed[x.email]) return 'Already followed up'
+  if (now - sentAt < c.followUp.afterDays * DAY) return `Due ${new Date(sentAt + c.followUp.afterDays * DAY).toLocaleDateString([], { day: 'numeric', month: 'short' })}`
+  const l = followUpLetter(c)
+  const miss = missingFields(x, l.subject, l.body)
+  return miss.length ? `Missing ${miss.join(', ')}` : null
+}
+
+export function followUpQueue(contacts: Contact[], c: Campaign, now = Date.now()): { due: Contact[]; later: number } {
+  const sent = contacts.filter((x) => inAudience(x, c.audience) && c.sent[x.email])
+  const due = sent.filter((x) => !followUpReason(x, c, now))
+  const later = sent.filter((x) => followUpReason(x, c, now)?.startsWith('Due')).length
+  return { due, later }
+}
+
 /** Why the batch cannot start now, or null. The same answer the Send button and the Review sheet show. */
-export function cannotStart(): string | null {
+export function cannotStart(mode: 'first' | 'followup' = 'first'): string | null {
   const s = useOutreachStore.getState()
   const c = s.campaign()
   if (!window.esb?.outreachSend) return 'Sending needs the ESB Studio desktop app'
   if (!c) return 'Open or create a campaign first'
   if (!s.mail?.hasPassword || !s.mail.settings) return 'Save the sender account and app password first'
-  if (!c.subject.trim() || !c.body.trim()) return 'The letter needs a subject and a body'
-  if (!eligible(s.contacts, c.subject, c.body, c.audience).length) return 'Nobody in this audience is ready to send to'
+  if (mode === 'first') {
+    if (!c.subject.trim() || !c.body.trim()) return 'The letter needs a subject and a body'
+    if (!eligible(s.contacts, c.subject, c.body, c.audience).length) return 'Nobody in this audience is ready to send to'
+  } else if (!followUpQueue(s.contacts, c).due.length) return 'Nobody is due a follow-up yet'
   if (s.mail.sent24h >= s.mail.settings.dailyLimit) return `Today's limit of ${s.mail.settings.dailyLimit} is used up`
   return null
 }
 
-export async function startBatch() {
+/** Send the first letter to everyone ready (mode 'first'), or the follow-up to everyone due (mode 'followup'). */
+export async function startBatch(mode: 'first' | 'followup' = 'first') {
   const s = useOutreachStore.getState()
   await s.refreshMail()
-  const why = cannotStart()
+  const why = cannotStart(mode)
   if (why) { s.addLog('warn', why); return }
   const c = s.campaign()!
   const mail = useOutreachStore.getState().mail!
-  const queue = eligible(useOutreachStore.getState().contacts, c.subject, c.body, c.audience)
+  const queue = mode === 'first' ? eligible(useOutreachStore.getState().contacts, c.subject, c.body, c.audience) : followUpQueue(useOutreachStore.getState().contacts, c).due
   const room = Math.max(0, mail.settings!.dailyLimit - mail.sent24h)
   const id = ++runId
   const total = Math.min(queue.length, room)
   const campaignId = c.id
-  s.patch({ status: 'sending', scheduledAt: null })
+  const what = mode === 'first' ? 'email' : 'follow-up'
+  // `interrupted` says which kind of batch this is, so one cut short by closing the app can be continued
+  s.patch({ status: 'sending', scheduledAt: null, interrupted: mode })
   s.setRun('running', { runSent: 0, runTotal: total, nextAt: null })
-  s.addLog('info', `${c.name}: ${total} email${total === 1 ? '' : 's'}, ${mail.settings!.minDelaySec}–${mail.settings!.maxDelaySec} s apart`)
+  s.addLog('info', `${c.name}: ${total} ${what}${total === 1 ? '' : 's'}, ${mail.settings!.minDelaySec}–${mail.settings!.maxDelaySec} s apart`)
 
   let sent = 0
   const list = queue.slice(0, total)
-  const finish = (status: Campaign['status']) => { useOutreachStore.getState().patch({ status }); useOutreachStore.getState().setRun('idle') }
+  const finish = (status: Campaign['status']) => { useOutreachStore.getState().patch({ status, interrupted: null }); useOutreachStore.getState().setRun('idle') }
+  const blocked = (x: Contact, cur: Campaign) => (mode === 'first' ? skipReason(x, cur.subject, cur.body) : followUpReason(x, cur))
   for (let i = 0; i < list.length; ) {
     const target = list[i]
-    // the contact may have been opted out, approved away or sent by hand since the batch began
+    // the contact may have been opted out, approved away, answered or sent by hand since the batch began
     let st = useOutreachStore.getState()
     const cur = st.campaign()
     if (!cur || cur.id !== campaignId) return
     const now = st.contacts.find((x) => x.email === target.email)
-    if (!now || skipReason(now, cur.subject, cur.body)) { i++; continue }
+    if (!now || blocked(now, cur)) { i++; continue }
     if (!(await sleepUntil(st.nextAt ?? 0, id))) return
     st = useOutreachStore.getState()
     const live = st.campaign()!
     st.markSending(target.email)
-    const r = await window.esb!.outreachSend!({ to: target.email, ...mailFor(now, live), attachments: attachmentsOf() })
+    const payload = mode === 'first' ? mailFor(now, live) : { ...mailFor(now, { ...live, ...followUpLetter(live) }), followUp: true }
+    const r = await window.esb!.outreachSend!({ to: target.email, ...payload, attachments: mode === 'first' ? attachmentsOf() : [] })
     st = useOutreachStore.getState()
     st.markSending(null)
     if (id !== runId) return
@@ -105,15 +150,16 @@ export async function startBatch() {
       continue
     }
     i++
+    const mark = (t: number) => (mode === 'first' ? st.markSent(target.email, t) : st.markFollowed(target.email, t))
     if (r.ok) {
       sent++
-      st.markSent(target.email, Date.now())
-      st.addLog('ok', `Sent to ${now.personName || target.email}${now.organization ? `, ${now.organization}` : ''}`)
+      mark(Date.now())
+      st.addLog('ok', `${mode === 'first' ? 'Sent to' : 'Followed up'} ${now.personName || target.email}${now.organization ? `, ${now.organization}` : ''}`)
     } else if (r.duplicate) {
-      st.markSent(target.email, Date.now())
+      mark(Date.now())
       st.addLog('warn', `${target.email}: ${r.error}`)
     } else {
-      st.markFailed(target.email, r.error)
+      if (mode === 'first') st.markFailed(target.email, r.error)
       st.addLog('error', `${target.email}: ${r.error}`)
       // the account or the daily limit refused: every later send would fail the same way
       if (r.nextAt || /password|auth|login|credential|limit/i.test(r.error)) {
@@ -131,9 +177,10 @@ export async function startBatch() {
     useOutreachStore.getState().setNextAt(i < list.length ? Date.now() + lo + Math.random() * (hi - lo) : null)
   }
   if (id !== runId) return
-  const left = eligible(useOutreachStore.getState().contacts, c.subject, c.body, c.audience).length
+  const after = useOutreachStore.getState()
+  const left = mode === 'first' ? eligible(after.contacts, c.subject, c.body, c.audience).length : followUpQueue(after.contacts, after.campaign()!).due.length
   finish(left ? 'paused' : 'done')
-  useOutreachStore.getState().addLog('info', `${c.name}: ${sent} sent${left ? ` · ${left} left for another day` : ''}`)
+  after.addLog('info', `${c.name}: ${sent} ${what}${sent === 1 ? '' : 's'} sent${left ? ` · ${left} left for another day` : ''}`)
 }
 
 export function pauseBatch() { useOutreachStore.getState().setRun('paused'); useOutreachStore.getState().patch({ status: 'paused' }); useOutreachStore.getState().addLog('warn', 'Batch paused') }
@@ -143,7 +190,7 @@ export function stopBatch() {
   const s = useOutreachStore.getState()
   s.markSending(null)
   s.setRun('idle')
-  s.patch({ status: 'paused' })
+  s.patch({ status: 'paused', interrupted: null })
   s.addLog('warn', 'Batch stopped')
 }
 
@@ -171,6 +218,13 @@ const LATE_LIMIT = 12 * 3600_000
 let scheduler: ReturnType<typeof setInterval> | null = null
 export function startScheduler() {
   if (scheduler) return
+  // replies and bounces: read the inbox on launch and every 15 minutes while anything was sent (main caches 5 min)
+  const inbox = () => {
+    const s = useOutreachStore.getState()
+    if (s.run === 'idle' && s.campaigns.some((c) => Object.keys(c.sent).length)) void s.refreshMail().then(() => { if (useOutreachStore.getState().mail?.hasPassword) void useOutreachStore.getState().checkInbox() })
+  }
+  setTimeout(inbox, 20_000)
+  setInterval(inbox, 15 * 60_000)
   scheduler = setInterval(() => {
     const s = useOutreachStore.getState()
     if (s.run !== 'idle') return
@@ -194,12 +248,14 @@ const csvCell = (v: string | number) => { const t = String(v); return /[",\n\r]/
 
 /** One row per contact in the campaign's audience: what happened and why. Read from the campaign, nothing estimated. */
 export function resultsCsv(c: Campaign, contacts: Contact[]): string {
-  const head = ['Email', 'Name', 'Designation', 'Organization', 'Group', 'Sheet status', 'Result', 'When', 'Detail']
+  const head = ['Email', 'Name', 'Designation', 'Organization', 'Group', 'Sheet status', 'Result', 'When', 'Detail', 'Replied', 'Followed up']
   const rows = contacts.filter((x) => inAudience(x, c.audience)).map((x) => {
     const t = c.sent[x.email]
-    const result = t ? 'Sent' : c.failed[x.email] ? 'Failed' : x.status === 'OPTED_OUT' ? 'Opted out' : skipReason(x, c.subject, c.body) ? 'Skipped' : 'Not sent yet'
-    const detail = c.failed[x.email] ?? (t ? '' : skipReason(x, c.subject, c.body) ?? '')
-    return [x.email, x.personName, x.designation, x.organization, x.sectorGroup, x.rawStatus, result, t ? new Date(t).toISOString() : '', detail]
+    const bounced = c.bounced[x.email]
+    const result = bounced ? 'Bounced' : t ? 'Sent' : c.failed[x.email] ? 'Failed' : x.status === 'OPTED_OUT' ? 'Opted out' : skipReason(x, c.subject, c.body) ? 'Skipped' : 'Not sent yet'
+    const detail = bounced ?? c.failed[x.email] ?? (t ? (x.status === 'OPTED_OUT' ? 'Asked not to be emailed' : '') : skipReason(x, c.subject, c.body) ?? '')
+    const iso = (v?: number) => (v ? new Date(v).toISOString() : '')
+    return [x.email, x.personName, x.designation, x.organization, x.sectorGroup, x.rawStatus, result, iso(t), detail, iso(c.replied[x.email]), iso(c.followed[x.email])]
   })
   return [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n'
 }

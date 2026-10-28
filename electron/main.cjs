@@ -348,6 +348,10 @@ ipcMain.handle('esb:outreach-save', (_e, settings, password) => {
 ipcMain.handle('esb:outreach-forget-password', () => outreachMailer().forgetPassword())
 ipcMain.handle('esb:outreach-send', (_e, mail) => outreachMailer().send(mail))
 ipcMain.handle('esb:outreach-verify', (_e, force) => outreachMailer().verify(force === true))
+// replies, unsubscribes and bounces to the desk's own letters, read from the same account's inbox (read-only)
+let inbox = null
+const outreachInbox = () => (inbox ??= require('./inbox.cjs').createInbox({ ledger: () => outreachMailer().ledger(), account: () => outreachMailer().inboxAccount(), ImapFlow: require('imapflow').ImapFlow }))
+ipcMain.handle('esb:outreach-inbox', (_e, force) => outreachInbox().check(force === true))
 
 // no page in this app may embed a <webview>, and any window not covered above opens nothing
 app.on('web-contents-created', (_e, contents) => {

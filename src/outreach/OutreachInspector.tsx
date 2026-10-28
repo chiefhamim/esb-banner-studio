@@ -6,8 +6,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useOutreachStore } from './outreachStore'
-import { useOutreachUi, type RightTab } from './outreachUi'
-import { cannotStart, downloadText, eligible, inAudience, pauseBatch, resultsCsv, resumeBatch, sendTest, signatureOf, stopBatch } from './campaign'
+import { ask, useOutreachUi, type RightTab } from './outreachUi'
+import { cannotStart, downloadText, eligible, followUpQueue, followUpReason, inAudience, pauseBatch, resultsCsv, resumeBatch, sendTest, signatureOf, startBatch, stopBatch } from './campaign'
 import { skipReason } from './compose'
 import { STATUS_LABEL, purposeLabel } from './directory'
 import { letterChecks } from './checks'
@@ -92,6 +92,17 @@ function SendTab() {
         )}
       </section>
 
+      {c?.interrupted && s.run === 'idle' && (
+        <section className="or-card or-interrupted">
+          <header><Icon name="info" size={14} /><h3>Sending was interrupted</h3></header>
+          <p className="or-muted">ESB Studio closed while this campaign was sending {c.interrupted === 'followup' ? 'follow-ups' : 'its letter'}. Everyone it reached is recorded; nobody gets it twice.</p>
+          <div className="or-actions">
+            <button type="button" className="btn sm primary" disabled={!!cannotStart(c.interrupted)} data-tip={cannotStart(c.interrupted) ?? 'Pick up where it stopped'} onClick={() => void startBatch(c.interrupted!)}><Icon name="play" size={13} /><span>Continue sending</span></button>
+            <button type="button" className="btn sm" onClick={() => s.patch({ interrupted: null })}>Not now</button>
+          </div>
+        </section>
+      )}
+
       <section className="or-card">
         <header><Icon name="send" size={14} /><h3>{c?.name ?? 'Campaign'}</h3>{c && <span className={'or-chip cs-' + c.status}>{STATUS_TEXT[c.status]}</span>}</header>
         {s.run === 'idle' ? (
@@ -116,11 +127,17 @@ function SendTab() {
         )}
         {c && (sent > 0 || failed > 0) && (
           <div className="or-results">
-            <span><b>{sent}</b> sent</span>{failed > 0 && <span className="bad"><b>{failed}</b> failed</span>}
+            <span><b>{sent}</b> sent</span>
+            {Object.keys(c.replied).length > 0 && <span className="good"><b>{Object.keys(c.replied).length}</b> replied</span>}
+            {Object.keys(c.bounced).length > 0 && <span className="bad"><b>{Object.keys(c.bounced).length}</b> bounced</span>}
+            {failed > 0 && <span className="bad"><b>{failed}</b> failed</span>}
             <button type="button" className="btn xs" onClick={() => downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts))} data-tip="Every contact in the audience: sent, failed, skipped and why"><Icon name="download" size={12} /><span>Results CSV</span></button>
           </div>
         )}
       </section>
+
+      {c && Object.keys(c.sent).length > 0 && <InboxCard />}
+      {c && Object.keys(c.sent).length > 0 && <FollowUpCard />}
 
       <section className="or-card">
         <header><Icon name="inbox" size={14} /><h3>Test email</h3></header>
@@ -159,7 +176,8 @@ function ContactTab() {
         {active.mxHost && <><dt>Mail server</dt><dd>{active.mxHost}</dd></>}
         {active.diagnostic && <><dt>Sheet note</dt><dd>{active.diagnostic}</dd></>}
         {active.sheet && <><dt>From sheet</dt><dd>{active.sheet.replace(/_/g, ' ')}</dd></>}
-        <dt>This campaign</dt><dd>{outside ? 'Outside the audience' : active.status === 'SENT' ? `Sent ${active.sentAt ? new Date(active.sentAt).toLocaleString() : ''}` : active.status === 'FAILED' ? `Failed: ${active.error}` : reason ?? 'Will be sent'}</dd>
+        <dt>This campaign</dt><dd>{outside ? 'Outside the audience' : active.status === 'REPLIED' ? `Replied ${active.repliedAt ? new Date(active.repliedAt).toLocaleString() : ''}` : active.status === 'BOUNCED' ? `Bounced: ${active.error}` : active.status === 'SENT' ? `Sent ${active.sentAt ? new Date(active.sentAt).toLocaleString() : ''}` : active.status === 'FAILED' ? `Failed: ${active.error}` : reason ?? 'Will be sent'}</dd>
+        {c && c.sent[active.email] && <><dt>Follow-up</dt><dd>{c.followed[active.email] ? `Sent ${new Date(c.followed[active.email]).toLocaleString()}` : followUpReason(active, c) ?? 'Due now'}</dd></>}
       </dl>
       {active.mxStatus !== 'SAFE_TO_SEND' && active.mxStatus !== 'EXCLUDED' && active.mxStatus !== 'UNDELIVERABLE' && c?.kind !== 'direct' && (
         <Switch checked={active.approved} onChange={(v) => s.approve(active.email, v)} label="I checked this address — include it" />
@@ -233,5 +251,54 @@ function ReviewTab() {
         )}
       </section>
     </>
+  )
+}
+
+const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60_000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : new Date(t).toLocaleDateString() }
+
+/** What came back: read from the sender's own inbox (electron/inbox.cjs), read-only. */
+function InboxCard() {
+  const s = useOutreachStore()
+  const c = s.campaign()!
+  const ib = s.inbox
+  const desktop = !!window.esb?.outreachInbox
+  const replied = Object.keys(c.replied).length, bounced = Object.keys(c.bounced).length
+  const optedOut = Object.keys(c.sent).filter((e) => s.optOut.includes(e)).length
+  return (
+    <section className="or-card">
+      <header><Icon name="inbox" size={14} /><h3>Replies &amp; bounces</h3>
+        <button type="button" className="btn sm" disabled={!desktop || !s.mail?.hasPassword || ib.state === 'busy'} onClick={() => void s.checkInbox(true)} data-tip={desktop ? `Read ${s.mail?.imapHost || 'the inbox'} for answers to this desk's letters — read-only, nothing is marked read` : 'Needs the desktop app'}>
+          <Icon name="refresh" size={13} className={ib.state === 'busy' ? 'spin' : ''} /><span>{ib.state === 'busy' ? 'Reading…' : 'Check'}</span>
+        </button>
+      </header>
+      <div className="or-stats">
+        <span className="good"><b>{replied}</b>replied</span>
+        <span><b>{optedOut}</b>opted out</span>
+        <span className={bounced ? 'bad' : ''}><b>{bounced}</b>bounced</span>
+      </div>
+      <p className="or-muted or-small">{!desktop ? 'Replies are read in the desktop app.' : ib.state === 'ok' ? `Inbox read ${ago(ib.at)} · ${ib.scanned} recent message${ib.scanned === 1 ? '' : 's'} looked at${ib.note ? ` · ${ib.note}` : ''}` : ib.state === 'bad' ? ib.error : ib.state === 'busy' ? 'Reading the inbox…' : 'Not read yet — it is read on launch and every 15 minutes.'}</p>
+    </section>
+  )
+}
+
+function FollowUpCard() {
+  const s = useOutreachStore()
+  const ui = useOutreachUi()
+  const c = s.campaign()!
+  const q = followUpQueue(s.contacts, c)
+  const done = Object.keys(c.followed).length
+  const why = cannotStart('followup')
+  return (
+    <section className="or-card">
+      <header><Icon name="refresh" size={14} /><h3>Follow-up</h3><span className="or-chip">after {c.followUp.afterDays} days</span></header>
+      <p className="or-muted">{q.due.length ? <><b>{q.due.length}</b> without a reply {q.due.length === 1 ? 'is' : 'are'} due a second letter</> : 'Nobody is due yet'}{q.later ? ` · ${q.later} later` : ''}{done ? ` · ${done} followed up` : ''}.</p>
+      <div className="or-actions">
+        <button type="button" className="btn sm" onClick={() => ui.set({ sheet: 'follow-up' })}><Icon name="edit" size={13} /><span>Letter</span></button>
+        <button type="button" className="btn sm primary" disabled={!!why || s.run !== 'idle'} data-tip={why ?? 'Check the inbox first, so nobody who just answered is written to again'}
+          onClick={async () => { if (await ask({ title: `Send the follow-up to ${q.due.length}?`, body: `Each goes once, threaded under the first letter, at your usual pace. ${s.inbox.state === 'ok' ? `The inbox was read ${ago(s.inbox.at)}.` : 'The inbox has not been read in this session — replies that arrived since are not known.'}`, ok: 'Send follow-ups' })) void startBatch('followup') }}>
+          <Icon name="send" size={13} /><span>Send {q.due.length || ''}</span>
+        </button>
+      </div>
+    </section>
   )
 }

@@ -5,7 +5,7 @@
 export type DeliverabilityStatus = 'SAFE_TO_SEND' | 'REVIEW_REQUIRED' | 'TECHNICAL_ONLY' | 'EXCLUDED' | 'UNDELIVERABLE' | 'UNKNOWN'
 
 /** Where a contact is in this desk's own sending. There is no "opened": nothing here can see that. */
-export type SendStatus = 'QUEUED' | 'SENDING' | 'SENT' | 'FAILED' | 'OPTED_OUT'
+export type SendStatus = 'QUEUED' | 'SENDING' | 'SENT' | 'FAILED' | 'OPTED_OUT' | 'REPLIED' | 'BOUNCED'
 
 export interface Contact {
   id: string
@@ -34,6 +34,8 @@ export interface Contact {
   approved: boolean
   status: SendStatus
   sentAt?: number
+  /** When they answered this campaign (read from the inbox). */
+  repliedAt?: number
   error?: string
 }
 
@@ -111,6 +113,15 @@ export interface Campaign {
   scheduledAt: number | null
   sent: Record<string, number>
   failed: Record<string, string>
+  /** Read from the inbox (electron/inbox.cjs): when each recipient answered — a person, not an out-of-office. */
+  replied: Record<string, number>
+  /** Addresses the mail system returned after sending, with its reason. */
+  bounced: Record<string, string>
+  /** The second letter to those who did not answer, and when each went. */
+  followUp: { afterDays: number; subject: string; body: string }
+  followed: Record<string, number>
+  /** A batch that was running when the app closed: which kind, so it can be continued. */
+  interrupted: 'first' | 'followup' | null
 }
 
 /** A saved workbook (its rows live in IndexedDB under `list:{id}`). */

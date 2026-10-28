@@ -13,10 +13,12 @@ import { Select, Seg } from '../ui/controls'
 import type { Contact } from './types'
 
 type Row = { c: Contact; skip: string | null }
-export type RowState = 'ready' | 'skip' | 'sent' | 'failed' | 'out' | 'busy'
+export type RowState = 'ready' | 'skip' | 'sent' | 'failed' | 'out' | 'busy' | 'replied' | 'bounced'
 
 export const rowState = ({ c, skip }: Row): { st: RowState; text: string; tip: string } => {
   if (c.status === 'SENDING') return { st: 'busy', text: 'Sending', tip: 'Being sent now' }
+  if (c.status === 'REPLIED') return { st: 'replied', text: 'Replied', tip: c.repliedAt ? `Replied ${new Date(c.repliedAt).toLocaleString()}` : 'Replied' }
+  if (c.status === 'BOUNCED') return { st: 'bounced', text: 'Bounced', tip: c.error || 'The mail system returned the letter' }
   if (c.status === 'SENT') return { st: 'sent', text: 'Sent', tip: c.sentAt ? `Sent ${new Date(c.sentAt).toLocaleString()}` : 'Sent' }
   if (c.status === 'FAILED') return { st: 'failed', text: 'Failed', tip: c.error || 'The server refused it' }
   if (c.status === 'OPTED_OUT') return { st: 'out', text: 'Opted out', tip: 'Asked not to be emailed' }
@@ -42,7 +44,9 @@ export function ContactsTab() {
   const counts = useMemo(() => ({
     ready: rows.filter((r) => !r.skip && r.c.status === 'QUEUED').length,
     skipped: rows.filter((r) => r.skip && r.c.status === 'QUEUED').length,
-    sent: rows.filter((r) => r.c.status === 'SENT').length,
+    sent: rows.filter((r) => r.c.status === 'SENT' || r.c.status === 'REPLIED').length,
+    replied: rows.filter((r) => r.c.status === 'REPLIED').length,
+    bounced: rows.filter((r) => r.c.status === 'BOUNCED').length,
     failed: rows.filter((r) => r.c.status === 'FAILED').length,
   }), [rows])
   const shown = useMemo(() => {
@@ -50,8 +54,9 @@ export function ContactsTab() {
     return rows.filter(({ c: x, skip }) => {
       if (s.view === 'ready' && (skip || x.status !== 'QUEUED')) return false
       if (s.view === 'skipped' && !(skip && x.status === 'QUEUED')) return false
-      if (s.view === 'sent' && x.status !== 'SENT') return false
-      if (s.view === 'failed' && x.status !== 'FAILED') return false
+      if (s.view === 'sent' && x.status !== 'SENT' && x.status !== 'REPLIED') return false
+      if (s.view === 'failed' && x.status !== 'FAILED' && x.status !== 'BOUNCED') return false
+      if (s.view === 'replied' && x.status !== 'REPLIED') return false
       return !q || [x.personName, x.organization, x.email, x.designation].some((v) => v.toLowerCase().includes(q))
     })
   }, [rows, s.view, s.query])
@@ -99,6 +104,8 @@ export function ContactsTab() {
               <input type="search" placeholder="Search name, organisation, email" value={s.query} onChange={(e) => s.setQuery(e.target.value)} aria-label="Search contacts" />
             </label>
             <Seg<typeof s.view>
+              // the chip measures its options once: new ones (Replied, Failed) arriving later need a fresh control
+              key={`f${counts.replied ? 1 : 0}${counts.failed + counts.bounced ? 1 : 0}`}
               className="or-filter"
               value={s.view}
               onChange={s.setView}
@@ -107,7 +114,8 @@ export function ContactsTab() {
                 { value: 'ready', label: `Ready ${counts.ready}`, tip: 'The batch will send to these' },
                 { value: 'skipped', label: `Skip ${counts.skipped}`, tip: 'Not sent until you fix or approve them' },
                 { value: 'sent', label: `Sent ${counts.sent}` },
-                ...(counts.failed ? [{ value: 'failed' as const, label: `Failed ${counts.failed}` }] : []),
+                ...(counts.replied ? [{ value: 'replied' as const, label: `Replied ${counts.replied}` }] : []),
+                ...(counts.failed + counts.bounced ? [{ value: 'failed' as const, label: `Failed ${counts.failed + counts.bounced}`, tip: 'Refused when sent, or returned later by the mail system' }] : []),
               ]}
             />
           </>

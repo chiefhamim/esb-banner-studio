@@ -5,10 +5,11 @@
 
 .outreach-workspace {
   --or-sent: #2563eb; --or-sent-soft: rgba(37, 99, 235, .1);
+  --or-reply: #0f766e; --or-reply-soft: rgba(15, 118, 110, .11);
   position: relative; display: grid; grid-template-rows: auto auto minmax(0, 1fr) 28px; grid-template-areas: 'top' 'log' 'body' 'status';
   width: 100%; height: 100%; min-height: 0; color: var(--text); background: var(--bg-0);
 }
-:root[data-theme=dark] .outreach-workspace { --or-sent: #8fb3ff; --or-sent-soft: rgba(143, 179, 255, .14); }
+:root[data-theme=dark] .outreach-workspace { --or-sent: #8fb3ff; --or-sent-soft: rgba(143, 179, 255, .14); --or-reply: #5eead4; --or-reply-soft: rgba(94, 234, 212, .13); }
 
 /* ---------------------------------------------------------------- header */
 .or-head { gap: 8px; }
@@ -43,6 +44,8 @@
 .st-sent, .cs-done { --st: var(--or-sent); --st-soft: var(--or-sent-soft); }
 .st-failed { --st: var(--danger); --st-soft: var(--danger-soft); }
 .st-out, .cs-draft { --st: var(--text-3); --st-soft: var(--fill); }
+.st-replied { --st: var(--or-reply); --st-soft: var(--or-reply-soft); }
+.st-bounced { --st: var(--danger); --st-soft: var(--danger-soft); }
 .st-busy { --st: var(--sel, var(--ink)); --st-soft: color-mix(in srgb, var(--sel, var(--ink)) 14%, transparent); }
 .or-dot[class*='cs-'] { background: var(--st); box-shadow: 0 0 0 3px var(--st-soft); }
 .or-dot.cs-sending { animation: sb-breathe 3.6s ease-in-out infinite; }
@@ -237,6 +240,7 @@
 .or-results { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding-top: 10px; font-size: 12px; color: var(--text-2); border-top: 1px solid var(--card-line); font-variant-numeric: tabular-nums; }
 .or-results b { color: var(--text); }
 .or-results .bad b { color: var(--danger); }
+.or-results .good b { color: var(--or-reply); }
 .or-results .btn { margin-left: auto; }
 .or-contact { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .or-contact b { font-size: 14px; line-height: 20px; }
@@ -290,3 +294,23 @@
   .or-suggest span { display: none; }
   .or-toolbar > .select { max-width: 220px; }
 }
+
+/* ---------------------------------------------------------------- what came back, follow-ups, interrupted batches */
+.or-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.or-stats span { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; font-size: 11px; color: var(--text-2); background: var(--fill); border-radius: var(--r-2); }
+.or-stats b { font: 800 18px/1 var(--font-ui); font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--text); }
+.or-stats .good b { color: var(--or-reply); }
+.or-stats .bad b { color: var(--danger); }
+.or-interrupted { box-shadow: var(--card-shadow), inset 3px 0 0 var(--warning); }
+.or-interrupted > header > svg { color: var(--warning); }
+.or-sb-inbox.on { --sb: var(--or-reply); --sb2: #4f8cff; }
+.or-fu-row { display: flex; align-items: flex-end; gap: 12px; }
+.or-fu-row .field { flex: 0 1 260px; }
+.or-fu-row .select { width: 100%; }
+.or-fu-count { padding-bottom: 8px; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.or-fu-count b { color: var(--text); }
+.or-tpl-list { display: flex; flex-direction: column; gap: 6px; }
+.or-tpl { align-items: center; cursor: default; }
+.or-tpl .btn, .or-tpl .ibtn { flex: none; }
+.or-ask-body { margin: 0; }
+.btn.primary.danger { background: var(--danger); border-color: transparent; color: #fff; }

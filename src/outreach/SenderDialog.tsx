@@ -15,6 +15,7 @@ export function SenderDialog({ onClose }: { onClose: () => void }) {
     name: cur?.name ?? 'ESB PowerLine',
     user: cur?.user ?? '',
     host: cur?.host ?? 'smtp.gmail.com',
+    imapHost: cur?.imapHost ?? '',
     port: cur?.port ?? 587,
     dailyLimit: cur?.dailyLimit ?? 100,
     minMin: Math.round((cur?.minDelaySec ?? 180) / 60 * 10) / 10,
@@ -30,7 +31,7 @@ export function SenderDialog({ onClose }: { onClose: () => void }) {
     if (!b?.outreachSave) return
     setSaving(true)
     setError(null)
-    const r = await b.outreachSave({ name: f.name, user: f.user.trim(), host: f.host.trim(), port: Number(f.port), dailyLimit: Number(f.dailyLimit), minDelaySec: Math.round(f.minMin * 60), maxDelaySec: Math.round(f.maxMin * 60) }, password || undefined)
+    const r = await b.outreachSave({ name: f.name, user: f.user.trim(), host: f.host.trim(), imapHost: f.imapHost.trim(), port: Number(f.port), dailyLimit: Number(f.dailyLimit), minDelaySec: Math.round(f.minMin * 60), maxDelaySec: Math.round(f.maxMin * 60) }, password || undefined)
     setSaving(false)
     if (!r.ok) { setError(r.error); return }
     addLog('info', `Sender saved: ${f.user}${password ? ' (app password stored, encrypted)' : ''}`)
@@ -64,6 +65,10 @@ export function SenderDialog({ onClose }: { onClose: () => void }) {
           <Field label="SMTP server"><input className="input" value={f.host} onChange={(e) => up('host', e.target.value)} /></Field>
           <Field label="Port"><input className="input" type="number" value={f.port} onChange={(e) => up('port', Number(e.target.value))} /></Field>
         </div>
+        <Field label="Inbox server (IMAP) — where replies and bounces are read">
+          <input className="input" placeholder={f.host.trim().toLowerCase() === 'smtp.gmail.com' ? 'imap.gmail.com (automatic)' : f.host.trim() ? `${f.host.trim().replace(/^smtp\./i, 'imap.')} (automatic)` : 'imap.example.com'} value={f.imapHost} onChange={(e) => up('imapHost', e.target.value)} />
+        </Field>
+        <p className="hint">Opened read-only with the same app password: nothing is marked read, moved or deleted, and only answers from people this desk emailed are looked at. In Gmail, IMAP is on by default for Workspace; for a personal account check Settings → Forwarding and POP/IMAP.</p>
         <div className="or-grid3">
           <Field label="Emails a day"><input className="input" type="number" min={1} max={500} value={f.dailyLimit} onChange={(e) => up('dailyLimit', Number(e.target.value))} /></Field>
           <Field label="Wait at least (min)"><input className="input" type="number" min={0.5} step={0.5} value={f.minMin} onChange={(e) => up('minMin', Number(e.target.value))} /></Field>

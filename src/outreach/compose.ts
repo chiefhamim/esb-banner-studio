@@ -54,6 +54,8 @@ export const mentionsAttachment = (body: string) => /\b(attached|enclosed|attach
 export function skipReason(c: Contact, subject: string, body: string): string | null {
   if (c.status === 'SENT') return 'Already sent'
   if (c.status === 'OPTED_OUT') return 'Asked not to be emailed'
+  if (c.status === 'BOUNCED') return `Bounced earlier${c.error ? ` (${c.error})` : ''} — the address did not take mail`
+  if (c.status === 'REPLIED') return 'Already replied'
   if (c.mxStatus === 'UNDELIVERABLE') return `No mail server for this address${c.rawStatus ? ` (${c.rawStatus})` : ''} — it would bounce`
   if (c.mxStatus === 'EXCLUDED') return `Excluded in the sheet${c.rawStatus ? ` (${c.rawStatus})` : ''}`
   if (c.mxStatus !== 'SAFE_TO_SEND' && !c.approved) {

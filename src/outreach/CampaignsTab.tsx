@@ -2,7 +2,7 @@
 // carries its state (draft, scheduled, sending, paused, done), and the figures are the campaign's own results.
 
 import { useOutreachStore } from './outreachStore'
-import { useOutreachUi } from './outreachUi'
+import { ask, useOutreachUi } from './outreachUi'
 import { Icon } from '../ui/Icon'
 import { MenuButton } from '../ui/controls'
 import type { Campaign } from './types'
@@ -30,7 +30,7 @@ export function CampaignsTab() {
         {!sorted.length ? (
           <div className="or-empty"><Icon name="send" size={22} /><b>No campaigns yet</b><p>A campaign is one letter to one audience, sent at a pace you set. Start one, or import a list and one is made for you.</p></div>
         ) : sorted.map((c) => {
-          const sent = Object.keys(c.sent).length, failed = Object.keys(c.failed).length
+          const sent = Object.keys(c.sent).length, failed = Object.keys(c.failed).length + Object.keys(c.bounced).length, replied = Object.keys(c.replied).length
           const on = c.id === s.activeId
           return (
             <div key={c.id} className={'or-row or-camp cs-' + c.status + (on ? ' on' : '')} role="option" aria-selected={on}>
@@ -42,7 +42,7 @@ export function CampaignsTab() {
                 </span>
                 <span className="or-camp-side">
                   <span className={'or-chip cs-' + c.status}>{c.status === 'scheduled' && c.scheduledAt ? `${when(c.scheduledAt)}` : STATUS_TEXT[c.status]}</span>
-                  <span className="or-camp-n" data-tip={`${sent} sent${failed ? ` · ${failed} failed` : ''} · edited ${new Date(c.updatedAt).toLocaleString()}`}>{sent ? `${sent} sent` : when(c.updatedAt)}{failed ? ` · ${failed} ✕` : ''}</span>
+                  <span className="or-camp-n" data-tip={`${sent} sent${replied ? ` · ${replied} replied` : ''}${failed ? ` · ${failed} failed or bounced` : ''} · edited ${new Date(c.updatedAt).toLocaleString()}`}>{sent ? `${sent} sent` : when(c.updatedAt)}{replied ? ` · ${replied} ↩` : ''}{failed ? ` · ${failed} ✕` : ''}</span>
                 </span>
               </button>
               <MenuButton icon="more" className="ibtn or-camp-menu" title="Campaign actions" align="end" items={[
@@ -51,7 +51,7 @@ export function CampaignsTab() {
                 { label: 'Rename…', icon: 'edit', disabled: !on, onClick: () => ui.set({ sheet: 'rename' }) },
                 ...(c.status === 'scheduled' ? [{ label: 'Cancel the schedule', icon: 'clock' as const, onClick: () => s.patchById(c.id, { status: 'draft', scheduledAt: null }) }] : []),
                 { divider: true },
-                { label: 'Delete', icon: 'trash', danger: true, disabled: !idle && on, onClick: () => { if (confirm(`Delete “${c.name}”? Its results go with it; addresses already emailed stay protected by the 7-day rule.`)) void s.deleteCampaign(c.id) } },
+                { label: 'Delete', icon: 'trash', danger: true, disabled: !idle && on, onClick: async () => { if (await ask({ title: `Delete “${c.name}”?`, body: 'Its letter, sources and results go with it. Addresses it already emailed stay protected by the 7-day rule.', ok: 'Delete', danger: true })) void s.deleteCampaign(c.id) } },
               ]} />
             </div>
           )

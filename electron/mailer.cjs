@@ -23,6 +23,9 @@ const MAX_DAILY = 500
 /** However the renderer sets its pacing, two campaign emails are never closer than this. */
 const MIN_GAP_SEC = 30
 const REPEAT_DAYS = 7
+/** A follow-up goes only to an address emailed at least this long ago, and at most once per FOLLOW_ONCE_DAYS. */
+const FOLLOW_MIN_DAYS = 2
+const FOLLOW_ONCE_DAYS = 30
 const TESTS_PER_HOUR = 10
 /** Gmail refuses a message over 25 MB; base64 adds a third, so the raw files must stay under about 18 MB. */
 const MAX_ATTACH_BYTES = 18 * 1024 * 1024
@@ -55,8 +58,11 @@ function validateSmtpSettings(s) {
   const minDelaySec = Number(o.minDelaySec), maxDelaySec = Number(o.maxDelaySec)
   if (!Number.isFinite(minDelaySec) || minDelaySec < MIN_GAP_SEC || minDelaySec > 3600) throw new Error(`Shortest wait must be ${MIN_GAP_SEC}–3600 seconds`)
   if (!Number.isFinite(maxDelaySec) || maxDelaySec < minDelaySec || maxDelaySec > 7200) throw new Error('Longest wait must be at least the shortest and at most 7200 seconds')
+  // where replies are read (inbox.cjs); empty = worked out from the SMTP server
+  const imapHost = String(o.imapHost || '').trim().toLowerCase()
+  if (imapHost && (!HOST_RE.test(imapHost) || imapHost === 'localhost')) throw new Error('Inbox (IMAP) server must be a host name such as imap.gmail.com')
   return {
-    host, port, secure: port === 465, user,
+    host, port, secure: port === 465, user, imapHost,
     name: oneLine(o.name, 80).replace(/["<>]/g, '') || 'ESB PowerLine',
     dailyLimit, minDelaySec: Math.round(minDelaySec), maxDelaySec: Math.round(maxDelaySec),
   }
@@ -94,7 +100,7 @@ function validateMail(m) {
   const attachments = list.map(attachmentFrom)
   const bytes = attachments.reduce((n, a) => n + a.content.length, 0)
   if (bytes > MAX_ATTACH_BYTES) throw new Error('Attachments are over 18 MB together — Gmail would refuse the message')
-  return { to: to.toLowerCase(), subject, body, signature, optOut, lang, letterhead: o.letterhead === true, attachments, isTest: o.isTest === true, resend: o.resend === true }
+  return { to: to.toLowerCase(), subject, body, signature, optOut, lang, letterhead: o.letterhead === true, attachments, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
 }
 
 /** May this send go now? Reads the ledger of earlier sends. */
@@ -104,13 +110,22 @@ function ledgerCheck(ledger, now, settings, mail) {
     const lastHour = ledger.filter((e) => e.kind === 'test' && now - e.t < 3600 * 1000).length
     return lastHour >= TESTS_PER_HOUR ? { ok: false, reason: `Test limit reached (${TESTS_PER_HOUR} an hour)` } : { ok: true }
   }
-  const campaign = recent.filter((e) => e.kind === 'campaign').sort((a, b) => a.t - b.t)
+  // first letters and follow-ups both count toward the day and the gap; tests do not
+  const campaign = recent.filter((e) => e.kind !== 'test').sort((a, b) => a.t - b.t)
   if (campaign.length >= settings.dailyLimit) {
     const nextAt = campaign[campaign.length - settings.dailyLimit].t + DAY
     return { ok: false, reason: `Daily limit of ${settings.dailyLimit} reached`, nextAt }
   }
   const last = campaign[campaign.length - 1]
   if (last && now - last.t < MIN_GAP_SEC * 1000) return { ok: false, reason: 'Too soon after the last email', nextAt: last.t + MIN_GAP_SEC * 1000 }
+  if (mail.followUp) {
+    const first = ledger.filter((e) => e.kind === 'campaign' && e.to === mail.to).sort((a, b) => b.t - a.t)[0]
+    if (!first) return { ok: false, reason: `No earlier letter to ${mail.to} to follow up` }
+    if (now - first.t < FOLLOW_MIN_DAYS * DAY) return { ok: false, reason: `The first letter to ${mail.to} went less than ${FOLLOW_MIN_DAYS} days ago` }
+    const again = ledger.find((e) => e.kind === 'followup' && e.to === mail.to && now - e.t < FOLLOW_ONCE_DAYS * DAY)
+    if (again) return { ok: false, reason: `Already followed up ${mail.to} on ${new Date(again.t).toISOString().slice(0, 10)}`, duplicate: true }
+    return { ok: true, inReplyTo: first.id || '' }
+  }
   if (!mail.resend) {
     const before = ledger.find((e) => e.kind === 'campaign' && e.to === mail.to && now - e.t < REPEAT_DAYS * DAY)
     if (before) return { ok: false, reason: `Already emailed ${mail.to} on ${new Date(before.t).toISOString().slice(0, 10)}`, duplicate: true }
@@ -133,13 +148,14 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     const saved = read(settingsFile, null)
     const now = clock()
     const l = ledger()
-    const recent = l.filter((e) => e.kind === 'campaign' && now - e.t < DAY)
+    const recent = l.filter((e) => e.kind !== 'test' && now - e.t < DAY)
     return {
       configured: !!saved,
       hasPassword: !!saved?.password,
       encryption: safeStorage.isEncryptionAvailable(),
-      settings: saved ? { host: saved.host, port: saved.port, user: saved.user, name: saved.name, dailyLimit: saved.dailyLimit, minDelaySec: saved.minDelaySec, maxDelaySec: saved.maxDelaySec } : null,
+      settings: saved ? { host: saved.host, imapHost: saved.imapHost || '', port: saved.port, user: saved.user, name: saved.name, dailyLimit: saved.dailyLimit, minDelaySec: saved.minDelaySec, maxDelaySec: saved.maxDelaySec } : null,
       sent24h: recent.length,
+      imapHost: saved ? require('./inbox.cjs').imapHostFor(saved.host, saved.imapHost) : '',
       // so the desk can mark contacts already emailed, even after its own storage is cleared
       sentTo: l.filter((e) => e.kind === 'campaign' && now - e.t < REPEAT_DAYS * DAY).map((e) => ({ to: e.to, t: e.t })),
     }
@@ -209,8 +225,10 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
         html,
         attachments: [...logo, ...mail.attachments],
         list: { unsubscribe: `mailto:${saved.user}?subject=unsubscribe` },
+        // a follow-up sits under the first letter in the recipient's mail client
+        ...(gate.inReplyTo ? { inReplyTo: gate.inReplyTo, references: [gate.inReplyTo] } : {}),
       })
-      l.push({ t: clock(), to: mail.to, kind: mail.isTest ? 'test' : 'campaign', id: String(info.messageId || '') })
+      l.push({ t: clock(), to: mail.to, kind: mail.isTest ? 'test' : mail.followUp ? 'followup' : 'campaign', id: String(info.messageId || '') })
       write(ledgerFile, l.filter((e) => clock() - e.t < 30 * DAY).slice(-5000))
       return { ok: true, messageId: info.messageId, sent24h: status().sent24h }
     } catch (e) {
@@ -219,7 +237,14 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     }
   }
 
-  return { status, saveSettings, forgetPassword, send, verify }
+  /** For inbox.cjs only (never sent over IPC): the account with its password, and the ledger of sends. */
+  function inboxAccount() {
+    const saved = read(settingsFile, null)
+    if (!saved || !saved.password) return null
+    return { user: saved.user, pass: safeStorage.decryptString(Buffer.from(saved.password, 'base64')), imapHost: require('./inbox.cjs').imapHostFor(saved.host, saved.imapHost) }
+  }
+
+  return { status, saveSettings, forgetPassword, send, verify, inboxAccount, ledger }
 }
 
-module.exports = { validateSmtpSettings, validateMail, ledgerCheck, createMailer, EMAIL_RE, MAX_DAILY, MIN_GAP_SEC, REPEAT_DAYS, MAX_ATTACH_BYTES }
+module.exports = { validateSmtpSettings, validateMail, ledgerCheck, createMailer, EMAIL_RE, MAX_DAILY, MIN_GAP_SEC, REPEAT_DAYS, FOLLOW_MIN_DAYS, FOLLOW_ONCE_DAYS, MAX_ATTACH_BYTES }

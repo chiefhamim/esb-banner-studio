@@ -5,10 +5,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOutreachStore } from './outreachStore'
-import { useOutreachUi } from './outreachUi'
+import { ask, useOutreachUi } from './outreachUi'
 import { OUTREACH_BLUEPRINTS, REWRITES, rewriteLetter, suggestBlueprint, writeOutreachWithAi, type LetterContext, type RewriteAction } from './outreachAi'
 import { PLACEHOLDERS, buildMessage, mentionsAttachment, missingFields } from './compose'
-import { inAudience, signatureOf, STAND_IN } from './campaign'
+import { eligible, inAudience, signatureOf, STAND_IN } from './campaign'
 import { logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
 import { AttachmentTray } from './AttachmentTray'
 import { purposeLabel } from './directory'
@@ -102,12 +102,17 @@ export function OutreachComposer() {
   const edited = (() => { const b = OUTREACH_BLUEPRINTS.find((x) => x.id === c.blueprint); return !!c.body.trim() && (!b || (c.body !== b.defaultBody && c.body !== b.bengaliBody)) })()
 
   const setBody = (body: string) => s.patch({ body })
-  const mark = (kind: string) => {
+  const mark = async (kind: string) => {
     const el = bodyRef.current
     if (!el) return
+    const a0 = el.selectionStart, b0 = el.selectionEnd
     let url = ''
-    if (kind === 'link') { url = (prompt('Link (https:// or mailto:)', 'https://') ?? '').trim(); if (!/^(https:\/\/\S+|mailto:\S+)$/i.test(url)) return }
-    const [t, a, b] = applyMark(c.body, el.selectionStart, el.selectionEnd, kind, url)
+    if (kind === 'link') {
+      const v = await ask({ title: 'Add a link', input: { label: 'Link — https:// or mailto: only', value: 'https://', pattern: /^(https:\/\/\S+\.\S+|mailto:\S+@\S+)$/i }, ok: 'Add link' })
+      if (typeof v !== 'string') return
+      url = v.trim()
+    }
+    const [t, a, b] = applyMark(c.body, a0, b0, kind, url)
     setBody(t)
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a, b) })
   }
@@ -118,8 +123,8 @@ export function OutreachComposer() {
     setBody(c.body.slice(0, a) + tag + c.body.slice(b))
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + tag.length, a + tag.length) })
   }
-  const pickLetter = (v: string) => {
-    if (edited && !confirm('Replace the letter you have written?')) return
+  const pickLetter = async (v: string) => {
+    if (edited && !(await ask({ title: 'Replace the letter?', body: 'The subject and body you have written are replaced. Undo is not available for this.', ok: 'Replace' }))) return
     if (v === 'blank') s.patch({ blueprint: 'blank', subject: '', body: '' })
     else if (v.startsWith('tpl-')) s.applyTemplate(v)
     else s.selectBlueprint(v as never)
@@ -144,14 +149,14 @@ export function OutreachComposer() {
   }
   const badTo = toText.split(/[\s,;]+/).filter((p) => p && !EMAIL.test(p))
   const mail = s.mail?.settings
-  const ready = audience.filter((x) => x.status === 'QUEUED').length
+  const ready = eligible(s.contacts, c.subject, c.body, c.audience).length
   const aiOff = !ai || aiPaused()
   const aiTip = aiPaused() ? 'AI is OFF — turn it on in the Engine panel (status bar)' : ai ? '' : `Add a ${aiName} key for the Letter job in the AI dialog`
 
   return (
     <main className="or-center" aria-label="Letter">
       <div className="or-toolbar">
-        <Select<string> value={c.blueprint === 'template' ? (s.templates.find((t) => t.subject === c.subject && t.body === c.body)?.id ?? 'template') : c.blueprint} prefix="Letter" onChange={pickLetter}
+        <Select<string> value={c.blueprint === 'template' ? (s.templates.find((t) => t.subject === c.subject && t.body === c.body)?.id ?? 'template') : c.blueprint} prefix="Letter" onChange={(v) => void pickLetter(v)}
           options={[
             ...OUTREACH_BLUEPRINTS.map((b) => ({ value: b.id as string, label: b.label, hint: b.tag })),
             ...s.templates.map((t) => ({ value: t.id, label: t.name, hint: 'Saved' })),
@@ -160,7 +165,7 @@ export function OutreachComposer() {
           ]} />
         <Seg<OutreachLang> value={c.lang} onChange={s.setLang} options={[{ value: 'en', label: 'English' }, { value: 'bn', label: 'বাংলা' }]} />
         {suggestion && suggestion.id !== c.blueprint && c.blueprint !== 'blank' && (
-          <button type="button" className="or-suggest" onClick={() => pickLetter(suggestion.id)} data-tip={`Use “${OUTREACH_BLUEPRINTS.find((b) => b.id === suggestion.id)?.label}” — ${suggestion.count} contacts in this audience are listed for ${purposeLabel(suggestion.purpose).toLowerCase()}`}>
+          <button type="button" className="or-suggest" onClick={() => void pickLetter(suggestion.id)} data-tip={`Use “${OUTREACH_BLUEPRINTS.find((b) => b.id === suggestion.id)?.label}” — ${suggestion.count} contacts in this audience are listed for ${purposeLabel(suggestion.purpose).toLowerCase()}`}>
             <Icon name="star" size={12} /><span>Fits this audience: {OUTREACH_BLUEPRINTS.find((b) => b.id === suggestion.id)?.label}</span>
           </button>
         )}
@@ -172,7 +177,7 @@ export function OutreachComposer() {
         <MenuButton label={busy && busy !== 'Draft' ? 'Rewriting…' : 'Rewrite'} icon="edit" className="sm" align="end" title={aiTip || 'Rewrite the letter with AI'}
           items={[...REWRITES.map((r) => ({ label: r.label, hint: r.hint, disabled: aiOff || !!busy || !c.body.trim(), onClick: () => void run(r.label, () => rewriteLetter(r.id, c, ctx)) })),
             { divider: true },
-            { label: 'Your own instruction…', icon: 'sparkle' as const, disabled: aiOff || !!busy || !c.body.trim(), onClick: () => { const t = prompt('How should the letter change?'); if (t?.trim()) void run('Rewrite', () => rewriteLetter('custom' as RewriteAction, c, ctx, t)) } }]} />
+            { label: 'Your own instruction…', icon: 'sparkle' as const, disabled: aiOff || !!busy || !c.body.trim(), onClick: async () => { const t = await ask({ title: 'Rewrite with your instruction', body: 'The same facts rule applies: nothing is added that the letter or your ticked talking points do not say.', input: { label: 'How should the letter change?', placeholder: 'e.g. Lead with the free digital edition; keep it under 120 words', multiline: true }, ok: 'Rewrite' }); if (typeof t === 'string' && t.trim()) void run('Rewrite', () => rewriteLetter('custom' as RewriteAction, c, ctx, t)) } }]} />
         <Seg<'edit' | 'preview'> value={ui.view} onChange={(v) => ui.set({ view: v })} options={[{ value: 'edit', label: 'Edit' }, { value: 'preview', label: 'Preview', tip: active ? `As ${active.personName || active.email} will receive it` : 'As a recipient will receive it' }]} />
       </div>
 
@@ -189,7 +194,7 @@ export function OutreachComposer() {
                 onChange={(e) => setToText(e.target.value)} onBlur={() => commitTo()} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitTo() } }} />
             ) : (
               <button type="button" className="or-line-v or-aud" onClick={() => ui.set({ left: 'contacts' })} data-tip="Change the audience in Contacts">
-                {s.contacts.length ? <><b>{audience.length}</b> contact{audience.length === 1 ? '' : 's'}{c.sheet ? ` · ${c.sheet.replace(/_/g, ' ')}` : ''}{c.audience.group != null ? ` · ${s.groupNames.get(c.audience.group) ?? `Group ${c.audience.group}`}` : ''}{c.audience.purposes[0] ? ` · ${purposeLabel(c.audience.purposes[0])}` : ''} · <b>{ready}</b> to go</> : 'Import a list in Contacts'}
+                {s.contacts.length ? <><b>{audience.length}</b> contact{audience.length === 1 ? '' : 's'}{c.sheet ? ` · ${c.sheet.replace(/_/g, ' ')}` : ''}{c.audience.group != null ? ` · ${s.groupNames.get(c.audience.group) ?? `Group ${c.audience.group}`}` : ''}{c.audience.purposes[0] ? ` · ${purposeLabel(c.audience.purposes[0])}` : ''} · <b>{ready}</b> ready</> : 'Import a list in Contacts'}
               </button>
             )}
             <span className="or-line-note">each gets their own copy</span>
@@ -207,7 +212,7 @@ export function OutreachComposer() {
           )}
 
           <div className="or-fmt" role="toolbar" aria-label="Formatting">
-            {TOOLS.map((t) => <button key={t.kind} type="button" className="ibtn" aria-label={t.tip} data-tip={t.tip} onMouseDown={(e) => e.preventDefault()} onClick={() => mark(t.kind)}><Icon name={t.icon} size={14} /></button>)}
+            {TOOLS.map((t) => <button key={t.kind} type="button" className="ibtn" aria-label={t.tip} data-tip={t.tip} onMouseDown={(e) => e.preventDefault()} onClick={() => void mark(t.kind)}><Icon name={t.icon} size={14} /></button>)}
             <i className="or-fmt-sep" />
             {PLACEHOLDERS.map((p) => <button key={p} type="button" className="or-tag" onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`{${p}}`)} data-tip={`Insert {${p}} — filled from each contact's row`}>{p}</button>)}
           </div>
@@ -216,7 +221,7 @@ export function OutreachComposer() {
             onKeyDown={(e) => {
               if (!(e.ctrlKey || e.metaKey)) return
               const k = e.key.toLowerCase()
-              if (k === 'b' || k === 'i' || k === 'k') { e.preventDefault(); mark(k === 'b' ? 'bold' : k === 'i' ? 'italic' : 'link') }
+              if (k === 'b' || k === 'i' || k === 'k') { e.preventDefault(); void mark(k === 'b' ? 'bold' : k === 'i' ? 'italic' : 'link') }
             }} />
 
           <div className="or-foot">

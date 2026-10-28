@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { contactsFromRows, groupNamesOf, parseCsv, parseGroupLabel, readableGroupName, statusOf } from '../../src/outreach/directory'
 import { buildMessage, mentionsAttachment, missingFields, sectorName, skipReason } from '../../src/outreach/compose'
-import { eligible, inAudience, resultsCsv } from '../../src/outreach/campaign'
+import { eligible, followUpLetter, followUpQueue, followUpReason, inAudience, resultsCsv } from '../../src/outreach/campaign'
 import { letterChecks, unsourcedNumbers } from '../../src/outreach/checks'
 import { OUTREACH_BLUEPRINTS, quoteInSource, suggestBlueprint } from '../../src/outreach/outreachAi'
-import { directContacts, newCampaign, overlay } from '../../src/outreach/outreachStore'
+import { directContacts, newCampaign, normalize, overlay } from '../../src/outreach/outreachStore'
 import type { Contact, Source } from '../../src/outreach/types'
 
 // synthetic rows only — example.com addresses, no real people
@@ -127,11 +127,40 @@ describe('Campaigns: audience, typed addresses, results', () => {
     const over = overlay(contacts, { approved: ['ce@example.org'], optOut: ['planning@example.net'] }, c, null)
     expect(over.map((x) => x.status)).toEqual(['SENT', 'FAILED', 'OPTED_OUT', 'QUEUED'])
     const csv = resultsCsv(c, over).trim().split('\r\n')
-    expect(csv[0]).toBe('Email,Name,Designation,Organization,Group,Sheet status,Result,When,Detail')
-    expect(csv[1]).toMatch(/^md@example\.com,A\. Rahman,.*,Sent,2026-10-28T06:00:00\.000Z,$/)
-    expect(csv[2]).toMatch(/,Failed,,Mailbox full$/)
+    expect(csv[0]).toBe('Email,Name,Designation,Organization,Group,Sheet status,Result,When,Detail,Replied,Followed up')
+    expect(csv[1]).toMatch(/^md@example\.com,A\. Rahman,.*,Sent,2026-10-28T06:00:00\.000Z,,,$/)
+    expect(csv[2]).toMatch(/,Failed,,Mailbox full,,$/)
     expect(csv[3]).toMatch(/,Opted out,/)
     expect(csv[4]).toMatch(/,Skipped,,No mail server/)
+  })
+  it('replies and bounces read from the inbox lay over the list: a bounced address is never written to again', () => {
+    const c = newCampaign({ sent: { 'md@example.com': 1, 'ce@example.org': 1 }, replied: { 'md@example.com': 5 }, bounced: { 'ce@example.org': '550 No such user' } })
+    const over = overlay(contacts, { approved: ['ce@example.org'], optOut: [], bouncedAddrs: { 'planning@example.net': '550 gone' } }, c, null)
+    expect(over.map((x) => x.status)).toEqual(['REPLIED', 'BOUNCED', 'BOUNCED', 'QUEUED'])
+    expect(skipReason(over[2], 'x', 'y')).toMatch(/^Bounced earlier \(550 gone\)/)
+    expect(skipReason(over[0], 'x', 'y')).toBe('Already replied')
+  })
+  it('a follow-up goes after N days only to those who have not replied, bounced, opted out or had one', () => {
+    const day = 24 * 3600_000, now = Date.UTC(2026, 10, 10)
+    const c = newCampaign({ subject: 'Magazine for {organization}', lang: 'en', followUp: { afterDays: 5, subject: '', body: '' },
+      sent: { 'md@example.com': now - 6 * day, 'ce@example.org': now - 6 * day, 'planning@example.net': now - 2 * day, 'f@nomail.example.com': now - 9 * day },
+      replied: { 'ce@example.org': now - 4 * day }, followed: { 'f@nomail.example.com': now - day } })
+    const over = overlay(contacts, { approved: [], optOut: [] }, c, null)
+    expect(followUpLetter(c).subject).toBe('Re: Magazine for {organization}')
+    expect(followUpReason(over[1], c, now)).toBe('Replied')
+    expect(followUpReason(over[2], c, now)).toMatch(/^Due /)
+    expect(followUpReason(over[3], c, now)).toBe('Already followed up')
+    const q = followUpQueue(over, c, now)
+    expect(q.due.map((x) => x.email)).toEqual(['md@example.com'])
+    expect(q.later).toBe(1)
+  })
+  it('a batch running when the app closed comes back paused and marked, to be continued by the editor — never on its own', () => {
+    const old = { ...newCampaign(), status: 'sending', interrupted: 'followup' } as ReturnType<typeof newCampaign>
+    expect(normalize(old)).toMatchObject({ status: 'paused', interrupted: 'followup' })
+    // a campaign saved by the previous version gains the new fields
+    const v1 = { ...newCampaign() } as Partial<ReturnType<typeof newCampaign>>
+    delete v1.replied; delete v1.followUp; delete v1.interrupted
+    expect(normalize(v1 as ReturnType<typeof newCampaign>)).toMatchObject({ replied: {}, interrupted: null, followUp: { afterDays: 5 } })
   })
   it('the audience’s purposes point to a blueprint', () => {
     expect(suggestBlueprint(contacts)?.id).toBe('corporate_sponsorship')

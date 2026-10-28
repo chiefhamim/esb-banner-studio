@@ -3,13 +3,14 @@
 
 import { useMemo, useState } from 'react'
 import { useOutreachStore, uid } from './outreachStore'
-import { useOutreachUi } from './outreachUi'
-import { cannotStart, eligible, inAudience, signatureOf, startBatch } from './campaign'
+import { ask, useOutreachUi } from './outreachUi'
+import { cannotStart, eligible, followUpLetter, followUpQueue, inAudience, signatureOf, startBatch } from './campaign'
 import { skipReason } from './compose'
 import { letterChecks } from './checks'
-import { OUTREACH_BLUEPRINTS } from './outreachAi'
+import { OUTREACH_BLUEPRINTS, rewriteLetter } from './outreachAi'
+import { aiFor, aiPaused } from '../editorial/aiProviders'
 import { logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
-import { Dialog, Field } from '../ui/controls'
+import { Dialog, Field, Select } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import { useEffect } from 'react'
 
@@ -169,6 +170,109 @@ export function ReviewSendDialog() {
         </div>
         {why && when === 'now' && <div className="callout warn"><Icon name="info" size={14} /><span>{why}</span></div>}
       </div>
+    </Dialog>
+  )
+}
+
+/** The desk's confirm / prompt (outreachUi `ask`). */
+export function AskDialog() {
+  const a = useOutreachUi((u) => u.asking)
+  const [v, setV] = useState(a?.input?.value ?? '')
+  useEffect(() => { setV(a?.input?.value ?? '') }, [a])
+  if (!a) return null
+  const valid = !a.input || (v.trim() !== '' && (!a.input.pattern || a.input.pattern.test(v.trim())))
+  const ok = () => { if (valid) a.resolve(a.input ? v : true) }
+  return (
+    <Dialog title={a.title} kicker="OUTREACH" width={a.input?.multiline ? 560 : 480} onClose={() => a.resolve(null)} footer={<>
+      <div className="spacer" />
+      <button type="button" className="btn" onClick={() => a.resolve(null)}>Cancel</button>
+      <button type="button" className={'btn primary' + (a.danger ? ' danger' : '')} onClick={ok} disabled={!valid}>{a.ok}</button>
+    </>}>
+      <div className="stack" style={{ gap: 10 }}>
+        {a.body && <p className="hint or-ask-body">{a.body}</p>}
+        {a.input && (
+          <Field label={a.input.label}>
+            {a.input.multiline
+              ? <textarea className="input or-prompt" rows={4} autoFocus value={v} placeholder={a.input.placeholder} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) ok() }} />
+              : <input className="input" autoFocus value={v} placeholder={a.input.placeholder} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ok() }} />}
+          </Field>
+        )}
+      </div>
+    </Dialog>
+  )
+}
+
+/** The second letter: when it goes, what it says. Defaults are a short, honest nudge with "Re:" on the subject. */
+export function FollowUpDialog() {
+  const s = useOutreachStore()
+  const ui = useOutreachUi()
+  const c = s.campaign()!
+  const def = followUpLetter({ ...c, followUp: { ...c.followUp, subject: '', body: '' } })
+  const [subject, setSubject] = useState(c.followUp.subject || def.subject)
+  const [body, setBody] = useState(c.followUp.body || def.body)
+  const [days, setDays] = useState(c.followUp.afterDays)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+  const ai = aiFor('outreach')
+  const close = () => ui.set({ sheet: null })
+  const q = followUpQueue(s.contacts, { ...c, followUp: { afterDays: days, subject, body } })
+  const write = async () => {
+    setBusy(true); setNote(null)
+    try {
+      const r = await rewriteLetter('custom', { subject: c.subject, body: c.body }, { blueprint: c.blueprint, lang: c.lang, housePrompt: s.housePrompt, sources: c.sources },
+        'Write a short, courteous FOLLOW-UP to this letter for someone who has not answered (60–110 words). Remind them in one sentence what was offered, make the one ask again, and say plainly that no answer is needed if it is not of interest. Subject: "Re: " plus the original subject.')
+      setSubject(r.subject); setBody(r.body)
+      setNote(`Written by ${r.model}.${r.unsourced.length ? ` Check these figures — no source has them: ${r.unsourced.join(', ')}.` : ' Read it before sending.'}`)
+    } catch (e) { setNote((e as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <Dialog title="Follow-up letter" kicker={c.name.toUpperCase()} width={640} onClose={close} footer={<>
+      <button type="button" className="btn" onClick={() => { setSubject(def.subject); setBody(def.body) }}>Use the default</button>
+      <button type="button" className="btn ai-btn" data-provider={ai?.provider} onClick={() => void write()} disabled={!ai || aiPaused() || busy || !c.body.trim()}>
+        <Icon name={busy ? 'refresh' : 'sparkle'} size={14} className={busy ? 'spin' : ''} /><span>{busy ? 'Writing…' : 'Write from the letter'}</span>
+      </button>
+      <div className="spacer" />
+      <button type="button" className="btn" onClick={close}>Cancel</button>
+      <button type="button" className="btn primary" disabled={!subject.trim() || !body.trim()} onClick={() => { s.patch({ followUp: { afterDays: days, subject: subject.trim() === def.subject ? '' : subject.trim(), body: body.trim() === def.body ? '' : body } }); close() }}>Save</button>
+    </>}>
+      <div className="stack" style={{ gap: 10 }}>
+        <p className="hint">Goes only to people this campaign wrote to who have not replied, bounced or opted out — once each, threaded under the first letter in their mail client. Replies are read from your inbox; a follow-up never goes to someone whose answer is still arriving, so check the inbox before sending.</p>
+        <div className="or-fu-row">
+          <Field label="Send after"><Select<number> value={days} onChange={setDays} options={[2, 3, 5, 7, 10, 14].map((d) => ({ value: d, label: `${d} days without a reply` }))} /></Field>
+          <div className="or-fu-count"><b>{q.due.length}</b> due now{q.later ? <> · <b>{q.later}</b> later</> : ''}</div>
+        </div>
+        <Field label="Subject"><input className="input" value={subject} onChange={(e) => setSubject(e.target.value)} /></Field>
+        <Field label="Letter — the same placeholders and marks as the first one; your signature is added"><textarea className={'input or-prompt' + (c.lang === 'bn' ? ' bn' : '')} rows={8} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
+        {note && <p className="or-note">{note}</p>}
+      </div>
+    </Dialog>
+  )
+}
+
+export function TemplatesDialog() {
+  const s = useOutreachStore()
+  const ui = useOutreachUi()
+  const c = s.campaign()
+  const close = () => ui.set({ sheet: null })
+  return (
+    <Dialog title="Templates" kicker="OUTREACH" width={620} onClose={close} footer={<>
+      <button type="button" className="btn" disabled={!c?.body.trim()} onClick={() => ui.set({ sheet: 'save-template' })}><Icon name="plus" size={14} /><span>Save this letter</span></button>
+      <div className="spacer" />
+      <button type="button" className="btn primary" onClick={close}>Done</button>
+    </>}>
+      {!s.templates.length ? (
+        <div className="or-empty"><Icon name="folder" size={22} /><b>No templates yet</b><p>A template keeps a subject and a letter, placeholders included, to start another campaign from.</p></div>
+      ) : (
+        <div className="or-tpl-list">
+          {s.templates.map((t) => (
+            <div key={t.id} className="or-row or-tpl">
+              <span className="or-row-main"><b>{t.name}</b><span>{t.lang === 'bn' ? 'বাংলা' : 'English'} · saved {new Date(t.savedAt).toLocaleDateString()}</span><span className="or-row-mail">{t.subject}</span></span>
+              <button type="button" className="btn sm" disabled={!c} onClick={async () => { if (await ask({ title: `Use “${t.name}”?`, body: 'The subject and body of this campaign are replaced.', ok: 'Use template' })) { s.applyTemplate(t.id); close() } }}>Use</button>
+              <button type="button" className="ibtn" aria-label={`Delete ${t.name}`} data-tip="Delete" onClick={async () => { if (await ask({ title: `Delete “${t.name}”?`, ok: 'Delete', danger: true })) s.deleteTemplate(t.id) }}><Icon name="trash" size={14} /></button>
+            </div>
+          ))}
+        </div>
+      )}
     </Dialog>
   )
 }

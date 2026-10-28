@@ -7,7 +7,7 @@
 // The main process keeps its own ledger of sends, which is what stops a repeat; `campaign.sent` is what the list shows.
 
 import { create } from 'zustand'
-import type { EsbOutreachStatus } from '../esb'
+import type { EsbInboxResult, EsbOutreachStatus } from '../esb'
 import type { AttachmentItem, Campaign, Contact, ListMeta, OutreachBlueprintId, OutreachLang, Signature, Source, Template } from './types'
 import { OUTREACH_BLUEPRINTS } from './outreachAi'
 import { contactsFromRows, groupNamesOf, readMailingFile } from './directory'
@@ -32,6 +32,8 @@ interface Saved {
   templates: Template[]
   /** The editor's house style for every AI job on this desk; '' = none. */
   housePrompt: string
+  /** Addresses the mail system returned (address → its reason), from any campaign: no later campaign writes to them. */
+  bouncedAddrs: Record<string, string>
 }
 
 export const DEFAULT_SIGNATURE: Signature = { id: 'sig-default', name: 'Outreach desk', text: 'With best regards,\n\nOutreach Desk\nESB PowerLine — Express Broadcast and Communication Ltd.\nDhaka, Bangladesh · https://esbpowerline.com' }
@@ -49,16 +51,27 @@ export function newCampaign(over: Partial<Campaign> = {}): Campaign {
     listId: null, sheet: '', audience: { group: null, purposes: [] }, recipients: [],
     blueprint: bp, lang: 'en', ...template(bp, 'en'), signatureId: DEFAULT_SIGNATURE.id, letterhead: true,
     sources: [], scheduledAt: null, sent: {}, failed: {},
+    replied: {}, bounced: {}, followUp: { afterDays: 5, subject: '', body: '' }, followed: {}, interrupted: null,
     ...over,
   }
 }
 
+/**
+ * A saved campaign with the fields later versions added, and a batch that was running when the app closed marked as
+ * interrupted (paused) — it is continued by the editor, never restarted on its own at launch.
+ */
+export function normalize(c: Campaign): Campaign {
+  const d = newCampaign()
+  const running = c.status === 'sending'
+  return { ...d, ...c, followUp: { ...d.followUp, ...(c.followUp ?? {}) }, status: running ? 'paused' : c.status, interrupted: running ? c.interrupted ?? 'first' : null }
+}
+
 function load(): Saved {
   try { localStorage.removeItem(LEGACY_CONFIG) } catch { /* storage blocked */ }
-  const base: Saved = { campaigns: [], activeId: null, lists: [], approved: [], optOut: [], signatures: [DEFAULT_SIGNATURE], templates: [], housePrompt: '' }
+  const base: Saved = { campaigns: [], activeId: null, lists: [], approved: [], optOut: [], signatures: [DEFAULT_SIGNATURE], templates: [], housePrompt: '', bouncedAddrs: {} }
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null') as Partial<Saved> | null
-    if (s) return { ...base, ...s, signatures: s.signatures?.length ? s.signatures : base.signatures }
+    if (s) return { ...base, ...s, campaigns: (s.campaigns ?? []).map(normalize), signatures: s.signatures?.length ? s.signatures : base.signatures }
     // the first desk kept one draft and per-address marks: carry them into a first campaign
     const v1 = JSON.parse(localStorage.getItem(V1) || 'null') as { approved?: string[]; optOut?: string[]; sent?: Record<string, number>; draft?: { blueprint: OutreachBlueprintId; lang: OutreachLang; subject: string; body: string } } | null
     if (v1) {
@@ -74,6 +87,7 @@ function save(s: Saved) {
 
 export type RunState = 'idle' | 'running' | 'paused'
 export interface LogEntry { t: number; level: 'info' | 'ok' | 'warn' | 'error'; text: string }
+export type InboxCheck = { state: 'idle' } | { state: 'busy'; at?: number } | { state: 'ok'; at: number; scanned: number; note?: string } | { state: 'bad'; at: number; error: string }
 export type SmtpCheck = { state: 'idle' } | { state: 'busy' } | { state: 'ok'; ms: number; at: number } | { state: 'bad'; error: string; at: number }
 
 interface OutreachState extends Saved {
@@ -83,7 +97,7 @@ interface OutreachState extends Saved {
   contacts: Contact[]
   importNote: string | null
   activeContact: string | null
-  view: 'all' | 'ready' | 'skipped' | 'sent' | 'failed'
+  view: 'all' | 'ready' | 'skipped' | 'sent' | 'replied' | 'failed'
   query: string
   attachments: AttachmentItem[]
 
@@ -95,6 +109,7 @@ interface OutreachState extends Saved {
 
   mail: EsbOutreachStatus | null
   smtp: SmtpCheck
+  inbox: InboxCheck
   log: LogEntry[]
 
   campaign: () => Campaign | null
@@ -117,6 +132,8 @@ interface OutreachState extends Saved {
   markSent: (email: string, t: number) => void
   markFailed: (email: string, error: string) => void
   markSending: (email: string | null) => void
+  markFollowed: (email: string, t: number) => void
+  checkInbox: (force?: boolean) => Promise<void>
   selectBlueprint: (id: OutreachBlueprintId) => void
   setLang: (lang: OutreachLang) => void
   addAttachment: (a: AttachmentItem) => void
@@ -138,18 +155,21 @@ interface OutreachState extends Saved {
 }
 
 /** The sheet's contacts with what the editor and the ledgers know laid over them. */
-export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'>, c: Campaign | null, mail: EsbOutreachStatus | null): Contact[] {
-  const approved = new Set(s.approved), optOut = new Set(s.optOut)
+export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'> & { bouncedAddrs?: Record<string, string> }, c: Campaign | null, mail: EsbOutreachStatus | null): Contact[] {
+  const approved = new Set(s.approved), optOut = new Set(s.optOut), bounced = s.bouncedAddrs ?? {}
   const ledger = new Map((mail?.sentTo ?? []).map((e) => [e.to, e.t]))
   return list.map((x) => {
     const sentAt = c?.sent[x.email] ?? ledger.get(x.email)
     const failed = c?.failed[x.email]
+    const bounce = c?.bounced?.[x.email] ?? bounced[x.email]
+    const replied = c?.replied?.[x.email]
     return {
       ...x,
       approved: x.approved || approved.has(x.email),
-      status: optOut.has(x.email) ? 'OPTED_OUT' : sentAt ? 'SENT' : failed ? 'FAILED' : x.status === 'SENDING' ? 'SENDING' : 'QUEUED',
+      status: optOut.has(x.email) ? 'OPTED_OUT' : bounce ? 'BOUNCED' : replied ? 'REPLIED' : sentAt ? 'SENT' : failed ? 'FAILED' : x.status === 'SENDING' ? 'SENDING' : 'QUEUED',
       sentAt,
-      error: failed,
+      repliedAt: replied,
+      error: bounce ?? failed,
     }
   })
 }
@@ -166,7 +186,7 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
   const saved = load()
   const persist = () => {
     const s = get()
-    save({ campaigns: s.campaigns, activeId: s.activeId, lists: s.lists, approved: s.approved, optOut: s.optOut, signatures: s.signatures, templates: s.templates, housePrompt: s.housePrompt })
+    save({ campaigns: s.campaigns, activeId: s.activeId, lists: s.lists, approved: s.approved, optOut: s.optOut, signatures: s.signatures, templates: s.templates, housePrompt: s.housePrompt, bouncedAddrs: s.bouncedAddrs })
   }
   const relay = () => set({ contacts: overlay(get().contacts, get(), get().campaign(), get().mail) })
   const patchCampaign = (id: string, p: Partial<Campaign>) => {
@@ -216,6 +236,7 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     runTotal: 0,
     mail: null,
     smtp: { state: 'idle' },
+    inbox: { state: 'idle' },
     log: [],
 
     campaign: () => get().campaigns.find((c) => c.id === get().activeId) ?? null,
@@ -240,7 +261,7 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     duplicateCampaign: async (id) => {
       const src = get().campaigns.find((c) => c.id === id)
       if (!src) return
-      const c = newCampaign({ ...src, id: uid('cmp'), name: `${src.name} (copy)`, status: 'draft', scheduledAt: null, sent: {}, failed: {}, createdAt: Date.now() })
+      const c = newCampaign({ ...src, id: uid('cmp'), name: `${src.name} (copy)`, status: 'draft', scheduledAt: null, sent: {}, failed: {}, replied: {}, bounced: {}, followed: {}, interrupted: null, createdAt: Date.now() })
       const files = await idbGet<AttachmentItem[]>(`files:${id}`)
       if (files) await idbSet(`files:${c.id}`, files)
       set({ campaigns: [c, ...get().campaigns] })
@@ -323,6 +344,36 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
       const c = get().campaign(); if (!c) return
       patchCampaign(c.id, { failed: { ...c.failed, [email]: error } })
       relay()
+    },
+    markFollowed: (email, t) => {
+      const c = get().campaign(); if (!c) return
+      patchCampaign(c.id, { followed: { ...c.followed, [email]: t } })
+    },
+    checkInbox: async (force = false) => {
+      const b = window.esb
+      if (!b?.outreachInbox || get().inbox.state === 'busy') return
+      set({ inbox: { state: 'busy', at: get().inbox.state === 'ok' ? (get().inbox as { at: number }).at : undefined } })
+      const r = await b.outreachInbox(force).catch((e: Error) => ({ ok: false, at: Date.now(), error: e.message }) as EsbInboxResult)
+      if (!r.ok) { set({ inbox: { state: 'bad', at: r.at, error: r.error ?? 'The inbox did not answer' } }); return }
+      // lay what came back over every campaign that wrote to those addresses — only after its own letter went
+      const optOut = new Set(get().optOut), bouncedAddrs = { ...get().bouncedAddrs }
+      const news: string[] = []
+      const campaigns = get().campaigns.map((c) => {
+        const replied = { ...c.replied }, bounced = { ...c.bounced }
+        for (const x of r.replies ?? []) {
+          const sentAt = Math.min(c.sent[x.email] ?? Infinity, c.followed[x.email] ?? Infinity)
+          if (x.auto || !(x.at >= sentAt - 60_000) || replied[x.email]) continue
+          replied[x.email] = x.at
+          news.push(`${x.email} replied${x.unsubscribe ? ' and asked not to be emailed' : ''} — ${c.name}`)
+        }
+        for (const x of r.bounces ?? []) if (c.sent[x.email] && !bounced[x.email]) { bounced[x.email] = x.reason; news.push(`${x.email} bounced: ${x.reason} — ${c.name}`) }
+        return Object.keys(replied).length !== Object.keys(c.replied).length || Object.keys(bounced).length !== Object.keys(c.bounced).length ? { ...c, replied, bounced } : c
+      })
+      for (const x of r.replies ?? []) if (x.unsubscribe) optOut.add(x.email)
+      for (const x of r.bounces ?? []) bouncedAddrs[x.email] ??= x.reason
+      set({ campaigns, optOut: [...optOut], bouncedAddrs, inbox: { state: 'ok', at: r.at, scanned: r.scanned ?? 0, note: r.note } })
+      persist(); relay()
+      for (const n of news) get().addLog(/bounced/.test(n) ? 'warn' : 'ok', n)
     },
     markSending: (email) => set({ current: email, contacts: get().contacts.map((c) => (c.email === email ? { ...c, status: 'SENDING' } : c.status === 'SENDING' ? { ...c, status: 'QUEUED' } : c)) }),
 

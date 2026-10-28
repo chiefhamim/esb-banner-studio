@@ -67,6 +67,17 @@ describe('ledgerCheck: the cap, the gap and no repeats', () => {
     expect(m.ledgerCheck(l, now, settings, mail('a@example.com'))).toMatchObject({ ok: false, duplicate: true })
     expect(m.ledgerCheck(l, now, settings, mail('a@example.com', { resend: true })).ok).toBe(true)
   })
+  it('a follow-up needs a first letter at least 2 days old, goes once a month, and is threaded under it', () => {
+    const first = { t: now - 3 * 24 * 3600e3, to: 'a@example.com', kind: 'campaign', id: '<first@example.com>' }
+    expect(m.ledgerCheck([], now, settings, mail('a@example.com', { followUp: true }))).toMatchObject({ ok: false, reason: /No earlier letter/ })
+    expect(m.ledgerCheck([{ ...first, t: now - 24 * 3600e3 }], now, settings, mail('a@example.com', { followUp: true }))).toMatchObject({ ok: false, reason: /less than 2 days/ })
+    expect(m.ledgerCheck([first], now, settings, mail('a@example.com', { followUp: true }))).toMatchObject({ ok: true, inReplyTo: '<first@example.com>' })
+    const again = [first, { t: now - 3600e3, to: 'a@example.com', kind: 'followup' }]
+    expect(m.ledgerCheck(again, now, settings, mail('a@example.com', { followUp: true }))).toMatchObject({ ok: false, duplicate: true })
+    // follow-ups count toward the day's cap like first letters
+    const full = [1, 2, 3].map((h) => ({ t: now - h * 3600e3, to: `x${h}@example.com`, kind: 'followup' }))
+    expect(m.ledgerCheck(full, now, settings, mail('new@example.com')).ok).toBe(false)
+  })
   it('test sends do not use the daily quota but are limited per hour', () => {
     const full = [1, 2, 3].map((h) => ({ t: now - h * 600e3, to: 'x@example.com', kind: 'campaign' }))
     expect(m.ledgerCheck(full, now, settings, mail('me@example.com', { isTest: true })).ok).toBe(true)
@@ -110,6 +121,18 @@ describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on eve
     expect(mailer.status()).toMatchObject({ sent24h: 1, sentTo: [{ to: 'md@example.com' }] })
     now += 120e3
     expect(await mailer.send({ to: 'md@example.com', subject: 'S', text: 'again' })).toMatchObject({ ok: false, duplicate: true })
+  })
+  it('a follow-up is sent with In-Reply-To the first letter and recorded as a follow-up', async () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
+    mailer.saveSettings(settings, 'abcdefghijklmnop')
+    await mailer.send({ to: 'md@example.com', subject: 'S', body: 'First' })
+    now += 3 * 24 * 3600e3
+    const r = await mailer.send({ to: 'md@example.com', subject: 'Re: S', body: 'Following up', followUp: true })
+    expect(r.ok).toBe(true)
+    expect(sent[1]).toMatchObject({ inReplyTo: '<id@example.com>', references: ['<id@example.com>'] })
+    expect(mailer.ledger().map((e: { kind: string }) => e.kind)).toEqual(['campaign', 'followup'])
+    expect(mailer.inboxAccount()).toMatchObject({ user: 'desk@example.com', pass: 'abcdefghijklmnop', imapHost: 'imap.gmail.com' })
+    expect(JSON.stringify(mailer.status())).not.toContain('abcdefgh')
   })
   it('sends nothing before a password is saved', async () => {
     const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })

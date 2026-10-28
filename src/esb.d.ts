@@ -45,11 +45,22 @@ export interface EsbBridge {
   outreachSave?: (settings: EsbSmtpSettings, password?: string) => Promise<{ ok: true; status: EsbOutreachStatus } | { ok: false; error: string }>
   outreachForgetPassword?: () => Promise<EsbOutreachStatus>
   outreachVerify?: (force?: boolean) => Promise<{ ok: boolean; ms?: number; error?: string; at: number }>
+  outreachInbox?: (force?: boolean) => Promise<EsbInboxResult>
   outreachSend?: (mail: EsbOutreachMail) => Promise<{ ok: true; messageId: string; sent24h: number } | { ok: false; error: string; nextAt?: number; duplicate?: boolean }>
 }
 
 /** The sender account and pacing; the app password is passed separately and never read back. */
-export interface EsbSmtpSettings { host: string; port: number; user: string; name: string; dailyLimit: number; minDelaySec: number; maxDelaySec: number }
+/** What came back to the desk's letters (electron/inbox.cjs). Only addresses the desk emailed; never message text. */
+export interface EsbInboxResult {
+  ok: boolean
+  at: number
+  error?: string
+  note?: string
+  scanned?: number
+  replies?: { email: string; at: number; subject: string; auto: boolean; unsubscribe: boolean }[]
+  bounces?: { email: string; at: number; reason: string }[]
+}
+export interface EsbSmtpSettings { host: string; imapHost?: string; port: number; user: string; name: string; dailyLimit: number; minDelaySec: number; maxDelaySec: number }
 export interface EsbOutreachStatus {
   configured: boolean
   hasPassword: boolean
@@ -59,6 +70,8 @@ export interface EsbOutreachStatus {
   sent24h: number
   /** Addresses emailed in the last 7 days. */
   sentTo: { to: string; t: number }[]
+  /** Where replies are read: the saved choice or the one worked out from the SMTP server. */
+  imapHost?: string
 }
 /** One email: plain text only (the main process builds the HTML part), attachments as data URLs. */
 export interface EsbOutreachMail {
@@ -74,6 +87,8 @@ export interface EsbOutreachMail {
   attachments?: { name: string; dataUrl: string }[]
   isTest?: boolean
   resend?: boolean
+  /** A second letter to someone who did not answer: the main process checks there was a first one, threads it under it. */
+  followUp?: boolean
 }
 
 declare global {
