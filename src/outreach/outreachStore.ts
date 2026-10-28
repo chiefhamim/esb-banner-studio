@@ -17,7 +17,12 @@ interface Saved {
   draft: { blueprint: OutreachBlueprintId; lang: OutreachLang; subject: string; body: string } | null
 }
 
+// the first build kept the SMTP settings, app password included, in plain text under this key; the password now
+// lives encrypted in the main process, so the old copy is deleted the first time the desk loads
+const LEGACY_CONFIG = 'esb-banner-studio/outreach-config'
+
 function load(): Saved {
+  try { localStorage.removeItem(LEGACY_CONFIG) } catch { /* storage blocked */ }
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null') as Partial<Saved> | null
     if (s) return { approved: s.approved ?? [], optOut: s.optOut ?? [], sent: s.sent ?? {}, draft: s.draft ?? null }
