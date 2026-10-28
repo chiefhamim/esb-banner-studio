@@ -351,7 +351,6 @@
 .sq-row { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 4px 6px 6px 4px; background: var(--card); border-radius: var(--r-3); box-shadow: 0 0 0 1px var(--card-line); transition: box-shadow var(--t-2) var(--ease), background var(--t-2) var(--ease); }
 .sq-row:hover { background: var(--field-hover); }
 .sq-row.on { box-shadow: 0 0 0 1.5px var(--ink); }
-.sq-row.on::before { content: ''; position: absolute; top: 10px; bottom: 10px; left: 0; width: 3px; background: var(--ink); border-radius: 0 2px 2px 0; }
 .sq-main { display: flex; flex-direction: column; min-width: 0; padding: 6px 8px 2px; text-align: left; color: inherit; background: none; border: 0; border-radius: var(--r-2); cursor: pointer; }
 .sq-main:focus-visible { outline: 2px solid var(--focus, var(--ink)); outline-offset: -2px; }
 .sq-title { display: -webkit-box; overflow: hidden; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--text); -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

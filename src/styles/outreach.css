@@ -333,10 +333,7 @@
 /* ---------------------------------------------------------------- breathing room inside switches and tabs
    The raised chip of a segmented control or tab bar sat 2 px from the edge of its well, so it read as edge to
    edge; on this desk it gets 4 px all round, and the options a 2 px gap between them. */
-/* only the desk's own columns: the workspace switcher in the header stays exactly as on the other desks */
-.or-body .seg-ctl, .or-body .side-tabs { padding: 4px; gap: 2px; }
-.or-body .seg-ctl .pill-slide, .or-body .side-tabs .pill-slide { top: 4px; bottom: 4px; }
-.or-body .or-toolbar .seg-ctl button { height: 24px; }
+/* the letter toolbar's language and Edit/Preview switches sit at the toolbar's 32 px (the 4 px well is now in studio.css for every desk) */
 .or-body .or-toolbar .seg-ctl { height: 32px; box-sizing: border-box; align-items: center; }
 .or-tabs.side-tabs { margin: 12px 12px 4px; }
 .or-left-head { padding: 8px 12px 12px; }
