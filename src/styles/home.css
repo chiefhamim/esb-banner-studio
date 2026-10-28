@@ -151,8 +151,8 @@
 /* the three stripes of the ESB banner, as a quiet divider between name and actions */
 .home-shell .home-header-brand { order: 0; }
 .home-shell .home-quick-actions { order: 2; }
-/* ---- launcher: the three desks plus Open, then a compact format strip ---- */
-.home-shell .home-launch { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+/* ---- launcher: the three desks plus Outreach and Open, then a compact format strip ---- */
+.home-shell .home-launch { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .home-shell .launch-tile {
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 14px; row-gap: 2px; align-items: center; text-align: left;
   padding: clamp(12px, 2.2vh, 18px) 16px; cursor: pointer; color: var(--text);
@@ -172,6 +172,7 @@
 .home-shell .launch-tile:nth-child(2) { --i: 1; }
 .home-shell .launch-tile:nth-child(3) { --i: 2; }
 .home-shell .launch-tile:nth-child(4) { --i: 3; }
+.home-shell .launch-tile:nth-child(5) { --i: 4; }
 /* format strip: name + size only, one tidy line each */
 .home-shell .format-note { display: none !important; }
 .home-shell .format-card { align-items: center !important; padding: 10px 12px; }
@@ -217,7 +218,7 @@
 /* ---- footer sits at the very bottom of the window ---- */
 .home-shell .home-footer { position: absolute; left: 0; right: 0; bottom: clamp(10px, 2.4vh, 22px); padding: 0; justify-content: center; pointer-events: none; }
 .home-shell .home-footer > * { pointer-events: auto; }
-/* ---- launcher as one balanced strip: four equal cells in a single panel, icon above label, hairline dividers ---- */
+/* ---- launcher as one balanced strip: five equal cells in a single panel, icon above label, hairline dividers ---- */
 .home-shell .home-launch { gap: 0; border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; box-shadow: var(--h-shadow); background: color-mix(in srgb, var(--card, #fff) 92%, transparent); }
 :root[data-theme=dark] .home-shell .home-launch { background: color-mix(in srgb, #14141c 82%, transparent); border-color: rgba(255, 255, 255, .14); }
 .home-shell .launch-tile {
@@ -593,12 +594,13 @@
 @media (prefers-reduced-motion: reduce) { .home-shell .home-header-brand::after { animation: none; } }
 /* title and the longer tagline share one width again (title = 3.02 x the tagline size, measured) */
 .home-shell .home-title { font-size: calc(var(--hs) * 3.02); }
-/* ---- hover on Editorial / Graphics / Video: the icon's line fills with its own shimmering colour gradient (SVG gradients defined once in HomeWorkspace; each slides slowly back and forth) ---- */
+/* ---- hover on Editorial / Graphics / Video / Outreach: the icon's line fills with its own shimmering colour gradient (SVG gradients defined once in HomeWorkspace; each slides slowly back and forth) ---- */
 .home-shell .launch-tile:nth-child(1):hover .launch-icon svg, .home-shell .launch-tile:nth-child(1):focus-visible .launch-icon svg { stroke: url(#home-ig-1); }
 .home-shell .launch-tile:nth-child(2):hover .launch-icon svg, .home-shell .launch-tile:nth-child(2):focus-visible .launch-icon svg { stroke: url(#home-ig-2); }
 .home-shell .launch-tile:nth-child(3):hover .launch-icon svg, .home-shell .launch-tile:nth-child(3):focus-visible .launch-icon svg { stroke: url(#home-ig-3); }
-.home-shell .launch-tile:nth-child(-n+3) .launch-icon svg { stroke-width: 2; transition: filter .3s ease; }
-.home-shell .launch-tile:nth-child(-n+3):hover .launch-icon svg { filter: drop-shadow(0 0 5px rgba(120, 110, 255, .45)); }
+.home-shell .launch-tile:nth-child(4):hover .launch-icon svg, .home-shell .launch-tile:nth-child(4):focus-visible .launch-icon svg { stroke: url(#home-ig-4); }
+.home-shell .launch-tile:nth-child(-n+4) .launch-icon svg { stroke-width: 2; transition: filter .3s ease; }
+.home-shell .launch-tile:nth-child(-n+4):hover .launch-icon svg { filter: drop-shadow(0 0 5px rgba(120, 110, 255, .45)); }
 .home-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
 /* an unsaved session found after a crash is the first card of Recent projects */
 .home-shell .recovery-card { cursor: default; border-color: color-mix(in srgb, #f0953a 55%, var(--line-2)); }

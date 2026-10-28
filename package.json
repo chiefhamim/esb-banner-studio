@@ -1,7 +1,7 @@
 {
   "name": "esb-banner-studio",
   "private": true,
-  "version": "1.5.4",
+  "version": "1.6.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
