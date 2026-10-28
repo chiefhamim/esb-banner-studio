@@ -22,8 +22,17 @@ export function inAudience(c: Contact, a: Campaign['audience'] | undefined): boo
 }
 
 /** The contacts a batch would send to now, in sheet order. */
+// The Send footer, the Send tab, the header count, the Review sheet and cannotStart() each ask this on every render, over
+// every contact (a regex over the letter per contact). The answer only changes with the contacts array, the letter or
+// the audience, so the last one is kept. Callers only read the list; never mutate it.
+let lastEligible: { contacts: Contact[]; subject: string; body: string; audience: string; out: Contact[] } | null = null
 export function eligible(contacts: Contact[], subject: string, body: string, audience?: Campaign['audience']): Contact[] {
-  return contacts.filter((c) => inAudience(c, audience) && !skipReason(c, subject, body))
+  const aud = JSON.stringify(audience ?? null)
+  const l = lastEligible
+  if (l && l.contacts === contacts && l.subject === subject && l.body === body && l.audience === aud) return l.out
+  const out = contacts.filter((c) => inAudience(c, audience) && !skipReason(c, subject, body))
+  lastEligible = { contacts, subject, body, audience: aud, out }
+  return out
 }
 
 /** The signature text the campaign uses ('' for none). */

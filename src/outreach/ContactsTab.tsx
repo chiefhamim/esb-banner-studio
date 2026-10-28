@@ -3,7 +3,8 @@
 // a coloured edge, like the Editorial story queue. Nothing here is invented: a contact with no name shows its
 // address, a row with no status says so.
 
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useOutreachStore } from './outreachStore'
 import { skipReason } from './compose'
 import { inAudience } from './campaign'
@@ -26,8 +27,16 @@ export const rowState = ({ c, skip }: Row): { st: RowState; text: string; tip: s
   return { st: 'ready', text: 'Ready', tip: c.approved && c.mxStatus !== 'SAFE_TO_SEND' ? 'Approved by you' : STATUS_LABEL[c.mxStatus] }
 }
 
+// a list of thousands renders a page at a time; filtering and search still run over all of it
+const PAGE = 200
+
 export function ContactsTab() {
-  const s = useOutreachStore()
+  // only what this tab reads: subscribing to the whole store re-rendered every row on each log line and inbox check
+  const s = useOutreachStore(useShallow((x) => ({
+    campaigns: x.campaigns, activeId: x.activeId, campaign: x.campaign, activeContact: x.activeContact, contacts: x.contacts,
+    importList: x.importList, importNote: x.importNote, lists: x.lists, query: x.query, run: x.run, setActiveContact: x.setActiveContact,
+    setAudience: x.setAudience, setQuery: x.setQuery, setSheet: x.setSheet, setView: x.setView, sheets: x.sheets, view: x.view,
+  })))
   const c = s.campaign()
   const file = useRef<HTMLInputElement>(null)
   const idle = s.run === 'idle'
@@ -60,6 +69,11 @@ export function ContactsTab() {
       return !q || [x.personName, x.organization, x.email, x.designation].some((v) => v.toLowerCase().includes(q))
     })
   }, [rows, s.view, s.query])
+  // back to the first page whenever what is listed changes
+  const [limit, setLimit] = useState(PAGE)
+  const [listKey, setListKey] = useState('')
+  const key = `${c?.id}|${s.view}|${s.query}`
+  if (key !== listKey) { setListKey(key); setLimit(PAGE) }
 
   const direct = c?.kind === 'direct'
   const pick = () => file.current?.click()
@@ -140,7 +154,7 @@ export function ContactsTab() {
           )
         ) : !shown.length ? (
           <div className="or-empty"><p>No contact matches.</p></div>
-        ) : shown.map((r) => {
+        ) : <>{shown.slice(0, limit).map((r) => {
           const st = rowState(r)
           const on = r.c.id === s.activeContact
           return (
@@ -154,6 +168,11 @@ export function ContactsTab() {
             </button>
           )
         })}
+        {shown.length > limit && (
+          <button type="button" className="btn or-wide or-more" onClick={() => setLimit((n) => n + PAGE)}>
+            Show {Math.min(PAGE, shown.length - limit)} more · {shown.length - limit} not shown
+          </button>
+        )}</>}
       </div>
     </div>
   )

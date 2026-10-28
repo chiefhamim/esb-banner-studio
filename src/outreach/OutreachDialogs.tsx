@@ -111,7 +111,7 @@ export function ReviewSendDialog() {
   const [at, setAt] = useState(() => toLocalInput(Date.now() + 3600_000))
   const close = () => ui.set({ sheet: null })
   const set = s.mail?.settings
-  const audience = s.contacts.filter((x) => inAudience(x, c.audience))
+  const audience = useMemo(() => s.contacts.filter((x) => inAudience(x, c.audience)), [s.contacts, c.audience])
   const ready = eligible(s.contacts, c.subject, c.body, c.audience)
   const room = set ? Math.max(0, set.dailyLimit - (s.mail?.sent24h ?? 0)) : 0
   const today = Math.min(ready.length, room)

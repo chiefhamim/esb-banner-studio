@@ -1,14 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import './App.css'
 import { loadBaseAssets } from './core/assets'
 import type { Assets } from './core/render'
 import { HomeWorkspace } from './shell/HomeWorkspace'
 import { GraphicsWorkspace } from './shell/GraphicsWorkspace'
-import { EditorialWorkspace } from './editorial/EditorialWorkspace'
-import { VideoWorkspace } from './video/VideoWorkspace'
-import { OutreachWorkspace } from './outreach/OutreachWorkspace'
 import { startScheduler } from './outreach/campaign'
-import { ComponentGallery } from './ui/ComponentGallery'
 import { useShellStore, deskMotion } from './shell/shellStore'
 import { arriveFrames, reducedMotion } from './ui/motion'
 import { useStore } from './store'
@@ -22,6 +18,18 @@ import './styles/outreach.css'
 
 installBannerLink()
 
+// Editorial (TipTap, the AI SDKs), Video (mediabunny) and Outreach (the workbook reader) are their own chunks, so the
+// app opens on Home and Graphics without parsing them: the single bundle was 2.3 MB. They are fetched in the background
+// once the first screen is up (below), so switching desk does not wait on the network or the parser.
+const loadEditorial = () => import('./editorial/EditorialWorkspace')
+const loadVideo = () => import('./video/VideoWorkspace')
+const loadOutreach = () => import('./outreach/OutreachWorkspace')
+const EditorialWorkspace = lazy(() => loadEditorial().then((m) => ({ default: m.EditorialWorkspace })))
+const VideoWorkspace = lazy(() => loadVideo().then((m) => ({ default: m.VideoWorkspace })))
+const OutreachWorkspace = lazy(() => loadOutreach().then((m) => ({ default: m.OutreachWorkspace })))
+const ComponentGallery = lazy(() => import('./ui/ComponentGallery').then((m) => ({ default: m.ComponentGallery })))
+const DeskLoading = () => <div className="loading"><div className="spinner" />Opening the desk</div>
+
 export default function App() {
   const [base, setBase] = useState<Assets | null>(null)
   const workspace = useShellStore((s) => s.workspace)
@@ -32,6 +40,10 @@ export default function App() {
     loadBaseAssets().then((b) => setBase(b))
     // a campaign scheduled on the Outreach desk starts at its time whichever desk is open
     startScheduler()
+    // warm the other desks while the editor is still looking at the first screen
+    const warm = () => { void loadEditorial(); void loadOutreach(); void loadVideo() }
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback
+    if (idle) idle(warm, { timeout: 3000 }); else setTimeout(warm, 1500)
   }, [])
 
   // A desk that arrives after a switch drifts in and settles with a soft overshoot, on the same spring as the tab chip
@@ -68,16 +80,18 @@ export default function App() {
   }, [])
 
   if (isGallery) {
-    return <ComponentGallery />
+    return <Suspense fallback={<DeskLoading />}><ComponentGallery /></Suspense>
   }
 
   return (
     <div className="studio-shell">
       <div className="workspace-main">
         {workspace === 'home' && <HomeWorkspace />}
-        {workspace === 'editorial' && <EditorialWorkspace />}
-        {workspace === 'video' && <VideoWorkspace />}
-        {workspace === 'outreach' && <OutreachWorkspace />}
+        <Suspense fallback={<DeskLoading />}>
+          {workspace === 'editorial' && <EditorialWorkspace />}
+          {workspace === 'video' && <VideoWorkspace />}
+          {workspace === 'outreach' && <OutreachWorkspace />}
+        </Suspense>
         {workspace === 'graphics' && (
           base ? <GraphicsWorkspace base={base} /> : (
             <div className="loading"><div className="spinner" />Loading fonts and artwork…</div>
