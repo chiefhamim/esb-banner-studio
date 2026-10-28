@@ -154,7 +154,7 @@ export function ReviewSendDialog() {
           <dt>Audience</dt><dd>{audience.length} contact{audience.length === 1 ? '' : 's'} · <b>{ready.length} ready</b>{reasons.length ? ` · ${audience.length - ready.length} not sent` : ''}</dd>
           {reasons.length > 0 && <><dt />
             <dd className="or-reasons">{reasons.slice(0, 6).map(([r, n]) => <span key={r}><b>{n}</b> {r.toLowerCase()}</span>)}</dd></>}
-          <dt>Today</dt><dd>{set ? <>{today} of {ready.length} can go today ({room} left of {set.dailyLimit}){ready.length > today ? ' — the rest on later days' : ''}{today > 1 ? ` · ${set.minDelaySec}–${set.maxDelaySec} s apart, about ${span >= 60 ? `${Math.floor(span / 60)} h ${span % 60} min` : `${span} min`} from your gap settings` : ''}</> : '—'}</dd>
+          <dt>Today</dt><dd>{set ? <>{today} of {ready.length} can go today{ready.length > today ? ' — the rest on later days' : ''}{today > 1 ? ` · about ${span >= 60 ? `${Math.floor(span / 60)} h ${span % 60} min` : `${span} min`} at ${set.minDelaySec >= 60 ? `${Math.round(set.minDelaySec / 60)}–${Math.round(set.maxDelaySec / 60)} min` : `${set.minDelaySec}–${set.maxDelaySec} s`} apart` : ''}</> : '—'}</dd>
           <dt>With it</dt><dd>{[c.letterhead ? 'ESB letterhead' : 'No letterhead', c.signatureId === 'none' ? 'no signature' : `signature “${s.signatures.find((x) => x.id === c.signatureId)?.name ?? '—'}”`, s.attachments.length ? `${s.attachments.length} file${s.attachments.length === 1 ? '' : 's'}` : 'no files', 'an unsubscribe line'].join(' · ')}</dd>
         </dl>
         {checks.length > 0 && (

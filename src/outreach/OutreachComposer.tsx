@@ -156,25 +156,20 @@ export function OutreachComposer() {
   return (
     <main className="or-center" aria-label="Letter">
       <div className="or-toolbar">
-        <Select<string> value={c.blueprint === 'template' ? (s.templates.find((t) => t.subject === c.subject && t.body === c.body)?.id ?? 'template') : c.blueprint} prefix="Letter" onChange={(v) => void pickLetter(v)}
+        <Select<string> value={c.blueprint === 'template' ? (s.templates.find((t) => t.subject === c.subject && t.body === c.body)?.id ?? 'template') : c.blueprint} className="or-letter-select" onChange={(v) => void pickLetter(v)}
           options={[
-            ...OUTREACH_BLUEPRINTS.map((b) => ({ value: b.id as string, label: b.label, hint: b.tag })),
+            ...OUTREACH_BLUEPRINTS.map((b) => ({ value: b.id as string, label: b.label, hint: b.tag, icon: 'mail' as const })),
             ...s.templates.map((t) => ({ value: t.id, label: t.name, hint: 'Saved' })),
             ...(c.blueprint === 'template' && !s.templates.some((t) => t.subject === c.subject && t.body === c.body) ? [{ value: 'template', label: 'From a template (edited)', hint: '' }] : []),
             { value: 'blank', label: 'Blank letter', hint: '' },
           ]} />
-        <Seg<OutreachLang> value={c.lang} onChange={s.setLang} options={[{ value: 'en', label: 'English' }, { value: 'bn', label: 'বাংলা' }]} />
-        {suggestion && suggestion.id !== c.blueprint && c.blueprint !== 'blank' && (
-          <button type="button" className="or-suggest" onClick={() => void pickLetter(suggestion.id)} data-tip={`Use “${OUTREACH_BLUEPRINTS.find((b) => b.id === suggestion.id)?.label}” — ${suggestion.count} contacts in this audience are listed for ${purposeLabel(suggestion.purpose).toLowerCase()}`}>
-            <Icon name="star" size={12} /><span>Fits this audience: {OUTREACH_BLUEPRINTS.find((b) => b.id === suggestion.id)?.label}</span>
-          </button>
-        )}
+        <Seg<OutreachLang> value={c.lang} onChange={s.setLang} options={[{ value: 'en', label: 'EN', tip: 'English' }, { value: 'bn', label: 'বাংলা', tip: 'Bangla' }]} />
         <div className="spacer" />
-        <button type="button" className="btn sm ai-btn" data-provider={ai?.provider} disabled={aiOff || !!busy} onClick={() => void run('Draft', () => writeOutreachWithAi(ctx))}
+        <button type="button" className="btn ai-btn" data-provider={ai?.provider} disabled={aiOff || !!busy} onClick={() => void run('Draft', () => writeOutreachWithAi(ctx))}
           data-tip={aiTip || `${aiName} writes the template from the letter's offer${c.sources.some((x) => x.points.some((p) => p.use)) ? ' and your ticked talking points' : ''}, with placeholders. Replaces the subject and body (undoable)`}>
           {busy === 'Draft' ? <Icon name="refresh" size={13} className="spin" /> : ai ? <ProviderMark id={ai.provider} size={13} /> : <Icon name="sparkle" size={13} />}<span>{busy === 'Draft' ? 'Writing…' : 'Write'}</span>
         </button>
-        <MenuButton label={busy && busy !== 'Draft' ? 'Rewriting…' : 'Rewrite'} icon="edit" className="sm" align="end" title={aiTip || 'Rewrite the letter with AI'}
+        <MenuButton label={busy && busy !== 'Draft' ? 'Rewriting…' : 'Rewrite'} icon="edit" className="" align="end" title={aiTip || 'Rewrite the letter with AI'}
           items={[...REWRITES.map((r) => ({ label: r.label, hint: r.hint, disabled: aiOff || !!busy || !c.body.trim(), onClick: () => void run(r.label, () => rewriteLetter(r.id, c, ctx)) })),
             { divider: true },
             { label: 'Your own instruction…', icon: 'sparkle' as const, disabled: aiOff || !!busy || !c.body.trim(), onClick: async () => { const t = await ask({ title: 'Rewrite with your instruction', body: 'The same facts rule applies: nothing is added that the letter or your ticked talking points do not say.', input: { label: 'How should the letter change?', placeholder: 'e.g. Lead with the free digital edition; keep it under 120 words', multiline: true }, ok: 'Rewrite' }); if (typeof t === 'string' && t.trim()) void run('Rewrite', () => rewriteLetter('custom' as RewriteAction, c, ctx, t)) } }]} />
@@ -197,7 +192,11 @@ export function OutreachComposer() {
                 {s.contacts.length ? <><b>{audience.length}</b> contact{audience.length === 1 ? '' : 's'}{c.sheet ? ` · ${c.sheet.replace(/_/g, ' ')}` : ''}{c.audience.group != null ? ` · ${s.groupNames.get(c.audience.group) ?? `Group ${c.audience.group}`}` : ''}{c.audience.purposes[0] ? ` · ${purposeLabel(c.audience.purposes[0])}` : ''} · <b>{ready}</b> ready</> : 'Import a list in Contacts'}
               </button>
             )}
-            <span className="or-line-note">each gets their own copy</span>
+            {c.kind === 'list' && suggestion && suggestion.id !== c.blueprint && c.blueprint !== 'blank' && (
+                  <button type="button" className="or-suggest" onClick={() => void pickLetter(suggestion.id)} data-tip={`Use “${OUTREACH_BLUEPRINTS.find((b) => b.id === suggestion.id)?.label}” — ${suggestion.count} contacts in this audience are listed for ${purposeLabel(suggestion.purpose).toLowerCase()}`}>
+                    <Icon name="star" size={12} /><span>Suggested: {OUTREACH_BLUEPRINTS.find((b) => b.id === suggestion.id)?.label}</span>
+                  </button>
+            )}
           </div>
           {badTo.length > 0 && <p className="or-inline-warn">Not an address: {badTo.slice(0, 3).join(', ')}</p>}
           <div className="or-line">
@@ -227,7 +226,7 @@ export function OutreachComposer() {
           <div className="or-foot">
             <Select<string> value={c.signatureId} prefix="Signature" onChange={(v) => s.patch({ signatureId: v })}
               options={[...s.signatures.map((x) => ({ value: x.id, label: x.name })), { value: 'none', label: 'No signature' }]} />
-            <button type="button" className="btn sm" onClick={() => ui.set({ sheet: 'signatures' })}><Icon name="edit" size={13} /><span>Signatures</span></button>
+            <button type="button" className="btn" onClick={() => ui.set({ sheet: 'signatures' })}><Icon name="edit" size={14} /><span>Signatures</span></button>
             <div className="spacer" />
             <Switch checked={c.letterhead} onChange={(v) => s.patch({ letterhead: v })} label="ESB letterhead" />
           </div>

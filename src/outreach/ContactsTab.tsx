@@ -9,7 +9,7 @@ import { skipReason } from './compose'
 import { inAudience } from './campaign'
 import { STATUS_LABEL, purposeLabel } from './directory'
 import { Icon } from '../ui/Icon'
-import { Select, Seg } from '../ui/controls'
+import { Select } from '../ui/controls'
 import type { Contact } from './types'
 
 type Row = { c: Contact; skip: string | null }
@@ -89,13 +89,17 @@ export function ContactsTab() {
           <Select value={c?.sheet ?? ''} prefix="Sheet" onChange={(v) => s.setSheet(String(v))}
             options={(listMeta?.sheets ?? s.sheets.map((x) => ({ name: x.name, contacts: 0 }))).filter((x) => x.contacts || x.name === c?.sheet).map((x) => ({ value: x.name, label: x.name.replace(/_/g, ' '), hint: x.contacts ? String(x.contacts) : '' }))} />
         )}
-        {!direct && groups.length > 1 && (
-          <Select<number> value={c?.audience.group ?? -1} prefix="Group" onChange={(v) => s.setAudience({ group: v < 0 ? null : v, purposes: [] })}
+        {!direct && (groups.length > 1 || purposes.length > 1) && (
+          <div className="or-pair">
+            {groups.length > 1 && (
+          <Select<number> value={c?.audience.group ?? -1} prefix="" onChange={(v) => s.setAudience({ group: v < 0 ? null : v, purposes: [] })}
             options={[{ value: -1, label: 'All groups' }, ...groups.map(([n, name]) => ({ value: n, label: name || `Group ${n}`, hint: String(n) }))]} />
         )}
-        {!direct && purposes.length > 1 && (
-          <Select<string> value={c?.audience.purposes[0] ?? ''} prefix="Purpose" onChange={(v) => s.setAudience({ purposes: v ? [v] : [] })}
+            {purposes.length > 1 && (
+          <Select<string> value={c?.audience.purposes[0] ?? ''} prefix="" onChange={(v) => s.setAudience({ purposes: v ? [v] : [] })}
             options={[{ value: '', label: 'Any purpose' }, ...purposes.map(([p, n]) => ({ value: p, label: purposeLabel(p), hint: String(n) }))]} />
+        )}
+          </div>
         )}
         {s.contacts.length > 0 && (
           <>
@@ -103,21 +107,22 @@ export function ContactsTab() {
               <Icon name="search" size={13} />
               <input type="search" placeholder="Search name, organisation, email" value={s.query} onChange={(e) => s.setQuery(e.target.value)} aria-label="Search contacts" />
             </label>
-            <Seg<typeof s.view>
-              // the chip measures its options once: new ones (Replied, Failed) arriving later need a fresh control
-              key={`f${counts.replied ? 1 : 0}${counts.failed + counts.bounced ? 1 : 0}`}
-              className="or-filter"
-              value={s.view}
-              onChange={s.setView}
-              options={[
-                { value: 'all', label: 'All', tip: `${inAud.length} in the audience` },
-                { value: 'ready', label: `Ready ${counts.ready}`, tip: 'The batch will send to these' },
-                { value: 'skipped', label: `Skip ${counts.skipped}`, tip: 'Not sent until you fix or approve them' },
-                { value: 'sent', label: `Sent ${counts.sent}` },
-                ...(counts.replied ? [{ value: 'replied' as const, label: `Replied ${counts.replied}` }] : []),
-                ...(counts.failed + counts.bounced ? [{ value: 'failed' as const, label: `Failed ${counts.failed + counts.bounced}`, tip: 'Refused when sent, or returned later by the mail system' }] : []),
-              ]}
-            />
+            {/* a row of chips that wraps, not a six-way segmented control: the counts change length and six segments
+                squeezed to 300 px left the labels touching each other and the edges */}
+            <div className="or-chips" role="group" aria-label="Show">
+              {([
+                ['all', 'All', inAud.length, `${inAud.length} in the audience`],
+                ['ready', 'Ready', counts.ready, 'The batch will send to these'],
+                ['skipped', 'Skipped', counts.skipped, 'Not sent until you fix or approve them'],
+                ['sent', 'Sent', counts.sent, 'Sent by this campaign'],
+                ...(counts.replied ? [['replied', 'Replied', counts.replied, 'Answered — read from your inbox']] : []),
+                ...(counts.failed + counts.bounced ? [['failed', 'Failed', counts.failed + counts.bounced, 'Refused when sent, or returned later by the mail system']] : []),
+              ] as [typeof s.view, string, number, string][]).map(([v, label, n, tip]) => (
+                <button key={v} type="button" className={'or-fchip' + (s.view === v ? ' on' : '')} aria-pressed={s.view === v} onClick={() => s.setView(v)} data-tip={tip}>
+                  {label}<span>{n}</span>
+                </button>
+              ))}
+            </div>
           </>
         )}
         {s.importNote && <p className="or-note">{s.importNote}</p>}

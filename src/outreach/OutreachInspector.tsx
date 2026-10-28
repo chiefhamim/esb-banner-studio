@@ -18,6 +18,7 @@ import { ProviderMark } from '../editorial/ProviderMark'
 import { Icon } from '../ui/Icon'
 import { Switch, Tabs } from '../ui/controls'
 
+const fmtWhen = (t: number) => new Date(t).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const mmss = (ms: number) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 const gap = (lo: number, hi: number) => (lo >= 60 ? `${Math.round(lo / 60)}–${Math.round(hi / 60)} min` : `${lo}–${hi} s`)
 
@@ -131,7 +132,7 @@ function SendTab() {
             {Object.keys(c.replied).length > 0 && <span className="good"><b>{Object.keys(c.replied).length}</b> replied</span>}
             {Object.keys(c.bounced).length > 0 && <span className="bad"><b>{Object.keys(c.bounced).length}</b> bounced</span>}
             {failed > 0 && <span className="bad"><b>{failed}</b> failed</span>}
-            <button type="button" className="btn xs" onClick={() => downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts))} data-tip="Every contact in the audience: sent, failed, skipped and why"><Icon name="download" size={12} /><span>Results CSV</span></button>
+            <button type="button" className="ibtn or-results-dl" aria-label="Download the results (CSV)" onClick={() => downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts))} data-tip="Download the results (CSV) — every contact in the audience: sent, failed, skipped and why"><Icon name="download" size={14} /></button>
           </div>
         )}
       </section>
@@ -144,7 +145,7 @@ function SendTab() {
         <p className="or-muted">Sends the letter to you first, filled with {active ? <b>{active.personName || active.email}</b> : 'a nameless recipient'}’s details. Does not count toward today.</p>
         <div className="or-test">
           <input type="email" className="or-input" placeholder="your@address" value={testTo} onChange={(e) => setTestTo(e.target.value)} aria-label="Test address" />
-          <button type="button" className="btn sm" disabled={!desktop || !ready || testing || !c || !/^\S+@\S+\.\S+$/.test(testTo)} onClick={async () => { setTesting(true); await sendTest(testTo.trim(), active); setTesting(false) }}>
+          <button type="button" className="btn" disabled={!desktop || !ready || testing || !c || !/^\S+@\S+\.\S+$/.test(testTo)} onClick={async () => { setTesting(true); await sendTest(testTo.trim(), active); setTesting(false) }}>
             <Icon name="send" size={13} /><span>{testing ? 'Sending…' : 'Send test'}</span>
           </button>
         </div>
@@ -176,8 +177,8 @@ function ContactTab() {
         {active.mxHost && <><dt>Mail server</dt><dd>{active.mxHost}</dd></>}
         {active.diagnostic && <><dt>Sheet note</dt><dd>{active.diagnostic}</dd></>}
         {active.sheet && <><dt>From sheet</dt><dd>{active.sheet.replace(/_/g, ' ')}</dd></>}
-        <dt>This campaign</dt><dd>{outside ? 'Outside the audience' : active.status === 'REPLIED' ? `Replied ${active.repliedAt ? new Date(active.repliedAt).toLocaleString() : ''}` : active.status === 'BOUNCED' ? `Bounced: ${active.error}` : active.status === 'SENT' ? `Sent ${active.sentAt ? new Date(active.sentAt).toLocaleString() : ''}` : active.status === 'FAILED' ? `Failed: ${active.error}` : reason ?? 'Will be sent'}</dd>
-        {c && c.sent[active.email] && <><dt>Follow-up</dt><dd>{c.followed[active.email] ? `Sent ${new Date(c.followed[active.email]).toLocaleString()}` : followUpReason(active, c) ?? 'Due now'}</dd></>}
+        <dt>This campaign</dt><dd>{outside ? 'Outside the audience' : active.status === 'REPLIED' ? `Replied ${active.repliedAt ? fmtWhen(active.repliedAt) : ''}` : active.status === 'BOUNCED' ? `Bounced: ${active.error}` : active.status === 'SENT' ? `Sent ${active.sentAt ? fmtWhen(active.sentAt) : ''}` : active.status === 'FAILED' ? `Failed: ${active.error}` : reason ?? 'Will be sent'}</dd>
+        {c && c.sent[active.email] && <><dt>Follow-up</dt><dd>{c.followed[active.email] ? `Sent ${fmtWhen(c.followed[active.email])}` : followUpReason(active, c) ?? 'Due now'}</dd></>}
       </dl>
       {active.mxStatus !== 'SAFE_TO_SEND' && active.mxStatus !== 'EXCLUDED' && active.mxStatus !== 'UNDELIVERABLE' && c?.kind !== 'direct' && (
         <Switch checked={active.approved} onChange={(v) => s.approve(active.email, v)} label="I checked this address — include it" />
@@ -276,7 +277,7 @@ function InboxCard() {
         <span><b>{optedOut}</b>opted out</span>
         <span className={bounced ? 'bad' : ''}><b>{bounced}</b>bounced</span>
       </div>
-      <p className="or-muted or-small">{!desktop ? 'Replies are read in the desktop app.' : ib.state === 'ok' ? `Inbox read ${ago(ib.at)} · ${ib.scanned} recent message${ib.scanned === 1 ? '' : 's'} looked at${ib.note ? ` · ${ib.note}` : ''}` : ib.state === 'bad' ? ib.error : ib.state === 'busy' ? 'Reading the inbox…' : 'Not read yet — it is read on launch and every 15 minutes.'}</p>
+      <p className="or-muted or-small">{!desktop ? 'Replies are read in the desktop app.' : ib.state === 'ok' ? `Read ${ago(ib.at)} · ${ib.scanned} message${ib.scanned === 1 ? '' : 's'} checked${ib.note ? ` · ${ib.note}` : ''}` : ib.state === 'bad' ? ib.error : ib.state === 'busy' ? 'Reading the inbox…' : 'Not read yet — it is read on launch and every 15 minutes.'}</p>
     </section>
   )
 }

@@ -23,8 +23,8 @@ export function CampaignsTab() {
   return (
     <div className="or-tab">
       <div className="or-left-head or-new">
-        <button type="button" className="btn sm primary" onClick={() => void s.createCampaign()} disabled={!idle} data-tip="A campaign to a mailing list (uses the list you have open)"><Icon name="plus" size={13} /><span>Campaign</span></button>
-        <button type="button" className="btn sm" onClick={async () => { await s.createCampaign({ kind: 'direct', name: 'New email', listId: null, sheet: '', blueprint: 'blank', subject: '', body: '' }); ui.set({ left: 'contacts', view: 'edit' }) }} disabled={!idle} data-tip="An ordinary email to addresses you type"><Icon name="mail" size={13} /><span>Email</span></button>
+        <button type="button" className="btn primary" onClick={() => void s.createCampaign()} disabled={!idle} data-tip="A campaign to a mailing list (uses the list you have open)"><Icon name="plus" size={13} /><span>Campaign</span></button>
+        <button type="button" className="btn" onClick={async () => { await s.createCampaign({ kind: 'direct', name: 'New email', listId: null, sheet: '', blueprint: 'blank', subject: '', body: '' }); ui.set({ left: 'contacts', view: 'edit' }) }} disabled={!idle} data-tip="An ordinary email to addresses you type"><Icon name="mail" size={13} /><span>Email</span></button>
       </div>
       <div className="or-list" role="listbox" aria-label="Campaigns">
         {!sorted.length ? (
@@ -36,13 +36,9 @@ export function CampaignsTab() {
             <div key={c.id} className={'or-row or-camp cs-' + c.status + (on ? ' on' : '')} role="option" aria-selected={on}>
               <button type="button" className="or-camp-open" onClick={() => void s.openCampaign(c.id)} disabled={!idle && !on}>
                 <span className="or-row-main">
-                  <b>{c.name}</b>
-                  <span>{c.kind === 'direct' ? `Email · ${c.recipients.length} address${c.recipients.length === 1 ? '' : 'es'}` : (s.lists.find((l) => l.id === c.listId)?.fileName ?? 'No list')}{c.sheet ? ` · ${c.sheet.replace(/_/g, ' ')}` : ''}</span>
-                  <span className="or-row-mail">{c.subject || 'No subject yet'}</span>
-                </span>
-                <span className="or-camp-side">
-                  <span className={'or-chip cs-' + c.status}>{c.status === 'scheduled' && c.scheduledAt ? `${when(c.scheduledAt)}` : STATUS_TEXT[c.status]}</span>
-                  <span className="or-camp-n" data-tip={`${sent} sent${replied ? ` · ${replied} replied` : ''}${failed ? ` · ${failed} failed or bounced` : ''} · edited ${new Date(c.updatedAt).toLocaleString()}`}>{sent ? `${sent} sent` : when(c.updatedAt)}{replied ? ` · ${replied} ↩` : ''}{failed ? ` · ${failed} ✕` : ''}</span>
+                  <span className="or-camp-top"><b>{c.name}</b><span className={'or-chip cs-' + c.status}>{c.status === 'scheduled' && c.scheduledAt ? when(c.scheduledAt) : STATUS_TEXT[c.status]}</span></span>
+                  <span>{c.kind === 'direct' ? `Email · ${c.recipients.length} address${c.recipients.length === 1 ? '' : 'es'}` : `${s.lists.find((l) => l.id === c.listId)?.fileName ?? 'No list'}${c.sheet ? ` · ${c.sheet.replace(/_/g, ' ')}` : ''}`}</span>
+                  <span className="or-camp-n">{sent ? [`${sent} sent`, replied && `${replied} replied`, failed && `${failed} failed`].filter(Boolean).join(' · ') : `Not sent · edited ${when(c.updatedAt)}`}</span>
                 </span>
               </button>
               <MenuButton icon="more" className="ibtn or-camp-menu" title="Campaign actions" align="end" items={[

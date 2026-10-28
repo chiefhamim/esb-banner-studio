@@ -6,8 +6,11 @@
 .outreach-workspace {
   --or-sent: #2563eb; --or-sent-soft: rgba(37, 99, 235, .1);
   --or-reply: #0f766e; --or-reply-soft: rgba(15, 118, 110, .11);
-  position: relative; display: grid; grid-template-rows: auto auto minmax(0, 1fr) 28px; grid-template-areas: 'top' 'log' 'body' 'status';
+  position: relative; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; grid-template-areas: 'top' 'log' 'body' 'status';
   width: 100%; height: 100%; min-height: 0; color: var(--text); background: var(--bg-0);
+  /* clip, not hidden: a hidden box can still be scrolled by focus, and the 4 px the status bar once overhung the
+     grid let every focused control nudge the whole desk up */
+  overflow: clip;
 }
 :root[data-theme=dark] .outreach-workspace { --or-sent: #8fb3ff; --or-sent-soft: rgba(143, 179, 255, .14); --or-reply: #5eead4; --or-reply-soft: rgba(94, 234, 212, .13); }
 
@@ -96,35 +99,44 @@
 .or-search:focus-within { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text) 35%, transparent); }
 .or-search input { flex: 1; min-width: 0; height: 100%; padding: 0; font: 500 12px/1 var(--font-ui); color: var(--text); background: none; border: 0; outline: none; }
 .or-filter { display: flex; width: 100%; }
+.or-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
+.or-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.or-fchip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; font: 500 12px/1 var(--font-ui); color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-pill); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
+.or-fchip span { font-variant-numeric: tabular-nums; color: var(--text-3); font-weight: 600; }
+.or-fchip:hover { color: var(--text); background: var(--fill-hover); }
+.or-fchip.on { color: var(--sel-ink, var(--on-ink)); background: var(--sel, var(--ink)); }
+.or-fchip.on span { color: inherit; opacity: .75; }
+.or-fchip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .or-filter button { flex: 1 1 auto; min-width: 0; padding: 0 6px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .or-list { display: flex; flex: 1; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; padding: 8px 6px 8px 10px; scrollbar-gutter: stable; }
 
-/* A row is a card with its state on the left edge — the Editorial story queue's `.sq-row::before` — so a long list
-   reads at a glance: green ready, amber skipped, blue sent, red failed, grey opted out. The open row is raised and
-   outlined in the selection colour. */
-.or-row { position: relative; flex: none; display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 8px 10px 8px 13px; text-align: left; color: var(--text); background: var(--card); border: 0; border-radius: var(--r-2); cursor: pointer; overflow: hidden;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent), 0 1px 2px rgba(16, 18, 28, .04);
-  transition: box-shadow var(--t-2) var(--spring), background var(--t-1) var(--ease), transform var(--t-2) var(--spring); }
-.or-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--st, color-mix(in srgb, var(--text) 18%, transparent)); }
-.or-row:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent), 0 2px 6px rgba(16, 18, 28, .07); }
-.or-row:active { transform: scale(.995); }
-.or-row.on { box-shadow: 0 0 0 1.5px var(--sel, var(--ink)), 0 2px 8px rgba(16, 18, 28, .08); }
+/* A row is a quiet card; its state is the chip on the right. The 3 px coloured edge came from the Editorial story
+   queue and said the same thing as the chip a second time — in five colours down a list of hundreds. */
+.or-row { position: relative; flex: none; display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 10px 12px; text-align: left; color: var(--text); background: var(--card); border: 0; border-radius: var(--r-2); cursor: pointer;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
+  transition: box-shadow var(--t-2) var(--spring), background var(--t-1) var(--ease); }
+.or-row:hover { background: color-mix(in srgb, var(--card) 92%, var(--text) 4%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent), 0 1px 4px rgba(16, 18, 28, .05); }
+.or-row.on { box-shadow: 0 0 0 1.5px var(--sel, var(--ink)), 0 2px 8px rgba(16, 18, 28, .07); }
 .or-row:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-:root[data-theme=dark] .or-row { background: color-mix(in srgb, var(--card) 86%, var(--text) 4%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent); }
-:root[data-theme=dark] .or-row:hover { background: color-mix(in srgb, var(--card) 80%, var(--text) 8%); }
+:root[data-theme=dark] .or-row { background: color-mix(in srgb, var(--card) 88%, var(--text) 3%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent); }
+:root[data-theme=dark] .or-row:hover { background: color-mix(in srgb, var(--card) 82%, var(--text) 7%); }
 :root[data-theme=dark] .or-row.on { box-shadow: 0 0 0 1.5px var(--sel, var(--ink)); }
 .or-row-main { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 1px; }
 .or-row-main > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .or-row-main b { font-size: 13px; line-height: 18px; font-weight: 600; }
 .or-row-main span { font-size: 11.5px; line-height: 16px; color: var(--text-2); }
+.or-row > .or-chip { margin-top: 1px; }
 .or-row-main .or-row-mail { color: var(--text-3); }
 
-.or-camp { padding: 0 2px 0 0; align-items: stretch; cursor: default; }
-.or-camp-open { display: flex; flex: 1 1 auto; align-items: flex-start; gap: 8px; min-width: 0; padding: 8px 4px 8px 13px; color: inherit; text-align: left; background: none; border: 0; cursor: pointer; font: inherit; }
+.or-camp { padding: 0; align-items: stretch; cursor: default; }
+.or-camp-open { display: flex; flex: 1 1 auto; min-width: 0; padding: 10px 6px 10px 12px; color: inherit; text-align: left; background: none; border: 0; border-radius: inherit; cursor: pointer; font: inherit; }
 .or-camp-open:disabled { cursor: default; opacity: .6; }
-.or-camp-side { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 4px; }
-.or-camp-n { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.or-camp-menu { flex: none; align-self: center; width: 28px; height: 28px; padding: 0; }
+.or-camp-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.or-camp-top b { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.or-row-main .or-camp-n { color: var(--text-3); font-variant-numeric: tabular-nums; }
+/* the actions appear on the row being pointed at, or the open one — not as a box inside every card */
+.or-camp-menu { flex: none; align-self: flex-start; width: 28px; height: 28px; margin: 6px 6px 0 0; padding: 0; opacity: 0; transition: opacity var(--t-1) var(--ease); }
+.or-camp:hover .or-camp-menu, .or-camp.on .or-camp-menu, .or-camp-menu:focus-visible, .or-camp-menu.open { opacity: 1; }
 .or-camp-menu .chev { display: none; }
 
 .or-paste { resize: vertical; min-height: 84px; }
@@ -150,10 +162,13 @@
 .or-center { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 12px 16px; gap: 10px; }
 .or-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .or-toolbar > .select { max-width: 320px; }
+/* the letter select takes what the buttons leave, so the toolbar stays one row from 1440 px down to 1180 */
+.or-toolbar > .or-letter-select { flex: 1 1 200px; min-width: 150px; }
+.or-toolbar .spacer { display: none; }
 .or-toolbar .spacer { flex: 1 1 0; }
-.or-suggest { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 300px; height: 28px; padding: 0 10px; font: 500 12px/1 var(--font-ui); color: var(--text-2); background: transparent; border: 1px dashed color-mix(in srgb, var(--text) 30%, transparent); border-radius: var(--r-pill); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
+.or-suggest { flex: none; display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 46%; height: 24px; padding: 0 10px; font: 500 11.5px/1 var(--font-ui); color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-pill); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
 .or-suggest span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.or-suggest:hover { color: var(--text); background: var(--fill-hover); border-style: solid; }
+.or-suggest:hover { color: var(--text); background: var(--fill-hover); }
 .or-suggest svg { flex: none; color: var(--warning); }
 .or-sheet { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; overflow-y: auto; background: var(--card); border-radius: var(--r-3); box-shadow: var(--card-shadow); }
 .or-start { justify-content: center; }
@@ -173,10 +188,10 @@
 .or-link { min-width: 0; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0; font-size: 13px; font-weight: 500; font-family: var(--font-ui); color: var(--or-sent); background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .or-inline-warn { margin: 6px 16px 0; font-size: 11.5px; color: var(--warning); }
 .or-variants { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 16px 0; }
-.or-fmt { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 8px 12px 0; padding: 3px; background: var(--fill); border-radius: var(--r-2); }
+.or-fmt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 10px 16px 0; padding: 4px 6px; background: var(--fill); border-radius: var(--r-2); }
 .or-fmt .ibtn { width: 28px; height: 28px; }
 .or-fmt-sep { width: 1px; height: 18px; margin: 0 6px; background: color-mix(in srgb, var(--text) 16%, transparent); }
-.or-tag, .or-variant { height: 24px; padding: 0 8px; font: 500 11.5px/1 var(--font-ui); color: var(--text-2); background: var(--card); border: 0; border-radius: var(--r-1); cursor: pointer; box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent); transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
+.or-tag, .or-variant { height: 24px; padding: 0 9px; font: 500 11.5px/1 var(--font-ui); color: var(--text-2); background: var(--card); border: 0; border-radius: var(--r-pill); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
 .or-tag::before { content: '{'; opacity: .55; }
 .or-tag::after { content: '}'; opacity: .55; }
 .or-tag:hover, .or-variant:hover { color: var(--text); background: var(--fill-hover); }
@@ -241,7 +256,7 @@
 .or-results b { color: var(--text); }
 .or-results .bad b { color: var(--danger); }
 .or-results .good b { color: var(--or-reply); }
-.or-results .btn { margin-left: auto; }
+.or-results .or-results-dl { margin-left: auto; width: 28px; height: 28px; }
 .or-contact { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .or-contact b { font-size: 14px; line-height: 20px; }
 .or-contact span { font-size: 12px; line-height: 17px; color: var(--text-2); overflow-wrap: anywhere; }
@@ -301,7 +316,7 @@
 .or-stats b { font: 800 18px/1 var(--font-ui); font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--text); }
 .or-stats .good b { color: var(--or-reply); }
 .or-stats .bad b { color: var(--danger); }
-.or-interrupted { box-shadow: var(--card-shadow), inset 3px 0 0 var(--warning); }
+.or-interrupted { background: color-mix(in srgb, var(--card) 90%, var(--warning) 10%); }
 .or-interrupted > header > svg { color: var(--warning); }
 .or-sb-inbox.on { --sb: var(--or-reply); --sb2: #4f8cff; }
 .or-fu-row { display: flex; align-items: flex-end; gap: 12px; }
@@ -314,3 +329,17 @@
 .or-tpl .btn, .or-tpl .ibtn { flex: none; }
 .or-ask-body { margin: 0; }
 .btn.primary.danger { background: var(--danger); border-color: transparent; color: #fff; }
+
+/* ---------------------------------------------------------------- breathing room inside switches and tabs
+   The raised chip of a segmented control or tab bar sat 2 px from the edge of its well, so it read as edge to
+   edge; on this desk it gets 4 px all round, and the options a 2 px gap between them. */
+/* only the desk's own columns: the workspace switcher in the header stays exactly as on the other desks */
+.or-body .seg-ctl, .or-body .side-tabs { padding: 4px; gap: 2px; }
+.or-body .seg-ctl .pill-slide, .or-body .side-tabs .pill-slide { top: 4px; bottom: 4px; }
+.or-body .or-toolbar .seg-ctl button { height: 24px; }
+.or-body .or-toolbar .seg-ctl { height: 32px; box-sizing: border-box; align-items: center; }
+.or-tabs.side-tabs { margin: 12px 12px 4px; }
+.or-left-head { padding: 8px 12px 12px; }
+.or-list { padding: 10px 8px 12px 12px; gap: 6px; }
+.or-right-scroll { padding: 8px 12px 12px; }
+.or-camp-open .or-row-main { gap: 2px; }
