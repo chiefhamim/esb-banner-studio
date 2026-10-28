@@ -1,222 +1,375 @@
+// Outreach desk state. Like the Editorial story queue, the desk holds many CAMPAIGNS — each with its audience,
+// letter, sources, schedule and per-address results — and one is open at a time. What the editor decided about an
+// ADDRESS (approved, asked not to be emailed) holds across every campaign.
+//
+// Where things live: campaigns, signatures, templates and the house prompt in localStorage
+// (`esb-banner-studio/outreach/v2`); imported workbooks and attachments in IndexedDB (idb.ts), being too big for it.
+// The main process keeps its own ledger of sends, which is what stops a repeat; `campaign.sent` is what the list shows.
+
 import { create } from 'zustand'
 import type { EsbOutreachStatus } from '../esb'
-import type { AttachmentItem, Contact, OutreachBlueprintId, OutreachLang } from './types'
+import type { AttachmentItem, Campaign, Contact, ListMeta, OutreachBlueprintId, OutreachLang, Signature, Source, Template } from './types'
 import { OUTREACH_BLUEPRINTS } from './outreachAi'
-import { contactsFromRows, readMailingFile } from './directory'
+import { contactsFromRows, groupNamesOf, readMailingFile } from './directory'
 import type { Sheet } from './directory'
+import { idbDel, idbGet, idbSet } from './idb'
 
-// What the editor decided per address — approved, opted out, sent — is kept in localStorage, so it survives a
-// restart and a re-import of the workbook. The main process keeps its own ledger of sends (the one that stops a
-// repeat); this copy is what the list shows, and it reaches back further than the main's seven-day window.
-const KEY = 'esb-banner-studio/outreach/v1'
-
-interface Saved {
-  approved: string[]
-  optOut: string[]
-  sent: Record<string, number>
-  draft: { blueprint: OutreachBlueprintId; lang: OutreachLang; subject: string; body: string } | null
-}
-
+const KEY = 'esb-banner-studio/outreach/v2'
+const V1 = 'esb-banner-studio/outreach/v1'
 // the first build kept the SMTP settings, app password included, in plain text under this key; the password now
 // lives encrypted in the main process, so the old copy is deleted the first time the desk loads
 const LEGACY_CONFIG = 'esb-banner-studio/outreach-config'
 
-function load(): Saved {
-  try { localStorage.removeItem(LEGACY_CONFIG) } catch { /* storage blocked */ }
-  try {
-    const s = JSON.parse(localStorage.getItem(KEY) || 'null') as Partial<Saved> | null
-    if (s) return { approved: s.approved ?? [], optOut: s.optOut ?? [], sent: s.sent ?? {}, draft: s.draft ?? null }
-  } catch { /* storage blocked or edited by hand: start clean */ }
-  return { approved: [], optOut: [], sent: {}, draft: null }
-}
-function save(s: Saved) {
-  try { localStorage.setItem(KEY, JSON.stringify(s)) } catch { /* full: the main process's ledger still prevents repeats */ }
-}
+export const uid = (p: string) => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 
-export type CampaignState = 'idle' | 'running' | 'paused'
-
-export interface LogEntry { t: number; level: 'info' | 'ok' | 'warn' | 'error'; text: string }
-
-interface OutreachState {
-  fileName: string
-  sheets: Sheet[]
-  sheet: string
-  contacts: Contact[]
-  importNote: string | null
+interface Saved {
+  campaigns: Campaign[]
   activeId: string | null
-  filter: 'all' | 'ready' | 'skipped' | 'sent' | 'failed'
-  group: string
-  query: string
-
-  blueprint: OutreachBlueprintId
-  lang: OutreachLang
-  subject: string
-  body: string
-  attachments: AttachmentItem[]
-
-  campaign: CampaignState
-  /** When the runner will send next (ms), for the countdown. */
-  nextAt: number | null
-  current: string | null
-  runSent: number
-  runTotal: number
-
-  /** The main process's view: account, encrypted password present, sends in the last 24 h. null outside the desktop app. */
-  mail: EsbOutreachStatus | null
-  log: LogEntry[]
-  saved: Saved
-
-  loadFile: (file: File) => Promise<void>
-  setSheet: (name: string) => void
-  setActive: (id: string | null) => void
-  setFilter: (f: OutreachState['filter']) => void
-  setGroup: (g: string) => void
-  setQuery: (q: string) => void
-  approve: (email: string, on: boolean) => void
-  optOut: (email: string, on: boolean) => void
-  markSent: (email: string, t: number) => void
-  markFailed: (email: string, error: string) => void
-  markSending: (email: string | null) => void
-
-  selectBlueprint: (id: OutreachBlueprintId) => void
-  setLang: (lang: OutreachLang) => void
-  setSubject: (s: string) => void
-  setBody: (s: string) => void
-  addAttachment: (a: AttachmentItem) => void
-  removeAttachment: (id: string) => void
-
-  setCampaign: (s: CampaignState, extra?: Partial<Pick<OutreachState, 'nextAt' | 'runSent' | 'runTotal'>>) => void
-  setNextAt: (t: number | null) => void
-  refreshMail: () => Promise<void>
-  addLog: (level: LogEntry['level'], text: string) => void
+  lists: ListMeta[]
+  approved: string[]
+  optOut: string[]
+  signatures: Signature[]
+  templates: Template[]
+  /** The editor's house style for every AI job on this desk; '' = none. */
+  housePrompt: string
 }
 
-/** The sheet's contacts with what the editor and the ledger know laid over them. */
-function overlay(list: Contact[], s: Saved, mail: EsbOutreachStatus | null): Contact[] {
-  const approved = new Set(s.approved), optOut = new Set(s.optOut)
-  const ledger = new Map((mail?.sentTo ?? []).map((e) => [e.to, e.t]))
-  return list.map((c) => {
-    const sentAt = s.sent[c.email] ?? ledger.get(c.email)
-    return {
-      ...c,
-      approved: approved.has(c.email),
-      status: optOut.has(c.email) ? 'OPTED_OUT' : sentAt ? 'SENT' : c.status === 'FAILED' ? 'FAILED' : 'QUEUED',
-      sentAt,
-    }
-  })
-}
+export const DEFAULT_SIGNATURE: Signature = { id: 'sig-default', name: 'Outreach desk', text: 'With best regards,\n\nOutreach Desk\nESB PowerLine — Express Broadcast and Communication Ltd.\nDhaka, Bangladesh · https://esbpowerline.com' }
 
 const template = (id: OutreachBlueprintId, lang: OutreachLang) => {
   const b = OUTREACH_BLUEPRINTS.find((x) => x.id === id) ?? OUTREACH_BLUEPRINTS[0]
   return lang === 'bn' ? { subject: b.bengaliSubject, body: b.bengaliBody } : { subject: b.defaultSubject, body: b.defaultBody }
 }
 
+export function newCampaign(over: Partial<Campaign> = {}): Campaign {
+  const now = Date.now()
+  const bp = OUTREACH_BLUEPRINTS[0].id
+  return {
+    id: uid('cmp'), name: 'Untitled campaign', createdAt: now, updatedAt: now, status: 'draft', kind: 'list',
+    listId: null, sheet: '', audience: { group: null, purposes: [] }, recipients: [],
+    blueprint: bp, lang: 'en', ...template(bp, 'en'), signatureId: DEFAULT_SIGNATURE.id, letterhead: true,
+    sources: [], scheduledAt: null, sent: {}, failed: {},
+    ...over,
+  }
+}
+
+function load(): Saved {
+  try { localStorage.removeItem(LEGACY_CONFIG) } catch { /* storage blocked */ }
+  const base: Saved = { campaigns: [], activeId: null, lists: [], approved: [], optOut: [], signatures: [DEFAULT_SIGNATURE], templates: [], housePrompt: '' }
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY) || 'null') as Partial<Saved> | null
+    if (s) return { ...base, ...s, signatures: s.signatures?.length ? s.signatures : base.signatures }
+    // the first desk kept one draft and per-address marks: carry them into a first campaign
+    const v1 = JSON.parse(localStorage.getItem(V1) || 'null') as { approved?: string[]; optOut?: string[]; sent?: Record<string, number>; draft?: { blueprint: OutreachBlueprintId; lang: OutreachLang; subject: string; body: string } } | null
+    if (v1) {
+      const c = newCampaign({ name: 'First campaign', ...(v1.draft ?? {}), sent: v1.sent ?? {} })
+      return { ...base, campaigns: [c], activeId: c.id, approved: v1.approved ?? [], optOut: v1.optOut ?? [] }
+    }
+  } catch { /* edited by hand or blocked: start clean */ }
+  return base
+}
+function save(s: Saved) {
+  try { localStorage.setItem(KEY, JSON.stringify(s)) } catch { /* full: the main process's ledger still prevents repeats */ }
+}
+
+export type RunState = 'idle' | 'running' | 'paused'
+export interface LogEntry { t: number; level: 'info' | 'ok' | 'warn' | 'error'; text: string }
+export type SmtpCheck = { state: 'idle' } | { state: 'busy' } | { state: 'ok'; ms: number; at: number } | { state: 'bad'; error: string; at: number }
+
+interface OutreachState extends Saved {
+  /** The open campaign's list, read from IndexedDB. */
+  sheets: Sheet[]
+  groupNames: Map<number, string>
+  contacts: Contact[]
+  importNote: string | null
+  activeContact: string | null
+  view: 'all' | 'ready' | 'skipped' | 'sent' | 'failed'
+  query: string
+  attachments: AttachmentItem[]
+
+  run: RunState
+  nextAt: number | null
+  current: string | null
+  runSent: number
+  runTotal: number
+
+  mail: EsbOutreachStatus | null
+  smtp: SmtpCheck
+  log: LogEntry[]
+
+  campaign: () => Campaign | null
+  openCampaign: (id: string) => Promise<void>
+  createCampaign: (over?: Partial<Campaign>) => Promise<string>
+  duplicateCampaign: (id: string) => Promise<void>
+  deleteCampaign: (id: string) => Promise<void>
+  patch: (p: Partial<Campaign>) => void
+  patchById: (id: string, p: Partial<Campaign>) => void
+  importList: (file: File) => Promise<void>
+  useList: (listId: string) => Promise<void>
+  setSheet: (name: string) => void
+  setRecipients: (addresses: string[]) => void
+  setAudience: (a: Partial<Campaign['audience']>) => void
+  setActiveContact: (email: string | null) => void
+  setView: (v: OutreachState['view']) => void
+  setQuery: (q: string) => void
+  approve: (email: string, on: boolean) => void
+  optOutAddress: (email: string, on: boolean) => void
+  markSent: (email: string, t: number) => void
+  markFailed: (email: string, error: string) => void
+  markSending: (email: string | null) => void
+  selectBlueprint: (id: OutreachBlueprintId) => void
+  setLang: (lang: OutreachLang) => void
+  addAttachment: (a: AttachmentItem) => void
+  removeAttachment: (id: string) => void
+  addSource: (s: Source) => void
+  updateSource: (id: string, p: Partial<Source>) => void
+  removeSource: (id: string) => void
+  saveSignature: (s: Signature) => void
+  deleteSignature: (id: string) => void
+  saveTemplate: (name: string) => void
+  applyTemplate: (id: string) => void
+  deleteTemplate: (id: string) => void
+  setHousePrompt: (p: string) => void
+  setRun: (r: RunState, extra?: Partial<Pick<OutreachState, 'nextAt' | 'runSent' | 'runTotal'>>) => void
+  setNextAt: (t: number | null) => void
+  refreshMail: () => Promise<void>
+  checkSmtp: (force?: boolean) => Promise<void>
+  addLog: (level: LogEntry['level'], text: string) => void
+}
+
+/** The sheet's contacts with what the editor and the ledgers know laid over them. */
+export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'>, c: Campaign | null, mail: EsbOutreachStatus | null): Contact[] {
+  const approved = new Set(s.approved), optOut = new Set(s.optOut)
+  const ledger = new Map((mail?.sentTo ?? []).map((e) => [e.to, e.t]))
+  return list.map((x) => {
+    const sentAt = c?.sent[x.email] ?? ledger.get(x.email)
+    const failed = c?.failed[x.email]
+    return {
+      ...x,
+      approved: x.approved || approved.has(x.email),
+      status: optOut.has(x.email) ? 'OPTED_OUT' : sentAt ? 'SENT' : failed ? 'FAILED' : x.status === 'SENDING' ? 'SENDING' : 'QUEUED',
+      sentAt,
+      error: failed,
+    }
+  })
+}
+
+/** Typed addresses for an ordinary email: each one is the editor's own choice, so it counts as approved. */
+export function directContacts(addresses: string[]): Contact[] {
+  return addresses.map((email, i) => ({
+    id: email, serial: i + 1, sectorGroup: '', groupNo: null, organization: '', personName: '', designation: '', email, phone: '',
+    purposes: [], mxStatus: 'SAFE_TO_SEND', rawStatus: 'Typed by you', diagnostic: '', sheet: '', approved: true, status: 'QUEUED',
+  }))
+}
+
 export const useOutreachStore = create<OutreachState>((set, get) => {
   const saved = load()
-  const draft = saved.draft ?? { blueprint: OUTREACH_BLUEPRINTS[0].id, lang: 'en' as const, ...template(OUTREACH_BLUEPRINTS[0].id, 'en') }
-  const persist = (patch: Partial<Saved>) => { const next = { ...get().saved, ...patch }; save(next); set({ saved: next, contacts: overlay(get().contacts, next, get().mail) }) }
-  const persistDraft = () => { const s = get(); persist({ draft: { blueprint: s.blueprint, lang: s.lang, subject: s.subject, body: s.body } }) }
-  const fromSheet = (name: string) => {
-    const sh = get().sheets.find((x) => x.name === name)
-    if (!sh) return
+  const persist = () => {
+    const s = get()
+    save({ campaigns: s.campaigns, activeId: s.activeId, lists: s.lists, approved: s.approved, optOut: s.optOut, signatures: s.signatures, templates: s.templates, housePrompt: s.housePrompt })
+  }
+  const relay = () => set({ contacts: overlay(get().contacts, get(), get().campaign(), get().mail) })
+  const patchCampaign = (id: string, p: Partial<Campaign>) => {
+    set({ campaigns: get().campaigns.map((c) => (c.id === id ? { ...c, ...p, updatedAt: Date.now() } : c)) })
+    persist()
+  }
+  /** Read the open campaign's contacts from its list and sheet (or its typed addresses). */
+  const loadContacts = async () => {
+    const c = get().campaign()
+    if (!c) return set({ sheets: [], contacts: [], groupNames: new Map(), importNote: null })
+    if (c.kind === 'direct') return set({ sheets: [], groupNames: new Map(), importNote: null, contacts: overlay(directContacts(c.recipients), get(), c, get().mail) })
+    const sheets = c.listId ? (await idbGet<Sheet[]>(`list:${c.listId}`)) ?? [] : []
+    const groupNames = groupNamesOf(sheets)
+    const sh = sheets.find((x) => x.name === c.sheet) ?? sheets.find((x) => x.rows.slice(0, 15).some((r) => r.some((v) => /^e-?mail(\s+address)?$/i.test(v))))
+    if (!sh) return set({ sheets, groupNames, contacts: [], importNote: c.listId ? 'The list for this campaign is not on this computer any more — import it again.' : null })
     try {
-      const r = contactsFromRows(sh.rows)
+      const r = contactsFromRows(sh.rows, new Map(groupNames), sh.name)
       const note = [r.skipped ? `${r.skipped} row${r.skipped === 1 ? '' : 's'} without a valid address skipped` : '', r.duplicates ? `${r.duplicates} repeated address${r.duplicates === 1 ? '' : 'es'} left out` : ''].filter(Boolean).join(' · ')
-      set({ sheet: name, contacts: overlay(r.contacts, get().saved, get().mail), activeId: r.contacts[0]?.id ?? null, importNote: note || null })
-      get().addLog('info', `${r.contacts.length} contacts on "${name}"${note ? ` (${note})` : ''}`)
+      if (sh.name !== c.sheet) patchCampaign(c.id, { sheet: sh.name })
+      set({ sheets, groupNames, contacts: overlay(r.contacts, get(), get().campaign(), get().mail), importNote: note || null })
     } catch (e) {
-      set({ sheet: name, contacts: [], activeId: null, importNote: (e as Error).message })
-      get().addLog('error', `"${name}": ${(e as Error).message}`)
+      set({ sheets, groupNames, contacts: [], importNote: (e as Error).message })
     }
   }
+  const loadAttachments = async () => {
+    const c = get().campaign()
+    set({ attachments: c ? (await idbGet<AttachmentItem[]>(`files:${c.id}`)) ?? [] : [] })
+  }
+
+  // open the last campaign once the store exists
+  queueMicrotask(() => { if (get().activeId) void get().openCampaign(get().activeId!) })
 
   return {
-    fileName: '',
+    ...saved,
     sheets: [],
-    sheet: '',
+    groupNames: new Map(),
     contacts: [],
     importNote: null,
-    activeId: null,
-    filter: 'all',
-    group: '',
+    activeContact: null,
+    view: 'all',
     query: '',
-
-    blueprint: draft.blueprint,
-    lang: draft.lang,
-    subject: draft.subject,
-    body: draft.body,
     attachments: [],
-
-    campaign: 'idle',
+    run: 'idle',
     nextAt: null,
     current: null,
     runSent: 0,
     runTotal: 0,
-
     mail: null,
+    smtp: { state: 'idle' },
     log: [],
-    saved,
 
-    loadFile: async (file) => {
-      if (get().campaign !== 'idle') { get().addLog('warn', 'Stop the batch before loading another list'); return }
+    campaign: () => get().campaigns.find((c) => c.id === get().activeId) ?? null,
+
+    openCampaign: async (id) => {
+      if (get().run !== 'idle' && id !== get().activeId) { get().addLog('warn', 'Stop the batch before opening another campaign'); return }
+      if (!get().campaigns.some((c) => c.id === id)) return
+      set({ activeId: id, activeContact: null, view: 'all', query: '' })
+      persist()
+      await Promise.all([loadContacts(), loadAttachments()])
+      set({ activeContact: get().contacts[0]?.id ?? null })
+    },
+    createCampaign: async (over = {}) => {
+      // a new campaign starts on the list the editor was using, if any
+      const cur = get().campaign()
+      const c = newCampaign({ listId: cur?.kind === 'list' ? cur.listId : null, sheet: cur?.kind === 'list' ? cur.sheet : '', ...over })
+      set({ campaigns: [c, ...get().campaigns] })
+      persist()
+      await get().openCampaign(c.id)
+      return c.id
+    },
+    duplicateCampaign: async (id) => {
+      const src = get().campaigns.find((c) => c.id === id)
+      if (!src) return
+      const c = newCampaign({ ...src, id: uid('cmp'), name: `${src.name} (copy)`, status: 'draft', scheduledAt: null, sent: {}, failed: {}, createdAt: Date.now() })
+      const files = await idbGet<AttachmentItem[]>(`files:${id}`)
+      if (files) await idbSet(`files:${c.id}`, files)
+      set({ campaigns: [c, ...get().campaigns] })
+      persist()
+      await get().openCampaign(c.id)
+    },
+    deleteCampaign: async (id) => {
+      if (get().run !== 'idle' && id === get().activeId) return
+      await idbDel(`files:${id}`)
+      const campaigns = get().campaigns.filter((c) => c.id !== id)
+      set({ campaigns })
+      if (get().activeId === id) {
+        set({ activeId: campaigns[0]?.id ?? null })
+        persist()
+        if (campaigns[0]) await get().openCampaign(campaigns[0].id); else set({ contacts: [], sheets: [], attachments: [] })
+      } else persist()
+    },
+    patch: (p) => { const c = get().campaign(); if (c) patchCampaign(c.id, p) },
+    patchById: (id, p) => patchCampaign(id, p),
+
+    importList: async (file) => {
+      if (get().run !== 'idle') { get().addLog('warn', 'Stop the batch before loading another list'); return }
       try {
         const sheets = await readMailingFile(file)
         if (!sheets.length) throw new Error('The file has no sheets')
-        // the sheet the editor's own workbook calls safe, else the first that has an Email column
-        const pick = sheets.find((s) => s.name === 'Strategic_Verified_Safe') ?? sheets.find((s) => s.rows.slice(0, 15).some((r) => r.some((c) => /^e-?mail(\s+address)?$/i.test(c)))) ?? sheets[0]
-        set({ fileName: file.name, sheets, group: '', query: '', filter: 'all' })
-        fromSheet(pick.name)
+        const groupNames = groupNamesOf(sheets)
+        const counts = sheets.map((sh) => { try { return { name: sh.name, contacts: contactsFromRows(sh.rows, new Map(groupNames), sh.name).contacts.length } } catch { return { name: sh.name, contacts: 0 } } })
+        const meta: ListMeta = { id: uid('list'), fileName: file.name, addedAt: Date.now(), sheets: counts }
+        await idbSet(`list:${meta.id}`, sheets)
+        // the sheet the editor's own workbook calls safe, else the first one that has contacts
+        const pick = counts.find((x) => x.name === 'Strategic_Verified_Safe' && x.contacts) ?? counts.find((x) => x.contacts)
+        const replaced = get().lists.filter((l) => l.fileName === file.name)
+        for (const l of replaced) if (!get().campaigns.some((c) => c.listId === l.id)) void idbDel(`list:${l.id}`)
+        set({ lists: [meta, ...get().lists.filter((l) => l.fileName !== file.name || get().campaigns.some((c) => c.listId === l.id))] })
+        if (!get().campaign()) await get().createCampaign({ name: file.name.replace(/\.(xlsx|csv)$/i, '').replace(/[_-]+/g, ' ') })
+        get().patch({ kind: 'list', listId: meta.id, sheet: pick?.name ?? '', audience: { group: null, purposes: [] } })
+        await loadContacts()
+        set({ activeContact: get().contacts[0]?.id ?? null })
+        get().addLog('info', `${file.name}: ${counts.filter((x) => x.contacts).map((x) => `${x.name.replace(/_/g, ' ')} ${x.contacts}`).join(' · ')}`)
       } catch (e) {
         set({ importNote: (e as Error).message })
         get().addLog('error', `Could not read ${file.name}: ${(e as Error).message}`)
       }
     },
-    setSheet: (name) => { if (get().campaign === 'idle') fromSheet(name) },
-    setActive: (activeId) => set({ activeId }),
-    setFilter: (filter) => set({ filter }),
-    setGroup: (group) => set({ group }),
+    useList: async (listId) => {
+      if (get().run !== 'idle') return
+      const meta = get().lists.find((l) => l.id === listId)
+      get().patch({ kind: 'list', listId, sheet: meta?.sheets.find((x) => x.contacts)?.name ?? '', audience: { group: null, purposes: [] } })
+      await loadContacts()
+    },
+    setSheet: (name) => { if (get().run === 'idle') { get().patch({ sheet: name, audience: { group: null, purposes: [] } }); void loadContacts() } },
+    setRecipients: (addresses) => {
+      const c = get().campaign(); if (!c || c.kind !== 'direct' || get().run !== 'idle') return
+      const recipients = [...new Set(addresses.map((a) => a.trim().toLowerCase()).filter(Boolean))].slice(0, 200)
+      get().patch({ recipients })
+      void loadContacts().then(() => { if (!get().contacts.some((x) => x.id === get().activeContact)) set({ activeContact: get().contacts[0]?.id ?? null }) })
+    },
+    setAudience: (a) => { const c = get().campaign(); if (c && get().run === 'idle') get().patch({ audience: { ...c.audience, ...a } }) },
+    setActiveContact: (activeContact) => set({ activeContact }),
+    setView: (view) => set({ view }),
     setQuery: (query) => set({ query }),
     approve: (email, on) => {
-      const a = new Set(get().saved.approved)
+      const a = new Set(get().approved)
       if (on) a.add(email); else a.delete(email)
-      persist({ approved: [...a] })
+      set({ approved: [...a], contacts: get().contacts.map((c) => (c.email === email && c.rawStatus !== 'Typed by you' ? { ...c, approved: on } : c)) }); persist(); relay()
     },
-    optOut: (email, on) => {
-      const o = new Set(get().saved.optOut)
+    optOutAddress: (email, on) => {
+      const o = new Set(get().optOut)
       if (on) o.add(email); else o.delete(email)
-      persist({ optOut: [...o] })
+      set({ optOut: [...o] }); persist(); relay()
       get().addLog('info', on ? `${email} will not be emailed again` : `${email} can be emailed again`)
     },
     markSent: (email, t) => {
-      const sent = { ...get().saved.sent, [email]: t }
-      // bounded: the oldest entries go first
-      const keys = Object.keys(sent)
-      if (keys.length > 5000) for (const k of keys.sort((x, y) => sent[x] - sent[y]).slice(0, keys.length - 5000)) delete sent[k]
-      persist({ sent })
+      const c = get().campaign(); if (!c) return
+      const failed = { ...c.failed }; delete failed[email]
+      patchCampaign(c.id, { sent: { ...c.sent, [email]: t }, failed })
+      relay()
     },
-    markFailed: (email, error) => set({ contacts: get().contacts.map((c) => (c.email === email ? { ...c, status: 'FAILED', error } : c)) }),
+    markFailed: (email, error) => {
+      const c = get().campaign(); if (!c) return
+      patchCampaign(c.id, { failed: { ...c.failed, [email]: error } })
+      relay()
+    },
     markSending: (email) => set({ current: email, contacts: get().contacts.map((c) => (c.email === email ? { ...c, status: 'SENDING' } : c.status === 'SENDING' ? { ...c, status: 'QUEUED' } : c)) }),
 
-    selectBlueprint: (id) => { set({ blueprint: id, ...template(id, get().lang) }); persistDraft() },
-    setLang: (lang) => { set({ lang, ...template(get().blueprint, lang) }); persistDraft() },
-    setSubject: (subject) => { set({ subject }); persistDraft() },
-    setBody: (body) => { set({ body }); persistDraft() },
-    addAttachment: (a) => {
-      if (get().attachments.some((x) => x.name === a.name)) return
-      set({ attachments: [...get().attachments, a] })
+    selectBlueprint: (id) => { const c = get().campaign(); if (c) get().patch({ blueprint: id, ...template(id, c.lang) }) },
+    setLang: (lang) => {
+      const c = get().campaign(); if (!c) return
+      // a blueprint switches to its other-language letter; the editor's own text is kept and only the language changes
+      get().patch(c.blueprint !== 'template' && c.blueprint !== 'blank' ? { lang, ...template(c.blueprint, lang) } : { lang })
     },
-    removeAttachment: (id) => set({ attachments: get().attachments.filter((a) => a.id !== id) }),
+    addAttachment: (a) => {
+      const c = get().campaign(); if (!c || get().attachments.some((x) => x.name === a.name)) return
+      const next = [...get().attachments, a]
+      set({ attachments: next }); void idbSet(`files:${c.id}`, next)
+    },
+    removeAttachment: (id) => {
+      const c = get().campaign(); if (!c) return
+      const next = get().attachments.filter((a) => a.id !== id)
+      set({ attachments: next }); void idbSet(`files:${c.id}`, next)
+    },
+    addSource: (src) => { const c = get().campaign(); if (c) get().patch({ sources: [src, ...c.sources] }) },
+    updateSource: (id, p) => { const c = get().campaign(); if (c) get().patch({ sources: c.sources.map((x) => (x.id === id ? { ...x, ...p } : x)) }) },
+    removeSource: (id) => { const c = get().campaign(); if (c) get().patch({ sources: c.sources.filter((x) => x.id !== id) }) },
+    saveSignature: (sig) => { set({ signatures: get().signatures.some((x) => x.id === sig.id) ? get().signatures.map((x) => (x.id === sig.id ? sig : x)) : [...get().signatures, sig] }); persist() },
+    deleteSignature: (id) => { if (get().signatures.length > 1) { set({ signatures: get().signatures.filter((x) => x.id !== id) }); persist() } },
+    saveTemplate: (name) => {
+      const c = get().campaign(); if (!c) return
+      set({ templates: [{ id: uid('tpl'), name: name.trim() || c.subject.slice(0, 40), lang: c.lang, subject: c.subject, body: c.body, savedAt: Date.now() }, ...get().templates] })
+      persist()
+    },
+    applyTemplate: (id) => { const t = get().templates.find((x) => x.id === id); if (t) get().patch({ blueprint: 'template', lang: t.lang, subject: t.subject, body: t.body }) },
+    deleteTemplate: (id) => { set({ templates: get().templates.filter((x) => x.id !== id) }); persist() },
+    setHousePrompt: (housePrompt) => { set({ housePrompt }); persist() },
 
-    setCampaign: (campaign, extra = {}) => set({ campaign, ...extra, ...(campaign === 'idle' ? { nextAt: null, current: null } : {}) }),
+    setRun: (run, extra = {}) => set({ run, ...extra, ...(run === 'idle' ? { nextAt: null, current: null } : {}) }),
     setNextAt: (nextAt) => set({ nextAt }),
     refreshMail: async () => {
       const b = window.esb
       if (!b?.outreachStatus) return
-      try {
-        const mail = await b.outreachStatus()
-        set({ mail, contacts: overlay(get().contacts, get().saved, mail) })
-      } catch { /* the bridge is missing in an older build */ }
+      try { set({ mail: await b.outreachStatus() }); relay() } catch { /* an older build without the bridge */ }
     },
-    addLog: (level, text) => set({ log: [...get().log.slice(-199), { t: Date.now(), level, text }] }),
+    checkSmtp: async (force = false) => {
+      const b = window.esb
+      if (!b?.outreachVerify) return
+      set({ smtp: { state: 'busy' } })
+      const r = await b.outreachVerify(force).catch((e: Error) => ({ ok: false, error: e.message, at: Date.now() }) as { ok: boolean; ms?: number; error?: string; at: number })
+      set({ smtp: r.ok ? { state: 'ok', ms: r.ms ?? 0, at: r.at } : { state: 'bad', error: r.error ?? 'Could not log in', at: r.at } })
+    },
+    addLog: (level, text) => set({ log: [...get().log.slice(-299), { t: Date.now(), level, text }] }),
   }
 })

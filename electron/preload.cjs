@@ -21,4 +21,5 @@ contextBridge.exposeInMainWorld('esb', {
   outreachSave: (settings, password) => ipcRenderer.invoke('esb:outreach-save', settings, password),
   outreachForgetPassword: () => ipcRenderer.invoke('esb:outreach-forget-password'),
   outreachSend: (mail) => ipcRenderer.invoke('esb:outreach-send', mail),
+  outreachVerify: (force) => ipcRenderer.invoke('esb:outreach-verify', force),
 })

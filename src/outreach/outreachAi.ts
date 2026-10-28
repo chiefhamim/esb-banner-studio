@@ -1,6 +1,7 @@
 import { aiFor, aiJson, aiPaused, providerMeta, type AiSchema } from '../editorial/aiProviders'
-import type { Contact, OutreachBlueprint, OutreachBlueprintId, OutreachLang } from './types'
+import type { Contact, OutreachBlueprint, OutreachBlueprintId, OutreachLang, Source, TalkingPoint } from './types'
 import { PLACEHOLDERS } from './compose'
+import { unsourcedNumbers } from './checks'
 
 export const OUTREACH_BLUEPRINTS: OutreachBlueprint[] = [
   {
@@ -184,59 +185,201 @@ Outreach Desk | ESB PowerLine`,
   },
 ]
 
-export interface AiOutreachDraft { subject: string; body: string; variants: string[]; model: string }
+// ------------------------------------------------------------------ which letter fits an audience
+// The workbook tags each contact with what they are on the list for (MAGAZINE_DISTRIBUTION, SPONSORSHIP, …). Each tag
+// belongs to one blueprint; the audience's most common tag picks the letter. A tag not listed here suggests nothing.
+const PURPOSE_BLUEPRINT: Record<string, OutreachBlueprintId> = {
+  MAGAZINE_DISTRIBUTION: 'magazine_distribution', VIP_CIRCULATION: 'magazine_distribution', RESEARCH_DISTRIBUTION: 'magazine_distribution',
+  SPONSORSHIP: 'corporate_sponsorship', ADVERTISING: 'corporate_sponsorship', ADVERTISING_PROSPECT: 'corporate_sponsorship', CORPORATE_SUBSCRIPTION: 'corporate_sponsorship', PARTNERSHIP: 'corporate_sponsorship',
+  HIGH_LEVEL_ENGAGEMENT: 'executive_interview', EXPERT_SOURCE: 'executive_interview', EXPERT_COMMENTARY: 'executive_interview', EDITORIAL_SOURCE: 'executive_interview', EDITORIAL_CONTRIBUTOR: 'executive_interview', MEDIA_INQUIRY: 'executive_interview',
+  GENERAL_INTELLIGENCE: 'breaking_intelligence', INTERNATIONAL_INTELLIGENCE: 'breaking_intelligence', DATA_PLATFORM: 'breaking_intelligence', GRID_EXPLORER: 'breaking_intelligence', PRESS_RELEASE: 'breaking_intelligence',
+  INSTITUTIONAL_RELATIONS: 'institutional_dialogue', DIPLOMATIC_ENGAGEMENT: 'institutional_dialogue', POLICY_DIALOGUE: 'institutional_dialogue', PROJECT_FINANCING: 'institutional_dialogue', GENERAL_CORPORATE_COMMUNICATION: 'institutional_dialogue',
+}
+
+/** The blueprint the audience's purposes point to, with how many contacts carry that purpose; null when none map. */
+export function suggestBlueprint(contacts: Contact[], chosen: string[] = []): { id: OutreachBlueprintId; purpose: string; count: number } | null {
+  const counts = new Map<string, number>()
+  for (const c of contacts) for (const p of c.purposes) if (PURPOSE_BLUEPRINT[p] && (!chosen.length || chosen.includes(p))) counts.set(p, (counts.get(p) ?? 0) + 1)
+  const top = [...counts].sort((a, b) => b[1] - a[1])[0]
+  return top ? { id: PURPOSE_BLUEPRINT[top[0]], purpose: top[0], count: top[1] } : null
+}
+
+// ------------------------------------------------------------------ shared
+const need = (role: 'outreach' | 'research' | 'review', what: string) => {
+  if (aiPaused()) throw new Error('AI is turned off (the AI switch). Turn it on to use it.')
+  const ai = aiFor(role)
+  if (!ai) throw new Error(`No AI provider has a key for ${what}. Add one in the AI dialog.`)
+  return ai
+}
+const squash = (t: string) => t.replace(/\s+/g, ' ').trim()
+/** True when `quote` is the source's own words (whitespace and curly quotes aside). */
+export const quoteInSource = (quote: string, text: string) => {
+  const n = (x: string) => squash(x).replace(/[“”]/g, '"').replace(/[‘’]/g, "'").toLowerCase()
+  const q = n(quote)
+  return q.length >= 12 && n(text).includes(q)
+}
+const sourceBrief = (sources: Source[]) => sources.flatMap((s) => s.points.filter((p) => p.use).map((p) => `- ${p.text} (source: ${s.title}${s.url ? `, ${s.url}` : ''}; it says: "${p.quote}")`)).join('\n')
+
+export interface LetterContext {
+  blueprint: OutreachBlueprintId | 'template' | 'blank'
+  lang: OutreachLang
+  housePrompt: string
+  sources: Source[]
+  example?: Contact
+}
+
+const RULES = (lang: OutreachLang) => `Placeholders: use exactly ${PLACEHOLDERS.map((p) => `{${p}}`).join(', ')} where each recipient's details go. Never write a real person's or organisation's name into the template.
+
+Facts: use only what you are given — the reference letter, the talking points from the editor's sources, and the recipient's role. Do not invent figures, circulation or readership numbers, rankings, awards, projects, dates, meetings, prices or quotes, about ESB PowerLine or the recipient. A figure must appear in a talking point or the reference letter exactly as written there. If the reference letter mentions an attachment, keep that sentence; otherwise do not mention one.
+
+Style: courteous, direct, no hype, no emojis. ${lang === 'bn' ? 'Write in formal Bangla (আনুষ্ঠানিক সরকারি ও করপোরেট শিষ্টাচার) with proper honorifics.' : 'Write in clear British English.'} Blank lines between paragraphs. You may use these marks, sparingly: "## " for a short heading, "- " bullets, **bold** for one key phrase, [words](https://link) for a link that appears in the sources or reference. No other markdown. Do not add a signature or an unsubscribe line; the app adds both.`
+
+export interface AiOutreachDraft { subject: string; body: string; variants: string[]; model: string; unsourced: string[] }
+
+const draftSchema: AiSchema = {
+  type: 'object',
+  properties: {
+    subject: { type: 'string', description: 'Subject line, at most 70 characters, may use {organization}' },
+    body: { type: 'string', description: 'The email body with the placeholders, without signature' },
+    variants: { type: 'string', description: 'Three other subject lines, one per line' },
+  },
+  required: ['subject', 'body', 'variants'],
+}
+
+function finish(data: Record<string, string>, ctx: LetterContext, reference: string, model: string): AiOutreachDraft {
+  // a model that wrote the example recipient's details in after all would send them to everyone: refuse that draft
+  const body = String(data.body || '').trim()
+  const subject = squash(String(data.subject || ''))
+  if (!body) throw new Error('The model returned an empty letter')
+  const ex = ctx.example
+  for (const v of [ex?.personName, ex?.organization, ex?.email].filter((x): x is string => !!x && x.length > 3)) {
+    if (body.includes(v) || subject.includes(v)) throw new Error(`The draft names ${v} instead of using a placeholder — write it again`)
+  }
+  return {
+    subject,
+    body,
+    variants: String(data.variants || '').split('\n').map((x) => x.replace(/^[-*•\d.)\s]+/, '').trim()).filter(Boolean).slice(0, 3),
+    model,
+    unsourced: unsourcedNumbers(body, ctx.sources, reference),
+  }
+}
+
+const referenceOf = (ctx: LetterContext, current?: { subject: string; body: string }) => {
+  const bp = OUTREACH_BLUEPRINTS.find((b) => b.id === ctx.blueprint)
+  return bp ? (ctx.lang === 'bn' ? bp.bengaliBody : bp.defaultBody) : current?.body ?? ''
+}
 
 /**
- * The Outreach provider writes the campaign's TEMPLATE — one letter for every recipient, with {name}, {designation},
- * {organization} and {sector} where their details go — not a letter to the one contact on screen (the first version
- * did that, so a batch would have sent one person's name to everyone). It may use only what it is given: the
- * blueprint's own letter (what ESB PowerLine is offering) and the recipient's role. It may not invent figures,
- * circulation, rankings, awards, projects, meetings or quotes, for ESB PowerLine or for the recipient.
+ * The Letter job writes the campaign's TEMPLATE — one letter for every recipient, with placeholders — not a letter
+ * to the one contact on screen (the first version did that, so a batch would have sent one person's name to
+ * everyone). It may use only the blueprint's own offer, the talking points the editor kept and the recipient's role.
  */
-export async function writeOutreachWithAi(blueprintId: OutreachBlueprintId, lang: OutreachLang, example: Contact | undefined, directive = ''): Promise<AiOutreachDraft> {
-  if (aiPaused()) throw new Error('AI is turned off (the AI switch). Turn it on to write with AI.')
-  const ai = aiFor('outreach')
-  if (!ai) throw new Error('No AI provider has a key for Outreach. Add one in the AI dialog.')
-  const bp = OUTREACH_BLUEPRINTS.find((b) => b.id === blueprintId) ?? OUTREACH_BLUEPRINTS[0]
-  const reference = lang === 'bn' ? bp.bengaliBody : bp.defaultBody
-
+export async function writeOutreachWithAi(ctx: LetterContext, directive = ''): Promise<AiOutreachDraft> {
+  const ai = need('outreach', 'the Letter job')
+  const bp = OUTREACH_BLUEPRINTS.find((b) => b.id === ctx.blueprint) ?? OUTREACH_BLUEPRINTS[0]
+  const reference = ctx.lang === 'bn' ? bp.bengaliBody : bp.defaultBody
+  const points = sourceBrief(ctx.sources)
   const system = `You write outreach emails for ESB PowerLine (esbpowerline.com), a Bangladesh energy and power news publisher, to officials and executives in the sector.
 
-Write ONE email template for a whole mailing list. Use these placeholders exactly where each recipient's details go: ${PLACEHOLDERS.map((p) => `{${p}}`).join(', ')}. Never write a real person's or organisation's name into the template.
+Write ONE email template for a whole mailing list, 120–220 words.
 
-Facts: use only what you are given — the reference letter below (what ESB PowerLine is offering) and the recipient's role. Do not invent figures, circulation or readership numbers, rankings, awards, projects, dates, meetings, prices or quotes, about ESB PowerLine or the recipient. If the reference letter mentions an attachment, keep that sentence; otherwise do not mention one.
-
-Style: courteous, direct and short (120–220 words), no hype, no emojis, no markdown. ${lang === 'bn' ? 'Write in formal Bangla (আনুষ্ঠানিক সরকারি ও করপোরেট শিষ্টাচার) with proper honorifics.' : 'Write in clear British English.'} Plain text with blank lines between paragraphs, ending with the sender block from the reference letter. Do not add an unsubscribe line; the app adds one.
-
+${RULES(ctx.lang)}
+${ctx.housePrompt.trim() ? `\nThe editor's house style (follow it unless it conflicts with the facts rule):\n${ctx.housePrompt.trim()}\n` : ''}
 Reference letter (${bp.label}):
 """
 ${reference}
 """`
-
-  const user = `Example recipient (for tone only — do not put these details in the template):
-Designation: ${example?.designation || 'unknown'}
-Sector: ${example?.sectorGroup || 'unknown'}
+  const user = `${points ? `Talking points the editor chose (use the ones that fit):\n${points}\n\n` : ''}Example recipient (for tone only — do not put these details in the template):
+Designation: ${ctx.example?.designation || 'unknown'}
+Sector: ${ctx.example?.sectorGroup || 'unknown'}
 ${directive ? `Editor's note: ${directive}\n` : ''}Write the template.`
+  const res = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model: ai.model, system, user, schema: draftSchema, maxTokens: 4096, effort: 'medium' })
+  return finish(res.data, ctx, reference, `${providerMeta(ai.provider).name} · ${res.model}`)
+}
 
-  const schema: AiSchema = {
-    type: 'object',
-    properties: {
-      subject: { type: 'string', description: 'Subject line, at most 70 characters, may use {organization}' },
-      body: { type: 'string', description: 'The email body as plain text with the placeholders' },
-      variants: { type: 'string', description: 'Three other subject lines, one per line' },
-    },
-    required: ['subject', 'body', 'variants'],
+export type RewriteAction = 'shorter' | 'formal' | 'warmer' | 'clearer' | 'translate' | 'custom'
+export const REWRITES: { id: RewriteAction; label: string; hint: string }[] = [
+  { id: 'shorter', label: 'Make it shorter', hint: 'About half the length, same offer' },
+  { id: 'formal', label: 'More formal', hint: 'Official register for ministries and boards' },
+  { id: 'warmer', label: 'Warmer', hint: 'Personal, still professional' },
+  { id: 'clearer', label: 'Clearer ask', hint: 'Put the one thing you want them to do up front' },
+  { id: 'translate', label: 'Translate', hint: 'English ⇄ বাংলা, placeholders kept' },
+]
+
+/** Rewrite the letter the editor already has. The same facts rule; the result is a draft the editor accepts or not. */
+export async function rewriteLetter(action: RewriteAction, current: { subject: string; body: string }, ctx: LetterContext, custom = ''): Promise<AiOutreachDraft & { lang: OutreachLang }> {
+  const ai = need('outreach', 'the Letter job')
+  const to: OutreachLang = action === 'translate' ? (ctx.lang === 'en' ? 'bn' : 'en') : ctx.lang
+  const ask: Record<RewriteAction, string> = {
+    shorter: 'Make it about half as long. Keep the offer, the ask and every placeholder; drop repetition and pleasantries.',
+    formal: 'Make the register more formal, as for a secretary of a ministry or the chair of a board. Same content.',
+    warmer: 'Make it warmer and more personal while staying professional. Same content.',
+    clearer: 'Put the single action you want the reader to take in the first two sentences, and make it unmistakable. Same facts.',
+    translate: to === 'bn' ? 'Translate into formal Bangla. Keep every placeholder exactly as it is ({name} etc.) and every link.' : 'Translate into clear British English. Keep every placeholder exactly as it is ({name} etc.) and every link.',
+    custom: custom.trim() || 'Improve it.',
   }
-  const res = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model: ai.model, system, user, schema, maxTokens: 4096, effort: 'medium' })
-  // a model that wrote the example recipient's details in after all would send them to everyone: refuse that draft
-  const body = String(res.data.body || '').trim()
-  for (const v of [example?.personName, example?.organization, example?.email].filter((x): x is string => !!x && x.length > 3)) {
-    if (body.includes(v)) throw new Error(`The draft names ${v} instead of using a placeholder — write it again`)
+  const reference = referenceOf(ctx, current)
+  const points = sourceBrief(ctx.sources)
+  const system = `You edit outreach emails for ESB PowerLine (esbpowerline.com), a Bangladesh energy and power news publisher.
+
+${RULES(to)}
+${ctx.housePrompt.trim() ? `\nThe editor's house style:\n${ctx.housePrompt.trim()}\n` : ''}
+Do not add any fact, figure, name, date or claim that is not already in the letter or in the talking points below.`
+  const user = `${points ? `Talking points:\n${points}\n\n` : ''}The letter:
+Subject: ${current.subject}
+
+${current.body}
+
+Task: ${ask[action]}`
+  const res = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model: ai.model, system, user, schema: draftSchema, maxTokens: 4096, effort: 'low' })
+  // figures may come from the editor's own letter as well as the sources
+  const d = finish(res.data, { ...ctx, lang: to }, `${reference}\n${current.body}`, `${providerMeta(ai.provider).name} · ${res.model}`)
+  return { ...d, lang: to }
+}
+
+// ------------------------------------------------------------------ Research: sources → talking points
+/**
+ * The Research job reads one source and lists what an outreach letter could use from it. Every point must carry the
+ * source's own sentence; a point whose quote is not in the source is dropped, not shown, so nothing reaches the
+ * letter that the source does not say.
+ */
+export async function researchSource(src: Source, purpose: string): Promise<{ points: TalkingPoint[]; dropped: number; model: string }> {
+  const ai = need('research', 'the Research job')
+  const system = `You are the research desk of ESB PowerLine, a Bangladesh energy news publisher. From the document, list 3 to 6 facts an outreach email about "${purpose}" could cite. Each point is one short sentence in English. Each must come with "quote": a sentence copied character for character from the document that states it (no paraphrase, no ellipsis, no translation). Use only what the document says. If it has nothing useful, return an empty list.`
+  const schema: AiSchema = { type: 'object', properties: { points: { type: 'string', description: 'JSON array of {"text": string, "quote": string}' } }, required: ['points'] }
+  const res = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model: ai.model, system, user: `Document: ${src.title}\n"""\n${src.text.slice(0, 24000)}\n"""`, schema, maxTokens: 3000, effort: 'low' })
+  let raw: unknown = []
+  try { raw = JSON.parse(String(res.data.points || '[]')) } catch { throw new Error('The model did not return a list of points') }
+  const list = Array.isArray(raw) ? raw as { text?: unknown; quote?: unknown }[] : []
+  const points: TalkingPoint[] = []
+  let dropped = 0
+  for (const p of list) {
+    const text = squash(String(p.text ?? '')), quote = squash(String(p.quote ?? ''))
+    if (!text || !quoteInSource(quote, src.text)) { dropped++; continue }
+    points.push({ id: `pt-${points.length}-${Date.now().toString(36)}`, text, quote, use: true })
   }
-  return {
-    subject: String(res.data.subject || '').replace(/\s+/g, ' ').trim(),
-    body,
-    variants: String(res.data.variants || '').split('\n').map((x) => x.replace(/^[-*•\d.)\s]+/, '').trim()).filter(Boolean).slice(0, 3),
-    model: `${providerMeta(ai.provider).name} · ${res.model}`,
-  }
+  return { points, dropped, model: `${providerMeta(ai.provider).name} · ${res.model}` }
+}
+
+// ------------------------------------------------------------------ Review: a second reader
+export interface ReviewNote { level: 'bad' | 'warn' | 'ok'; text: string; quote: string }
+
+/** The Review job reads the letter as a cautious senior editor would before it goes to officials. Advice only. */
+export async function reviewLetter(current: { subject: string; body: string; signature: string }, ctx: LetterContext): Promise<{ notes: ReviewNote[]; model: string }> {
+  const ai = need('review', 'the Review job')
+  const system = `You are a senior editor at ESB PowerLine checking an outreach email before it goes to government officials and energy-sector executives in Bangladesh. {name}, {designation}, {organization} and {sector} are placeholders filled per recipient — do not flag them.
+
+Report at most 8 notes, most important first: claims or figures that are not supported by the talking points, anything that could embarrass the publisher or offend an official, an unclear ask, tone, length, subject line quality, and likely spam-filter problems. Each note: "level" bad (must fix), warn (should fix) or ok (a strength worth keeping), "text" one sentence of advice, "quote" the exact words of the letter it is about ('' if general). Do not rewrite the letter.`
+  const schema: AiSchema = { type: 'object', properties: { notes: { type: 'string', description: 'JSON array of {"level": "bad"|"warn"|"ok", "text": string, "quote": string}' } }, required: ['notes'] }
+  const points = sourceBrief(ctx.sources)
+  const res = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model: ai.model, system, schema, maxTokens: 2500, effort: 'low',
+    user: `${ctx.housePrompt.trim() ? `House style: ${ctx.housePrompt.trim()}\n\n` : ''}${points ? `Talking points (the only sourced facts):\n${points}\n\n` : 'No sources were given.\n\n'}Subject: ${current.subject}\n\n${current.body}\n\n${current.signature}` })
+  let raw: unknown = []
+  try { raw = JSON.parse(String(res.data.notes || '[]')) } catch { throw new Error('The model did not return a list of notes') }
+  const full = `${current.subject}\n${current.body}\n${current.signature}`
+  const notes = (Array.isArray(raw) ? raw : []).slice(0, 8).map((n: { level?: unknown; text?: unknown; quote?: unknown }) => {
+    const quote = squash(String(n.quote ?? ''))
+    return { level: (['bad', 'warn', 'ok'].includes(String(n.level)) ? n.level : 'warn') as ReviewNote['level'], text: squash(String(n.text ?? '')), quote: quote && squash(full).includes(quote) ? quote : '' }
+  }).filter((n) => n.text)
+  return { notes, model: `${providerMeta(ai.provider).name} · ${res.model}` }
 }

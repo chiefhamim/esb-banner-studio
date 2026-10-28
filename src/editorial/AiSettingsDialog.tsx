@@ -13,7 +13,9 @@ const JOBS: { role: AiRole; name: string; note: string }[] = [
   { role: 'main', name: 'Main', note: 'Translation, headline, deck, story and tags' },
   { role: 'seo', name: 'SEO', note: 'Write with AI on the SEO tab' },
   { role: 'social', name: 'Social', note: 'Write with AI on the captions' },
-  { role: 'outreach', name: 'Outreach', note: 'Promotional pitches and subject lines' },
+  { role: 'outreach', name: 'Letter', note: 'Outreach: writes and rewrites the email' },
+  { role: 'research', name: 'Research', note: 'Outreach: talking points from your sources' },
+  { role: 'review', name: 'Review', note: 'Outreach: checks an email before it is sent' },
 ]
 
 export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; onToast: (msg: string) => void }) {

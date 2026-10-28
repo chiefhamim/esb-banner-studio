@@ -80,17 +80,21 @@ function validateMail(m) {
   if (!isEmail(to)) throw new Error('Recipient must be one plain email address')
   const subject = oneLine(o.subject, 250)
   if (!subject) throw new Error('Subject is empty')
-  // plain text only: the HTML part is built here (htmlFromText), so no markup from a workbook cell or an AI reply is
-  // ever sent as markup
-  const text = String(o.text || '')
-  if (!text.trim()) throw new Error('Message is empty')
-  if (text.length > 100_000) throw new Error('Message is too long')
+  // the body is plain text with a few marks (electron/email-html.mjs); the HTML part is built here from it, so no
+  // markup from a workbook cell or an AI reply is ever sent as markup. `text` is the older field name.
+  const body = String(o.body ?? o.text ?? '')
+  if (!body.trim()) throw new Error('Message is empty')
+  if (body.length > 100_000) throw new Error('Message is too long')
+  const signature = String(o.signature ?? '')
+  if (signature.length > 3000) throw new Error('Signature is too long')
+  const optOut = oneLine(o.optOut, 400)
+  const lang = o.lang === 'bn' ? 'bn' : 'en'
   const list = Array.isArray(o.attachments) ? o.attachments : []
   if (list.length > MAX_ATTACHMENTS) throw new Error(`At most ${MAX_ATTACHMENTS} attachments`)
   const attachments = list.map(attachmentFrom)
   const bytes = attachments.reduce((n, a) => n + a.content.length, 0)
   if (bytes > MAX_ATTACH_BYTES) throw new Error('Attachments are over 18 MB together — Gmail would refuse the message')
-  return { to: to.toLowerCase(), subject, text, attachments, isTest: o.isTest === true, resend: o.resend === true }
+  return { to: to.toLowerCase(), subject, body, signature, optOut, lang, letterhead: o.letterhead === true, attachments, isTest: o.isTest === true, resend: o.resend === true }
 }
 
 /** May this send go now? Reads the ledger of earlier sends. */
@@ -114,15 +118,10 @@ function ledgerCheck(ledger, now, settings, mail) {
   return { ok: true }
 }
 
-/** HTML for the message, built from the plain text: every character escaped, paragraphs kept, links clickable. */
-function htmlFromText(text) {
-  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-  const paras = String(text).replace(/\r\n/g, '\n').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean)
-  const body = paras.map((p) => `<p style="margin:0 0 14px">${esc(p).replace(/(https:\/\/[^\s<]+[^\s<.,;:)])/g, '<a href="$1">$1</a>').replace(/\n/g, '<br>')}</p>`).join('\n')
-  return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1f2937">${body}</div>`
-}
+const renderer = () => import('./email-html.mjs')
+const LOGO = path.join(__dirname, 'assets', 'esb-logo.png')
 
-function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now() }) {
+function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), render = renderer }) {
   const settingsFile = path.join(dir, 'outreach-smtp.json')
   const ledgerFile = path.join(dir, 'outreach-ledger.json')
   const read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return fallback } }
@@ -165,6 +164,30 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now() }
     return status()
   }
 
+  const transportFor = (saved) => nodemailer.createTransport({
+    host: saved.host, port: saved.port, secure: saved.secure,
+    auth: { user: saved.user, pass: safeStorage.decryptString(Buffer.from(saved.password, 'base64')) },
+    tls: { rejectUnauthorized: true, minVersion: 'TLSv1.2' },
+  })
+
+  // the status bar's live check: log in to the SMTP server and out again, nothing sent. Remembered for a minute so a
+  // window that asks often does not make the account log in again and again.
+  let lastVerify = null
+  async function verify(force = false) {
+    const saved = read(settingsFile, null)
+    if (!saved || !saved.password) return { ok: false, error: 'No sender account saved', at: clock() }
+    // even a forced check waits 10 s since the last, so a renderer in a loop cannot make the account log in non-stop
+    if (lastVerify && lastVerify.user === saved.user && clock() - lastVerify.at < (force ? 10_000 : 60_000)) return lastVerify
+    const t0 = clock()
+    try {
+      await transportFor(saved).verify()
+      lastVerify = { ok: true, ms: clock() - t0, user: saved.user, at: clock() }
+    } catch (e) {
+      lastVerify = { ok: false, error: String(e && e.message || e).slice(0, 200), user: saved.user, at: clock() }
+    }
+    return lastVerify
+  }
+
   async function send(raw) {
     let mail
     try { mail = validateMail(raw) } catch (e) { return { ok: false, error: e.message } }
@@ -174,18 +197,17 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now() }
     const gate = ledgerCheck(l, clock(), saved, mail)
     if (!gate.ok) return { ok: false, error: gate.reason, nextAt: gate.nextAt, duplicate: !!gate.duplicate }
     try {
-      const transport = nodemailer.createTransport({
-        host: saved.host, port: saved.port, secure: saved.secure,
-        auth: { user: saved.user, pass: safeStorage.decryptString(Buffer.from(saved.password, 'base64')) },
-        tls: { rejectUnauthorized: true, minVersion: 'TLSv1.2' },
-      })
-      const info = await transport.sendMail({
+      const { renderEmail } = await render()
+      const { html, text } = renderEmail({ body: mail.body, signature: mail.signature, optOut: mail.optOut, lang: mail.lang, letterhead: mail.letterhead, logoSrc: 'cid:esb-logo' })
+      // the letterhead's logo travels inside the message (cid:), never as a link to a server
+      const logo = mail.letterhead && fs.existsSync(LOGO) ? [{ filename: 'esb-logo.png', path: LOGO, cid: 'esb-logo', contentType: 'image/png' }] : []
+      const info = await transportFor(saved).sendMail({
         from: { name: saved.name, address: saved.user },
         to: mail.to,
         subject: mail.subject,
-        text: mail.text,
-        html: htmlFromText(mail.text),
-        attachments: mail.attachments,
+        text,
+        html,
+        attachments: [...logo, ...mail.attachments],
         list: { unsubscribe: `mailto:${saved.user}?subject=unsubscribe` },
       })
       l.push({ t: clock(), to: mail.to, kind: mail.isTest ? 'test' : 'campaign', id: String(info.messageId || '') })
@@ -197,7 +219,7 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now() }
     }
   }
 
-  return { status, saveSettings, forgetPassword, send }
+  return { status, saveSettings, forgetPassword, send, verify }
 }
 
-module.exports = { validateSmtpSettings, validateMail, ledgerCheck, htmlFromText, createMailer, EMAIL_RE, MAX_DAILY, MIN_GAP_SEC, REPEAT_DAYS, MAX_ATTACH_BYTES }
+module.exports = { validateSmtpSettings, validateMail, ledgerCheck, createMailer, EMAIL_RE, MAX_DAILY, MIN_GAP_SEC, REPEAT_DAYS, MAX_ATTACH_BYTES }

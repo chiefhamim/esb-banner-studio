@@ -55,7 +55,7 @@ export const providerMeta = (id: AiProviderId) => AI_PROVIDERS.find((p) => p.id 
 export interface AiModelInfo { id: string; label: string; hint?: string }
 
 /** The jobs the desk gives a provider. */
-export type AiRole = 'main' | 'seo' | 'social' | 'outreach'
+export type AiRole = 'main' | 'seo' | 'social' | 'outreach' | 'research' | 'review'
 
 export interface AiSettings {
   /** The main provider: translation and the whole story, and the provider SEO and social use unless given their own. */
@@ -64,8 +64,10 @@ export interface AiSettings {
   seo: AiProviderId | ''
   /** A provider just for the social captions; '' follows the main one. */
   social: AiProviderId | ''
-  /** A provider just for outreach generation; '' follows the main one. */
+  /** Outreach desk, three jobs like Editorial's: the letter, research on sources, the pre-send review; '' follows main. */
   outreach: AiProviderId | ''
+  research: AiProviderId | ''
+  review: AiProviderId | ''
   keys: Record<AiProviderId, string>
   /** 'auto' or a model id, per provider. */
   models: Record<AiProviderId, string>
@@ -82,7 +84,7 @@ const emptyRecord = (v: string): Record<AiProviderId, string> => ({ gemini: v, a
 const isProvider = (v: unknown): v is AiProviderId => AI_PROVIDERS.some((p) => p.id === v)
 
 export function loadAiSettings(): AiSettings {
-  const base: AiSettings = { provider: 'gemini', seo: '', social: '', outreach: '', keys: emptyRecord(''), models: emptyRecord('auto'), prompt: '', paused: false }
+  const base: AiSettings = { provider: 'gemini', seo: '', social: '', outreach: '', research: '', review: '', keys: emptyRecord(''), models: emptyRecord('auto'), prompt: '', paused: false }
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
@@ -92,6 +94,8 @@ export function loadAiSettings(): AiSettings {
         seo: isProvider(s.seo) ? s.seo : '',
         social: isProvider(s.social) ? s.social : '',
         outreach: isProvider(s.outreach) ? s.outreach : '',
+        research: isProvider(s.research) ? s.research : '',
+        review: isProvider(s.review) ? s.review : '',
         keys: { ...base.keys, ...(s.keys ?? {}) },
         models: { ...base.models, ...(s.models ?? {}) },
         prompt: typeof s.prompt === 'string' ? s.prompt : '',

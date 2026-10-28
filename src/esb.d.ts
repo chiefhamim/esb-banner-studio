@@ -44,6 +44,7 @@ export interface EsbBridge {
   outreachStatus?: () => Promise<EsbOutreachStatus>
   outreachSave?: (settings: EsbSmtpSettings, password?: string) => Promise<{ ok: true; status: EsbOutreachStatus } | { ok: false; error: string }>
   outreachForgetPassword?: () => Promise<EsbOutreachStatus>
+  outreachVerify?: (force?: boolean) => Promise<{ ok: boolean; ms?: number; error?: string; at: number }>
   outreachSend?: (mail: EsbOutreachMail) => Promise<{ ok: true; messageId: string; sent24h: number } | { ok: false; error: string; nextAt?: number; duplicate?: boolean }>
 }
 
@@ -60,7 +61,20 @@ export interface EsbOutreachStatus {
   sentTo: { to: string; t: number }[]
 }
 /** One email: plain text only (the main process builds the HTML part), attachments as data URLs. */
-export interface EsbOutreachMail { to: string; subject: string; text: string; attachments?: { name: string; dataUrl: string }[]; isTest?: boolean; resend?: boolean }
+export interface EsbOutreachMail {
+  to: string
+  subject: string
+  /** Plain text with the marks of electron/email-html.mjs; the main process builds the HTML. */
+  body: string
+  signature?: string
+  optOut?: string
+  lang?: 'en' | 'bn'
+  /** ESB letterhead: logo and brand stripes, the logo attached inline. */
+  letterhead?: boolean
+  attachments?: { name: string; dataUrl: string }[]
+  isTest?: boolean
+  resend?: boolean
+}
 
 declare global {
   interface Window {

@@ -75,16 +75,6 @@ describe('ledgerCheck: the cap, the gap and no repeats', () => {
   })
 })
 
-describe('htmlFromText: the only HTML a recipient gets', () => {
-  it('escapes markup from a workbook cell or an AI reply, keeps paragraphs, links https addresses', () => {
-    const h = m.htmlFromText('Dear <img src=x onerror=alert(1)>,\n\nSee https://esbpowerline.com/articles/x.')
-    expect(h).not.toContain('<img')
-    expect(h).toContain('&lt;img src=x onerror=alert(1)&gt;')
-    expect(h).toContain('<a href="https://esbpowerline.com/articles/x">https://esbpowerline.com/articles/x</a>.')
-    expect(h.match(/<p /g)).toHaveLength(2)
-  })
-})
-
 describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on every message', () => {
   let dir: string
   const sent: Record<string, unknown>[] = []
@@ -108,11 +98,15 @@ describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on eve
   it('sends with the saved account, records the send, and refuses the same address again', async () => {
     const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
     mailer.saveSettings(settings, 'abcdefghijklmnop')
-    const r = await mailer.send({ to: 'md@example.com', subject: 'S', text: 'Dear Sir,\n\nBody' })
+    const r = await mailer.send({ to: 'md@example.com', subject: 'S', body: 'Dear Sir,\n\nBody', letterhead: true, optOut: 'Reply unsubscribe' })
     expect(r.ok).toBe(true)
     expect((transports[0].auth as { pass: string }).pass).toBe('abcdefghijklmnop')
     expect(sent[0]).toMatchObject({ from: { name: 'ESB PowerLine', address: 'desk@example.com' }, list: { unsubscribe: 'mailto:desk@example.com?subject=unsubscribe' } })
+    // the letterhead logo rides inline as cid:esb-logo, read by main from its own copy
+    expect((sent[0].attachments as { cid?: string }[]).some((a) => a.cid === 'esb-logo')).toBe(true)
+    expect(String(sent[0].html)).toContain('src="cid:esb-logo"')
     expect(String(sent[0].html)).toContain('<p ')
+    expect(String(sent[0].text)).toContain('Body')
     expect(mailer.status()).toMatchObject({ sent24h: 1, sentTo: [{ to: 'md@example.com' }] })
     now += 120e3
     expect(await mailer.send({ to: 'md@example.com', subject: 'S', text: 'again' })).toMatchObject({ ok: false, duplicate: true })

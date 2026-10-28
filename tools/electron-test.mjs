@@ -86,6 +86,8 @@ try {
   const twoTo = await page.evaluate(() => window.esb.outreachSend({ to: 'a@example.com, b@example.com', subject: 's', text: 't' }))
   const noAcct = await page.evaluate(() => window.esb.outreachSend({ to: 'a@example.com', subject: 's', text: 't' }))
   console.log(!pathAtt.ok && /path/.test(pathAtt.error) && !twoTo.ok && !noAcct.ok && /Save the sender/.test(noAcct.error) ? 'PASS' : 'FAIL', 'outreach send refuses a disk path, two recipients, and anything before an account is saved', JSON.stringify([pathAtt, twoTo, noAcct]))
+  const ver = await page.evaluate(() => window.esb.outreachVerify(true))
+  console.log(ver && ver.ok === false && /sender|account|password/i.test(ver.error || '') ? 'PASS' : 'FAIL', 'mail-server check answers "no account" instead of pretending to be signed in', JSON.stringify(ver))
   const badHost = await page.evaluate(() => window.esb.outreachSave({ host: 'localhost', port: 587, user: 'desk@example.com', name: 'x', dailyLimit: 50, minDelaySec: 60, maxDelaySec: 120 }))
   const saveOk = await page.evaluate(() => window.esb.outreachSave({ host: 'smtp.gmail.com', port: 587, user: 'desk@example.com', name: 'ESB PowerLine', dailyLimit: 50, minDelaySec: 60, maxDelaySec: 120 }, 'abcd efgh ijkl mnop'))
   const stored = fs.existsSync(path.join(profile, 'outreach-smtp.json')) ? fs.readFileSync(path.join(profile, 'outreach-smtp.json'), 'utf8') : ''

@@ -16,7 +16,7 @@ import { fmtDuration } from './jobLog'
 
 type Check = { state: 'busy' } | { state: 'ok'; ms: number; model: string } | { state: 'bad'; error: string }
 type Active = { provider: AiProviderId; key: string; model: string }
-const ROLES: { role: AiRole; label: string }[] = [{ role: 'main', label: 'Main' }, { role: 'seo', label: 'SEO' }, { role: 'social', label: 'Social' }, { role: 'outreach', label: 'Outreach' }]
+const ROLES: { role: AiRole; label: string }[] = [{ role: 'main', label: 'Main' }, { role: 'seo', label: 'SEO' }, { role: 'social', label: 'Social' }, { role: 'outreach', label: 'Letter' }, { role: 'research', label: 'Research' }, { role: 'review', label: 'Review' }]
 
 /** Health of each distinct (provider, key, model) — shared by the footer word and the panel. */
 const useHealth = create<{ byKey: Record<string, Check>; set: (k: string, c: Check) => void }>((set) => ({
@@ -38,7 +38,8 @@ async function check(a: Active) {
 
 const fmt = fmtDuration
 
-export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offline: boolean; onAddKey: () => void }) {
+/** `roles` = the jobs this desk runs (Editorial: Main · SEO · Social; Outreach: Letter · Research · Review). */
+export function EngineStatus({ ai, offline, onAddKey, roles = ['main', 'seo', 'social'] }: { ai: AiSettings; offline: boolean; onAddKey: () => void; roles?: AiRole[] }) {
   const setAiSettings = useEditorialStore((s) => s.setAiSettings)
   const setAiPaused = useEditorialStore((s) => s.setAiPaused)
   const byKey = useHealth((s) => s.byKey)
@@ -50,7 +51,8 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
   const btn = useRef<HTMLButtonElement>(null)
   const pop = useRef<HTMLDivElement>(null)
 
-  const rows = useMemo(() => ROLES.map((r) => ({ ...r, chosen: roleProvider(ai, r.role), a: aiFor(r.role, ai) })), [ai])
+  const roleKey = roles.join(',')
+  const rows = useMemo(() => ROLES.filter((r) => roleKey.split(',').includes(r.role)).map((r) => ({ ...r, chosen: roleProvider(ai, r.role), a: aiFor(r.role, ai) })), [ai, roleKey])
   const distinct = useMemo(() => {
     const m = new Map<string, Active>()
     for (const r of rows) if (r.a) m.set(sig(r.a), r.a)
@@ -82,7 +84,7 @@ export function EngineStatus({ ai, offline, onAddKey }: { ai: AiSettings; offlin
   const noKey = rows.filter((r) => !r.a).length
   const summary = ai.paused ? { cls: 'off', text: 'AI OFF' }
     : offline ? { cls: 'bad', text: 'Offline' }
-    : !distinct.length ? { cls: 'free', text: 'Free translation' }
+    : !distinct.length ? { cls: 'free', text: roles.includes('main') ? 'Free translation' : 'No AI key' }
     : busy ? { cls: 'busy', text: 'Checking…' }
     : bad ? { cls: 'bad', text: `${bad} of ${rows.length} need attention` }
     : noKey ? { cls: 'warn', text: `Working · ${noKey} on free` }

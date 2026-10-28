@@ -1,29 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { contactsFromRows, parseCsv } from '../../src/outreach/directory'
+import { contactsFromRows, groupNamesOf, parseCsv, parseGroupLabel, readableGroupName, statusOf } from '../../src/outreach/directory'
 import { buildMessage, mentionsAttachment, missingFields, sectorName, skipReason } from '../../src/outreach/compose'
-import { eligible } from '../../src/outreach/campaign'
-import { OUTREACH_BLUEPRINTS } from '../../src/outreach/outreachAi'
-import type { Contact } from '../../src/outreach/types'
+import { eligible, inAudience, resultsCsv } from '../../src/outreach/campaign'
+import { letterChecks, unsourcedNumbers } from '../../src/outreach/checks'
+import { OUTREACH_BLUEPRINTS, quoteInSource, suggestBlueprint } from '../../src/outreach/outreachAi'
+import { directContacts, newCampaign, overlay } from '../../src/outreach/outreachStore'
+import type { Contact, Source } from '../../src/outreach/types'
 
 // synthetic rows only — example.com addresses, no real people
 const rows = [
   ['Outreach list'],
   [],
-  ['SL', 'Sector Group', 'Organization', 'Person Name', 'Designation', 'Email Address', 'Deliverability Status'],
+  ['SL', 'Sector Group', 'Organization', 'Person Name', 'Designation', 'Email Address', 'Purpose', 'Deliverability Status'],
   ['GROUP 1: POWER GENERATION'],
-  ['1', '', 'Example Power Co.', 'A. Rahman', 'Managing Director', 'MD@Example.com', 'SAFE_TO_SEND'],
-  ['2', 'GROUP 2', 'Sample Gas Ltd.', '', 'Chief Engineer', 'ce@example.org; alt@example.org', 'REVIEW_REQUIRED'],
-  ['3', 'GROUP 2', 'Test Grid', 'C. Hossain', '', 'planning@example.net', ''],
-  ['4', 'GROUP 2', 'Dup Co.', 'D', 'X', 'md@example.com', 'SAFE_TO_SEND'],
-  ['5', 'GROUP 2', 'Bad Co.', 'E', 'Y', 'not-an-address', 'SAFE_TO_SEND'],
+  ['1', '', 'Example Power Co.', 'A. Rahman', 'Managing Director', 'MD@Example.com', 'MAGAZINE_DISTRIBUTION, SPONSORSHIP', 'SAFE_TO_SEND'],
+  ['2', 'GROUP 2', 'Sample Gas Ltd.', '', 'Chief Engineer', 'ce@example.org; alt@example.org', 'SPONSORSHIP', 'REVIEW_REQUIRED'],
+  ['3', 'GROUP 2', 'Test Grid', 'C. Hossain', '', 'planning@example.net', '', ''],
+  ['4', 'GROUP 2', 'Dup Co.', 'D', 'X', 'md@example.com', '', 'SAFE_TO_SEND'],
+  ['5', 'GROUP 2', 'Bad Co.', 'E', 'Y', 'not-an-address', '', 'SAFE_TO_SEND'],
+  ['6', 'GROUP 2', 'Gone Co.', 'F', 'Z', 'f@nomail.example.com', '', 'DEAD_NO_DNS'],
 ]
 
 describe('Directory: only what the sheet says', () => {
   const { contacts, skipped, duplicates } = contactsFromRows(rows)
   it('finds the header, keeps group banners, takes the first valid address, drops repeats', () => {
-    expect(contacts.map((c) => c.email)).toEqual(['md@example.com', 'ce@example.org', 'planning@example.net'])
-    expect(contacts[0].sectorGroup).toBe('GROUP 1: POWER GENERATION')
-    expect(contacts[1].sectorGroup).toBe('GROUP 2')
+    expect(contacts.map((c) => c.email)).toEqual(['md@example.com', 'ce@example.org', 'planning@example.net', 'f@nomail.example.com'])
+    expect(contacts[0].sectorGroup).toBe('Power Generation')
+    expect(contacts[0].groupNo).toBe(1)
+    expect(contacts[1].groupNo).toBe(2)
+    expect(contacts[1].sectorGroup).toBe('')
     expect(skipped).toBe(1)
     expect(duplicates).toBe(1)
   })
@@ -31,6 +36,33 @@ describe('Directory: only what the sheet says', () => {
     expect(contacts[1].personName).toBe('')
     expect(contacts[2].mxStatus).toBe('UNKNOWN')
     expect(contacts[1].mxStatus).toBe('REVIEW_REQUIRED')
+    expect(contacts[0].purposes).toEqual(['MAGAZINE_DISTRIBUTION', 'SPONSORSHIP'])
+  })
+  it("maps the workbook's own status words", () => {
+    expect(statusOf('DEAD_NO_DNS')).toBe('UNDELIVERABLE')
+    expect(statusOf('A_RECORD_FALLBACK')).toBe('REVIEW_REQUIRED')
+    expect(statusOf('ELIGIBLE')).toBe('REVIEW_REQUIRED')
+    expect(statusOf('NOT_RELEVANT')).toBe('EXCLUDED')
+    expect(statusOf('TECHNICAL_ONLY')).toBe('TECHNICAL_ONLY')
+    expect(statusOf('SAFE_TO_SEND')).toBe('SAFE_TO_SEND')
+    expect(statusOf('')).toBe('UNKNOWN')
+    expect(statusOf('maybe')).toBe('UNKNOWN')
+  })
+  it('reads group names from the summary sheet first, then from banners, and a banner above the header', () => {
+    expect(parseGroupLabel('GROUP 3: TRANSMISSION — (17 leads)')).toEqual([3, 'TRANSMISSION'])
+    expect(parseGroupLabel('Group 4')).toEqual([4, ''])
+    expect(readableGroupName('POWER GENERATION AND TRANSMISSION (PGCB / NLDC)')).toBe('Power Generation and Transmission (PGCB / NLDC)')
+    const summary = { name: 'Summary', rows: [['Group #', 'Industry / Sectoral Group Name', 'Leads'], ['GROUP 1', 'Power Generation Utilities', '2'], ['GROUP 2', 'Gas & Petroleum', '4']] }
+    const sheet = { name: 'Safe', rows: [['GROUP 9: BANNER NAME'], ['Email', 'Organization'], ['x@example.com', 'X'], ['GROUP 1: OTHER WORDS'], ['Email', 'Organization'], ['y@example.com', 'Y']] }
+    const names = groupNamesOf([summary, sheet])
+    expect(names.get(1)).toBe('Power Generation Utilities')
+    expect(names.get(9)).toBe('Banner Name')
+    const r = contactsFromRows(sheet.rows, names, 'Safe')
+    expect(r.contacts.map((c) => [c.email, c.groupNo, c.sectorGroup, c.sheet])).toEqual([['x@example.com', 9, 'Banner Name', 'Safe'], ['y@example.com', 1, 'Power Generation Utilities', 'Safe']])
+  })
+  it('keeps the sheet’s diagnostic note', () => {
+    const r = contactsFromRows([['Email', 'Diagnostic Issue & Recommended Action'], ['a@example.com', 'No MX record — verify by phone']])
+    expect(r.contacts[0].diagnostic).toBe('No MX record — verify by phone')
   })
   it('reads CSV with quoted commas and doubled quotes', () => {
     expect(parseCsv('Email,Organization\r\nx@example.com,"Power, Gas ""and"" Grid"\r\n')).toEqual([['Email', 'Organization'], ['x@example.com', 'Power, Gas "and" Grid']])
@@ -50,11 +82,14 @@ describe('Compose: who the batch sends to, and what they get', () => {
     expect(skipReason({ ...contacts[2], approved: true }, subject, body)).toBe('Missing designation')
     expect(skipReason({ ...contacts[1], approved: true }, subject, body)).toBeNull()
   })
+  it('never sends to an address with no mail server, even when approved', () => {
+    expect(skipReason({ ...contacts[3], approved: true }, subject, body)).toMatch(/No mail server.*bounce/)
+  })
   it('greets a nameless row as Sir/Madam (মহোদয় in Bangla) and adds the opt-out line', () => {
     const m = buildMessage(contacts[1], subject, body, 'en')
-    expect(m.text.startsWith('Dear Sir/Madam,')).toBe(true)
-    expect(m.text).toMatch(/reply with "unsubscribe"/)
-    expect(buildMessage(contacts[1], subject, 'শ্রদ্ধেয় {name},', 'bn').text.startsWith('শ্রদ্ধেয় মহোদয়,')).toBe(true)
+    expect(m.body.startsWith('Dear Sir/Madam,')).toBe(true)
+    expect(m.optOut).toMatch(/reply with "unsubscribe"/)
+    expect(buildMessage(contacts[1], subject, 'শ্রদ্ধেয় {name},', 'bn').body.startsWith('শ্রদ্ধেয় মহোদয়,')).toBe(true)
     expect(missingFields(contacts[1], subject, body)).toEqual([])
   })
   it('never sends twice, or to someone who opted out', () => {
@@ -65,12 +100,64 @@ describe('Compose: who the batch sends to, and what they get', () => {
   it('{sector} reads as a sector name, never as "GROUP 1"', () => {
     expect(sectorName('GROUP 1: POWER GENERATION AND TRANSMISSION')).toBe('Power Generation and Transmission')
     expect(sectorName('GROUP 2')).toBe('')
-    expect(buildMessage(contacts[0], 'x', 'In {sector}.', 'en').text.startsWith('In Power Generation.')).toBe(true)
+    expect(buildMessage(contacts[0], 'x', 'In {sector}.', 'en').body).toBe('In Power Generation.')
   })
   it('notices a letter that promises an attachment', () => {
     expect(mentionsAttachment(body)).toBe(true)
     expect(mentionsAttachment('সংযুক্ত করা হলো')).toBe(true)
     expect(mentionsAttachment('Dear {name}, hello.')).toBe(false)
+  })
+})
+
+describe('Campaigns: audience, typed addresses, results', () => {
+  const { contacts } = contactsFromRows(rows)
+  it('an audience narrows by group and by purpose', () => {
+    expect(contacts.filter((c) => inAudience(c, { group: 2, purposes: [] })).map((c) => c.email)).toEqual(['ce@example.org', 'planning@example.net', 'f@nomail.example.com'])
+    expect(contacts.filter((c) => inAudience(c, { group: null, purposes: ['SPONSORSHIP'] })).map((c) => c.email)).toEqual(['md@example.com', 'ce@example.org'])
+  })
+  it('typed addresses are the editor’s own choice: approved, with nothing invented about them', () => {
+    const [d] = directContacts(['someone@example.com'])
+    expect(d.approved).toBe(true)
+    expect(d.personName).toBe('')
+    expect(skipReason(d, 'Hello', 'Dear {name},')).toBeNull()
+    expect(skipReason(d, 'Hello', 'As {designation}')).toBe('Missing designation')
+  })
+  it('a campaign’s results lay over the list, and the CSV says what happened to everyone in the audience', () => {
+    const c = newCampaign({ subject: 'For {organization}', body: 'Dear {name}, as {designation}…', sent: { 'md@example.com': Date.UTC(2026, 9, 28, 6) }, failed: { 'ce@example.org': 'Mailbox full' } })
+    const over = overlay(contacts, { approved: ['ce@example.org'], optOut: ['planning@example.net'] }, c, null)
+    expect(over.map((x) => x.status)).toEqual(['SENT', 'FAILED', 'OPTED_OUT', 'QUEUED'])
+    const csv = resultsCsv(c, over).trim().split('\r\n')
+    expect(csv[0]).toBe('Email,Name,Designation,Organization,Group,Sheet status,Result,When,Detail')
+    expect(csv[1]).toMatch(/^md@example\.com,A\. Rahman,.*,Sent,2026-10-28T06:00:00\.000Z,$/)
+    expect(csv[2]).toMatch(/,Failed,,Mailbox full$/)
+    expect(csv[3]).toMatch(/,Opted out,/)
+    expect(csv[4]).toMatch(/,Skipped,,No mail server/)
+  })
+  it('the audience’s purposes point to a blueprint', () => {
+    expect(suggestBlueprint(contacts)?.id).toBe('corporate_sponsorship')
+    expect(suggestBlueprint(contacts, ['MAGAZINE_DISTRIBUTION'])?.id).toBe('magazine_distribution')
+    expect(suggestBlueprint([])).toBeNull()
+  })
+})
+
+describe('Checks and the facts rule', () => {
+  const src: Source = { id: 's', kind: 'text', title: 'Note', text: 'The plant added 1,200 MW in 2025 and supplies 40% of the region.', points: [], addedAt: 0 }
+  it('figures not found in any source are named; figures that are, are not', () => {
+    expect(unsourcedNumbers('It added 1,200 MW in 2025, about 40%.', [src])).toEqual([])
+    expect(unsourcedNumbers('It added 1,500 MW, reaching 3 million homes.', [src])).toEqual(['1,500'])
+    expect(unsourcedNumbers('Visit https://esbpowerline.com/articles/2026-x', [])).toEqual([])
+  })
+  it('a talking point’s quote must be the source’s own words', () => {
+    expect(quoteInSource('The plant added 1,200 MW in 2025', src.text)).toBe(true)
+    expect(quoteInSource('The plant added 1,500 MW in 2025', src.text)).toBe(false)
+    expect(quoteInSource('added', src.text)).toBe(false)
+  })
+  it('the fixed checks catch what a filter or an official would', () => {
+    const ids = (l: ReturnType<typeof letterChecks>) => l.filter((x) => x.level !== 'ok').map((x) => x.id)
+    const bad = letterChecks({ subject: 'FREE OFFER!!', body: 'Dear {nme}, act now. Please find the brochure attached. We reach 90,000 readers. http://example.com', signature: '', attachments: [], sources: [] })
+    expect(ids(bad)).toEqual(expect.arrayContaining(['placeholders', 'spam', 'caps', 'bang', 'http', 'attach', 'numbers', 'length']))
+    const good = letterChecks({ subject: 'ESB PowerLine magazine for {organization}', body: Array(12).fill('We would be glad to send {organization} the magazine each month.').join(' '), signature: 'With best regards', attachments: [], sources: [] })
+    expect(ids(good)).toEqual([])
   })
 })
 

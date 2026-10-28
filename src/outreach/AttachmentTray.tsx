@@ -53,9 +53,10 @@ export function AttachmentTray() {
   }
 
   const insertStory = () => {
-    if (!liveSlug || !draft.headline.trim()) return
-    const block = [draft.headline.trim(), draft.deck.trim(), `https://esbpowerline.com/articles/${liveSlug}`].filter(Boolean).join('\n')
-    s.setBody(`${s.body.trimEnd()}\n\n${block}\n`)
+    const c = s.campaign()
+    if (!c || !liveSlug || !draft.headline.trim()) return
+    const block = [`**${draft.headline.trim()}**`, draft.deck.trim(), `[Read the story](https://esbpowerline.com/articles/${liveSlug})`].filter(Boolean).join('\n')
+    s.patch({ body: `${c.body.trimEnd()}\n\n${block}\n` })
     s.addLog('ok', 'Inserted the Editorial story and its link')
   }
 
@@ -66,14 +67,14 @@ export function AttachmentTray() {
         <b>Attachments</b>
         <span className={'or-count' + (total > MAX_BYTES ? ' over' : '')}>{fmt(total)} of 18 MB</span>
         <div className="spacer" />
-        <button type="button" className="btn sm" onClick={() => void attachBanner()} disabled={rendering} data-tip="Render the banner on the Graphics desk (Facebook 4:5, JPEG) and attach it">
+        <button type="button" className="btn sm" onClick={() => void attachBanner()} disabled={rendering || !s.campaign()} data-tip="Render the banner on the Graphics desk (Facebook 4:5, JPEG) and attach it">
           <Icon name="layers" size={13} /><span>{rendering ? 'Rendering…' : 'Banner'}</span>
         </button>
         <button type="button" className="btn sm" onClick={insertStory} disabled={!liveSlug || !draft.headline.trim()}
           data-tip={liveSlug ? 'Add the Editorial story’s headline, deck and link to the end of the letter' : 'Publish the Editorial story first — its link must exist before it goes in an email'}>
           <Icon name="newspaper" size={13} /><span>Story link</span>
         </button>
-        <button type="button" className="btn sm" onClick={() => input.current?.click()} data-tip="PDF, Word, Excel, PowerPoint, images, text or CSV — up to 18 MB together">
+        <button type="button" className="btn sm" onClick={() => input.current?.click()} disabled={!s.campaign()} data-tip="PDF, Word, Excel, PowerPoint, images, text or CSV — up to 18 MB together">
           <Icon name="plus" size={13} /><span>Add files</span>
         </button>
         <input ref={input} type="file" multiple accept={ACCEPT} hidden onChange={(e) => { void add(e.target.files); e.target.value = '' }} />

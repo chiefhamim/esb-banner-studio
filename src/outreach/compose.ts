@@ -42,12 +42,9 @@ export const OPT_OUT_LINE: Record<OutreachLang, string> = {
   bn: 'ভবিষ্যতে ইএসবি পাওয়ারলাইনের ইমেইল পেতে না চাইলে "unsubscribe" লিখে উত্তর দিন; আমরা আর লিখব না।',
 }
 
-/** The subject and plain text one recipient gets. */
-export function buildMessage(c: Contact, subject: string, body: string, lang: OutreachLang): { subject: string; text: string } {
-  return {
-    subject: fill(subject, c, lang).replace(/\s+/g, ' ').trim(),
-    text: `${fill(body, c, lang).trim()}\n\n—\n${OPT_OUT_LINE[lang]}`,
-  }
+/** The subject, body (with its marks) and opt-out line one recipient gets; the main process renders the HTML. */
+export function buildMessage(c: Contact, subject: string, body: string, lang: OutreachLang): { subject: string; body: string; optOut: string } {
+  return { subject: fill(subject, c, lang).replace(/\s+/g, ' ').trim(), body: fill(body, c, lang).trim(), optOut: OPT_OUT_LINE[lang] }
 }
 
 /** The body promises an attachment ("attached", "enclosed", "সংযুক্ত") — then there must be one. */
@@ -57,8 +54,12 @@ export const mentionsAttachment = (body: string) => /\b(attached|enclosed|attach
 export function skipReason(c: Contact, subject: string, body: string): string | null {
   if (c.status === 'SENT') return 'Already sent'
   if (c.status === 'OPTED_OUT') return 'Asked not to be emailed'
-  if (c.mxStatus === 'EXCLUDED') return 'Excluded in the sheet'
-  if (c.mxStatus !== 'SAFE_TO_SEND' && !c.approved) return c.mxStatus === 'UNKNOWN' ? 'No status in the sheet — approve to include' : 'Marked for review — approve to include'
+  if (c.mxStatus === 'UNDELIVERABLE') return `No mail server for this address${c.rawStatus ? ` (${c.rawStatus})` : ''} — it would bounce`
+  if (c.mxStatus === 'EXCLUDED') return `Excluded in the sheet${c.rawStatus ? ` (${c.rawStatus})` : ''}`
+  if (c.mxStatus !== 'SAFE_TO_SEND' && !c.approved) {
+    const why = c.mxStatus === 'UNKNOWN' ? 'No status in the sheet' : c.mxStatus === 'TECHNICAL_ONLY' ? 'Technical address' : 'Marked for review'
+    return `${why}${c.rawStatus ? ` (${c.rawStatus})` : ''} — approve to include`
+  }
   const miss = missingFields(c, subject, body)
   if (miss.length) return `Missing ${miss.join(', ')}`
   return null

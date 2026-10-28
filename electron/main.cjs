@@ -347,6 +347,7 @@ ipcMain.handle('esb:outreach-save', (_e, settings, password) => {
 })
 ipcMain.handle('esb:outreach-forget-password', () => outreachMailer().forgetPassword())
 ipcMain.handle('esb:outreach-send', (_e, mail) => outreachMailer().send(mail))
+ipcMain.handle('esb:outreach-verify', (_e, force) => outreachMailer().verify(force === true))
 
 // no page in this app may embed a <webview>, and any window not covered above opens nothing
 app.on('web-contents-created', (_e, contents) => {

@@ -7,6 +7,7 @@ import { GraphicsWorkspace } from './shell/GraphicsWorkspace'
 import { EditorialWorkspace } from './editorial/EditorialWorkspace'
 import { VideoWorkspace } from './video/VideoWorkspace'
 import { OutreachWorkspace } from './outreach/OutreachWorkspace'
+import { startScheduler } from './outreach/campaign'
 import { ComponentGallery } from './ui/ComponentGallery'
 import { useShellStore, deskMotion } from './shell/shellStore'
 import { arriveFrames, reducedMotion } from './ui/motion'
@@ -29,6 +30,8 @@ export default function App() {
 
   useEffect(() => {
     loadBaseAssets().then((b) => setBase(b))
+    // a campaign scheduled on the Outreach desk starts at its time whichever desk is open
+    startScheduler()
   }, [])
 
   // A desk that arrives after a switch drifts in and settles with a soft overshoot, on the same spring as the tab chip
