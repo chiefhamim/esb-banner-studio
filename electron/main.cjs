@@ -337,16 +337,16 @@ ipcMain.on('esb:start-drag', (event, arg) => {
   }
 })
 
-// --- Outreach Desk IPC Handlers ---
-const mailer = require('./mailer.cjs')
-
-ipcMain.handle('esb:send-outreach-email', async (_e, config, mail) => {
-  return await mailer.sendOutreachEmail(config, mail)
+// Outreach desk: the account, the encrypted app password and the send ledger live here (electron/mailer.cjs); the
+// renderer can ask for one checked email at a time and read the status, nothing more.
+let mailer = null
+const outreachMailer = () => (mailer ??= require('./mailer.cjs').createMailer({ dir: app.getPath('userData'), safeStorage: require('electron').safeStorage, nodemailer: require('nodemailer') }))
+ipcMain.handle('esb:outreach-status', () => outreachMailer().status())
+ipcMain.handle('esb:outreach-save', (_e, settings, password) => {
+  try { return { ok: true, status: outreachMailer().saveSettings(settings, password) } } catch (e) { return { ok: false, error: e.message } }
 })
-
-ipcMain.handle('esb:load-mailing-list', async (_e, filePath) => {
-  return mailer.loadWorkbookFile(filePath)
-})
+ipcMain.handle('esb:outreach-forget-password', () => outreachMailer().forgetPassword())
+ipcMain.handle('esb:outreach-send', (_e, mail) => outreachMailer().send(mail))
 
 // no page in this app may embed a <webview>, and any window not covered above opens nothing
 app.on('web-contents-created', (_e, contents) => {

@@ -174,20 +174,20 @@
 .pnl-body .cat-txt b { overflow-wrap: normal; word-break: normal; hyphens: auto; -webkit-hyphens: auto; }
 
 /* ---------------------------------------------------------------- fields: filled, ring on focus */
-.input, input[type=text], input[type=email], input[type=password], input[type=url], input[type=search], textarea.input,
+.input, input[type=text], input[type=email], input[type=password], input[type=url], input[type=search], input[type=number], textarea.input,
 .select, .scrub, .colorfield, .search, .ed-input, .ed-slug .ed-slug-input, .ed-tags {
   background: var(--field);
   border: 0;
   box-shadow: none;
   transition: background var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring);
 }
-.input:hover, input[type=text]:hover, input[type=email]:hover, input[type=password]:hover, input[type=url]:hover, textarea.input:hover,
+.input:hover, input[type=text]:hover, input[type=email]:hover, input[type=password]:hover, input[type=url]:hover, input[type=number]:hover, textarea.input:hover,
 .select:hover, .scrub:hover, .colorfield:hover, .search:hover, .ed-input:hover, .ed-slug .ed-slug-input:hover, .ed-tags:hover {
   background: var(--field-hover);
   border: 0;
   box-shadow: none;
 }
-.input:focus, input[type=text]:focus, input[type=email]:focus, input[type=password]:focus, input[type=url]:focus, textarea.input:focus,
+.input:focus, input[type=text]:focus, input[type=email]:focus, input[type=password]:focus, input[type=url]:focus, input[type=number]:focus, textarea.input:focus,
 .select.open, .scrub:focus-within, .colorfield:focus-within, .search:focus-within, .ed-input:focus, .ed-slug .ed-slug-input:focus, .ed-tags:focus-within {
   background: var(--card);
   border: 0;

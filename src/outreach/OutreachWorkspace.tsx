@@ -1,117 +1,57 @@
-import { useEffect, useState } from 'react'
+// The Outreach desk: the mailing list (left), the letter (centre), sending (right), the log under the header.
+// The first version opened a fixed workbook path on start (W:\E-Mail Marketing\…) through a bridge that read any
+// file on the PC; the list is now always picked by the editor.
+
+import { useMemo, useState } from 'react'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { DirectoryPanel } from './DirectoryPanel'
 import { OutreachComposer } from './OutreachComposer'
 import { OutreachInspector } from './OutreachInspector'
 import { useOutreachStore } from './outreachStore'
+import { eligible } from './campaign'
 import { Icon } from '../ui/Icon'
-import { DEFAULT_MAILING_LIST_PATH } from './directoryStore'
 
 export function OutreachWorkspace() {
-  const contacts = useOutreachStore((s) => s.contacts)
-  const rolling24hCount = useOutreachStore((s) => s.rolling24hCount)
-  const config = useOutreachStore((s) => s.config)
-  const campaignState = useOutreachStore((s) => s.campaignState)
-  const loadWorkbookData = useOutreachStore((s) => s.loadWorkbookData)
-  const addLog = useOutreachStore((s) => s.addLog)
-  const logs = useOutreachStore((s) => s.logs)
-  const [showLogDrawer, setShowLogDrawer] = useState(false)
-
-  // Auto-attempt loading the Master Directory from disk in Electron environment
-  useEffect(() => {
-    if (contacts.length > 0) return
-
-    const loadDefaultMailingList = async () => {
-      try {
-        const esbApi = (window as unknown as { esb?: { loadMailingList?: (path: string) => Promise<{ success: boolean; data?: Uint8Array; error?: string }> } }).esb
-        if (esbApi?.loadMailingList) {
-          const res = await esbApi.loadMailingList(DEFAULT_MAILING_LIST_PATH)
-          if (res.success && res.data) {
-            loadWorkbookData(res.data)
-            return
-          }
-        }
-      } catch {
-        /* browser fallback: user can click Import */
-      }
-    }
-    void loadDefaultMailingList()
-  }, [contacts.length, loadWorkbookData, addLog])
+  const s = useOutreachStore()
+  const [showLog, setShowLog] = useState(false)
+  const ready = useMemo(() => eligible(s.contacts, s.subject, s.body).length, [s.contacts, s.subject, s.body])
+  const sent = s.contacts.filter((c) => c.status === 'SENT').length
+  const failures = s.log.filter((l) => l.level === 'error').length
 
   return (
-    <div className="workspace outreach-workspace" aria-label="Outreach Desk">
-      {/* 1. Header Topbar */}
-      <header className="topbar ed-head outreach-topbar">
+    <div className="outreach-workspace">
+      <header className="topbar ed-head or-head">
         <WorkspaceSwitcher />
-        <i className="head-sep" aria-hidden />
-
-        <div className="row" style={{ alignItems: 'center', gap: 8 }}>
-          <strong className="text-white" style={{ fontSize: 13, letterSpacing: '0.2px' }}>
-            Outreach & Promotional Desk
-          </strong>
-          <span className="pill xs" style={{ fontSize: 10, background: 'rgba(56,189,248,0.1)', color: '#38bdf8' }}>
-            Consolidated Energy Intelligence
-          </span>
-        </div>
-
         <div className="spacer" />
-
-        {/* Campaign Activity / Log button */}
-        <div className="row" style={{ alignItems: 'center', gap: 6 }}>
-          <button
-            type="button"
-            className={'btn xs subtle' + (campaignState === 'RUNNING' ? ' pulse' : '')}
-            onClick={() => setShowLogDrawer(!showLogDrawer)}
-            data-tip="Toggle Live Dispatch Logs"
-          >
-            <Icon name="activity" size={13} />
-            <span style={{ fontSize: 11, marginLeft: 4 }}>Logs ({logs.length})</span>
-          </button>
-        </div>
+        <button type="button" className={'btn sm or-log-btn' + (showLog ? ' on' : '')} aria-pressed={showLog} onClick={() => setShowLog(!showLog)} data-tip="What the desk did: imports, sends, refusals">
+          <Icon name="activity" size={14} /><span>Log</span>{s.log.length > 0 && <span className={'or-badge' + (failures ? ' bad' : '')}>{s.log.length}</span>}
+        </button>
       </header>
 
-      {/* 2. Main 3-Column Desk Stage */}
-      <div className="ed-body outreach-body">
+      {showLog && (
+        <div className="or-log" role="log" aria-label="Outreach log">
+          {s.log.length === 0 ? <p className="or-muted">Nothing yet.</p> : [...s.log].reverse().map((l, i) => (
+            <div key={i} className={'or-log-line ' + l.level}><time>{new Date(l.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><span>{l.text}</span></div>
+          ))}
+        </div>
+      )}
+
+      <div className="or-body">
         <DirectoryPanel />
         <OutreachComposer />
         <OutreachInspector />
       </div>
 
-      {/* 3. 28px Bottom Statusbar */}
-      <footer className="statusbar vw-statusbar outreach-statusbar">
-        <div className="row" style={{ gap: 12, alignItems: 'center' }}>
-          <span><Icon name="users" size={12} /> {contacts.length} Leads Indexed</span>
-          <span>•</span>
-          <span>MX Verified Safe: {contacts.filter((c) => c.mxStatus === 'SAFE_TO_SEND').length}</span>
-          <span>•</span>
-          <span>Opened: {contacts.filter((c) => c.openCount > 0).length}</span>
-        </div>
-
+      <footer className="statusbar or-status">
+        <span>{s.contacts.length} contacts</span>
+        <div className="sep" />
+        <span>{ready} ready</span>
+        <div className="sep" />
+        <span>{sent} sent</span>
         <div className="spacer" />
-
-        <div className="row" style={{ gap: 12, alignItems: 'center', fontFamily: 'monospace' }}>
-          <span>Quota: {rolling24hCount} / {config.dailyLimit} (24h)</span>
-          <span>•</span>
-          <span>Status: <strong style={{ color: campaignState === 'RUNNING' ? '#10b981' : '#f59e0b' }}>{campaignState}</strong></span>
-        </div>
+        {s.mail?.settings && <span>{s.mail.sent24h} of {s.mail.settings.dailyLimit} in the last 24 h</span>}
+        {s.campaign !== 'idle' && <><div className="sep" /><span className="or-status-run">{s.campaign === 'running' ? 'Sending' : 'Paused'} · {s.runSent}/{s.runTotal}</span></>}
       </footer>
-
-      {/* Slide-out Activity Log Drawer */}
-      {showLogDrawer && (
-        <div className="outreach-log-drawer custom-scroll">
-          <div className="row" style={{ justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>Activity & Telemetry Stream</span>
-            <button type="button" className="btn xs" onClick={() => setShowLogDrawer(false)}>&times;</button>
-          </div>
-          <div className="scroll custom-scroll" style={{ padding: '8px 12px', maxHeight: 240, overflowY: 'auto', fontFamily: 'monospace', fontSize: 11 }}>
-            {logs.map((l) => (
-              <div key={l.id} className={'log-line ' + l.level} style={{ margin: '3px 0' }}>
-                <span style={{ opacity: 0.5 }}>[{l.timestamp}]</span> {l.message}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

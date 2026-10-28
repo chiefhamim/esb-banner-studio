@@ -1,206 +1,117 @@
+// Left column: the mailing list. Import an .xlsx or .csv, pick a sheet and a group, search, and see for every
+// contact whether the batch will send to them — and if not, why (skipReason). Nothing here is invented: a contact
+// with no name shows its address, a row with no status says so.
+
 import { useMemo, useRef } from 'react'
 import { useOutreachStore } from './outreachStore'
+import { skipReason } from './compose'
+import { STATUS_LABEL } from './directory'
 import { Icon } from '../ui/Icon'
+import { Select, Seg } from '../ui/controls'
+import type { Contact } from './types'
+
+type Row = { c: Contact; skip: string | null }
+
+const chipOf = ({ c, skip }: Row): { cls: string; text: string; tip: string } => {
+  if (c.status === 'SENDING') return { cls: 'busy', text: 'Sending', tip: 'Being sent now' }
+  if (c.status === 'SENT') return { cls: 'good', text: 'Sent', tip: c.sentAt ? `Sent ${new Date(c.sentAt).toLocaleString()}` : 'Sent' }
+  if (c.status === 'FAILED') return { cls: 'bad', text: 'Failed', tip: c.error || 'The server refused it' }
+  if (c.status === 'OPTED_OUT') return { cls: 'muted', text: 'Opted out', tip: 'Asked not to be emailed' }
+  if (skip) return { cls: 'warn', text: 'Skipped', tip: skip }
+  return { cls: 'ready', text: 'Ready', tip: c.approved ? 'Approved by you' : STATUS_LABEL[c.mxStatus] }
+}
 
 export function DirectoryPanel() {
-  const contacts = useOutreachStore((s) => s.contacts)
-  const activeContactId = useOutreachStore((s) => s.activeContactId)
-  const setActiveContactId = useOutreachStore((s) => s.setActiveContactId)
-  const selectedSheet = useOutreachStore((s) => s.selectedSheet)
-  const sheetNames = useOutreachStore((s) => s.sheetNames)
-  const filterGroup = useOutreachStore((s) => s.filterGroup)
-  const setFilterGroup = useOutreachStore((s) => s.setFilterGroup)
-  const filterStatus = useOutreachStore((s) => s.filterStatus)
-  const setFilterStatus = useOutreachStore((s) => s.setFilterStatus)
-  const searchQuery = useOutreachStore((s) => s.searchQuery)
-  const setSearchQuery = useOutreachStore((s) => s.setSearchQuery)
-  const loadWorkbookData = useOutreachStore((s) => s.loadWorkbookData)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const s = useOutreachStore()
+  const file = useRef<HTMLInputElement>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const buffer = ev.target?.result as ArrayBuffer
-      if (buffer) loadWorkbookData(buffer)
-    }
-    reader.readAsArrayBuffer(file)
-    e.target.value = ''
-  }
-
-  // Auto-extract unique groups
-  const availableGroups = useMemo(() => {
-    const set = new Set<string>()
-    for (const c of contacts) {
-      if (c.sectorGroup) set.add(c.sectorGroup)
-    }
-    return ['ALL', ...Array.from(set).sort()]
-  }, [contacts])
-
-  // Filtered contacts
-  const filtered = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim()
-    return contacts.filter((c) => {
-      if (filterGroup !== 'ALL' && c.sectorGroup !== filterGroup) return false
-      if (filterStatus !== 'ALL') {
-        if (filterStatus === 'QUEUED' && c.trackingStatus !== 'QUEUED') return false
-        if (filterStatus === 'SENT' && c.trackingStatus !== 'SENT') return false
-        if (filterStatus === 'OPENED' && c.trackingStatus !== 'OPENED') return false
-        if (filterStatus === 'FAILED' && c.trackingStatus !== 'FAILED') return false
-      }
-      if (!q) return true
-      return (
-        c.personName.toLowerCase().includes(q) ||
-        c.organization.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        c.designation.toLowerCase().includes(q)
-      )
+  const rows: Row[] = useMemo(() => s.contacts.map((c) => ({ c, skip: skipReason(c, s.subject, s.body) })), [s.contacts, s.subject, s.body])
+  const groups = useMemo(() => [...new Set(s.contacts.map((c) => c.sectorGroup).filter(Boolean))].sort(), [s.contacts])
+  const counts = useMemo(() => ({
+    ready: rows.filter((r) => !r.skip && r.c.status === 'QUEUED').length,
+    skipped: rows.filter((r) => r.skip && r.c.status === 'QUEUED').length,
+    sent: rows.filter((r) => r.c.status === 'SENT').length,
+    failed: rows.filter((r) => r.c.status === 'FAILED').length,
+  }), [rows])
+  const shown = useMemo(() => {
+    const q = s.query.trim().toLowerCase()
+    return rows.filter(({ c, skip }) => {
+      if (s.group && c.sectorGroup !== s.group) return false
+      if (s.filter === 'ready' && (skip || c.status !== 'QUEUED')) return false
+      if (s.filter === 'skipped' && !(skip && c.status === 'QUEUED')) return false
+      if (s.filter === 'sent' && c.status !== 'SENT') return false
+      if (s.filter === 'failed' && c.status !== 'FAILED') return false
+      return !q || [c.personName, c.organization, c.email, c.designation].some((x) => x.toLowerCase().includes(q))
     })
-  }, [contacts, filterGroup, filterStatus, searchQuery])
+  }, [rows, s.group, s.filter, s.query])
 
   return (
-    <aside className="left ed-left outreach-left" aria-label="Directory & Contacts">
-      {/* Top action bar */}
-      <div className="outreach-dir-head">
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          <div className="row" style={{ gap: 6, alignItems: 'center' }}>
-            <Icon name="users" size={14} />
-            <strong className="text-xs uppercase tracking-wider" style={{ fontSize: 11 }}>Directory Census</strong>
+    <aside className="or-left" aria-label="Mailing list">
+      <div className="or-left-head">
+        <div className="or-file">
+          <span className="or-file-icon"><Icon name="users" size={15} /></span>
+          <div className="or-file-text">
+            <b title={s.fileName || undefined}>{s.fileName || 'No list loaded'}</b>
+            <span>{s.contacts.length ? `${s.contacts.length} contacts · ${counts.ready} ready` : 'Excel (.xlsx) or CSV with an Email column'}</span>
           </div>
-          <button
-            type="button"
-            className="btn xs"
-            data-tip="Import custom Excel or CSV list"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Icon name="upload" size={12} />
-            <span>Import</span>
+          <button type="button" className="btn sm" onClick={() => file.current?.click()} disabled={s.campaign !== 'idle'} data-tip={s.campaign !== 'idle' ? 'Stop the batch to load another list' : 'Load a mailing list from this computer'}>
+            <Icon name="upload" size={13} /><span>{s.fileName ? 'Replace' : 'Import'}</span>
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-          />
+          <input ref={file} type="file" accept=".xlsx,.csv,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void s.loadFile(f); e.target.value = '' }} />
         </div>
-
-        {/* Sheet picker & count pill */}
-        <div className="row" style={{ gap: 6, marginTop: 8 }}>
-          <select
-            className="select xs"
-            style={{ flex: 1, height: 26, fontSize: 11 }}
-            value={selectedSheet}
-            onChange={(e) => {
-              // trigger reload if workbook loaded
-              const file = (window as unknown as { __lastWb?: ArrayBuffer }).__lastWb
-              if (file) loadWorkbookData(file, e.target.value)
-            }}
-          >
-            {sheetNames.map((s) => (
-              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
-            ))}
-          </select>
-          <span className="pill xs" style={{ fontSize: 10, padding: '2px 6px' }}>
-            {filtered.length} / {contacts.length}
-          </span>
-        </div>
-
-        {/* Sector Group Filter */}
-        {availableGroups.length > 2 && (
-          <div className="row" style={{ marginTop: 4 }}>
-            <select
-              className="select xs"
-              style={{ width: '100%', height: 24, fontSize: 10 }}
-              value={filterGroup}
-              onChange={(e) => setFilterGroup(e.target.value)}
-            >
-              {availableGroups.map((g) => (
-                <option key={g} value={g}>{g === 'ALL' ? 'All Groups / Sectors' : g}</option>
-              ))}
-            </select>
-          </div>
+        {s.sheets.length > 1 && (
+          <Select value={s.sheet} options={s.sheets.map((x) => ({ value: x.name, label: x.name.replace(/_/g, ' ') }))} onChange={(v) => s.setSheet(String(v))} prefix="Sheet" />
         )}
-
-        {/* Search bar */}
-        <div className="row search-box" style={{ marginTop: 6, position: 'relative' }}>
-          <input
-            type="text"
-            className="input xs"
-            style={{ width: '100%', paddingLeft: 24, fontSize: 11 }}
-            placeholder="Search name, org, email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <span style={{ position: 'absolute', left: 7, top: 6, opacity: 0.5, pointerEvents: 'none' }}>
-            <Icon name="globe" size={12} />
-          </span>
-        </div>
-
-        {/* Status filter chips */}
-        <div className="row" style={{ gap: 4, marginTop: 6, overflowX: 'auto', paddingBottom: 2 }}>
-          {(['ALL', 'QUEUED', 'SENT', 'OPENED', 'FAILED'] as const).map((st) => (
-            <button
-              key={st}
-              type="button"
-              className={'pill xs' + (filterStatus === st ? ' on' : '')}
-              style={{ fontSize: 10, padding: '1px 6px', cursor: 'pointer' }}
-              onClick={() => setFilterStatus(st)}
-            >
-              {st === 'OPENED' ? '✓✓ Opened' : st === 'SENT' ? '✓ Sent' : st}
-            </button>
-          ))}
-        </div>
+        {groups.length > 1 && (
+          <Select value={s.group} options={[{ value: '', label: 'All groups' }, ...groups.map((g) => ({ value: g, label: g }))]} onChange={(v) => s.setGroup(String(v))} prefix="Group" />
+        )}
+        {s.contacts.length > 0 && (
+          <>
+            <label className="or-search">
+              <Icon name="search" size={13} />
+              <input type="search" placeholder="Search name, organisation, email" value={s.query} onChange={(e) => s.setQuery(e.target.value)} aria-label="Search contacts" />
+            </label>
+            <Seg<typeof s.filter>
+              className="or-filter"
+              value={s.filter}
+              onChange={s.setFilter}
+              options={[
+                { value: 'all', label: 'All', tip: `${s.contacts.length} contacts` },
+                { value: 'ready', label: `Ready ${counts.ready}`, tip: 'The batch will send to these' },
+                { value: 'skipped', label: `Skip ${counts.skipped}`, tip: 'Not sent until you fix or approve them' },
+                { value: 'sent', label: `Sent ${counts.sent}` },
+                ...(counts.failed ? [{ value: 'failed' as const, label: `Failed ${counts.failed}` }] : []),
+              ]}
+            />
+          </>
+        )}
+        {s.importNote && <p className="or-note">{s.importNote}</p>}
       </div>
 
-      {/* Contact list */}
-      <div className="scroll custom-scroll" style={{ flex: 1, overflowY: 'auto' }}>
-        {filtered.length === 0 ? (
-          <div className="outreach-empty" style={{ padding: 24, textAlign: 'center', opacity: 0.6, fontSize: 12 }}>
-            <Icon name="users" size={24} />
-            <p style={{ marginTop: 8 }}>No contacts match filter.</p>
+      <div className="or-list" role="listbox" aria-label="Contacts">
+        {!s.contacts.length ? (
+          <div className="or-empty">
+            <Icon name="inbox" size={22} />
+            <b>Import your mailing list</b>
+            <p>One row per contact. The columns read are Email (required), Person Name, Designation, Organization, Sector Group and Deliverability Status. A row whose status is not SAFE is only sent after you approve it.</p>
+            <button type="button" className="btn primary sm" onClick={() => file.current?.click()}><Icon name="upload" size={13} /><span>Import list</span></button>
           </div>
-        ) : (
-          <div className="stack" style={{ gap: 2, padding: '4px 6px' }}>
-            {filtered.map((c) => {
-              const active = c.id === activeContactId
-              return (
-                <div
-                  key={c.id}
-                  className={'outreach-contact-card' + (active ? ' active' : '')}
-                  onClick={() => setActiveContactId(c.id)}
-                >
-                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <span className="contact-name" title={c.personName}>{c.personName}</span>
-                    {/* Mailtrack / delivery badge */}
-                    {c.trackingStatus === 'OPENED' ? (
-                      <span className="receipt-badge opened" title={`Opened ${c.openCount}×`}>
-                        <Icon name="checkDouble" size={12} />
-                        <span style={{ fontSize: 9, marginLeft: 2 }}>{c.openCount}×</span>
-                      </span>
-                    ) : c.trackingStatus === 'SENT' ? (
-                      <span className="receipt-badge sent" title="Sent"><Icon name="check" size={11} /></span>
-                    ) : c.mxStatus === 'SAFE_TO_SEND' ? (
-                      <span className="mx-badge safe" title="MX Verified Safe"><Icon name="shield" size={10} /></span>
-                    ) : (
-                      <span className="mx-badge review" title="Review Required">?</span>
-                    )}
-                  </div>
-
-                  <div className="contact-org" title={`${c.designation} · ${c.organization}`}>
-                    {c.designation ? `${c.designation} · ` : ''}{c.organization}
-                  </div>
-
-                  <div className="row contact-meta" style={{ justifyContent: 'space-between', marginTop: 2 }}>
-                    <span className="contact-email">{c.email}</span>
-                    <span className="contact-grp">{c.sectorGroup ? c.sectorGroup.replace(/^GROUP\s+/i, 'G') : ''}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+        ) : !shown.length ? (
+          <div className="or-empty"><p>No contact matches.</p></div>
+        ) : shown.map((r) => {
+          const chip = chipOf(r)
+          const on = r.c.id === s.activeId
+          return (
+            <button key={r.c.id} type="button" role="option" aria-selected={on} className={'or-row' + (on ? ' on' : '')} onClick={() => s.setActive(r.c.id)}>
+              <span className="or-row-main">
+                <b>{r.c.personName || r.c.email}</b>
+                <span>{[r.c.designation, r.c.organization].filter(Boolean).join(' · ') || 'No designation or organisation in the sheet'}</span>
+                {r.c.personName && <span className="or-row-mail">{r.c.email}</span>}
+              </span>
+              <span className={'or-chip ' + chip.cls} data-tip={chip.tip}>{chip.text}</span>
+            </button>
+          )
+        })}
       </div>
     </aside>
   )

@@ -9,7 +9,8 @@ const MAX_IMAGE_FETCH_BYTES = 25 * 1024 * 1024
 
 /** A bare file name (no directories) with an image extension; anything else becomes .png. */
 function imageFileName(name, allowed = IMAGE_EXT, fallback = 'png') {
-  const base = path.basename(String(name || '')).replace(/[\u0000-\u001f<>:"|?*]/g, '').trim() || 'ESB-Banner'
+  // split on both separators: path.basename only knows the host's, so a Windows path kept its folders on Linux
+  const base = String(name || '').split(/[\\/]/).pop().replace(/[\u0000-\u001f<>:"|?*]/g, '').trim() || 'ESB-Banner'
   const m = base.match(/^(.*?)(?:\.([a-z0-9]+))?$/i)
   const stem = (m && m[1]) || base
   const ext = m && m[2] ? m[2].toLowerCase() : ''

@@ -1,5 +1,6 @@
-import { aiFor, aiJson, aiPaused, type AiSchema } from '../editorial/aiProviders'
-import type { Contact, OutreachBlueprint, OutreachBlueprintId } from './types'
+import { aiFor, aiJson, aiPaused, providerMeta, type AiSchema } from '../editorial/aiProviders'
+import type { Contact, OutreachBlueprint, OutreachBlueprintId, OutreachLang } from './types'
+import { PLACEHOLDERS } from './compose'
 
 export const OUTREACH_BLUEPRINTS: OutreachBlueprint[] = [
   {
@@ -183,97 +184,59 @@ Outreach Desk | ESB PowerLine`,
   },
 ]
 
-export type AiOutreachGenerationResult = {
-  subject: string
-  preheader: string
-  bodyHtml: string
-  bodyText: string
-  keyHook: string
-  subjectVariants: string[]
-  [key: string]: unknown
-}
+export interface AiOutreachDraft { subject: string; body: string; variants: string[]; model: string }
 
 /**
- * Calls Claude / active AI provider to generate promotional email copy tailored specifically to the recipient.
+ * The Outreach provider writes the campaign's TEMPLATE — one letter for every recipient, with {name}, {designation},
+ * {organization} and {sector} where their details go — not a letter to the one contact on screen (the first version
+ * did that, so a batch would have sent one person's name to everyone). It may use only what it is given: the
+ * blueprint's own letter (what ESB PowerLine is offering) and the recipient's role. It may not invent figures,
+ * circulation, rankings, awards, projects, meetings or quotes, for ESB PowerLine or for the recipient.
  */
-export async function generateAiOutreachCopy(
-  contact: Contact,
-  blueprintId: OutreachBlueprintId,
-  language: 'en' | 'bn' | 'bilingual' = 'en',
-  customDirective = ''
-): Promise<AiOutreachGenerationResult> {
-  if (aiPaused()) {
-    throw new Error('AI is currently turned off in Settings (AI master switch is paused).')
-  }
-
+export async function writeOutreachWithAi(blueprintId: OutreachBlueprintId, lang: OutreachLang, example: Contact | undefined, directive = ''): Promise<AiOutreachDraft> {
+  if (aiPaused()) throw new Error('AI is turned off (the AI switch). Turn it on to write with AI.')
   const ai = aiFor('outreach')
-  if (!ai) {
-    throw new Error('No AI provider configured for Outreach. Please add a Claude (Anthropic) or Gemini API key in Settings.')
-  }
+  if (!ai) throw new Error('No AI provider has a key for Outreach. Add one in the AI dialog.')
+  const bp = OUTREACH_BLUEPRINTS.find((b) => b.id === blueprintId) ?? OUTREACH_BLUEPRINTS[0]
+  const reference = lang === 'bn' ? bp.bengaliBody : bp.defaultBody
 
-  const blueprint = OUTREACH_BLUEPRINTS.find((b) => b.id === blueprintId) || OUTREACH_BLUEPRINTS[0]
+  const system = `You write outreach emails for ESB PowerLine (esbpowerline.com), a Bangladesh energy and power news publisher, to officials and executives in the sector.
 
-  const system = `You are the Principal Communications Director & Elite Institutional Outreach Strategist for ESB PowerLine (https://esbpowerline.com), Bangladesh's premier sovereign, public, and private energy newsroom and directory system.
+Write ONE email template for a whole mailing list. Use these placeholders exactly where each recipient's details go: ${PLACEHOLDERS.map((p) => `{${p}}`).join(', ')}. Never write a real person's or organisation's name into the template.
 
-Your job is to generate a world-class, high-converting, deeply respectful, and mathematically precise promotional outreach email addressed to a specific high-level official in the Bangladesh energy sector.
+Facts: use only what you are given — the reference letter below (what ESB PowerLine is offering) and the recipient's role. Do not invent figures, circulation or readership numbers, rankings, awards, projects, dates, meetings, prices or quotes, about ESB PowerLine or the recipient. If the reference letter mentions an attachment, keep that sentence; otherwise do not mention one.
 
-NON-NEGOTIABLE STANDARDS:
-1. Tone must be authoritative, diplomatic, polished, and free of hype, emojis, or AI slop.
-2. If language is Bengali, write immaculate, formal Secretariat-grade protocol (আনুষ্ঠানিক সরকারি ও করপোরেট শিষ্টাচার) with proper honorifics. Rendered in Hind Siliguri typography.
-3. If language is English, write executive energy-sector English with accurate units (MW, MMCFD, Tk Crore, PPA, grid stability).
-4. If language is Bilingual, provide the primary message in English followed by an elegant, formal Bengali summary.
-5. Personalize the key opening hook to the recipient's specific organization and sector role.
-6. The HTML body should use clean, semantic tags (<p>, <strong>, <em>, <ul>, <li>, <br/>) with inline styling suitable for corporate Outlook, Gmail, and government webmail (.gov.bd).
-7. Generate 5 distinct, high-open-rate subject lines.`
+Style: courteous, direct and short (120–220 words), no hype, no emojis, no markdown. ${lang === 'bn' ? 'Write in formal Bangla (আনুষ্ঠানিক সরকারি ও করপোরেট শিষ্টাচার) with proper honorifics.' : 'Write in clear British English.'} Plain text with blank lines between paragraphs, ending with the sender block from the reference letter. Do not add an unsubscribe line; the app adds one.
 
-  const user = `RECIPIENT DOSSIER:
-- Name: ${contact.personName}
-- Designation: ${contact.designation}
-- Organization: ${contact.organization}
-- Sector Group: ${contact.sectorGroup}
-- Approved Purpose: ${contact.purpose}
+Reference letter (${bp.label}):
+"""
+${reference}
+"""`
 
-CAMPAIGN BLUEPRINT: ${blueprint.label} (${blueprint.tag})
-LANGUAGE REQUIREMENT: ${language.toUpperCase()}
-ADDITIONAL DIRECTIVE: ${customDirective || 'Focus on high executive credibility and long-term institutional relationship.'}
-
-Generate an email proposal tailored to this official.`
+  const user = `Example recipient (for tone only — do not put these details in the template):
+Designation: ${example?.designation || 'unknown'}
+Sector: ${example?.sectorGroup || 'unknown'}
+${directive ? `Editor's note: ${directive}\n` : ''}Write the template.`
 
   const schema: AiSchema = {
     type: 'object',
     properties: {
-      subject: { type: 'string', description: 'Primary subject line, <= 68 characters, personalized' },
-      preheader: { type: 'string', description: 'Preheader preview text for inbox, <= 110 characters' },
-      bodyHtml: { type: 'string', description: 'Full formatted HTML body with inline styling' },
-      bodyText: { type: 'string', description: 'Plain text fallback matching the HTML' },
-      keyHook: { type: 'string', description: 'One sentence explaining the personalized angle for this entity' },
-      subjectVariants: { type: 'string', description: '5 alternative A/B testable subject lines, separated by newlines' },
+      subject: { type: 'string', description: 'Subject line, at most 70 characters, may use {organization}' },
+      body: { type: 'string', description: 'The email body as plain text with the placeholders' },
+      variants: { type: 'string', description: 'Three other subject lines, one per line' },
     },
-    required: ['subject', 'preheader', 'bodyHtml', 'bodyText', 'keyHook', 'subjectVariants'],
+    required: ['subject', 'body', 'variants'],
   }
-
-  const res = await aiJson<Record<string, unknown>>({
-    provider: ai.provider,
-    key: ai.key,
-    model: ai.model,
-    system,
-    user,
-    schema,
-    maxTokens: 4096,
-    effort: 'medium',
-  })
-
-  const rawVariants = res.data.subjectVariants
-  const variants: string[] = typeof rawVariants === 'string'
-    ? rawVariants.split('\n').map((s) => s.trim().replace(/^[-*•\d.]+\s*/, '')).filter(Boolean)
-    : Array.isArray(rawVariants) ? (rawVariants as string[]) : []
-
+  const res = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model: ai.model, system, user, schema, maxTokens: 4096, effort: 'medium' })
+  // a model that wrote the example recipient's details in after all would send them to everyone: refuse that draft
+  const body = String(res.data.body || '').trim()
+  for (const v of [example?.personName, example?.organization, example?.email].filter((x): x is string => !!x && x.length > 3)) {
+    if (body.includes(v)) throw new Error(`The draft names ${v} instead of using a placeholder — write it again`)
+  }
   return {
-    subject: String(res.data.subject || ''),
-    preheader: String(res.data.preheader || ''),
-    bodyHtml: String(res.data.bodyHtml || ''),
-    bodyText: String(res.data.bodyText || ''),
-    keyHook: String(res.data.keyHook || ''),
-    subjectVariants: variants,
+    subject: String(res.data.subject || '').replace(/\s+/g, ' ').trim(),
+    body,
+    variants: String(res.data.variants || '').split('\n').map((x) => x.replace(/^[-*•\d.)\s]+/, '').trim()).filter(Boolean).slice(0, 3),
+    model: `${providerMeta(ai.provider).name} · ${res.model}`,
   }
 }

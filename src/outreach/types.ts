@@ -1,30 +1,31 @@
-export type DeliverabilityStatus = 'SAFE_TO_SEND' | 'REVIEW_REQUIRED' | 'TECHNICAL_ONLY' | 'EXCLUDED'
+/** What the workbook says about an address. An empty status cell is UNKNOWN — never assumed safe. */
+export type DeliverabilityStatus = 'SAFE_TO_SEND' | 'REVIEW_REQUIRED' | 'TECHNICAL_ONLY' | 'EXCLUDED' | 'UNKNOWN'
 
-export type TrackingStatus = 'QUEUED' | 'SENDING' | 'SENT' | 'OPENED' | 'CLICKED' | 'REPLIED' | 'BOUNCED' | 'FAILED'
+/** Where a contact is in this desk's own sending. There is no "opened": nothing here can see that. */
+export type SendStatus = 'QUEUED' | 'SENDING' | 'SENT' | 'FAILED' | 'OPTED_OUT'
 
 export interface Contact {
   id: string
   serial: number
   sectorGroup: string
   organization: string
+  /** '' when the workbook names no person; the greeting then reads "Sir/Madam". */
   personName: string
   designation: string
   email: string
   phone: string
   purpose: string
   mxHost?: string
+  /** As the workbook states it. */
   mxStatus: DeliverabilityStatus
-  trackingStatus: TrackingStatus
-  sentAt?: string
-  openedAt?: string
-  openCount: number
-  lastViewedAt?: string
-  clickCount: number
+  /** The editor approved this address by hand (stored per address). */
+  approved: boolean
+  status: SendStatus
+  sentAt?: number
   error?: string
-  attempts: number
 }
 
-export type OutreachBlueprintId = 
+export type OutreachBlueprintId =
   | 'magazine_distribution'
   | 'corporate_sponsorship'
   | 'executive_interview'
@@ -47,36 +48,7 @@ export interface AttachmentItem {
   name: string
   size: number
   mimeType: string
-  dataUrl?: string
-  path?: string
-  isInline?: boolean
-  cid?: string
+  dataUrl: string
 }
 
-export interface CampaignConfig {
-  senderName: string
-  senderEmail: string
-  senderPassword?: string
-  smtpHost: string
-  smtpPort: number
-  secure: boolean
-  dailyLimit: number
-  minDelaySec: number
-  maxDelaySec: number
-  trackingEndpoint: string
-  enableOpenTracking: boolean
-  enableClickTracking: boolean
-  autoAddGraphicsBanner: boolean
-  autoAddEditorialStory: boolean
-}
-
-export interface TrackingLogEntry {
-  id: string
-  trackingId: string
-  email: string
-  event: 'sent' | 'open' | 'click'
-  timestamp: string
-  userAgent?: string
-  ip?: string
-  url?: string
-}
+export type OutreachLang = 'en' | 'bn'

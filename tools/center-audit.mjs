@@ -59,8 +59,11 @@ try {
     if (theme === 'dark') await page.evaluate(() => window.__store.getState().setTheme('dark'))
     const add = (where, list) => { for (const l of list) { const k = `${where} :: ${l.replace(/d[xy]=-?[\d.]+/g, '')}`; if (!seen.has(k)) seen.set(k, `${where}@${w}/${theme} ${l}`) } }
     add('home', await page.evaluate(measure))
-    for (const ws of ['graphics', 'video', 'editorial']) {
-      await page.click(`.ws-btn[data-ws="${ws}"]`); await page.waitForTimeout(600)
+    for (const ws of ['graphics', 'video', 'outreach', 'editorial']) {
+      // from Home a desk opens by its tile (Home has no switcher); from a desk, by the switcher
+      const tile = page.locator(`.launch-tile:has-text("${ws[0].toUpperCase() + ws.slice(1)}")`)
+      if (await tile.count()) await tile.first().click(); else await page.click(`.ws-btn[data-ws="${ws}"]`)
+      await page.waitForTimeout(600)
       if (ws === 'editorial') {
         add('editorial-empty', await page.evaluate(measure))
         await page.click('button:has-text("Paste Text or File")'); await page.fill('.ed-paste-area', 'পেট্রোবাংলা সিলেট গ্যাসক্ষেত্রে দুটি নতুন কূপ খনন করবে\nপেট্রোবাংলা সিলেট গ্যাসক্ষেত্রে দুটি নতুন উন্নয়ন কূপ খননের উদ্যোগ নিয়েছে।')
@@ -70,6 +73,12 @@ try {
           add('editorial-' + tab, await page.evaluate(measure))
         }
         await page.click('.ed-ai-chip'); await page.waitForTimeout(300); add('ai-dialog', await page.evaluate(measure)); await page.keyboard.press('Escape')
+      } else if (ws === 'outreach') {
+        add('outreach-empty', await page.evaluate(measure))
+        // a synthetic list (example.com addresses only)
+        const csv = 'Email Address,Person Name,Designation,Organization,Sector Group,Deliverability Status\nmd@example.com,A. Rahman,Managing Director,Example Power Co.,GROUP 1: POWER GENERATION,SAFE_TO_SEND\nce@example.org,,Chief Engineer,Sample Gas Ltd.,GROUP 2: GAS,REVIEW_REQUIRED\n'
+        await page.setInputFiles('.or-left input[type=file]', { name: 'list.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) }); await page.waitForTimeout(500)
+        add('outreach', await page.evaluate(measure))
       } else add(ws, await page.evaluate(measure))
     }
     await page.close()

@@ -1,240 +1,116 @@
-import { useState, useMemo } from 'react'
+// Centre: the letter. One template for the whole list — a blueprint, English or Bangla, a subject and a plain-text
+// body with {name}/{designation}/{organization}/{sector} — and a Preview that shows exactly what the selected contact
+// will receive, opt-out line included. What is sent is plain text; the main process builds the HTML from it.
+
+import { useMemo, useRef, useState } from 'react'
 import { useOutreachStore } from './outreachStore'
-import { OUTREACH_BLUEPRINTS, generateAiOutreachCopy } from './outreachAi'
+import { OUTREACH_BLUEPRINTS, writeOutreachWithAi } from './outreachAi'
+import { PLACEHOLDERS, buildMessage, mentionsAttachment, missingFields } from './compose'
 import { AttachmentTray } from './AttachmentTray'
+import { aiFor, aiPaused, loadAiSettings, providerMeta, roleProvider } from '../editorial/aiProviders'
 import { Icon } from '../ui/Icon'
-import type { OutreachBlueprintId } from './types'
+import { Select, Seg } from '../ui/controls'
+import type { OutreachBlueprintId, OutreachLang } from './types'
+
+const SUBJECT_MAX = 70
 
 export function OutreachComposer() {
-  const selectedBlueprint = useOutreachStore((s) => s.selectedBlueprint)
-  const selectBlueprint = useOutreachStore((s) => s.selectBlueprint)
-  const languageMode = useOutreachStore((s) => s.languageMode)
-  const setLanguageMode = useOutreachStore((s) => s.setLanguageMode)
-  const subject = useOutreachStore((s) => s.subject)
-  const setSubject = useOutreachStore((s) => s.setSubject)
-  const bodyHtml = useOutreachStore((s) => s.bodyHtml)
-  const setBodyHtml = useOutreachStore((s) => s.setBodyHtml)
-  const contacts = useOutreachStore((s) => s.contacts)
-  const activeContactId = useOutreachStore((s) => s.activeContactId)
-  const addLog = useOutreachStore((s) => s.addLog)
+  const s = useOutreachStore()
+  const [view, setView] = useState<'edit' | 'preview'>('edit')
+  const [busy, setBusy] = useState(false)
+  const [variants, setVariants] = useState<string[]>([])
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const active = s.contacts.find((c) => c.id === s.activeId) ?? s.contacts[0]
+  const ai = aiFor('outreach')
+  const aiName = providerMeta(ai?.provider ?? roleProvider(loadAiSettings(), 'outreach')).name
 
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [showPreview, setShowPreview] = useState(false)
-  const [subjectVariants, setSubjectVariants] = useState<string[]>([])
+  const missingCount = useMemo(() => s.contacts.filter((c) => c.status === 'QUEUED' && missingFields(c, s.subject, s.body).length).length, [s.contacts, s.subject, s.body])
+  const promisesFile = mentionsAttachment(s.body) && !s.attachments.length
+  const msg = active ? buildMessage(active, s.subject, s.body, s.lang) : null
 
-  // Resolve currently previewed contact
-  const activeContact = useMemo(() => {
-    return contacts.find((c) => c.id === activeContactId) || contacts[0] || {
-      personName: 'মেজর জেনারেল এস এম জিয়া-উল-আজিম, এনডিসি',
-      designation: 'চেয়ারম্যান',
-      organization: 'BREB (বাংলাদেশ পল্লী বিদ্যুতায়ন বোর্ড)',
-      sectorGroup: 'Group 1: Power Distribution Utilities',
-      purpose: 'MAGAZINE_DISTRIBUTION',
-      email: 'chairman@reb.gov.bd',
-    }
-  }, [contacts, activeContactId])
-
-  // Interpolated preview
-  const previewSubject = useMemo(() => {
-    return subject
-      .replace(/{name}/g, activeContact.personName)
-      .replace(/{designation}/g, activeContact.designation)
-      .replace(/{organization}/g, activeContact.organization)
-      .replace(/{sector}/g, activeContact.sectorGroup)
-      .replace(/{purpose}/g, activeContact.purpose)
-  }, [subject, activeContact])
-
-  const previewBody = useMemo(() => {
-    return bodyHtml
-      .replace(/{name}/g, activeContact.personName)
-      .replace(/{designation}/g, activeContact.designation)
-      .replace(/{organization}/g, activeContact.organization)
-      .replace(/{sector}/g, activeContact.sectorGroup)
-      .replace(/{purpose}/g, activeContact.purpose)
-  }, [bodyHtml, activeContact])
-
-  const handleGenerateAi = async () => {
-    setIsGenerating(true)
-    addLog('info', `Calling Claude AI to draft ${selectedBlueprint} pitch for ${activeContact.personName}...`)
-    try {
-      const res = await generateAiOutreachCopy(
-        activeContact as unknown as Parameters<typeof generateAiOutreachCopy>[0],
-        selectedBlueprint,
-        languageMode
-      )
-      setSubject(res.subject)
-      setBodyHtml(res.bodyHtml || res.bodyText)
-      setSubjectVariants(res.subjectVariants || [])
-      addLog('success', `Claude generated promotional draft: "${res.subject}"`)
-    } catch (err) {
-      addLog('error', `AI Generation failed: ${String(err)}`)
-    } finally {
-      setIsGenerating(false)
-    }
+  const insert = (tag: string) => {
+    const el = bodyRef.current
+    if (!el) return s.setBody(s.body + tag)
+    const a = el.selectionStart, b = el.selectionEnd
+    s.setBody(s.body.slice(0, a) + tag + s.body.slice(b))
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + tag.length, a + tag.length) })
   }
 
-  const insertTag = (tag: string) => {
-    setBodyHtml(bodyHtml + tag)
+  const write = async () => {
+    setBusy(true)
+    try {
+      const r = await writeOutreachWithAi(s.blueprint, s.lang, active)
+      s.setSubject(r.subject)
+      s.setBody(r.body)
+      setVariants(r.variants)
+      setView('edit')
+      s.addLog('ok', `Draft written by ${r.model} — read it before sending`)
+    } catch (e) {
+      s.addLog('error', `AI draft: ${(e as Error).message}`)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
-    <main className="center ed-center outreach-center" aria-label="Promotional Composer">
-      {/* Top blueprint & language control bar */}
-      <div className="outreach-composer-topbar">
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-          {/* Blueprint pill selector */}
-          <div className="row" style={{ gap: 4, overflowX: 'auto', flex: 1, paddingRight: 8 }}>
-            {OUTREACH_BLUEPRINTS.map((bp) => (
-              <button
-                key={bp.id}
-                type="button"
-                className={'pill xs' + (selectedBlueprint === bp.id ? ' on' : '')}
-                style={{ fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                onClick={() => selectBlueprint(bp.id as OutreachBlueprintId)}
-              >
-                {bp.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Language mode switcher */}
-          <div className="seg-ctl xs" style={{ display: 'inline-flex' }}>
-            <button
-              type="button"
-              className={'seg-btn' + (languageMode === 'en' ? ' on' : '')}
-              onClick={() => setLanguageMode('en')}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              className={'seg-btn' + (languageMode === 'bn' ? ' on' : '')}
-              onClick={() => setLanguageMode('bn')}
-            >
-              বাংলা
-            </button>
-            <button
-              type="button"
-              className={'seg-btn' + (languageMode === 'bilingual' ? ' on' : '')}
-              onClick={() => setLanguageMode('bilingual')}
-            >
-              Dual
-            </button>
-          </div>
-        </div>
-
-        {/* AI Action Strip */}
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-          <div className="row" style={{ gap: 6, alignItems: 'center' }}>
-            <button
-              type="button"
-              className={'btn xs primary' + (isGenerating ? ' loading' : '')}
-              disabled={isGenerating}
-              onClick={handleGenerateAi}
-              data-tip="Generate tailored promotional copy using Claude Sonnet/Opus"
-            >
-              <Icon name="sparkle" size={13} />
-              <span>{isGenerating ? 'Writing with Claude...' : '✨ Write with Claude'}</span>
-            </button>
-
-            {subjectVariants.length > 0 && (
-              <select
-                className="select xs"
-                style={{ fontSize: 11, maxWidth: 220 }}
-                onChange={(e) => setSubject(e.target.value)}
-              >
-                <option value="">A/B Subject Variants ({subjectVariants.length})</option>
-                {subjectVariants.map((v, i) => (
-                  <option key={i} value={v}>{v}</option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Merge variable chips */}
-          <div className="row" style={{ gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 10, opacity: 0.6, textTransform: 'uppercase' }}>Tags:</span>
-            {['{name}', '{designation}', '{organization}', '{sector}'].map((t) => (
-              <button
-                key={t}
-                type="button"
-                className="pill xs"
-                style={{ fontSize: 10, padding: '1px 5px', cursor: 'pointer', fontFamily: 'monospace' }}
-                onClick={() => insertTag(t)}
-                data-tip={`Insert ${t} tag`}
-              >
-                {t}
-              </button>
-            ))}
-            <button
-              type="button"
-              className={'pill xs' + (showPreview ? ' on' : '')}
-              style={{ fontSize: 10, padding: '1px 8px', cursor: 'pointer' }}
-              onClick={() => setShowPreview(!showPreview)}
-            >
-              <Icon name="eye" size={11} />
-              <span style={{ marginLeft: 3 }}>Preview</span>
-            </button>
-          </div>
-        </div>
+    <main className="or-center" aria-label="Letter">
+      <div className="or-toolbar">
+        <Select<OutreachBlueprintId> value={s.blueprint} options={OUTREACH_BLUEPRINTS.map((b) => ({ value: b.id, label: b.label, hint: b.tag }))} onChange={(v) => s.selectBlueprint(v)} prefix="Letter" />
+        <Seg<OutreachLang> value={s.lang} onChange={s.setLang} options={[{ value: 'en', label: 'English' }, { value: 'bn', label: 'বাংলা' }]} />
+        <div className="spacer" />
+        <button type="button" className="btn sm ai-btn" data-provider={ai?.provider} onClick={() => void write()} disabled={busy || !ai || aiPaused()}
+          data-tip={aiPaused() ? 'AI is OFF — turn it on in the Editorial Engine panel' : ai ? `${aiName} writes the template from this letter's offer, with placeholders — it replaces the subject and body` : `Add a ${aiName} key in the AI dialog to write with AI`}>
+          <Icon name="sparkle" size={13} className={busy ? 'spin' : ''} /><span>{busy ? 'Writing…' : 'Write with AI'}</span>
+        </button>
+        <Seg<'edit' | 'preview'> value={view} onChange={setView} options={[{ value: 'edit', label: 'Edit' }, { value: 'preview', label: 'Preview', tip: active ? `As ${active.personName || active.email} will receive it` : 'Import a list to preview' }]} />
       </div>
 
-      {/* Editor or Live Preview View */}
-      <div className="outreach-composer-body" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {showPreview ? (
-          /* Live Recipient Preview Card */
-          <div className="outreach-preview-box">
-            <div className="preview-meta-header">
-              <div><span className="lbl">To:</span> <strong className="val">{activeContact.personName} &lt;{activeContact.email}&gt;</strong></div>
-              <div><span className="lbl">Role:</span> <span className="val">{activeContact.designation} · {activeContact.organization}</span></div>
-              <div><span className="lbl">Subject:</span> <strong className="val-subj">{previewSubject}</strong></div>
-            </div>
-            <div className="preview-content-rendered">
-              {previewBody.includes('<') ? (
-                <div dangerouslySetInnerHTML={{ __html: previewBody }} />
-              ) : (
-                <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{previewBody}</pre>
+      <div className="or-sheet">
+        {view === 'edit' ? (
+          <>
+            <div className="or-field">
+              <div className="or-field-row"><label htmlFor="or-subject">Subject</label><span className={'or-count' + (s.subject.length > SUBJECT_MAX ? ' over' : '')}>{s.subject.length} / {SUBJECT_MAX}</span></div>
+              <input id="or-subject" className="or-input" value={s.subject} onChange={(e) => s.setSubject(e.target.value)} />
+              {variants.length > 0 && (
+                <div className="or-variants" aria-label="Other subject lines">
+                  {variants.map((v) => <button key={v} type="button" className="or-variant" onClick={() => s.setSubject(v)} data-tip="Use this subject">{v}</button>)}
+                </div>
               )}
             </div>
-          </div>
-        ) : (
-          /* Real Editor */
-          <div className="stack" style={{ flex: 1, gap: 8, padding: '10px 12px' }}>
-            <div>
-              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 3 }}>
-                <label style={{ fontSize: 10, textTransform: 'uppercase', opacity: 0.7, fontWeight: 700 }}>
-                  Subject Line
-                </label>
-                <span style={{ fontSize: 10, opacity: subject.length > 68 ? 0.9 : 0.5, color: subject.length > 68 ? '#f59e0b' : 'inherit' }}>
-                  {subject.length} / 68 chars
+            <div className="or-field grow">
+              <div className="or-field-row">
+                <label htmlFor="or-body">Message</label>
+                <span className="or-tags">
+                  {PLACEHOLDERS.map((p) => <button key={p} type="button" className="or-tag" onClick={() => insert(`{${p}}`)} data-tip={`Insert {${p}} — filled from each contact's row`}>{p}</button>)}
                 </span>
               </div>
-              <input
-                type="text"
-                className="input"
-                style={{ width: '100%', fontSize: 13, fontWeight: 600 }}
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              />
+              <textarea id="or-body" ref={bodyRef} className={'or-input or-body' + (s.lang === 'bn' ? ' bn' : '')} value={s.body} onChange={(e) => s.setBody(e.target.value)} spellCheck />
             </div>
-
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <label style={{ fontSize: 10, textTransform: 'uppercase', opacity: 0.7, fontWeight: 700, marginBottom: 3 }}>
-                Email Proposal Body (HTML & Plaintext)
-              </label>
-              <textarea
-                className="textarea custom-scroll"
-                style={{ flex: 1, width: '100%', minHeight: 280, resize: 'none', fontSize: 12, lineHeight: 1.6 }}
-                value={bodyHtml}
-                onChange={(e) => setBodyHtml(e.target.value)}
-              />
+            {(promisesFile || missingCount > 0) && (
+              <div className="or-warnings">
+                {promisesFile && <p><Icon name="paperclip" size={13} />The letter mentions an attachment, but nothing is attached.</p>}
+                {missingCount > 0 && <p><Icon name="info" size={13} />{missingCount} contact{missingCount === 1 ? '' : 's'} lack a field this letter uses and will be skipped.</p>}
+              </div>
+            )}
+          </>
+        ) : msg && active ? (
+          <article className="or-preview">
+            <dl>
+              <dt>To</dt><dd>{active.personName ? `${active.personName} <${active.email}>` : active.email}</dd>
+              <dt>Subject</dt><dd><b>{msg.subject}</b></dd>
+              {s.attachments.length > 0 && <><dt>Files</dt><dd>{s.attachments.map((a) => a.name).join(', ')}</dd></>}
+            </dl>
+            {missingFields(active, s.subject, s.body).length > 0 && <p className="or-preview-warn">This contact will be skipped: missing {missingFields(active, s.subject, s.body).join(', ')}.</p>}
+            <div className={'or-preview-body' + (s.lang === 'bn' ? ' bn' : '')}>
+              {msg.text.split(/\n{2,}/).map((p, i) => <p key={i}>{p}</p>)}
             </div>
-
-            {/* Universal Attachment Tray */}
-            <AttachmentTray />
-          </div>
+          </article>
+        ) : (
+          <div className="or-empty"><p>Import a mailing list to see the letter as a contact will receive it.</p></div>
         )}
       </div>
+
+      <AttachmentTray />
     </main>
   )
 }

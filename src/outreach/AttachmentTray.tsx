@@ -1,175 +1,92 @@
-import { useRef } from 'react'
+// Files that go with every email of the batch. Three sources:
+//   - any PDF / Office / image / text file from this computer (the same list the main process accepts);
+//   - the Graphics banner, rendered from the banner document — the first version looked for the Graphics canvas on
+//     screen, which is never there while Outreach is open, so it always failed;
+//   - the Editorial story as a short text block with its link — only once the story is live on esbpowerline.com
+//     (/articles/{slug}; the first version linked /news/{slug}, which does not exist).
+
+import { useRef, useState } from 'react'
 import { useOutreachStore } from './outreachStore'
 import { Icon } from '../ui/Icon'
 import { useStore } from '../store'
+import { useStoryQueue } from '../editorial/storyQueue'
 import { useEditorialStore } from '../editorial/editorialStore'
-import type { AttachmentItem } from './types'
+import { renderBanner } from '../export'
+import { loadBaseAssets } from '../core/assets'
+
+const ACCEPT = '.pdf,.png,.jpg,.jpeg,.webp,.gif,.docx,.xlsx,.pptx,.doc,.xls,.ppt,.txt,.csv'
+const MAX_BYTES = 18 * 1024 * 1024
+const fmt = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : b ? `${Math.max(1, Math.round(b / 1024))} KB` : "0 MB")
+const asDataUrl = (blob: Blob) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(blob) })
 
 export function AttachmentTray() {
-  const attachments = useOutreachStore((s) => s.attachments)
-  const addAttachment = useOutreachStore((s) => s.addAttachment)
-  const removeAttachment = useOutreachStore((s) => s.removeAttachment)
-  const setBodyHtml = useOutreachStore((s) => s.setBodyHtml)
-  const addLog = useOutreachStore((s) => s.addLog)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const s = useOutreachStore()
+  const input = useRef<HTMLInputElement>(null)
+  const [rendering, setRendering] = useState(false)
+  const total = s.attachments.reduce((n, a) => n + a.size, 0)
+  const story = useStoryQueue((q) => q.stories.find((x) => x.id === q.activeId))
+  const draft = useEditorialStore((e) => e.draft)
+  const liveSlug = story?.publishedSlug || story?.publishedUrl?.match(/\/articles\/([^/?#]+)/)?.[1]
 
-  const totalBytes = attachments.reduce((acc, a) => acc + a.size, 0)
-  const totalMB = (totalBytes / (1024 * 1024)).toFixed(1)
-  const isOverLimit = totalBytes > 25 * 1024 * 1024
-  const isWarning = totalBytes > 20 * 1024 * 1024
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i]
-      const reader = new FileReader()
-      reader.onload = (ev) => {
-        const dataUrl = ev.target?.result as string
-        const item: AttachmentItem = {
-          id: 'att_' + Date.now() + '_' + i,
-          name: f.name,
-          size: f.size,
-          mimeType: f.type || 'application/octet-stream',
-          dataUrl,
-        }
-        addAttachment(item)
-      }
-      reader.readAsDataURL(f)
-    }
-    e.target.value = ''
-  }
-
-  // Cross-Desk Bridge 1: Attach Current Graphics Banner
-  const handleAttachBanner = async () => {
-    try {
-      // Find the active artboard canvas from Graphics Desk
-      const canvas = document.querySelector<HTMLCanvasElement>('.stage canvas, canvas#artboard')
-      if (!canvas) {
-        // Fallback: check doc headline from graphics store
-        const headline = useStore.getState().doc.content.headline || 'ESB PowerLine Banner'
-        addLog('warning', `Canvas not currently rendered. Using banner document: ${headline}`)
-        return
-      }
-
-      const dataUrl = canvas.toDataURL('image/png')
-      // calculate approximate size from base64
-      const approxBytes = Math.round((dataUrl.length * 3) / 4)
-      const bannerItem: AttachmentItem = {
-        id: 'banner_' + Date.now(),
-        name: `ESB_PowerLine_Banner_${Date.now()}.png`,
-        size: approxBytes,
-        mimeType: 'image/png',
-        dataUrl,
-        isInline: true,
-        cid: 'esb_banner_art',
-      }
-      addAttachment(bannerItem)
-      addLog('success', 'Attached current Graphics Desk composition (PNG).')
-    } catch (err) {
-      addLog('error', `Could not capture banner: ${String(err)}`)
+  const add = async (files: FileList | null) => {
+    for (const f of Array.from(files ?? [])) {
+      const ext = f.name.split('.').pop()?.toLowerCase() ?? ''
+      if (!ACCEPT.split(',').includes('.' + ext)) { s.addLog('warn', `${f.name}: only PDF, Office, image, text and CSV files can be attached`); continue }
+      if (total + f.size > MAX_BYTES) { s.addLog('warn', `${f.name}: the attachments would pass 18 MB, which Gmail refuses`); continue }
+      s.addAttachment({ id: `${Date.now()}-${f.name}`, name: f.name, size: f.size, mimeType: f.type, dataUrl: await asDataUrl(f) })
     }
   }
 
-  // Cross-Desk Bridge 2: Insert Active Editorial Story Card
-  const handleInsertEditorialStory = () => {
+  const attachBanner = async () => {
+    setRendering(true)
     try {
-      const draft = useEditorialStore.getState().draft
-      if (!draft || !draft.headline) {
-        addLog('warning', 'No active story on Editorial Desk to insert.')
-        return
-      }
-
-      const currentHtml = useOutreachStore.getState().bodyHtml
-      const articleUrl = draft.slug ? `https://esbpowerline.com/news/${draft.slug}` : 'https://esbpowerline.com'
-      const storyCard = `
-<div style="margin: 16px 0; padding: 14px 18px; border-left: 3px solid #0aa37a; background: #131b26; border-radius: 6px; font-family: sans-serif;">
-  <span style="font-size: 11px; text-transform: uppercase; color: #1fd3a8; font-weight: 700; letter-spacing: 0.5px;">ESB PowerLine Intelligence Feature</span>
-  <h3 style="margin: 6px 0 4px 0; font-size: 15px; color: #ffffff; font-weight: 700; line-height: 1.3;">${draft.headline}</h3>
-  <p style="margin: 0 0 10px 0; font-size: 13px; color: #94a3b8; line-height: 1.4;">${draft.deck || ''}</p>
-  <a href="${articleUrl}" style="display: inline-block; font-size: 12px; color: #38bdf8; text-decoration: none; font-weight: 600;">Read Full Analysis on ESB PowerLine &rarr;</a>
-</div>
-`
-      setBodyHtml(currentHtml + '\n' + storyCard)
-      addLog('success', `Inserted story card: "${draft.headline.substring(0, 40)}..."`)
-    } catch (err) {
-      addLog('error', `Failed inserting editorial story: ${String(err)}`)
+      const doc = useStore.getState().doc
+      const blob = await renderBanner(doc, 'fb45', await loadBaseAssets(), 1, 'jpeg', 0.9)
+      const name = `ESB-PowerLine-banner-${new Date().toISOString().slice(0, 10)}.jpg`
+      s.addAttachment({ id: `banner-${Date.now()}`, name, size: blob.size, mimeType: 'image/jpeg', dataUrl: await asDataUrl(blob) })
+      s.addLog('ok', `Attached the Graphics banner (${fmt(blob.size)})`)
+    } catch (e) {
+      s.addLog('error', `Could not render the banner: ${(e as Error).message}`)
+    } finally {
+      setRendering(false)
     }
+  }
+
+  const insertStory = () => {
+    if (!liveSlug || !draft.headline.trim()) return
+    const block = [draft.headline.trim(), draft.deck.trim(), `https://esbpowerline.com/articles/${liveSlug}`].filter(Boolean).join('\n')
+    s.setBody(`${s.body.trimEnd()}\n\n${block}\n`)
+    s.addLog('ok', 'Inserted the Editorial story and its link')
   }
 
   return (
-    <div className="outreach-attachment-tray">
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <div className="row" style={{ gap: 6, alignItems: 'center' }}>
-          <Icon name="paperclip" size={13} />
-          <strong style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.4px', opacity: 0.8 }}>
-            Attachments & Assets
-          </strong>
-          <span className={'payload-pill' + (isOverLimit ? ' danger' : isWarning ? ' warning' : '')}>
-            {totalMB} MB / 25 MB
-          </span>
-        </div>
-
-        {/* 1-Click Bridge Buttons */}
-        <div className="row" style={{ gap: 5 }}>
-          <button
-            type="button"
-            className="btn xs subtle"
-            data-tip="Render and attach active banner from Graphics Desk"
-            onClick={handleAttachBanner}
-          >
-            <Icon name="layers" size={12} />
-            <span>+ Attach Studio Banner</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn xs subtle"
-            data-tip="Insert active newsroom story from Editorial Desk"
-            onClick={handleInsertEditorialStory}
-          >
-            <Icon name="newspaper" size={12} />
-            <span>+ Insert Editorial Story</span>
-          </button>
-
-          <button
-            type="button"
-            className="btn xs"
-            data-tip="Attach any file from PC (PDF, DOCX, XLSX, Photos)"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Icon name="plus" size={12} />
-            <span>Add Files</span>
-          </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            style={{ display: 'none' }}
-            onChange={handleFileSelect}
-          />
-        </div>
+    <div className="or-files">
+      <div className="or-files-head">
+        <Icon name="paperclip" size={14} />
+        <b>Attachments</b>
+        <span className={'or-count' + (total > MAX_BYTES ? ' over' : '')}>{fmt(total)} of 18 MB</span>
+        <div className="spacer" />
+        <button type="button" className="btn sm" onClick={() => void attachBanner()} disabled={rendering} data-tip="Render the banner on the Graphics desk (Facebook 4:5, JPEG) and attach it">
+          <Icon name="layers" size={13} /><span>{rendering ? 'Rendering…' : 'Banner'}</span>
+        </button>
+        <button type="button" className="btn sm" onClick={insertStory} disabled={!liveSlug || !draft.headline.trim()}
+          data-tip={liveSlug ? 'Add the Editorial story’s headline, deck and link to the end of the letter' : 'Publish the Editorial story first — its link must exist before it goes in an email'}>
+          <Icon name="newspaper" size={13} /><span>Story link</span>
+        </button>
+        <button type="button" className="btn sm" onClick={() => input.current?.click()} data-tip="PDF, Word, Excel, PowerPoint, images, text or CSV — up to 18 MB together">
+          <Icon name="plus" size={13} /><span>Add files</span>
+        </button>
+        <input ref={input} type="file" multiple accept={ACCEPT} hidden onChange={(e) => { void add(e.target.files); e.target.value = '' }} />
       </div>
-
-      {/* Attachment chips */}
-      {attachments.length > 0 && (
-        <div className="row att-chips-wrap" style={{ gap: 6, flexWrap: 'wrap' }}>
-          {attachments.map((a) => (
-            <div key={a.id} className="att-chip">
-              <Icon name={a.mimeType.startsWith('image/') ? 'image' : 'filePlus'} size={12} />
-              <span className="att-name" title={a.name}>{a.name}</span>
-              <span className="att-size">({Math.round(a.size / 1024)} KB)</span>
-              <button
-                type="button"
-                className="att-del"
-                data-tip="Remove attachment"
-                onClick={() => removeAttachment(a.id)}
-              >
-                &times;
-              </button>
-            </div>
+      {s.attachments.length > 0 && (
+        <div className="or-file-chips">
+          {s.attachments.map((a) => (
+            <span key={a.id} className="or-file-chip">
+              <Icon name={a.mimeType.startsWith('image/') ? 'image' : 'filePlus'} size={13} />
+              <span className="or-file-name" title={a.name}>{a.name}</span>
+              <span className="or-file-size">{fmt(a.size)}</span>
+              <button type="button" aria-label={`Remove ${a.name}`} data-tip="Remove" onClick={() => s.removeAttachment(a.id)}><Icon name="x" size={12} /></button>
+            </span>
           ))}
         </div>
       )}
