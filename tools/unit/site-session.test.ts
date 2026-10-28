@@ -42,18 +42,18 @@ describe('Staff sign-in mirrors the site', () => {
 
   it('reads name and role from the profiles row and refuses member accounts', async () => {
     stubStorage()
-    const user = { id: 'u9', email: 'ed@esbpowerline.com', user_metadata: {}, app_metadata: {} }
+    const user = { id: 'u9', email: 'ed@example.com', user_metadata: {}, app_metadata: {} }
     let role = 'EDITOR'
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
       if (url.includes('/auth/v1/token')) return new Response(JSON.stringify({ access_token: 'a', refresh_token: 'r', expires_in: 3600, user }), { status: 200 })
       if (url.includes('/rest/v1/profiles')) return new Response(JSON.stringify([{ role, status: 'ACTIVE', full_name: 'Desk Editor' }]), { status: 200 })
       return new Response('', { status: 404 })
     }))
-    const ok = await authenticateStaff('Ed@esbpowerline.com', 'pw')
+    const ok = await authenticateStaff('Ed@example.com', 'pw')
     expect(ok.success).toBe(true)
-    expect(ok.session).toMatchObject({ email: 'ed@esbpowerline.com', name: 'Desk Editor', role: 'EDITOR', token: 'a', authType: 'supabase' })
+    expect(ok.session).toMatchObject({ email: 'ed@example.com', name: 'Desk Editor', role: 'EDITOR', token: 'a', authType: 'supabase' })
     role = 'SUBSCRIBER'
-    const member = await authenticateStaff('ed@esbpowerline.com', 'pw')
+    const member = await authenticateStaff('ed@example.com', 'pw')
     expect(member.success).toBe(false)
     expect(member.error).toMatch(/member account/)
   })
@@ -61,7 +61,7 @@ describe('Staff sign-in mirrors the site', () => {
   it('a wrong password gets the site\'s wording, and there is no bypass', async () => {
     stubStorage()
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'invalid_grant', error_description: 'Invalid login credentials' }), { status: 400 })))
-    const r = await authenticateStaff('hamim2964@gmail.com', 'nope')
+    const r = await authenticateStaff('editor@example.com', 'nope')
     expect(r).toEqual({ success: false, error: 'Invalid email or password. Check your credentials and try again.' })
     expect(friendlyAuthError('exceed_egress_quota')).toMatch(/temporarily unavailable/)
   })

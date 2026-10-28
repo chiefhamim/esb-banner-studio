@@ -517,13 +517,32 @@ export const ESB_CATEGORIES: Record<string, { id: string; slug: string; name: st
   'Renewables & Nuclear': { id: 'cmqv473nh0007vk55fyfwonza', slug: 'renewables-nuclear', name: 'Renewables & Nuclear' },
 }
 
-/** Verified Editorial Staff mapping for esbpowerline.com matching public.User */
-export const ESB_AUTHORS: Record<string, { id: string; name: string; email: string; role: string }> = {
-  'hamim2964@gmail.com': { id: 'cmqv471bq0001vk55aw07256e', name: 'Mehedi Hasan Hamim', email: 'hamim2964@gmail.com', role: 'EDITOR' },
-  'admin@esbpowerline.com': { id: 'cmqv471700000vk55trr7n8df', name: 'ESB NEWS DESK', email: 'admin@esbpowerline.com', role: 'SUPER_ADMIN' },
-  'rasel@esbpowerline.com': { id: 'cmqv471gb0002vk55sozpxt7p', name: 'Sheikh Rasel', email: 'rasel@esbpowerline.com', role: 'EDITOR' },
-  'rezafaisalmahmud@gmail.com': { id: 'cmtveuqkv000004jm5sjwsqox', name: 'Faisal Al Mahmud', email: 'rezafaisalmahmud@gmail.com', role: 'EDITOR' },
-  'yeasinfiyaz@gmail.com': { id: 'cmttn1o9s000204igmykknlg9', name: 'Yeasin Fiyaz', email: 'yeasinfiyaz@gmail.com', role: 'EDITOR' },
+/** The site's author record (public.User) for each staff account, keyed by the SHA-256 of the account's lower-case
+ * email — so the shipped app carries no one's address, and a signed-in session still finds its own record. The names
+ * are the public bylines on esbpowerline.com. `newsDesk` marks the shared desk account, whose posts go out as the desk. */
+export interface SiteAuthor { id: string; name: string; role: string; newsDesk?: boolean }
+export const ESB_AUTHORS: Record<string, SiteAuthor> = {
+  e0949ef415de7fe4a72e0d9f1c44c59a82c60ef78b35ba8d23b0aa4c4bc4e3f1: { id: 'cmqv471bq0001vk55aw07256e', name: 'Mehedi Hasan Hamim', role: 'EDITOR' },
+  '953e07d714089108dd65eefdadeed299cd02803d3c3f639791534107e863c5e1': { id: 'cmqv471700000vk55trr7n8df', name: 'ESB NEWS DESK', role: 'SUPER_ADMIN', newsDesk: true },
+  ea3930a44d4f0c5c9c3bc2eff2026969499763aea67c5a4694a45709b83fb9cf: { id: 'cmqv471gb0002vk55sozpxt7p', name: 'Sheikh Rasel', role: 'EDITOR' },
+  e2912d649e362102e78c8dd634362e571daddc35ab51ea5f85d1e1ad3c5a8542: { id: 'cmtveuqkv000004jm5sjwsqox', name: 'Faisal Al Mahmud', role: 'EDITOR' },
+  '53ab50c34db9e4c1c328cc1feea9313853d6701bd3343ad55b3c01d6ddbdf1d3': { id: 'cmttn1o9s000204igmykknlg9', name: 'Yeasin Fiyaz', role: 'EDITOR' },
+}
+
+export async function emailKey(email: string): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(email.trim().toLowerCase()))
+  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** The site author for a signed-in email, or undefined when the Studio does not know it. */
+export async function authorFor(email: string): Promise<SiteAuthor | undefined> {
+  return ESB_AUTHORS[await emailKey(email)]
+}
+
+// dev server only (like __store): the end-to-end test registers a synthetic example.com author, so no test needs a
+// real staff address to exercise publishing
+if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') {
+  Object.assign(window, { __addTestAuthor: async (email: string, a: SiteAuthor) => { ESB_AUTHORS[await emailKey(email)] = a } })
 }
 
 /** Helper to generate a collision-resistant CUID-formatted ID compatible with Prisma `@default(cuid())` */
@@ -575,7 +594,7 @@ export async function insertArticleToSupabase(
     const categoryInfo = ESB_CATEGORIES[payload.category] || ESB_CATEGORIES['Fossil Fuels & Commodities']
 
     // The article is credited to the account that signed in — never to someone else's.
-    const author = ESB_AUTHORS[session.email.toLowerCase()]
+    const author = await authorFor(session.email)
     if (!author) {
       return { success: false, error: `${session.email} is signed in, but the Studio does not know its author record on the site yet. Use "Open the site CMS" to publish from the site itself.` }
     }
@@ -605,7 +624,7 @@ export async function insertArticleToSupabase(
       isBreaking: !!payload.isBreaking,
       isPinned: !!payload.isPinned,
       isTrending: !!payload.isTrending,
-      postAsNewsDesk: !!payload.postAsNewsDesk || author.email === 'admin@esbpowerline.com',
+      postAsNewsDesk: !!payload.postAsNewsDesk || !!author.newsDesk,
       tags: Array.isArray(payload.tags) ? payload.tags : [],
       seo: payload.seo || {},
       locale: 'en',

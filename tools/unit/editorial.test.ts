@@ -256,9 +256,14 @@ describe('Editorial Desk — Live esbpowerline.com CMS & Supabase Bridge', () =>
     expect(ESB_CATEGORIES['Consumers & Tariffs'].id).toBe('cmqv473nh000avk55ur3yty0p')
     expect(ESB_CATEGORIES['Renewables & Nuclear'].id).toBe('cmqv473nh0007vk55fyfwonza')
 
-    expect(ESB_AUTHORS['hamim2964@gmail.com'].id).toBe('cmqv471bq0001vk55aw07256e')
-    expect(ESB_AUTHORS['hamim2964@gmail.com'].name).toBe('Mehedi Hasan Hamim')
-    expect(ESB_AUTHORS['admin@esbpowerline.com'].role).toBe('SUPER_ADMIN')
+    // keyed by a hash of the address: the shipped roster holds names and site ids, never an email
+    expect(Object.keys(ESB_AUTHORS)).toHaveLength(5)
+    expect(JSON.stringify(ESB_AUTHORS)).not.toContain('@')
+    expect(Object.keys(ESB_AUTHORS).every((k) => /^[0-9a-f]{64}$/.test(k))).toBe(true)
+    expect(Object.values(ESB_AUTHORS).filter((a) => a.newsDesk)).toHaveLength(1)
+    const { authorFor, emailKey } = await import('../../src/editorial/siteApi')
+    expect(await authorFor('Someone@Example.com')).toBeUndefined()
+    expect(await emailKey(' Someone@Example.com ')).toBe(await emailKey('someone@example.com'))
 
     const cuid = generateCuid()
     expect(cuid.length).toBe(25)

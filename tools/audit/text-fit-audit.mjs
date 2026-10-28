@@ -32,7 +32,7 @@ const LONG = {
   tags: 'Bheramara-Baharampur HVDC, Power Grid Company of Bangladesh, cross-border electricity trade, Rooppur Nuclear Power Plant, load-shedding, summer peak demand',
   byline: 'Mehedi Hasan Hamim Chowdhury, Senior Energy Correspondent',
   credit: 'Photo: Power Grid Company of Bangladesh Limited (PGCB) / Bangladesh Power Development Board',
-  email: 'mehedi.hasan.hamim.chowdhury@esbpowerline.com',
+  email: 'a.very.long.staff.address.for.layout@example.com',
 }
 
 const found = new Map()
