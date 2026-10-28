@@ -219,6 +219,7 @@ const restored = loadPersisted()
 /** True when the last session's draft was brought back on launch (the workspace tells the editor once). */
 export const restoredDraftOnLaunch = !!(restored.draft?.headline || restored.source)
 
+let probeSeq = 0
 export const useEditorialStore = create<EditorialState>((set, get) => ({
   source: restored.source ?? null,
   draft: restored.draft ?? DEFAULT_DRAFT,
@@ -250,7 +251,12 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
   setFeedSearchQuery: (query) => set({ feedSearchQuery: query }),
 
   checkConnection: async () => {
-    const status = await probeSite(get().staffSession)
+    // checks overlap (the 20 s timer, focus, coming online, signing in or out): only the newest may set the status,
+    // and only for the session it was asked about — a slow older answer must not report a session that has changed
+    const seq = ++probeSeq
+    const session = get().staffSession
+    const status = await probeSite(session)
+    if (seq !== probeSeq || get().staffSession !== session) return
     set({ siteStatus: status })
   },
 

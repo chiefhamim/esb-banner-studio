@@ -140,7 +140,17 @@ export async function startBatch(mode: 'first' | 'followup' = 'first') {
     const live = st.campaign()!
     st.markSending(target.email)
     const payload = mode === 'first' ? mailFor(now, live) : { ...mailFor(now, { ...live, ...followUpLetter(live) }), followUp: true }
-    const r = await window.esb!.outreachSend!({ to: target.email, ...payload, attachments: mode === 'first' ? attachmentsOf() : [] })
+    let r: Awaited<ReturnType<NonNullable<NonNullable<typeof window.esb>['outreachSend']>>>
+    try {
+      r = await window.esb!.outreachSend!({ to: target.email, ...payload, attachments: mode === 'first' ? attachmentsOf() : [] })
+    } catch (e) {
+      // the bridge itself failed (not the mail server): stop cleanly rather than leave the desk stuck on "running"
+      useOutreachStore.getState().markSending(null)
+      if (id !== runId) return
+      finish('paused')
+      useOutreachStore.getState().addLog('error', `${target.email}: the send could not be handed to the mailer — ${(e as Error).message}`)
+      return
+    }
     st = useOutreachStore.getState()
     st.markSending(null)
     if (id !== runId) return
@@ -236,7 +246,15 @@ export function startScheduler() {
       return
     }
     void (async () => {
+      // a start that cannot happen (no password, the day's limit used, nobody left) goes back to a draft once, with the
+      // reason — it used to stay scheduled and retry every 15 s, reopening the campaign and logging the same warning
       if (s.activeId !== due.id) await s.openCampaign(due.id)
+      const why = cannotStart()
+      if (why) {
+        useOutreachStore.getState().patchById(due.id, { status: 'draft', scheduledAt: null })
+        useOutreachStore.getState().addLog('warn', `${due.name}: the scheduled start did not happen — ${why}`)
+        return
+      }
       s.addLog('info', `${due.name}: scheduled start`)
       await startBatch()
     })()

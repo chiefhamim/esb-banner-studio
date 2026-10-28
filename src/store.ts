@@ -666,51 +666,9 @@ export const useStore = create<State>((set, get) => {
   }
 })
 
-// persist the document and session photos so a reload or restart keeps the work in progress
-const IDB_NAME = 'esb-banner-studio/idb'
-const IDB_STORE = 'kv'
-export interface SavedPhoto { id: string; name: string; blob: Blob }
-
-function openIdb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') { reject(new Error('no idb')); return }
-    const req = indexedDB.open(IDB_NAME, 1)
-    req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE) }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
-}
-
-async function persistImagesToIdb(items: ImageItem[]): Promise<void> {
-  try {
-    const db = await openIdb()
-    const currentIds = items.map((i) => i.id)
-    const tx = db.transaction(IDB_STORE, 'readwrite')
-    const store = tx.objectStore(IDB_STORE)
-
-    // Save individual images by key and cleanup removed keys
-    for (const im of items) {
-      const blob = await (await fetch(im.url)).blob()
-      store.put({ id: im.id, name: im.name, blob }, `img:${im.id}`)
-    }
-
-    // Read previous index to prune removed images
-    const prevIndexReq = store.get('image_index')
-    prevIndexReq.onsuccess = () => {
-      const prevIds: string[] = prevIndexReq.result ?? []
-      const currentSet = new Set(currentIds)
-      for (const oldId of prevIds) {
-        if (!currentSet.has(oldId)) store.delete(`img:${oldId}`)
-      }
-      store.put(currentIds, 'image_index')
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error)
-    })
-  } catch { /* ignore idb errors */ }
-}
+// Photos are not kept between sessions (the desk starts clean, see restoreSessionPhotos). An earlier version tried to
+// keep them in IndexedDB on every change; that database is cleared once so nothing it held lingers on disk.
+if (typeof indexedDB !== 'undefined') { try { indexedDB.deleteDatabase('esb-banner-studio/idb') } catch { /* unavailable */ } }
 
 export async function restoreSessionPhotos(): Promise<void> {
   // Clean fresh start on application launch: do not restore old session photos or stale doc
@@ -720,7 +678,6 @@ export async function restoreSessionPhotos(): Promise<void> {
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let skipDirty = false
 useStore.subscribe((s, prev) => {
-  if (s.images !== prev.images) void persistImagesToIdb(s.images)
   if (s.doc === prev.doc) return
   // a content change can remove layers (e.g. the link pill): never keep them selected
   if (s.selectedIds.length && (s.doc.content !== prev.doc.content || s.doc.extras !== prev.doc.extras)) {
@@ -732,6 +689,9 @@ useStore.subscribe((s, prev) => {
   else if (!s.dirty) useStore.setState({ dirty: true })
   clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
+    // read now, not from this change's `s`: the first edit after a save set `dirty` after `s` was taken, so the
+    // snapshot below was skipped for it
+    const s = useStore.getState()
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(s.doc))
       if (s.dirty) {

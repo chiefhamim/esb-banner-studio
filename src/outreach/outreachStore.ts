@@ -194,11 +194,16 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     persist()
   }
   /** Read the open campaign's contacts from its list and sheet (or its typed addresses). */
+  // each load is numbered: opening A then B while A's list is still being read must not leave A's contacts on B (the
+  // send queue reads `contacts`)
+  let contactsSeq = 0
   const loadContacts = async () => {
+    const seq = ++contactsSeq
     const c = get().campaign()
     if (!c) return set({ sheets: [], contacts: [], groupNames: new Map(), importNote: null })
     if (c.kind === 'direct') return set({ sheets: [], groupNames: new Map(), importNote: null, contacts: overlay(directContacts(c.recipients), get(), c, get().mail) })
     const sheets = c.listId ? (await idbGet<Sheet[]>(`list:${c.listId}`)) ?? [] : []
+    if (seq !== contactsSeq || get().activeId !== c.id) return
     const groupNames = groupNamesOf(sheets)
     const sh = sheets.find((x) => x.name === c.sheet) ?? sheets.find((x) => x.rows.slice(0, 15).some((r) => r.some((v) => /^e-?mail(\s+address)?$/i.test(v))))
     if (!sh) return set({ sheets, groupNames, contacts: [], importNote: c.listId ? 'The list for this campaign is not on this computer any more — import it again.' : null })
@@ -213,7 +218,9 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
   }
   const loadAttachments = async () => {
     const c = get().campaign()
-    set({ attachments: c ? (await idbGet<AttachmentItem[]>(`files:${c.id}`)) ?? [] : [] })
+    const files = c ? (await idbGet<AttachmentItem[]>(`files:${c.id}`)) ?? [] : []
+    if ((get().activeId ?? null) !== (c?.id ?? null)) return // another campaign was opened meanwhile
+    set({ attachments: files })
   }
 
   // open the last campaign once the store exists

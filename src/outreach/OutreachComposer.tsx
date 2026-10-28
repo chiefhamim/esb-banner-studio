@@ -134,7 +134,9 @@ export function OutreachComposer() {
     const undo = { subject: c.subject, body: c.body, lang: c.lang }
     try {
       const r = await job()
-      s.patch({ subject: r.subject || c.subject, body: r.body, ...(r.lang ? { lang: r.lang } : {}) })
+      // written into the campaign it was asked for, even if the editor has opened another one meanwhile
+      useOutreachStore.getState().patchById(c.id, { subject: r.subject || c.subject, body: r.body, ...(r.lang ? { lang: r.lang } : {}) })
+      if (useOutreachStore.getState().activeId !== c.id) { s.addLog('ok', `${what} by ${r.model} — saved into ${c.name}`); return }
       setVariants(r.variants)
       setAiNote({ model: r.model, unsourced: r.unsourced, undo })
       ui.set({ view: 'edit' })

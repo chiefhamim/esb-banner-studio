@@ -108,6 +108,18 @@ export function VideoWorkspace() {
     return () => cancelAnimationFrame(animId)
   }, [playing, currentTime, project.duration, seek])
 
+  // leaving the Video desk stops what it started: timeline audio, and a voiceover still recording (its timer and mic)
+  useEffect(() => {
+    const audios = activeAudiosRef.current
+    return () => {
+      audios.forEach((a) => { try { a.pause(); a.src = '' } catch { /* already gone */ } })
+      audios.clear()
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+      const rec = mediaRecorderRef.current
+      if (rec && rec.state !== 'inactive') { rec.onstop = null; rec.stop(); rec.stream.getTracks().forEach((t) => t.stop()) }
+    }
+  }, [])
+
   // ---------------------------------------------------------------- Audio Playback Sync
   useEffect(() => {
     const audios = activeAudiosRef.current
@@ -305,7 +317,8 @@ export function VideoWorkspace() {
           v.preload = 'metadata'
           v.muted = true
           v.onloadedmetadata = () => {
-            duration = v.duration || 5
+            // a MediaRecorder WebM often reports Infinity until it is played through; treat that like unknown
+            duration = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 5
             width = v.videoWidth
             height = v.videoHeight
             v.currentTime = Math.min(1.0, duration / 2)
@@ -420,6 +433,9 @@ export function VideoWorkspace() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const rec = new MediaRecorder(stream)
       recordedChunksRef.current = []
+      // measured, not read from state: `recordingSeconds` inside onstop is the value from this closure (0), which made
+      // every take a 1-second clip
+      const startedAt = performance.now()
 
       rec.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data)
@@ -430,7 +446,7 @@ export function VideoWorkspace() {
         if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
         const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' })
         const url = URL.createObjectURL(blob)
-        const dur = Math.max(1, recordingSeconds)
+        const dur = Math.max(1, Math.round((performance.now() - startedAt) / 100) / 10)
         const name = `Voiceover Take ${new Date().toLocaleTimeString()}`
 
         const asset: MediaAsset = {

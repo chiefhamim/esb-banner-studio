@@ -57,6 +57,14 @@ interface VideoState {
 
 const MAX_HISTORY = 30
 
+/** The blob: URLs of a project being thrown away (with its undo history) that neither the next project nor the media
+ * bin still uses. A story-video build makes two (banner, photo) each time; nothing released them. */
+function releaseDropped(s: { project: VideoProject; history: VideoProject[]; future: VideoProject[]; mediaAssets: MediaAsset[] }, next: VideoProject) {
+  const keep = new Set([...next.clips.map((c) => c.sourceUrl), ...s.mediaAssets.map((a) => a.url)])
+  const dropped = new Set([s.project, ...s.history, ...s.future].flatMap((p) => p.clips.map((c) => c.sourceUrl)))
+  for (const u of dropped) if (u && u.startsWith('blob:') && !keep.has(u)) { try { URL.revokeObjectURL(u) } catch { /* already gone */ } }
+}
+
 function pushHistory(currentProject: VideoProject, history: VideoProject[]): VideoProject[] {
   const next = [...history, currentProject]
   if (next.length > MAX_HISTORY) return next.slice(next.length - MAX_HISTORY)
@@ -216,8 +224,10 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   setExporting: (exporting, progress = 0) => set({ exporting, exportProgress: progress }),
 
   resetToDemo: () => {
+    const project = createDefaultTimeline('16:9')
+    releaseDropped(get(), project)
     set({
-      project: createDefaultTimeline('16:9'),
+      project,
       currentTime: 0,
       playing: false,
       selectedClipId: null,
@@ -233,8 +243,12 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   },
 
   removeMediaAsset: (id) => {
-    const asset = get().mediaAssets.find((a) => a.id === id)
-    if (asset?.url && asset.url.startsWith('blob:')) {
+    const { mediaAssets, project, history, future } = get()
+    const asset = mediaAssets.find((a) => a.id === id)
+    // a clip on the timeline (or one undo can bring back) still plays this file: revoking it then left the monitor
+    // black or silent and broke the export. The bin entry goes; the bytes stay until nothing points at them.
+    const inUse = !!asset && [project, ...history, ...future].some((p) => p.clips.some((c) => c.sourceUrl === asset.url))
+    if (asset?.url && asset.url.startsWith('blob:') && !inUse) {
       try {
         URL.revokeObjectURL(asset.url)
       } catch {}
@@ -273,6 +287,7 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   },
 
   loadProject: (project) => {
+    releaseDropped(get(), project)
     set({
       project,
       currentTime: 0,

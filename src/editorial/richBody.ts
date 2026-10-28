@@ -83,7 +83,7 @@ function blockTexts(el: Element, out: string[]) {
     if (SKIP.has(tag)) continue
     // a table row reads as one line, so a table is a few paragraphs rather than one per cell
     if (tag === 'tr') {
-      const cells = Array.from(child.children).map((x) => (x.textContent ?? '').replace(/s+/g, ' ').trim()).filter(Boolean)
+      const cells = Array.from(child.children).map((x) => (x.textContent ?? '').replace(/\s+/g, ' ').trim()).filter(Boolean)
       if (cells.length) out.push(cells.join(' | '))
       continue
     }

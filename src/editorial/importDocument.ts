@@ -159,7 +159,8 @@ async function readPdf(data: ArrayBuffer, name: string): Promise<ImportedDocumen
     const needsVision = !text || wordCount(text) < 5 ? 'scanned' : looksLikeLegacyBangla(text) ? 'legacy' : looksScrambledBangla(text) ? 'scrambled' : undefined
     return { kind: 'pdf', name, text: needsVision ? '' : text, pages: pdf.numPages, words: needsVision ? 0 : wordCount(text), warnings, needsVision }
   } finally {
-    void pdf.cleanup()
+    // destroy, not cleanup: cleanup frees page caches only and leaves the whole document loaded in the pdf.js worker
+    void pdf.loadingTask.destroy()
   }
 }
 

@@ -26,10 +26,14 @@ function PdfPages({ data }: { data: Uint8Array }) {
   const [state, setState] = useState<string>('Drawing the pages')
   useEffect(() => {
     let dead = false
+    let task: { destroy(): Promise<void> } | null = null
     void (async () => {
       try {
         const pdfjs = await loadPdfjs()
-        const pdf = await pdfjs.getDocument({ data: data.slice() }).promise
+        if (dead) return
+        const loading = pdfjs.getDocument({ data: data.slice() })
+        task = loading
+        const pdf = await loading.promise
         const pages = Math.min(pdf.numPages, 30)
         for (let i = 1; i <= pages && !dead; i++) {
           const page = await pdf.getPage(i)
@@ -42,7 +46,8 @@ function PdfPages({ data }: { data: Uint8Array }) {
         if (!dead) setState(pdf.numPages > pages ? `First ${pages} of ${pdf.numPages} pages` : '')
       } catch (e) { if (!dead) setState(`This PDF could not be drawn: ${(e as Error).message}`) }
     })()
-    return () => { dead = true }
+    // release the document (and its worker memory) when the viewer closes, and drop the drawn pages
+    return () => { dead = true; void task?.destroy(); host.current?.replaceChildren() }
   }, [data])
   return <>{state && <p className="hint">{state}</p>}<div ref={host} className="or-view-pdf" /></>
 }
@@ -51,13 +56,15 @@ function DocxText({ data }: { data: Uint8Array }) {
   const [html, setHtml] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   useEffect(() => {
+    let dead = false
     void (async () => {
       try {
         const mammoth = (await import('mammoth/mammoth.browser')).default as { convertToHtml(o: { arrayBuffer: ArrayBuffer }): Promise<{ value: string }> }
         const r = await mammoth.convertToHtml({ arrayBuffer: data.slice().buffer })
-        setHtml(sanitizeBodyHtml(r.value))
-      } catch (e) { setErr((e as Error).message) }
+        if (!dead) setHtml(sanitizeBodyHtml(r.value))
+      } catch (e) { if (!dead) setErr((e as Error).message) }
     })()
+    return () => { dead = true }
   }, [data])
   if (err) return <p className="hint">This Word file could not be read: {err}</p>
   return html === null ? <p className="hint">Reading the document</p> : <div className="or-view-doc" dangerouslySetInnerHTML={{ __html: html }} />

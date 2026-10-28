@@ -67,3 +67,9 @@ describe('richOf sanitises what was stored', () => {
     expect(out).toBe('<p>Hello</p>')
   })
 })
+
+describe('tables in plain text', () => {
+  it('keeps every letter of a cell — the whitespace collapse once matched the letter "s"', () => {
+    expect(htmlToPlain('<table><tr><td>Gas  sales</td><td>Mass\nsupply</td></tr></table>')).toBe('Gas sales | Mass supply')
+  })
+})
