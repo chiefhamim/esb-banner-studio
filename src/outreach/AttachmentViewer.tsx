@@ -27,6 +27,7 @@ function PdfPages({ data }: { data: Uint8Array }) {
   useEffect(() => {
     let dead = false
     let task: { destroy(): Promise<void> } | null = null
+    const el = host.current
     void (async () => {
       try {
         const pdfjs = await loadPdfjs()
@@ -41,13 +42,13 @@ function PdfPages({ data }: { data: Uint8Array }) {
           const canvas = document.createElement('canvas')
           canvas.width = vp.width; canvas.height = vp.height
           await page.render({ canvasContext: canvas.getContext('2d')!, viewport: vp, canvas } as Parameters<typeof page.render>[0]).promise
-          if (!dead) host.current?.appendChild(canvas)
+          if (!dead) el?.appendChild(canvas)
         }
         if (!dead) setState(pdf.numPages > pages ? `First ${pages} of ${pdf.numPages} pages` : '')
       } catch (e) { if (!dead) setState(`This PDF could not be drawn: ${(e as Error).message}`) }
     })()
     // release the document (and its worker memory) when the viewer closes, and drop the drawn pages
-    return () => { dead = true; void task?.destroy(); host.current?.replaceChildren() }
+    return () => { dead = true; void task?.destroy(); el?.replaceChildren() }
   }, [data])
   return <>{state && <p className="hint">{state}</p>}<div ref={host} className="or-view-pdf" /></>
 }
