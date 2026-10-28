@@ -167,12 +167,12 @@ export function OutreachComposer() {
         <div className="spacer" />
         <button type="button" className="btn ai-btn" data-provider={ai?.provider} disabled={aiOff || !!busy} onClick={() => void run('Draft', () => writeOutreachWithAi(ctx))}
           data-tip={aiTip || `${aiName} writes the template from the letter's offer${c.sources.some((x) => x.points.some((p) => p.use)) ? ' and your ticked talking points' : ''}, with placeholders. Replaces the subject and body (undoable)`}>
-          {busy === 'Draft' ? <Icon name="refresh" size={13} className="spin" /> : ai ? <ProviderMark id={ai.provider} size={13} /> : <Icon name="sparkle" size={13} />}<span>{busy === 'Draft' ? 'Writing…' : 'Write'}</span>
+          {busy === 'Draft' ? <Icon name="refresh" size={13} className="spin" /> : ai ? <ProviderMark id={ai.provider} size={13} /> : <Icon name="sparkle" size={13} />}<span>{busy === 'Draft' ? 'Writing' : 'Write'}</span>
         </button>
-        <MenuButton label={busy && busy !== 'Draft' ? 'Rewriting…' : 'Rewrite'} icon="edit" className="" align="end" title={aiTip || 'Rewrite the letter with AI'}
+        <MenuButton label={busy && busy !== 'Draft' ? 'Rewriting' : 'Rewrite'} icon="edit" className="" align="end" title={aiTip || 'Rewrite the letter with AI'}
           items={[...REWRITES.map((r) => ({ label: r.label, hint: r.hint, disabled: aiOff || !!busy || !c.body.trim(), onClick: () => void run(r.label, () => rewriteLetter(r.id, c, ctx)) })),
             { divider: true },
-            { label: 'Your own instruction…', icon: 'sparkle' as const, disabled: aiOff || !!busy || !c.body.trim(), onClick: async () => { const t = await ask({ title: 'Rewrite with your instruction', body: 'The same facts rule applies: nothing is added that the letter or your ticked talking points do not say.', input: { label: 'How should the letter change?', placeholder: 'e.g. Lead with the free digital edition; keep it under 120 words', multiline: true }, ok: 'Rewrite' }); if (typeof t === 'string' && t.trim()) void run('Rewrite', () => rewriteLetter('custom' as RewriteAction, c, ctx, t)) } }]} />
+            { label: 'Your own instruction', icon: 'sparkle' as const, disabled: aiOff || !!busy || !c.body.trim(), onClick: async () => { const t = await ask({ title: 'Rewrite with your instruction', body: 'The same facts rule applies: nothing is added that the letter or your ticked talking points do not say.', input: { label: 'How should the letter change?', placeholder: 'e.g. Lead with the free digital edition; keep it under 120 words', multiline: true }, ok: 'Rewrite' }); if (typeof t === 'string' && t.trim()) void run('Rewrite', () => rewriteLetter('custom' as RewriteAction, c, ctx, t)) } }]} />
         <Seg<'edit' | 'preview'> value={ui.view} onChange={(v) => ui.set({ view: v })} options={[{ value: 'edit', label: 'Edit' }, { value: 'preview', label: 'Preview', tip: active ? `As ${active.personName || active.email} will receive it` : 'As a recipient will receive it' }]} />
       </div>
 
@@ -215,7 +215,7 @@ export function OutreachComposer() {
             <i className="or-fmt-sep" />
             {PLACEHOLDERS.map((p) => <button key={p} type="button" className="or-tag" onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`{${p}}`)} data-tip={`Insert {${p}} — filled from each contact's row`}>{p}</button>)}
           </div>
-          <textarea ref={bodyRef} className={'or-body' + (c.lang === 'bn' ? ' bn' : '')} value={c.body} onChange={(e) => setBody(e.target.value)} spellCheck aria-label="Message"
+          <textarea ref={bodyRef} className={'or-text' + (c.lang === 'bn' ? ' bn' : '')} value={c.body} onChange={(e) => setBody(e.target.value)} spellCheck aria-label="Message"
             placeholder="Write the letter. Blank line = new paragraph."
             onKeyDown={(e) => {
               if (!(e.ctrlKey || e.metaKey)) return

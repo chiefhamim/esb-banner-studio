@@ -49,7 +49,7 @@ export function SenderDialog({ onClose }: { onClose: () => void }) {
         {mail?.hasPassword && <button type="button" className="btn" onClick={async () => { await window.esb?.outreachForgetPassword?.(); await refresh(); addLog('info', 'App password removed') }}>Remove password</button>}
         <div className="spacer" />
         <button type="button" className="btn" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn primary" onClick={() => void save()} disabled={saving || !f.user.trim()}>{saving ? 'Saving…' : 'Save'}</button>
+        <button type="button" className="btn primary" onClick={() => void save()} disabled={saving || !f.user.trim()}>{saving ? 'Saving' : 'Save'}</button>
       </>}
     >
       <div className="stack or-sender-form" style={{ gap: 12 }}>

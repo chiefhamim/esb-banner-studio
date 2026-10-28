@@ -1499,3 +1499,7 @@ label.switch:active i { filter: brightness(.94); }
    sub-pixel rounding; a tighter side pad and no gap leave ~30 px of slack (same specificity path as the container rule) */
 .vw-bin-panel .side-tabs:has(> button:nth-of-type(3)) { gap: 0; }
 .vw-bin-panel .side-tabs:has(> button:nth-of-type(3)) button { padding: 0 3px; }
+/* a destructive item keeps its red when pointed at: the hover above paints every item in the selection colour, which
+   turned "Delete" into accent-on-accent and made the red fade out in the light theme */
+.menu .menu-item.danger:hover:not(:disabled), .menu .menu-item.danger.active { color: var(--danger); background: var(--danger-soft); }
+.menu .menu-item.danger:hover:not(:disabled) .icon, .menu .menu-item.danger:hover:not(:disabled) svg { color: var(--danger); opacity: 1; }

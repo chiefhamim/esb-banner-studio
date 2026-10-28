@@ -16,7 +16,7 @@ import { fmtDuration } from './jobLog'
 
 type Check = { state: 'busy' } | { state: 'ok'; ms: number; model: string } | { state: 'bad'; error: string }
 type Active = { provider: AiProviderId; key: string; model: string }
-const ROLES: { role: AiRole; label: string }[] = [{ role: 'main', label: 'Main' }, { role: 'seo', label: 'SEO' }, { role: 'social', label: 'Social' }, { role: 'outreach', label: 'Letter' }, { role: 'research', label: 'Research' }, { role: 'review', label: 'Review' }]
+const ROLES: { role: AiRole; label: string }[] = [{ role: 'main', label: 'Story' }, { role: 'seo', label: 'SEO' }, { role: 'social', label: 'Social' }, { role: 'outreach', label: 'Letter' }, { role: 'research', label: 'Research' }, { role: 'review', label: 'Review' }]
 
 /** Health of each distinct (provider, key, model) — shared by the footer word and the panel. */
 const useHealth = create<{ byKey: Record<string, Check>; set: (k: string, c: Check) => void }>((set) => ({
@@ -118,7 +118,7 @@ export function EngineStatus({ ai, offline, onAddKey, roles = ['main', 'seo', 's
                 <span className="eng-role">{label}</span>
                 <Select<string> className="eng-select" value={role === 'main' ? ai.provider : ai[role]} title={`${label} company`} onChange={(v) => setRole(role, v)}
                   options={[
-                    ...(role !== 'main' ? [{ value: '', label: 'Same as main', hint: providerMeta(ai.provider).name }] : []),
+                    ...(role !== 'main' ? [{ value: '', label: 'Same as Story', hint: providerMeta(ai.provider).name }] : []),
                     ...AI_PROVIDERS.map((p) => ({ value: p.id as string, label: p.name, swatch: p.color, hint: ai.keys[p.id]?.trim() ? '' : 'no key' })),
                   ]} />
                 <span className="eng-model" data-provider={chosen}>

@@ -1179,7 +1179,7 @@ export function EditorialWorkspace() {
         </div>
         <div className="spacer" />
         <TranslateProgress status={progressStatus} />
-        <button type="button" className={'ed-ai-chip' + (mainAi ? ' on' : '') + (ai.paused ? ' paused' : '')} data-provider={ai.provider} onClick={() => setShowApiKeyModal(true)} aria-label="AI keys and roles" data-tip={ai.paused ? 'AI is OFF — nothing is sent to any AI company. Click to open the AI settings, or turn it ON in the Engine panel' : mainAi ? `Main: ${aiName} · ${aiModelLabel}${seoAi ? ` — SEO: ${providerMeta(seoAi.provider).name}` : ''}${socialAi ? ` — Social: ${providerMeta(socialAi.provider).name}` : ''}. Click to change` : 'AI is off — add a Gemini, Claude, OpenAI or OpenRouter key'}>
+        <button type="button" className={'ed-ai-chip' + (mainAi ? ' on' : '') + (ai.paused ? ' paused' : '')} data-provider={ai.provider} onClick={() => setShowApiKeyModal(true)} aria-label="AI keys and roles" data-tip={ai.paused ? 'AI is OFF — nothing is sent to any AI company. Click to open the AI settings, or turn it ON in the Engine panel' : mainAi ? `Story: ${aiName} · ${aiModelLabel}${seoAi ? ` — SEO: ${providerMeta(seoAi.provider).name}` : ''}${socialAi ? ` — Social: ${providerMeta(socialAi.provider).name}` : ''}. Click to change` : 'AI is off — add a Gemini, Claude, OpenAI or OpenRouter key'}>
           {ai.paused ? <Icon name="power" size={14} /> : mainAi ? <ProviderMark id={ai.provider} size={18} /> : <Icon name="link" size={14} />}
           <span className="ed-ai-label">{ai.paused ? 'AI OFF' : mainAi ? aiName : 'Connect AI'}</span>
         </button>

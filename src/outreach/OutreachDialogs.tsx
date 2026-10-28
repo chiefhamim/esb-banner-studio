@@ -229,7 +229,7 @@ export function FollowUpDialog() {
     <Dialog title="Follow-up letter" kicker={c.name.toUpperCase()} width={640} onClose={close} footer={<>
       <button type="button" className="btn" onClick={() => { setSubject(def.subject); setBody(def.body) }}>Use the default</button>
       <button type="button" className="btn ai-btn" data-provider={ai?.provider} onClick={() => void write()} disabled={!ai || aiPaused() || busy || !c.body.trim()}>
-        <Icon name={busy ? 'refresh' : 'sparkle'} size={14} className={busy ? 'spin' : ''} /><span>{busy ? 'Writing…' : 'Write from the letter'}</span>
+        <Icon name={busy ? 'refresh' : 'sparkle'} size={14} className={busy ? 'spin' : ''} /><span>{busy ? 'Writing' : 'Write from the letter'}</span>
       </button>
       <div className="spacer" />
       <button type="button" className="btn" onClick={close}>Cancel</button>

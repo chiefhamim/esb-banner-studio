@@ -15,6 +15,7 @@ import { aiFor, aiPaused, providerMeta, loadAiSettings, roleProvider } from '../
 import { ProviderMark } from '../editorial/ProviderMark'
 import { Icon } from '../ui/Icon'
 import { Seg } from '../ui/controls'
+import { FileTypePair, FileTypeIcon } from '../editorial/FileTypeIcon'
 import type { Source } from './types'
 
 const CAP = 24_000
@@ -30,6 +31,7 @@ export function SourcesTab() {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [openSrc, setOpenSrc] = useState<string | null>(null)
   const file = useRef<HTMLInputElement>(null)
   const ai = aiFor('research')
   const aiName = providerMeta(ai?.provider ?? roleProvider(loadAiSettings(), 'research')).name
@@ -96,24 +98,36 @@ export function SourcesTab() {
         ]} />
         {mode === 'link' && (
           <div className="or-test">
-            <input className="or-input" type="url" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addLink() }} aria-label="Source link" />
+            <input className="or-input" type="url" placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addLink() }} aria-label="Source link" />
             <button type="button" className="btn" onClick={() => void addLink()} disabled={!desktop || busy === 'link' || !url.trim()} data-tip={desktop ? 'Read the page and add its text' : 'Reading web pages needs the desktop app — paste the text instead'}><Icon name={busy === 'link' ? 'refresh' : 'plus'} size={13} className={busy === 'link' ? 'spin' : ''} /><span>Add</span></button>
           </div>
         )}
         {mode === 'story' && (
-          <button type="button" className="btn sm or-wide" onClick={addStory} disabled={!draft.headline.trim()} data-tip={draft.headline.trim() ? 'Use the headline, deck and body on the Editorial desk' : 'No story on the Editorial desk'}>
-            <Icon name="newspaper" size={13} /><span className="or-ellipsis">{draft.headline.trim() ? draft.headline : 'No story on the Editorial desk'}</span>
-          </button>
+          draft.headline.trim() ? (
+            // the whole story as it stands on the Editorial desk, read before it is added — not just its first line
+            <div className="or-story">
+              <div className="or-story-scroll">
+                <b>{draft.headline}</b>
+                {draft.deck.trim() && <p className="or-story-deck">{draft.deck}</p>}
+                {draft.body.split(/\n{2,}/).filter((p) => p.trim()).map((p, i) => <p key={i}>{p}</p>)}
+              </div>
+              <button type="button" className="btn primary or-wide" onClick={addStory}><Icon name="plus" size={14} /><span>Add this story</span></button>
+            </div>
+          ) : <p className="or-muted">No story on the Editorial desk yet. Open one there and it appears here in full.</p>
         )}
         {mode === 'file' && (
           <>
-            <button type="button" className="btn sm or-wide" onClick={() => file.current?.click()} disabled={busy === 'file'}><Icon name="filePlus" size={13} /><span>{busy === 'file' ? 'Reading…' : 'Choose a PDF or Word file'}</span></button>
+            <button type="button" className="or-drop" onClick={() => file.current?.click()} disabled={busy === 'file'}>
+              <FileTypePair size={38} />
+              <b>{busy === 'file' ? 'Reading the file' : 'Choose a PDF or Word file'}</b>
+              <span>Read on this computer, as in Editorial — nothing is uploaded</span>
+            </button>
             <input ref={file} type="file" accept=".pdf,.docx" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void addFile(f); e.target.value = '' }} />
           </>
         )}
         {mode === 'text' && (
           <>
-            <textarea className="or-input or-paste" rows={4} placeholder="Paste a press release, a report summary, notes…" value={text} onChange={(e) => setText(e.target.value)} aria-label="Source text" />
+            <textarea className="or-input or-paste" rows={4} placeholder="Paste a press release, a report summary or your notes" value={text} onChange={(e) => setText(e.target.value)} aria-label="Source text" />
             <button type="button" className="btn sm or-wide" onClick={addText} disabled={text.trim().length < 80}><Icon name="plus" size={13} /><span>Add text</span></button>
           </>
         )}
@@ -126,10 +140,16 @@ export function SourcesTab() {
         ) : c.sources.map((src) => (
           <article key={src.id} className="or-src">
             <header>
-              <span className="or-src-ic"><Icon name={KIND_ICON[src.kind]} size={13} /></span>
+              {src.kind === 'file' && /\.(pdf|docx)$/i.test(src.title)
+                ? <FileTypeIcon kind={src.title.toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx'} size={30} className="or-src-file" />
+                : <span className="or-src-ic"><Icon name={KIND_ICON[src.kind]} size={13} /></span>}
               <div className="or-src-t"><b title={src.title}>{src.title}</b><span>{src.url ? new URL(src.url).hostname : src.kind === 'file' ? 'File' : src.kind === 'story' ? 'Editorial' : 'Pasted'} · {src.text.split(/\s+/).length} words</span></div>
               <button type="button" className="ibtn" aria-label={`Remove ${src.title}`} data-tip="Remove" onClick={() => s.removeSource(src.id)}><Icon name="x" size={13} /></button>
             </header>
+            <button type="button" className="or-src-more" aria-expanded={openSrc === src.id} onClick={() => setOpenSrc(openSrc === src.id ? null : src.id)}>
+              <Icon name="chevDown" size={12} className={openSrc === src.id ? 'open' : ''} /><span>{openSrc === src.id ? 'Hide the text' : 'Read it all'}</span>
+            </button>
+            {openSrc === src.id && <div className="or-src-full">{src.text.split(/\n{2,}/).filter((p) => p.trim()).map((p, i) => <p key={i}>{p}</p>)}</div>}
             {src.points.length > 0 && (
               <ul className="or-points">
                 {src.points.map((p) => (
@@ -145,7 +165,7 @@ export function SourcesTab() {
             <button type="button" className="btn sm ai-btn or-wide" data-provider={ai?.provider} onClick={() => void research(src)} disabled={!ai || aiPaused() || !!busy}
               data-tip={aiPaused() ? 'AI is OFF' : ai ? `${aiName} lists what a letter could cite, each with the source's own sentence` : `Add a ${aiName} key for the Research job`}>
               {busy === src.id ? <Icon name="refresh" size={13} className="spin" /> : ai ? <ProviderMark id={ai.provider} size={13} /> : <Icon name="sparkle" size={13} />}
-              <span>{busy === src.id ? 'Reading…' : src.points.length ? 'Find talking points again' : 'Find talking points'}</span>
+              <span>{busy === src.id ? 'Reading' : src.points.length ? 'Find talking points again' : 'Find talking points'}</span>
             </button>
           </article>
         ))}

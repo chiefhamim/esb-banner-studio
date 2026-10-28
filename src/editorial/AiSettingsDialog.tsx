@@ -10,7 +10,7 @@ import type { AiModelInfo, AiProviderId, AiRole, AiSettings } from './aiProvider
 import { JOURNALISTIC_TRANSLATOR_PROMPT } from './translator'
 
 const JOBS: { role: AiRole; name: string; note: string }[] = [
-  { role: 'main', name: 'Main', note: 'Translation, headline, deck, story and tags' },
+  { role: 'main', name: 'Story', note: 'Translation, headline, deck, story and tags' },
   { role: 'seo', name: 'SEO', note: 'Write with AI on the SEO tab' },
   { role: 'social', name: 'Social', note: 'Write with AI on the captions' },
   { role: 'outreach', name: 'Letter', note: 'Outreach: writes and rewrites the email' },
@@ -60,7 +60,7 @@ export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; on
   const chosen = draft.models[p]
   const custom = draft.prompt.trim() !== JOURNALISTIC_TRANSLATOR_PROMPT.trim()
   const roleOptions = (role: AiRole) => [
-    ...(role === 'main' ? [] : [{ value: '', label: 'Same as main' }]),
+    ...(role === 'main' ? [] : [{ value: '', label: 'Same as Story' }]),
     ...AI_PROVIDERS.map((x) => ({ value: x.id as string, label: hasKey(x.id) ? x.name : `${x.name} — no key yet`, swatch: x.color })),
   ]
   const unkeyed = JOBS.filter((j) => !hasKey(roleProvider(draft, j.role)))

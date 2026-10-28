@@ -22,9 +22,13 @@ export function CampaignsTab() {
 
   return (
     <div className="or-tab">
+      {/* one way to start either kind; the desk stays on Campaigns and the letter's To line takes the cursor —
+          the old "Email" button jumped to Contacts, which shows nothing for an email to typed addresses */}
       <div className="or-left-head or-new">
-        <button type="button" className="btn primary" onClick={() => void s.createCampaign()} disabled={!idle} data-tip="A campaign to a mailing list (uses the list you have open)"><Icon name="plus" size={13} /><span>Campaign</span></button>
-        <button type="button" className="btn" onClick={async () => { await s.createCampaign({ kind: 'direct', name: 'New email', listId: null, sheet: '', blueprint: 'blank', subject: '', body: '' }); ui.set({ left: 'contacts', view: 'edit' }) }} disabled={!idle} data-tip="An ordinary email to addresses you type"><Icon name="mail" size={13} /><span>Email</span></button>
+        <MenuButton label="New" icon="plus" className="primary or-wide" align="start" items={[
+          { label: 'Campaign to a list', icon: 'users', hint: 'One letter to an audience from your mailing list', disabled: !idle, onClick: () => void s.createCampaign() },
+          { label: 'Email to addresses', icon: 'mail', hint: 'An ordinary email to people you type', disabled: !idle, onClick: async () => { await s.createCampaign({ kind: 'direct', name: 'New email', listId: null, sheet: '', blueprint: 'blank', subject: '', body: '' }); ui.set({ view: 'edit' }); requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.or-line input[aria-label="Recipients"]')?.focus()) } },
+        ]} />
       </div>
       <div className="or-list" role="listbox" aria-label="Campaigns">
         {!sorted.length ? (
@@ -44,7 +48,7 @@ export function CampaignsTab() {
               <MenuButton icon="more" className="ibtn or-camp-menu" title="Campaign actions" align="end" items={[
                 { label: 'Open', icon: 'folder', disabled: on || !idle, onClick: () => void s.openCampaign(c.id) },
                 { label: 'Duplicate', icon: 'copy', disabled: !idle, onClick: () => void s.duplicateCampaign(c.id) },
-                { label: 'Rename…', icon: 'edit', disabled: !on, onClick: () => ui.set({ sheet: 'rename' }) },
+                { label: 'Rename', icon: 'edit', disabled: !on, onClick: () => ui.set({ sheet: 'rename' }) },
                 ...(c.status === 'scheduled' ? [{ label: 'Cancel the schedule', icon: 'clock' as const, onClick: () => s.patchById(c.id, { status: 'draft', scheduledAt: null }) }] : []),
                 { divider: true },
                 { label: 'Delete', icon: 'trash', danger: true, disabled: !idle && on, onClick: async () => { if (await ask({ title: `Delete “${c.name}”?`, body: 'Its letter, sources and results go with it. Addresses it already emailed stay protected by the 7-day rule.', ok: 'Delete', danger: true })) void s.deleteCampaign(c.id) } },

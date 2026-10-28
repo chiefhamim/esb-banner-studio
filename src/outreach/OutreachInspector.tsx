@@ -34,13 +34,13 @@ export function OutreachInspector() {
       <div className="or-right-scroll">
         {ui.right === 'send' ? <SendTab /> : ui.right === 'contact' ? <ContactTab /> : <ReviewTab />}
       </div>
+      <SendFooter />
     </aside>
   )
 }
 
 function SendTab() {
   const s = useOutreachStore()
-  const ui = useOutreachUi()
   const c = s.campaign()
   const desktop = !!window.esb?.outreachSend
   const [testTo, setTestTo] = useState('')
@@ -62,18 +62,13 @@ function SendTab() {
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
   const willSend = Math.min(queue.length, Math.max(0, limit - used))
   const active = s.contacts.find((x) => x.id === s.activeContact)
-  const why = cannotStart()
   const sent = c ? Object.keys(c.sent).length : 0
   const failed = c ? Object.keys(c.failed).length : 0
 
   return (
     <>
       <section className="or-card">
-        <header><Icon name="mail" size={14} /><h3>Sender</h3>
-          <button type="button" className="btn sm" onClick={() => ui.set({ sheet: 'sender' })} disabled={!desktop} data-tip={desktop ? 'Account, app password and pacing' : 'Sending needs the ESB Studio desktop app'}>
-            <Icon name="sliders" size={13} /><span>Settings</span>
-          </button>
-        </header>
+        <header><Icon name="mail" size={14} /><h3>Sender</h3></header>
         {!desktop ? (
           <p className="or-muted">Sending needs the ESB Studio desktop app. Here you can prepare the list and the letter.</p>
         ) : set ? (
@@ -82,7 +77,7 @@ function SendTab() {
             <span className={'or-chip ' + (ready ? (s.smtp.state === 'bad' ? 'bad' : 'good') : 'warn')}>{!ready ? 'No app password' : s.smtp.state === 'bad' ? 'Login failed' : s.smtp.state === 'ok' ? 'Signed in' : 'Saved'}</span>
           </div>
         ) : (
-          <p className="or-muted">No sender yet. Add the Gmail or Workspace account that sends, with a Google app password.</p>
+          <p className="or-muted">No sender yet. Use the account button at the top right to add the Gmail or Workspace account that sends, with a Google app password.</p>
         )}
         {desktop && set && (
           <>
@@ -106,26 +101,8 @@ function SendTab() {
 
       <section className="or-card">
         <header><Icon name="send" size={14} /><h3>{c?.name ?? 'Campaign'}</h3>{c && <span className={'or-chip cs-' + c.status}>{STATUS_TEXT[c.status]}</span>}</header>
-        {s.run === 'idle' ? (
-          <>
-            <p className="or-muted">{!c ? 'Open or create a campaign.' : queue.length ? `${queue.length} ready${desktop && set ? ` · ${willSend} can go today` : ''}` : s.contacts.length ? 'Nobody in this audience is ready — see Skip in Contacts' : c.kind === 'direct' ? 'Type addresses in the To line' : 'Import a list to start'}</p>
-            {c?.status === 'scheduled' && c.scheduledAt && <p className="or-sched"><Icon name="clock" size={13} /><span>Starts {new Date(c.scheduledAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} — keep the app open</span><button type="button" className="btn xs" onClick={() => s.patch({ status: 'draft', scheduledAt: null })}>Cancel</button></p>}
-            <button type="button" className="btn primary or-wide" onClick={() => ui.set({ sheet: 'review-send' })} disabled={!c} data-tip={why ?? 'Check everything once more, then send now or at a time'}>
-              <Icon name="send" size={13} /><span>{willSend ? `Review & send to ${willSend}` : 'Review & send'}</span>
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="or-progress"><span>{s.runSent} of {s.runTotal} sent</span>{s.current ? <span className="or-ellipsis">Sending to {s.current}</span> : s.nextAt ? <span>Next in <b>{mmss(s.nextAt - Date.now())}</b></span> : null}</div>
-            <div className="or-meter"><i style={{ width: `${s.runTotal ? (s.runSent / s.runTotal) * 100 : 0}%` }} /></div>
-            <div className="or-actions">
-              {s.run === 'running'
-                ? <button type="button" className="btn sm" onClick={pauseBatch}><Icon name="pause" size={13} /><span>Pause</span></button>
-                : <button type="button" className="btn sm primary" onClick={resumeBatch}><Icon name="play" size={13} /><span>Resume</span></button>}
-              <button type="button" className="btn sm" onClick={stopBatch}><Icon name="x" size={13} /><span>Stop</span></button>
-            </div>
-          </>
-        )}
+        <p className="or-muted">{!c ? 'Open or create a campaign.' : queue.length ? `${queue.length} ready${desktop && set ? ` · ${willSend} can go today` : ''}` : s.contacts.length ? 'Nobody in this audience is ready — see Skipped in Contacts' : c.kind === 'direct' ? 'Type addresses in the To line' : 'Import a list to start'}</p>
+        {c?.status === 'scheduled' && c.scheduledAt && s.run === 'idle' && <p className="or-sched"><Icon name="clock" size={13} /><span>Starts {new Date(c.scheduledAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} — keep the app open</span><button type="button" className="btn xs" onClick={() => s.patch({ status: 'draft', scheduledAt: null })}>Cancel</button></p>}
         {c && (sent > 0 || failed > 0) && (
           <div className="or-results">
             <span><b>{sent}</b> sent</span>
@@ -146,7 +123,7 @@ function SendTab() {
         <div className="or-test">
           <input type="email" className="or-input" placeholder="your@address" value={testTo} onChange={(e) => setTestTo(e.target.value)} aria-label="Test address" />
           <button type="button" className="btn" disabled={!desktop || !ready || testing || !c || !/^\S+@\S+\.\S+$/.test(testTo)} onClick={async () => { setTesting(true); await sendTest(testTo.trim(), active); setTesting(false) }}>
-            <Icon name="send" size={13} /><span>{testing ? 'Sending…' : 'Send test'}</span>
+            <Icon name="send" size={13} /><span>{testing ? 'Sending' : 'Send test'}</span>
           </button>
         </div>
       </section>
@@ -232,7 +209,7 @@ function ReviewTab() {
         <p className="or-muted">{aiName} reads the letter as a cautious senior editor would before it goes to officials: unsupported claims, tone, the ask, the subject. Advice only — nothing is changed.</p>
         <button type="button" className="btn sm ai-btn or-wide" data-provider={ai?.provider} onClick={() => void run()} disabled={!ai || aiPaused() || busy || !c.body.trim()}
           data-tip={aiPaused() ? 'AI is OFF' : ai ? 'One request with the letter, its signature and your ticked talking points' : `Add a ${aiName} key for the Review job`}>
-          {busy ? <Icon name="refresh" size={13} className="spin" /> : <Icon name="sparkle" size={13} />}<span>{busy ? 'Reading…' : notes ? 'Review again' : 'Review the letter'}</span>
+          {busy ? <Icon name="refresh" size={13} className="spin" /> : <Icon name="sparkle" size={13} />}<span>{busy ? 'Reading' : notes ? 'Review again' : 'Review the letter'}</span>
         </button>
         {error && <p className="or-note">{error}</p>}
         {notes && (
@@ -269,7 +246,7 @@ function InboxCard() {
     <section className="or-card">
       <header><Icon name="inbox" size={14} /><h3>Replies &amp; bounces</h3>
         <button type="button" className="btn sm" disabled={!desktop || !s.mail?.hasPassword || ib.state === 'busy'} onClick={() => void s.checkInbox(true)} data-tip={desktop ? `Read ${s.mail?.imapHost || 'the inbox'} for answers to this desk's letters — read-only, nothing is marked read` : 'Needs the desktop app'}>
-          <Icon name="refresh" size={13} className={ib.state === 'busy' ? 'spin' : ''} /><span>{ib.state === 'busy' ? 'Reading…' : 'Check'}</span>
+          <Icon name="refresh" size={13} className={ib.state === 'busy' ? 'spin' : ''} /><span>{ib.state === 'busy' ? 'Reading' : 'Check'}</span>
         </button>
       </header>
       <div className="or-stats">
@@ -277,7 +254,7 @@ function InboxCard() {
         <span><b>{optedOut}</b>opted out</span>
         <span className={bounced ? 'bad' : ''}><b>{bounced}</b>bounced</span>
       </div>
-      <p className="or-muted or-small">{!desktop ? 'Replies are read in the desktop app.' : ib.state === 'ok' ? `Read ${ago(ib.at)} · ${ib.scanned} message${ib.scanned === 1 ? '' : 's'} checked${ib.note ? ` · ${ib.note}` : ''}` : ib.state === 'bad' ? ib.error : ib.state === 'busy' ? 'Reading the inbox…' : 'Not read yet — it is read on launch and every 15 minutes.'}</p>
+      <p className="or-muted or-small">{!desktop ? 'Replies are read in the desktop app.' : ib.state === 'ok' ? `Read ${ago(ib.at)} · ${ib.scanned} message${ib.scanned === 1 ? '' : 's'} checked${ib.note ? ` · ${ib.note}` : ''}` : ib.state === 'bad' ? ib.error : ib.state === 'busy' ? 'Reading the inbox' : 'Not read yet — it is read on launch and every 15 minutes.'}</p>
     </section>
   )
 }
@@ -301,5 +278,45 @@ function FollowUpCard() {
         </button>
       </div>
     </section>
+  )
+}
+
+/** Pinned to the foot of the right column on every tab, like Editorial's Review & publish: what is ready, and the
+ *  one button that sends — or, while a batch runs, its progress with Pause and Stop. */
+function SendFooter() {
+  const s = useOutreachStore()
+  const ui = useOutreachUi()
+  const c = s.campaign()
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (!s.nextAt) return
+    const t = setInterval(() => tick((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [s.nextAt])
+  const set = s.mail?.settings
+  const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
+  const willSend = Math.min(queue.length, Math.max(0, (set?.dailyLimit ?? 0) - (s.mail?.sent24h ?? 0)))
+  const why = cannotStart()
+  if (s.run !== 'idle') {
+    return (
+      <footer className="or-right-foot">
+        <div className="or-progress"><span><b>{s.runSent}</b> of {s.runTotal} sent</span>{s.current ? <span>Sending to {s.current}</span> : s.nextAt ? <span>Next in <b>{mmss(s.nextAt - Date.now())}</b></span> : null}</div>
+        <div className="or-meter"><i style={{ width: `${s.runTotal ? (s.runSent / s.runTotal) * 100 : 0}%` }} /></div>
+        <div className="or-actions">
+          {s.run === 'running'
+            ? <button type="button" className="btn" onClick={pauseBatch}><Icon name="pause" size={14} /><span>Pause</span></button>
+            : <button type="button" className="btn primary" onClick={resumeBatch}><Icon name="play" size={14} /><span>Resume</span></button>}
+          <button type="button" className="btn" onClick={stopBatch}><Icon name="x" size={14} /><span>Stop</span></button>
+        </div>
+      </footer>
+    )
+  }
+  return (
+    <footer className="or-right-foot">
+      <p className="or-foot-note">{!c ? 'Open or create a campaign' : why ? why : <><b>{willSend}</b> ready to go today{queue.length > willSend ? ` · ${queue.length - willSend} on later days` : ''}</>}</p>
+      <button type="button" className="btn primary or-wide or-send-btn" onClick={() => ui.set({ sheet: 'review-send' })} disabled={!c} data-tip="Check everything once more, then send now or at a time">
+        <Icon name="send" size={15} /><span>{willSend ? `Review & send to ${willSend}` : 'Review & send'}</span>
+      </button>
+    </footer>
   )
 }

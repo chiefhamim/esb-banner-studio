@@ -12,6 +12,7 @@ import { SourcesTab } from './SourcesTab'
 import { OutreachComposer } from './OutreachComposer'
 import { OutreachInspector } from './OutreachInspector'
 import { SenderDialog } from './SenderDialog'
+import { OutreachActivity } from './OutreachActivity'
 import { AskDialog, FollowUpDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
 import { useOutreachStore } from './outreachStore'
 import { ask, useOutreachUi, type LeftTab } from './outreachUi'
@@ -47,7 +48,6 @@ export function OutreachWorkspace() {
   const audience = useMemo(() => s.contacts.filter((x) => inAudience(x, c?.audience)), [s.contacts, c?.audience])
   const ready = useMemo(() => (c ? eligible(s.contacts, c.subject, c.body, c.audience).length : 0), [s.contacts, c])
   const sent = c ? Object.keys(c.sent).length : 0
-  const failures = s.log.filter((l) => l.level === 'error').length
   const totalReplies = s.campaigns.reduce((n, x) => n + Object.keys(x.replied).length, 0)
   const set = s.mail?.settings
   const desktop = !!window.esb?.outreachSend
@@ -58,30 +58,30 @@ export function OutreachWorkspace() {
       { label: 'New campaign', icon: 'plus', disabled: !idle, onClick: () => void s.createCampaign() },
       { label: 'New email to addresses', icon: 'mail', disabled: !idle, onClick: () => void s.createCampaign({ kind: 'direct', name: 'New email', listId: null, sheet: '', blueprint: 'blank', subject: '', body: '' }) },
       { label: 'Duplicate', icon: 'copy', disabled: !c || !idle, onClick: () => c && void s.duplicateCampaign(c.id) },
-      { label: 'Rename…', icon: 'edit', disabled: !c, onClick: () => ui.set({ sheet: 'rename' }) },
+      { label: 'Rename', icon: 'edit', disabled: !c, onClick: () => ui.set({ sheet: 'rename' }) },
       { divider: true },
-      { label: 'Review & send…', icon: 'send', disabled: !c || !idle, onClick: () => ui.set({ sheet: 'review-send' }) },
+      { label: 'Review & send', icon: 'send', disabled: !c || !idle, onClick: () => ui.set({ sheet: 'review-send' }) },
       { label: 'Check the inbox for replies', icon: 'inbox', disabled: !desktop || !s.mail?.hasPassword || s.inbox.state === 'busy', onClick: () => void s.checkInbox(true) },
       { label: 'Export results (CSV)', icon: 'download', disabled: !c || !s.contacts.length, onClick: () => c && downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts)) },
       { divider: true },
       { label: 'Delete campaign', icon: 'trash', danger: true, disabled: !c || !idle, onClick: async () => { if (c && await ask({ title: `Delete “${c.name}”?`, body: 'Its letter, sources and results go with it. Addresses it already emailed stay protected by the 7-day rule.', ok: 'Delete', danger: true })) void s.deleteCampaign(c.id) } },
     ] },
     { label: 'Letter', items: [
-      { label: 'Save as template…', icon: 'filePlus', disabled: !c?.body.trim(), onClick: () => ui.set({ sheet: 'save-template' }) },
-      { label: 'Templates…', icon: 'folder', hint: s.templates.length ? String(s.templates.length) : 'None yet', onClick: () => ui.set({ sheet: 'templates' }) },
-      { label: 'Follow-up letter…', icon: 'refresh', disabled: !c, onClick: () => ui.set({ sheet: 'follow-up' }) },
+      { label: 'Save as template', icon: 'filePlus', disabled: !c?.body.trim(), onClick: () => ui.set({ sheet: 'save-template' }) },
+      { label: 'Templates', icon: 'folder', hint: s.templates.length ? String(s.templates.length) : 'None yet', onClick: () => ui.set({ sheet: 'templates' }) },
+      { label: 'Follow-up letter', icon: 'refresh', disabled: !c, onClick: () => ui.set({ sheet: 'follow-up' }) },
       { divider: true },
-      { label: 'Signatures…', icon: 'edit', onClick: () => ui.set({ sheet: 'signatures' }) },
+      { label: 'Signatures', icon: 'edit', onClick: () => ui.set({ sheet: 'signatures' }) },
       { label: 'ESB letterhead', checked: !!c?.letterhead, disabled: !c, onClick: () => s.patch({ letterhead: !c?.letterhead }) },
-      { label: 'House prompt…', icon: 'sparkle', hint: s.housePrompt ? 'Set' : 'None', onClick: () => ui.set({ sheet: 'prompt' }) },
+      { label: 'House prompt', icon: 'sparkle', hint: s.housePrompt ? 'Set' : 'None', onClick: () => ui.set({ sheet: 'prompt' }) },
     ] },
     { label: 'List', items: [
-      { label: 'Import a list…', icon: 'upload', disabled: !idle, onClick: () => file.current?.click() },
+      { label: 'Import a list', icon: 'upload', disabled: !idle, onClick: () => file.current?.click() },
       ...(s.lists.length ? [{ heading: 'On this computer' }] : []),
       ...s.lists.slice(0, 6).map((l) => ({ label: l.fileName, hint: `${l.sheets.reduce((n, x) => n + x.contacts, 0)} rows`, checked: c?.listId === l.id, disabled: !c || !idle || c.kind === 'direct', onClick: () => void s.useList(l.id) })),
       { divider: true },
       { label: 'Contacts', checked: ui.left === 'contacts', onClick: () => openTab('contacts') },
-      { label: 'Sender account…', icon: 'mail', disabled: !desktop, onClick: () => ui.set({ sheet: 'sender' }) },
+      { label: 'Sender account', icon: 'mail', disabled: !desktop, onClick: () => ui.set({ sheet: 'sender' }) },
     ] },
     { label: 'View', items: [
       { label: 'Contacts', checked: ui.left === 'contacts', onClick: () => openTab('contacts') },
@@ -90,7 +90,6 @@ export function OutreachWorkspace() {
       { divider: true },
       { label: 'Edit the letter', checked: ui.view === 'edit', onClick: () => ui.set({ view: 'edit' }) },
       { label: 'Preview as sent', checked: ui.view === 'preview', onClick: () => ui.set({ view: 'preview' }) },
-      { label: 'Log', checked: ui.showLog, onClick: () => ui.set({ showLog: !ui.showLog }) },
       { divider: true },
       { heading: 'Appearance' },
       { label: 'Light', icon: 'sun', checked: theme !== 'dark', onClick: () => useStore.getState().setTheme('light') },
@@ -100,7 +99,7 @@ export function OutreachWorkspace() {
 
   const smtp = s.smtp
   const smtpOn = !!set && !!s.mail?.hasPassword && smtp.state !== 'bad'
-  const smtpText = !desktop ? 'Desktop app only' : !set ? 'No sender' : !s.mail?.hasPassword ? 'No app password' : smtp.state === 'busy' ? 'Checking…' : smtp.state === 'bad' ? 'Login failed' : smtp.state === 'ok' ? <><span className="sb-text">{set.user}</span><span className="sb-ms">{smtp.ms} ms</span></> : <span className="sb-text">{set.user}</span>
+  const smtpText = !desktop ? 'Desktop app only' : !set ? 'No sender' : !s.mail?.hasPassword ? 'No app password' : smtp.state === 'busy' ? 'Checking' : smtp.state === 'bad' ? 'Login failed' : smtp.state === 'ok' ? <><span className="sb-text">{set.user}</span><span className="sb-ms">{smtp.ms} ms</span></> : <span className="sb-text">{set.user}</span>
 
   return (
     <div className="outreach-workspace">
@@ -116,9 +115,7 @@ export function OutreachWorkspace() {
           </button>
         )}
         <div className="spacer" />
-        <button type="button" className={'pv-btn or-log-btn' + (ui.showLog ? ' on' : '')} aria-pressed={ui.showLog} onClick={() => ui.set({ showLog: !ui.showLog })} data-tip="What the desk did: imports, sends, refusals">
-          <Icon name="activity" size={15} />{s.log.length > 0 && <span className={'or-badge' + (failures ? ' bad' : '')}>{s.log.length}</span>}
-        </button>
+        <OutreachActivity />
         <button type="button" className={'ed-ai-chip' + (letterAi ? ' on' : '') + (ai.paused ? ' paused' : '')} data-provider={letterAi?.provider} onClick={() => ui.set({ sheet: 'ai' })} aria-label="AI keys and roles"
           data-tip={ai.paused ? 'AI is OFF — click to open the AI settings, or turn it ON in the Engine panel' : letterAi ? `Letter, Research and Review AI — ${providerMeta(letterAi.provider).name}. Click to change` : 'Connect an AI to write, research and review letters'}>
           {ai.paused ? <Icon name="power" size={14} /> : letterAi ? <ProviderMark id={letterAi.provider} size={18} /> : <Icon name="link" size={14} />}
@@ -127,25 +124,8 @@ export function OutreachWorkspace() {
         <button type="button" className={'ed-account' + (set ? ' in' : '')} onClick={() => ui.set({ sheet: 'sender' })} disabled={!desktop} aria-label="Sender account" data-tip={set ? `Sending as ${set.name} · ${set.user}` : desktop ? 'Set up the account that sends' : 'Sending needs the desktop app'}>
           {set ? <span className="ed-avatar">{(set.name || set.user).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span> : <><Icon name="mail" size={14} /><span className="ed-account-label">Sender</span></>}
         </button>
-        {idle ? (
-          <button type="button" className="btn primary" onClick={() => ui.set({ sheet: 'review-send' })} disabled={!c} data-tip="Review the campaign and send it now or at a time">
-            <Icon name="send" size={15} /><span>Send</span>
-          </button>
-        ) : (
-          <button type="button" className="btn primary or-running" onClick={() => ui.set({ right: 'send' })} data-tip="The batch is running — see Send">
-            <Icon name="refresh" size={15} className={s.run === 'running' ? 'spin' : ''} /><span>{s.runSent}/{s.runTotal}</span>
-          </button>
-        )}
         <input ref={file} type="file" accept=".xlsx,.csv,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void s.importList(f); e.target.value = '' }} />
       </header>
-
-      {ui.showLog && (
-        <div className="or-log" role="log" aria-label="Outreach log">
-          {s.log.length === 0 ? <p className="or-muted">Nothing yet.</p> : [...s.log].reverse().map((l, i) => (
-            <div key={i} className={'or-log-line ' + l.level}><time>{new Date(l.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><span>{l.text}</span></div>
-          ))}
-        </div>
-      )}
 
       <div className="or-body">
         <aside className="or-left" aria-label="Contacts, campaigns and sources">
@@ -171,7 +151,7 @@ export function OutreachWorkspace() {
           <button type="button" className={'sb-cms or-sb-inbox ' + (s.inbox.state === 'bad' ? 'off' : 'on')} onClick={() => void s.checkInbox(true)}
             data-tip={s.inbox.state === 'bad' ? `${s.inbox.error} — click to try again` : `Replies, unsubscribes and bounces read from ${s.mail.imapHost || 'the inbox'} (read-only). Click to read it now`}>
             <span className="sb-k">Inbox</span>
-            <span className="sb-pill"><i className="sb-dot" aria-hidden />{s.inbox.state === 'busy' ? 'Reading…' : s.inbox.state === 'bad' ? 'Not read' : s.inbox.state === 'ok' ? <span className="sb-text">{totalReplies} repl{totalReplies === 1 ? 'y' : 'ies'} · {new Date(s.inbox.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> : 'Not read yet'}</span>
+            <span className="sb-pill"><i className="sb-dot" aria-hidden />{s.inbox.state === 'busy' ? 'Reading' : s.inbox.state === 'bad' ? 'Not read' : s.inbox.state === 'ok' ? <span className="sb-text">{totalReplies} repl{totalReplies === 1 ? 'y' : 'ies'} · {new Date(s.inbox.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> : 'Not read yet'}</span>
           </button>
         </>}
         <div className="sep" />
