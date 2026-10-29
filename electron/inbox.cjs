@@ -108,7 +108,7 @@ async function readStream(stream, max) {
  * `ledger()` returns the mailer's sends ({t, to, kind, id}); `account()` the saved account with its password
  * decrypted, or null. `ImapFlow` is injected so the tests can stand in for a server.
  */
-function createInbox({ ledger, account, ImapFlow, clock = () => Date.now() }) {
+function createInbox({ ledger, account, ImapFlow, clock = () => Date.now(), onReplyText, isAiReadsReply }) {
   let last = null
   let running = null
 
@@ -168,7 +168,14 @@ function createInbox({ ledger, account, ImapFlow, clock = () => Date.now() }) {
                 if (part) {
                   downloads++
                   const d = await client.download(String(m.uid), part.part || '1', { uid: true, maxBytes: 64_000 })
-                  if (d.content) { const t = await readStream(d.content, 64_000); unsubscribe = asksToUnsubscribe(subject, part.type === 'text/html' ? stripHtml(t) : t) }
+                  if (d.content) {
+                    const t = await readStream(d.content, 64_000);
+                    const plain = part.type === 'text/html' ? stripHtml(t) : t;
+                    unsubscribe = asksToUnsubscribe(subject, plain);
+                    if (onReplyText && (isAiReadsReply ? isAiReadsReply() : false)) {
+                      onReplyText({ email: from, at, subject, ownWords: ownWords(plain).slice(0, 1200) });
+                    }
+                  }
                 }
               }
               replies.push({ email: from, at, subject, auto, unsubscribe })

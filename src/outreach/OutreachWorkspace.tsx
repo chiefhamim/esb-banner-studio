@@ -16,6 +16,7 @@ import { ActivityDesk } from './ActivityDesk'
 import { AutopilotDialog } from './AutopilotDialog'
 import { SegmentsDialog } from './SegmentsDialog'
 import { SubjectVersionsDialog } from './SubjectVersionsDialog'
+import { AssistantDialog } from './AssistantDialog'
 import { OutreachActivity } from './OutreachActivity'
 import { AskDialog, FollowUpDialog, FooterDialog, HeaderDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
 import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore } from './outreachStore'
@@ -96,6 +97,7 @@ export function OutreachWorkspace() {
       { label: 'Review & send', icon: 'send', disabled: !c || !idle, onClick: () => ui.set({ sheet: 'review-send' }) },
       { label: 'Check the inbox for replies', icon: 'inbox', disabled: !desktop || !s.mail?.hasPassword || s.inbox.state === 'busy', onClick: () => void s.checkInbox(true) },
       { label: 'Export results (CSV)', icon: 'download', disabled: !c || !s.contacts.length, onClick: () => c && downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts)) },
+      { label: 'Ask the assistant…', icon: 'sparkle', onClick: () => ui.set({ sheet: 'assistant' }) },
       { label: 'Autopilot settings', icon: 'sliders', onClick: () => ui.set({ sheet: 'autopilot' }) },
       { divider: true },
       { label: 'Delete campaign', icon: 'trash', danger: true, disabled: !c || !idle, onClick: async () => { if (c && await ask({ title: `Delete “${c.name}”?`, body: 'Its letter, sources and results go with it. Addresses it already emailed stay protected by the 7-day rule.', ok: 'Delete', danger: true })) void s.deleteCampaign(c.id) } },
@@ -267,6 +269,7 @@ export function OutreachWorkspace() {
       {ui.sheet === 'templates' && <TemplatesDialog />}
       {ui.sheet === 'segments' && c && <SegmentsDialog onClose={() => ui.set({ sheet: null })} />}
       {ui.sheet === 'subject-versions' && c && <SubjectVersionsDialog onClose={() => ui.set({ sheet: null })} />}
+      {ui.sheet === 'assistant' && <AssistantDialog onClose={() => ui.set({ sheet: null })} />}
       <AskDialog />
     </div>
   )

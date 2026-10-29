@@ -60,7 +60,7 @@ export interface EsbBridge {
   outreachLogEvent?: (e: { type: 'ai.action' | 'note'; text: string; command?: string; status?: string; campaignId?: string }) => Promise<{ ok: boolean }>
   outreachOptOut?: (email: string, on: boolean) => Promise<{ ok: boolean }>
   outreachSyncOptOuts?: (emails: string[]) => Promise<{ ok: boolean; added: number }>
-  outreachReplyTexts?: (emails: string[]) => Promise<{ email: string; text: string }[]>
+  outreachReplyTexts?: (emails: string[]) => Promise<{ email: string; text?: string; ownWords?: string; subject?: string; at?: number }[]>
   onOutreach?: (cb: (m: OutreachPush) => void) => () => void
 }
 

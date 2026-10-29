@@ -195,6 +195,17 @@ function ContactTab() {
         {active.sheet && <><dt>From sheet</dt><dd>{active.sheet.replace(/_/g, ' ')}</dd></>}
         <dt>This campaign</dt><dd>{outside ? 'Outside the audience' : active.status === 'REPLIED' ? `Replied ${active.repliedAt ? fmtWhen(active.repliedAt) : ''}` : active.status === 'BOUNCED' ? `Bounced: ${active.error}` : active.status === 'SENT' ? `Sent ${active.sentAt ? fmtWhen(active.sentAt) : ''}` : active.status === 'FAILED' ? `Failed: ${active.error}` : reason ?? 'Will be sent'}</dd>
         {c && c.sent[active.email] && <><dt>Follow-up</dt><dd>{c.followed[active.email] ? `Sent ${fmtWhen(c.followed[active.email])}` : followUpReason(active, c) ?? 'Due now'}</dd></>}
+        {c?.replyLabels?.[active.email] && (
+          <>
+            <dt>Reply analysis</dt>
+            <dd>
+              <span className={`or-chip cs-${c.replyLabels[active.email].label}`} style={{ marginRight: 6 }}>
+                {c.replyLabels[active.email].label.replace('_', ' ')}
+              </span>
+              <span style={{ fontSize: 12 }}>{c.replyLabels[active.email].summary}</span>
+            </dd>
+          </>
+        )}
       </dl>
       {active.mxStatus !== 'SAFE_TO_SEND' && active.mxStatus !== 'EXCLUDED' && active.mxStatus !== 'UNDELIVERABLE' && c?.kind !== 'direct' && (
         <Switch checked={active.approved} onChange={(v) => s.approve(active.email, v)} label="I checked this address — include it" />

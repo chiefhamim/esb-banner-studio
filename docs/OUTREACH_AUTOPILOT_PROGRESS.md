@@ -2,7 +2,7 @@
 
 > **Branch:** `outreach-autopilot`  
 > **Started:** 2026-10-30  
-> **Status:** Phase 5 Complete (In Progress: Phase 6)
+> **Status:** Phase 6 Complete (In Progress: Phase 7)
 
 ---
 
@@ -83,11 +83,11 @@
 - [x] **5.6 Phase 5 Gate:** Segmented draft & opener verification, 30 desktop screenshots verified.
 
 ### Phase 6 — AI Assistant
-- [ ] **6.1 Command registry (`commands.ts`):** Structured typed command surface.
-- [ ] **6.2 AI Operator (`operator.ts`):** Natural language intent mapping with autonomy levels (`suggest`, `confirm`, `auto-safe`).
-- [ ] **6.3 Assistant dialog (`AssistantDialog.tsx`):** Chat/action command panel.
-- [ ] **6.4 Opt-in reply classification (`replyAi.ts`):** Privacy-conscious reply sorting.
-- [ ] **6.5 Phase 6 Gate:** Assistant autonomy & security audit.
+- [x] **6.1 Command registry (`commands.ts`):** Structured typed command surface.
+- [x] **6.2 AI Operator (`operator.ts`):** Natural language intent mapping with autonomy levels (`suggest`, `confirm`, `auto-safe`).
+- [x] **6.3 Assistant dialog (`AssistantDialog.tsx`):** Chat/action command panel.
+- [x] **6.4 Opt-in reply classification (`replyAi.ts`):** Privacy-conscious reply sorting.
+- [x] **6.5 Phase 6 Gate:** Assistant autonomy & security audit, 30 desktop screenshots verified.
 
 ### Phase 7 — Hardening and handover
 - [ ] **7.1 Soak testing:** 5,000-message dry run.

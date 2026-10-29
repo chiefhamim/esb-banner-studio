@@ -421,7 +421,7 @@ ipcMain.handle('esb:outreach-send', (_e, mail) => outreachMailer().send(mail))
 ipcMain.handle('esb:outreach-verify', (_e, force) => outreachMailer().verify(force === true))
 // replies, unsubscribes and bounces to the desk's own letters, read from the same account's inbox (read-only)
 let inbox = null
-const outreachInbox = () => (inbox ??= require('./inbox.cjs').createInbox({ ledger: () => outreachMailer().ledger(), account: () => outreachMailer().inboxAccount(), ImapFlow: require('imapflow').ImapFlow }))
+const outreachInbox = () => (inbox ??= require('./inbox.cjs').createInbox({ ledger: () => outreachMailer().ledger(), account: () => outreachMailer().inboxAccount(), ImapFlow: require('imapflow').ImapFlow, isAiReadsReply: () => outreachSettings.get().aiReadsReply === true, onReplyText: (entry) => saveReplyText(entry) }))
 ipcMain.handle('esb:outreach-inbox', (_e, force) => outreachInbox().check(force === true))
 
 // --- Outreach Autopilot IPC Handlers (§1.8, Appendix A) ---
@@ -479,9 +479,22 @@ ipcMain.handle('esb:outreach-check-addresses', async (_e, rawDomains) => {
   if (!g.ok) return {}
   return getDnsChecker().checkDomains(g.domains)
 })
+const aiActionTimestamps = []
+
 ipcMain.handle('esb:outreach-log-event', (_e, rawE) => {
   const g = outreachGuard.validateLogEvent(rawE)
   if (!g.ok) return { ok: false, error: g.error }
+  if (g.event.type === 'ai.action') {
+    const now = Date.now()
+    const cutoff = now - 3600000
+    while (aiActionTimestamps.length > 0 && aiActionTimestamps[0] < cutoff) {
+      aiActionTimestamps.shift()
+    }
+    if (aiActionTimestamps.length >= 20) {
+      return { ok: false, error: 'Rate limit exceeded: maximum 20 AI actions per hour' }
+    }
+    aiActionTimestamps.push(now)
+  }
   outreachEvents.append(g.event)
   return { ok: true }
 })
@@ -505,10 +518,39 @@ ipcMain.handle('esb:outreach-sync-opt-outs', (_e, rawEmails) => {
   }
   return { ok: true, added }
 })
+let replyTextsStore = null
+function getReplyTextsFile() { return path.join(userData, 'outreach-reply-texts.json') }
+function loadReplyTexts() {
+  if (replyTextsStore) return replyTextsStore
+  try {
+    const f = getReplyTextsFile()
+    if (fs.existsSync(f)) {
+      replyTextsStore = JSON.parse(fs.readFileSync(f, 'utf8')) || []
+    } else {
+      replyTextsStore = []
+    }
+  } catch {
+    replyTextsStore = []
+  }
+  return replyTextsStore
+}
+function saveReplyText(entry) {
+  const list = loadReplyTexts()
+  const normEmail = String(entry.email || '').toLowerCase().trim()
+  const idx = list.findIndex((x) => x.email === normEmail && x.at === entry.at)
+  const item = { email: normEmail, at: entry.at, subject: String(entry.subject || '').slice(0, 200), ownWords: String(entry.ownWords || '').slice(0, 1200) }
+  if (idx >= 0) { list[idx] = item } else { list.push(item) }
+  if (list.length > 500) { replyTextsStore = list.slice(-500) }
+  try { fs.writeFileSync(getReplyTextsFile(), JSON.stringify(replyTextsStore), 'utf8') } catch {}
+}
+
 ipcMain.handle('esb:outreach-reply-texts', async (_e, rawEmails) => {
   const cfg = outreachSettings.get()
   if (!cfg.aiReadsReply) return []
-  return []
+  if (!Array.isArray(rawEmails)) return []
+  const emails = new Set(rawEmails.filter((e) => typeof e === 'string').map((e) => e.toLowerCase().trim()).slice(0, 50))
+  const list = loadReplyTexts()
+  return list.filter((x) => emails.has(x.email))
 })
 
 // no page in this app may embed a <webview>, and any window not covered above opens nothing

@@ -45,6 +45,13 @@ export function AutopilotCard() {
           <button
             type="button"
             className="or-link-btn"
+            onClick={() => ui.set({ sheet: 'assistant' })}
+          >
+            Ask the assistant…
+          </button>
+          <button
+            type="button"
+            className="or-link-btn"
             onClick={() => ui.set({ sheet: 'autopilot' })}
           >
             Autopilot settings
@@ -117,6 +124,14 @@ export function AutopilotCard() {
             <span>Stop</span>
           </button>
         )}
+
+        <button
+          type="button"
+          className="or-link-btn"
+          onClick={() => ui.set({ sheet: 'assistant' })}
+        >
+          Ask the assistant…
+        </button>
 
         <button
           type="button"
