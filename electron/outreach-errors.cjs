@@ -21,8 +21,8 @@ function classifySendError(err, options = {}) {
   const o = err && typeof err === 'object' ? err : {}
   const rawCode = o.code !== undefined ? String(o.code) : undefined
   const respCode = Number(o.responseCode) || 0
-  const response = String(o.response || o.message || err || '')
-  const text = (o.message ? String(o.message) : response).slice(0, 300)
+  const response = String(o.response || o.message || o.error || (typeof err === 'string' ? err : ''))
+  const text = (o.message ? String(o.message) : (o.error ? String(o.error) : response)).slice(0, 300)
   const lower = response.toLowerCase()
 
   const enhancedMatch = ENHANCED_STATUS_RE.exec(response)
