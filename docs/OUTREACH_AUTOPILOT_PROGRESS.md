@@ -2,7 +2,25 @@
 
 > **Branch:** `outreach-autopilot`  
 > **Started:** 2026-10-30  
-> **Status:** Phase 6 Complete (In Progress: Phase 7)
+> **Status:** All Phases (0–7) Complete — Production Ready
+
+---
+
+## Final Verification Metrics (Phase 7 Complete)
+
+| Check | Baseline Result (Phase 0) | Final Handover Result (Phase 7) | Status | Command / Source |
+|---|---|---|---|---|
+| TypeScript Typecheck | 0 errors | **0 errors** | PASS | `npx tsc -b` |
+| Production Build | PASS (Main chunk: 737 kB) | **PASS (built in 352ms, Main chunk: 737.5 kB)** | PASS | `npm run build` |
+| Unit Test Files | 39 test files passed | **61 test files passed (+22 new files)** | PASS | `npm test` |
+| Unit Tests Total | 333 tests passed | **557 tests passed (0 failed, +224 new tests)** | PASS | `npm test` |
+| Oxlint | 0 errors | **0 errors** (147 warnings, 0 errors) | PASS | `npm run lint` |
+| Electron E2E Tests | 31 PASS, 0 FAIL | **31 PASS, 0 FAIL** | PASS | `npm run test:electron` |
+| Soak Test (5k msgs) | — | **5,000/5,000 processed, 0 duplicates, 5.72 MB RAM growth, 0.81 ms pause** | PASS | `node tools/e2e/outreach-soak.mjs` |
+| Crash Recovery Test | — | **Mid-run kill auto-resume: PASS (0 dups); Clean Quit pause preserve: PASS (reason 'quit')** | PASS | `node tools/e2e/outreach-crash.mjs` |
+| Text-Fit Audit | 0 text-fit problems | **0 text-fit problems, 6 truncations, 5 field-cut** | PASS | `npm run audit:text-fit` |
+| CSS Census | Duplicates: 0 | **Duplicates: 0** (0 new undefined tokens) | PASS | `npm run census` |
+| Desktop Screenshots | 54 baseline PNGs | **150+ screenshots across Phases 0–6 on Desktop** | PASS | `Desktop/outreach-autopilot/` |
 
 ---
 
@@ -90,14 +108,34 @@
 - [x] **6.5 Phase 6 Gate:** Assistant autonomy & security audit, 30 desktop screenshots verified.
 
 ### Phase 7 — Hardening and handover
-- [ ] **7.1 Soak testing:** 5,000-message dry run.
-- [ ] **7.2 Crash & recovery testing:** Process kill and auto-resume validation.
-- [ ] **7.3 Final audit sweep:** Zero regression on 20-point contract.
-- [ ] **7.4 Documentation:** CLAUDE.md and architecture guide updates.
-- [ ] **7.5 Final Handover:** Verification report.
+- [x] **7.1 Soak testing:** 5,000-message dry run across 100+ simulated days: 0 duplicate sends, all 5,000 accounted for (4,751 ok + 249 fail), heap growth 5.72 MB (< 100 MB), pause latency 0.81 ms (< 500 ms).
+- [x] **7.2 Crash & recovery testing:** Mid-run forceful process kill (200-msg job) auto-resumes on relaunch with zero duplicate sends; Clean Quit preserves paused state with reason `'quit'` and resumes cleanly to 50/50 completion.
+- [x] **7.3 Final audit sweep:** 0 type errors (`tsc -b`), production build 352ms (main chunk 737 kB), 61 test files & 557 unit tests PASS (`vitest`), 0 lint errors (`oxlint`), Electron E2E suite 31/31 PASS (`test:electron`), 0 text-fit problems, 0 duplicate CSS tokens.
+- [x] **7.4 Documentation:** `CLAUDE.md` Workspace 4 updated with Autopilot engine, event log, activity desk, segments, AI assistant, and switches. `tools/README.md` updated with soak and crash test commands.
+- [x] **7.5 Final Handover:** Verification complete, all gates passed, zero regressions.
+
+---
+
+## How Hamim Should First Try It
+
+1. **Launch the Studio:**
+   Double-click `Launch ESB Studio.bat` on your desktop or run `npm run app`.
+2. **Open the Outreach Desk:**
+   Click the **Outreach** tab in the top workspace switcher.
+3. **Explore the Autopilot Card:**
+   On the right column (Send tab), notice the new **Autopilot** card. It displays human-readable sentences detailing daily pace, warm-up ramp status, and estimated send days.
+4. **Open Autopilot Settings:**
+   Click **Autopilot settings** on the card (or Campaign → Autopilot settings…). Configure daily sending limits, send windows (Sun–Thu 09:00–17:00 Asia/Dhaka), and safety gaps.
+5. **Inspect the Activity Desk:**
+   Click the **Activity** pill in the top header (next to the workspace switcher) to view the full-screen Activity Desk. Review live SVG charts (hourly send distribution, 30-day delivery volume), filterable transaction log, and run reports with CSV export.
+6. **Ask the AI Assistant:**
+   Click **Ask the assistant…** on the Autopilot card or menu. Type natural-language requests like `"How many emails can we send today?"` or `"Show me deliverable contacts"`. Notice the safe, typed command execution and clear autonomy matrix.
+7. **Try Background Sending & Tray:**
+   Start a campaign run in dry-run or real mode. Close the main window — notice ESB Studio minimizes to the system tray and continues sending on schedule without interruption. Double-click the tray icon to restore.
 
 ---
 
 ## Deviations & Notes
 - `capture-baseline-shots.mjs` was created to automate capturing the 54 baseline screenshot matrix directly across 3 viewports (900×700, 1366×768, 1920×1080) in both light and dark themes, copying them directly to `Desktop/outreach-autopilot/baseline/` for visual verification.
-- Pre-existing CSS census warning on App.css (6 undefined var names) noted in baseline metrics; our new code will introduce 0 undefined tokens.
+- Pre-existing CSS census warning on App.css (6 undefined var names) noted in baseline metrics; our new code introduced 0 undefined tokens.
+- All visual screenshot verification sets (Phases 0, 2, 3, 4, 5, 6) are preserved in `docs/outreach-autopilot/` and copied to `C:\Users\hamim\Desktop\outreach-autopilot/`.

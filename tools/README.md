@@ -2,8 +2,10 @@
 
 | Folder / file | What it is | How to run |
 |---|---|---|
-| `unit/` | Vitest unit tests (picked up by `npm test`) | `npm test` |
+| `unit/` | Vitest unit tests (61 test files, 557 tests, picked up by `npm test`) | `npm test` |
 | `e2e/` | End-to-end runners: real Vite or Electron driven by Playwright | `npm run test:ui`, `test:editorial`, `test:video`, `test:extract`, `test:golden`, `test:electron` (Linux: `ESB_NO_SYNC=1 xvfb-run -a node tools/e2e/electron-test.mjs`) |
+| `e2e/outreach-soak.mjs` | Phase 7.1 Soak Test: 5,000-message dry-run simulation across days (zero duplicates, <100MB RAM, <500ms pause) | `node tools/e2e/outreach-soak.mjs` |
+| `e2e/outreach-crash.mjs` | Phase 7.2 Crash Recovery Test: 200-msg run mid-kill auto-resume & clean quit state preservation | `node tools/e2e/outreach-crash.mjs` |
 | `e2e/web-cases.json` | The nine extra web-banner golden cases | `node tools/e2e/golden-test.mjs "$(cat tools/e2e/web-cases.json)"` |
 | `audit/` | Visual and quality sweeps that report findings rather than pass or fail: centring, text-fit, contrast, a11y, overflow, perf, CSS census | `npm run audit:center`, `audit:text-fit`, `audit:contrast`, `audit:a11y`, `census` |
 | `golden/` | Reference banner PNGs. **Protected brand output: never redraw or re-encode.** | — |

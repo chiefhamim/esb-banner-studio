@@ -205,7 +205,11 @@ function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
     }
 
     if (st.countToday >= maxPerDay) {
-      // Exceeded daily domain count
+      // Exceeded daily domain count - free when resetAt arrives
+      const resetTime = st.resetAt || (now + 24 * 3600 * 1000)
+      if (resetTime < earliestDomainFreeAt) {
+        earliestDomainFreeAt = resetTime
+      }
       continue
     }
 

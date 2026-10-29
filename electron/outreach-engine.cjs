@@ -287,6 +287,7 @@ function createEngine(deps = {}) {
     }
 
     // 5. Pick next message
+    cleanDomainStats(now)
     const msgs = jobs.messages(job.id)
     const sentIndexes = new Set(job.state.sent || [])
     const heldIndexes = new Set(job.state.held || [])
@@ -299,14 +300,24 @@ function createEngine(deps = {}) {
     })
 
     if (!pick) {
-      // Check if there are un-sent held messages
+      // Check if there are un-sent messages
       const remainingUnsent = msgs.length - sentIndexes.size
-      if (remainingUnsent > 0 && heldIndexes.size > 0) {
+      if (remainingUnsent > 0) {
+        if (heldIndexes.size > 0 && remainingUnsent === heldIndexes.size) {
+          job.status = 'waiting'
+          job.why = 'held'
+          job.until = null
+          jobs.saveState(job)
+          pushProgress(job)
+          return
+        }
+        // Messages remain queued (e.g. waiting for domain reset or retry)
         job.status = 'waiting'
-        job.why = 'held'
-        job.until = null
+        job.why = 'domain'
+        job.until = now + 60000
         jobs.saveState(job)
         pushProgress(job)
+        activeTimer = setTimer(tick, Math.max(1000, Math.round(60000 / speed)))
         return
       }
 
@@ -398,7 +409,7 @@ function createEngine(deps = {}) {
 
     if (job.dry || dryRun) {
       // Dry-run simulated send
-      await new Promise((r) => setTimeout(r, Math.max(20, Math.round((50 + rnd() * 150) / speed))))
+      await new Promise((r) => setTimeout(r, Math.max(1, Math.round((50 + rnd() * 150) / speed))))
       if (failRate > 0 && rnd() < failRate) {
         sendResult = { ok: false, error: '550 5.1.1 User unknown', kind: 'recipient_permanent' }
       } else {

@@ -206,10 +206,11 @@ function createEventLog(options = {}) {
 
     // If query requires older events than what is in recentEvents, we can scan files
     let sourceEvents = recentEvents
-    if (from && recentEvents.length > 0 && from < recentEvents[0].t) {
+    if ((from !== undefined && recentEvents.length > 0 && from < recentEvents[0].t) || from === 0) {
       // Need older events: load all available events
       const all = []
-      for (const mf of monthFiles) {
+      const mFiles = listMonthFiles()
+      for (const mf of mFiles) {
         all.push(...readLinesFromFile(mf.file))
       }
       all.sort((a, b) => (a.t || 0) - (b.t || 0))

@@ -135,7 +135,7 @@ export function SegmentsDialog({ onClose }: SegmentsDialogProps) {
   }
 
   // Reset to using the main letter
-  const useMainLetter = (segKey: string) => {
+  const revertToMainLetter = (segKey: string) => {
     const updated = { ...variants }
     delete updated[segKey]
     s.patch({ variants: updated })
@@ -331,7 +331,7 @@ export function SegmentsDialog({ onClose }: SegmentsDialogProps) {
                         <button
                           type="button"
                           className="btn sm"
-                          onClick={() => useMainLetter(seg.key)}
+                          onClick={() => revertToMainLetter(seg.key)}
                           title="Revert back to using the main letter for this sector"
                         >
                           <span>Use main letter</span>
