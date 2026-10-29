@@ -290,11 +290,13 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
         ...(gate.inReplyTo ? { inReplyTo: gate.inReplyTo, references: [gate.inReplyTo] } : {}),
       })
       l.push({ t: clock(), to: mail.to, kind: mail.isTest ? 'test' : mail.followUp ? 'followup' : 'campaign', id: String(info.messageId || '') })
-      write(ledgerFile, l.filter((e) => clock() - e.t < 30 * DAY).slice(-5000))
+      write(ledgerFile, l.filter((e) => clock() - e.t < 45 * DAY).slice(-60000))
       return { ok: true, messageId: info.messageId, sent24h: status().sent24h }
     } catch (e) {
       // the server's answer, without the account password (nodemailer does not echo it, but never risk it)
-      return { ok: false, error: String(e && e.message || e).slice(0, 300) }
+      const errText = String(e && e.message || e).slice(0, 300)
+      const classified = require('./outreach-errors.cjs').classifySendError(e)
+      return { ok: false, error: errText, kind: classified.kind, scope: classified.scope, code: classified.code }
     }
   }
 
