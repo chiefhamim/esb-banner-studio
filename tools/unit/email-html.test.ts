@@ -93,4 +93,21 @@ describe('email-html: the only HTML a recipient gets', () => {
     const { html } = renderEmail({ body: 'x', officialPad: true, headerBg: '#112233' })
     expect(html).not.toContain('background:#112233')
   })
+  it('footer background: a valid hex is used and the footer text switches to white on a dark pick', () => {
+    const dark = renderEmail({ body: 'x', letterhead: true, footerLine: 'Dear reader', footerBg: '#111111' }).html
+    expect(dark).toContain('background:#111111')
+    expect(dark).toMatch(/color:#ffffff[^>]*background:#111111|background:#111111[^>]*color:#ffffff/)
+    const light = renderEmail({ body: 'x', letterhead: true, footerLine: 'Dear reader', footerBg: '#ffffcc' }).html
+    expect(light).toContain('color:#1f2937') // BRAND.ink — readable on a light pick
+  })
+  it('footer background: an invalid value never reaches the style attribute', () => {
+    const { html } = renderEmail({ body: 'x', letterhead: true, footerLine: 'x', footerBg: 'red; } body { display:none' })
+    expect(html).not.toContain('background:red')
+  })
+  it('stripe colours: each bar can be overridden independently, a blank or invalid bar keeps its own default', () => {
+    const { html } = renderEmail({ body: 'x', letterhead: true, stripeColors: '#111111,,not-a-hex' })
+    expect(html).toContain('background:#111111')
+    expect(html).toContain('background:#e52d2d') // the default red, untouched
+    expect(html).toContain('background:#ec8e3c') // the default orange, untouched
+  })
 })

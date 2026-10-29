@@ -47,7 +47,8 @@ export function mailFor(contact: Contact, c: Campaign): Omit<EsbOutreachMail, 't
   const st = useOutreachStore.getState()
   return {
     subject: m.subject, body: m.body, optOut: m.optOut, signature: signatureOf(c), lang: c.lang, letterhead: c.letterhead,
-    officialPad: c.officialPad, footerLine: st.footerLine, headerBg: st.headerBg, fontFamily: st.fontFamily,
+    officialPad: c.officialPad, footerLine: st.footerLine, fontFamily: st.fontFamily,
+    headerBg: st.headerBg, footerBg: st.footerBg, stripeColors: st.stripeColors,
   }
 }
 

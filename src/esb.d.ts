@@ -90,6 +90,11 @@ export interface EsbOutreachMail {
   footerLine?: string
   /** The plain letterhead header's background, #rrggbb — an invalid value is dropped, never inserted as given. */
   headerBg?: string
+  /** The plain letterhead footer's own background, #rrggbb — same rule as headerBg. */
+  footerBg?: string
+  /** The three bars above the header and below the footer, "#rrggbb,#rrggbb,#rrggbb" — a bar that is blank or not a
+   *  real hex keeps its own default colour. */
+  stripeColors?: string
   /** An id into EMAIL_FONTS — an unknown id falls back to the default, never passed through as written. */
   fontFamily?: string
   attachments?: { name: string; dataUrl: string }[]

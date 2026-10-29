@@ -99,9 +99,11 @@ function validateMail(m) {
   // undefined/null (an older caller, or a test) means "not specified" → the usual default; the renderer always sends
   // its own current text, including a deliberate '' once the editor has cleared it
   const footerLine = o.footerLine == null ? DEFAULT_FOOTER_LINE : oneLine(o.footerLine, 300)
-  // headerBg/fontFamily are re-checked inside renderEmail itself (a hex regex, an allowlist lookup) — this is only
-  // the ordinary length/type bound every free-text field gets here
+  // headerBg/footerBg/stripeColors/fontFamily are re-checked inside renderEmail itself (a hex regex, an allowlist
+  // lookup) — this is only the ordinary length/type bound every free-text field gets here
   const headerBg = oneLine(o.headerBg, 20)
+  const footerBg = oneLine(o.footerBg, 20)
+  const stripeColors = oneLine(o.stripeColors, 24)
   const fontFamily = oneLine(o.fontFamily, 20)
   const lang = o.lang === 'bn' ? 'bn' : 'en'
   const list = Array.isArray(o.attachments) ? o.attachments : []
@@ -109,7 +111,7 @@ function validateMail(m) {
   const attachments = list.map(attachmentFrom)
   const bytes = attachments.reduce((n, a) => n + a.content.length, 0)
   if (bytes > MAX_ATTACH_BYTES) throw new Error('Attachments are over 18 MB together — Gmail would refuse the message')
-  return { to: to.toLowerCase(), subject, body, signature, optOut, footerLine, headerBg, fontFamily, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
+  return { to: to.toLowerCase(), subject, body, signature, optOut, footerLine, headerBg, footerBg, stripeColors, fontFamily, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
 }
 
 /** May this send go now? Reads the ledger of earlier sends. */
@@ -263,7 +265,7 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
       const { html, text } = renderEmail({
         body: mail.body, signature: mail.signature, optOut: mail.optOut, lang: mail.lang, letterhead: mail.letterhead,
         logoSrc: 'cid:esb-logo', officialPad: mail.officialPad, sidebarSrc: 'cid:esb-pad-sidebar', qrSrc: 'cid:esb-pad-qr',
-        footerLine: mail.footerLine, headerBg: mail.headerBg, fontFamily: mail.fontFamily,
+        footerLine: mail.footerLine, headerBg: mail.headerBg, footerBg: mail.footerBg, stripeColors: mail.stripeColors, fontFamily: mail.fontFamily,
       })
       // every pad/letterhead image travels inside the message (cid:), never as a link to a server; the QR is built
       // fresh from PAD_VCARD above, not read off the printed pad

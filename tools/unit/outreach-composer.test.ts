@@ -2,7 +2,7 @@
 // softBreakOnEnter: Gmail's own rule for the desk's plain-text-with-marks editors — Enter alone starts a new
 // paragraph (blank line, which blocksToHtml reads as a paragraph break), Shift+Enter breaks the line within one.
 import { describe, expect, it, vi } from 'vitest'
-import { softBreakOnEnter } from '../../src/outreach/compose'
+import { applyMark, softBreakOnEnter } from '../../src/outreach/compose'
 
 function fire(value: string, pos: number, shiftKey: boolean) {
   const el = document.createElement('textarea')
@@ -29,5 +29,24 @@ describe('softBreakOnEnter', () => {
   it('does not double the blank line when the cursor already sits at one', () => {
     const { next } = fire('Dear {name}\n\n', 13, false)
     expect(next).toBe('Dear {name}\n\n\n') // one more "\n" completes the blank line, not two
+  })
+})
+
+describe('applyMark — shared by the body toolbar and the Footer dialog\'s own', () => {
+  it('centres the selected line(s) with "-> ", and toggles it back off', () => {
+    const [once] = applyMark('Dear Sir', 0, 8, 'center')
+    expect(once).toBe('-> Dear Sir')
+    const [twice] = applyMark(once, 0, once.length, 'center')
+    expect(twice).toBe('Dear Sir') // the same button removes the mark it just added
+  })
+  it('wraps a selection in bold/italic, with a sensible placeholder when nothing is selected', () => {
+    const [bold] = applyMark('Dear Sir', 0, 8, 'bold')
+    expect(bold).toBe('**Dear Sir**')
+    const [placeholder] = applyMark('', 0, 0, 'bold')
+    expect(placeholder).toBe('**bold words**')
+  })
+  it('a link wraps the selection and appends the given URL', () => {
+    const [link] = applyMark('click here', 0, 10, 'link', 'https://esbpowerline.com')
+    expect(link).toBe('[click here](https://esbpowerline.com)')
   })
 })

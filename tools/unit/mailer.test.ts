@@ -135,6 +135,19 @@ describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on eve
     await mailer.send({ to: 'c@example.com', subject: 'S', body: 'B', letterhead: true, footerLine: '**ESB Desk**' })
     expect(String(sent[2].html)).toContain('<strong>ESB Desk</strong>')
   })
+  it('header/footer background and stripe colours reach the real send, invalid ones are dropped', async () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
+    mailer.saveSettings(settings, 'abcdefghijklmnop')
+    await mailer.send({ to: 'a@example.com', subject: 'S', body: 'B', letterhead: true, headerBg: '#223344', footerBg: '#112233', stripeColors: '#aa0000,,#00aa00' })
+    const html = String(sent[0].html)
+    expect(html).toContain('background:#223344')
+    expect(html).toContain('background:#112233')
+    expect(html).toContain('background:#aa0000')
+    expect(html).toContain('background:#00aa00')
+    now += 60e3
+    await mailer.send({ to: 'b@example.com', subject: 'S', body: 'B', letterhead: true, headerBg: 'not-a-hex' })
+    expect(String(sent[1].html)).not.toContain('background:not-a-hex')
+  })
   it('official pad: logo, the real sidebar artwork and a freshly generated QR all ride inline as cid attachments', async () => {
     const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
     mailer.saveSettings(settings, 'abcdefghijklmnop')

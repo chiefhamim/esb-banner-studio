@@ -37,6 +37,12 @@ interface Saved {
   footerLine: string
   /** The plain letterhead header's background — a #rrggbb colour, or '' for white. Ignored for the official pad. */
   headerBg: string
+  /** The plain letterhead footer's own background — a #rrggbb colour, or '' for white. The footer's text switches
+   *  to black or white on its own so a dark pick never leaves it unreadable. Ignored for the official pad. */
+  footerBg: string
+  /** The three bars above the header and below the footer — "#rrggbb,#rrggbb,#rrggbb", or '' for ESB's own green,
+   *  red, orange. A bar left blank keeps its default colour rather than going blank. */
+  stripeColors: string
   /** An id into EMAIL_FONTS (emailRender.ts) — a fixed list of fonts that render as themselves across mail clients,
    *  not "whatever is installed on this PC", which has no effect on what a recipient's own client renders. */
   fontFamily: string
@@ -78,7 +84,7 @@ export function normalize(c: Campaign): Campaign {
 
 function load(): Saved {
   try { localStorage.removeItem(LEGACY_CONFIG) } catch { /* storage blocked */ }
-  const base: Saved = { campaigns: [], activeId: null, lists: [], approved: [], optOut: [], signatures: [DEFAULT_SIGNATURE], templates: [], housePrompt: '', footerLine: DEFAULT_FOOTER_LINE, headerBg: '', fontFamily: DEFAULT_FONT_FAMILY, bouncedAddrs: {} }
+  const base: Saved = { campaigns: [], activeId: null, lists: [], approved: [], optOut: [], signatures: [DEFAULT_SIGNATURE], templates: [], housePrompt: '', footerLine: DEFAULT_FOOTER_LINE, headerBg: '', footerBg: '', stripeColors: '', fontFamily: DEFAULT_FONT_FAMILY, bouncedAddrs: {} }
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null') as Partial<Saved> | null
     if (s) return { ...base, ...s, campaigns: (s.campaigns ?? []).map(normalize), signatures: s.signatures?.length ? s.signatures : base.signatures }
@@ -159,6 +165,8 @@ interface OutreachState extends Saved {
   setHousePrompt: (p: string) => void
   setFooterLine: (line: string) => void
   setHeaderBg: (hex: string) => void
+  setFooterBg: (hex: string) => void
+  setStripeColors: (csv: string) => void
   setFontFamily: (id: string) => void
   setRun: (r: RunState, extra?: Partial<Pick<OutreachState, 'nextAt' | 'runSent' | 'runTotal'>>) => void
   setNextAt: (t: number | null) => void
@@ -199,7 +207,7 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
   const saved = load()
   const persist = () => {
     const s = get()
-    save({ campaigns: s.campaigns, activeId: s.activeId, lists: s.lists, approved: s.approved, optOut: s.optOut, signatures: s.signatures, templates: s.templates, housePrompt: s.housePrompt, footerLine: s.footerLine, headerBg: s.headerBg, fontFamily: s.fontFamily, bouncedAddrs: s.bouncedAddrs })
+    save({ campaigns: s.campaigns, activeId: s.activeId, lists: s.lists, approved: s.approved, optOut: s.optOut, signatures: s.signatures, templates: s.templates, housePrompt: s.housePrompt, footerLine: s.footerLine, headerBg: s.headerBg, footerBg: s.footerBg, stripeColors: s.stripeColors, fontFamily: s.fontFamily, bouncedAddrs: s.bouncedAddrs })
   }
   const relay = () => set({ contacts: overlay(get().contacts, get(), get().campaign(), get().mail) })
   const patchCampaign = (id: string, p: Partial<Campaign>) => {
@@ -428,6 +436,8 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     setHousePrompt: (housePrompt) => { set({ housePrompt }); persist() },
     setFooterLine: (line) => { set({ footerLine: line.trim() }); persist() },
     setHeaderBg: (hex) => { set({ headerBg: hex }); persist() },
+    setFooterBg: (hex) => { set({ footerBg: hex }); persist() },
+    setStripeColors: (csv) => { set({ stripeColors: csv }); persist() },
     setFontFamily: (id) => { set({ fontFamily: id }); persist() },
 
     setRun: (run, extra = {}) => set({ run, ...extra, ...(run === 'idle' ? { nextAt: null, current: null } : {}) }),

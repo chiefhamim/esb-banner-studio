@@ -7,6 +7,27 @@
 import type { Contact, OutreachLang } from './types'
 import type { KeyboardEvent } from 'react'
 
+/** Wrap the selection in a mark, or prefix each selected line; returns the new text and selection. Shared by every
+ *  editor on the desk (the body toolbar, and the Footer dialog's own) so a mark reads identically wherever it was
+ *  typed — there is one parser (electron/email-html.mjs) and it must never see two dialects of the same mark. */
+export function applyMark(text: string, a: number, b: number, kind: string, url = ''): [string, number, number] {
+  const sel = text.slice(a, b)
+  const wrap = (l: string, r: string, empty: string) => { const inner = sel || empty; return [text.slice(0, a) + l + inner + r + text.slice(b), a + l.length, a + l.length + inner.length] as [string, number, number] }
+  if (kind === 'bold') return wrap('**', '**', 'bold words')
+  if (kind === 'italic') return wrap('*', '*', 'words')
+  if (kind === 'link') return wrap('[', `](${url})`, 'link words')
+  if (kind === 'rule') { const ins = `${a && text[a - 1] !== '\n' ? '\n\n' : ''}---\n\n`; return [text.slice(0, a) + ins + text.slice(b), a + ins.length, a + ins.length] }
+  // line marks: from the start of the first selected line to the end of the last
+  const s0 = text.lastIndexOf('\n', a - 1) + 1
+  const e0 = (() => { const i = text.indexOf('\n', b); return i < 0 ? text.length : i })()
+  const lines = text.slice(s0, e0).split('\n')
+  const pre = (i: number) => (kind === 'heading' ? '## ' : kind === 'bullet' ? '- ' : kind === 'number' ? `${i + 1}. ` : kind === 'center' ? '-> ' : '> ')
+  const strip = (l: string) => l.replace(/^(#{2,3}\s+|[-•]\s+|\d+[.)]\s+|->\s+|>\s?)/, '')
+  const all = lines.every((l) => l.startsWith(pre(0).trim()) || (kind === 'number' && /^\d+[.)]\s/.test(l)))
+  const out = lines.map((l, i) => (all ? strip(l) : pre(i) + strip(l))).join('\n')
+  return [text.slice(0, s0) + out + text.slice(e0), s0, s0 + out.length]
+}
+
 /** Gmail's own rule, so the plain-marks model (blank line = new paragraph) matches how the editor actually types:
  *  Enter alone starts a new paragraph; Shift+Enter is a line break within the one they're on. A bare textarea makes
  *  no such distinction — both keys insert one "\n" — so the desk's editors intercept Enter themselves. */

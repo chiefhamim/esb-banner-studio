@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOutreachStore } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { OUTREACH_BLUEPRINTS, REWRITES, rewriteLetter, suggestBlueprint, writeOutreachWithAi, type LetterContext, type RewriteAction } from './outreachAi'
-import { PLACEHOLDERS, buildMessage, mentionsAttachment, missingFields, softBreakOnEnter } from './compose'
+import { PLACEHOLDERS, applyMark, buildMessage, mentionsAttachment, missingFields, softBreakOnEnter } from './compose'
 import { eligible, inAudience, signatureOf, STAND_IN } from './campaign'
 import { logoDataUrl, padQrDataUrl, padSidebarDataUrl, renderEmail, withViewerMargin } from './emailRender'
 import { AttachmentTray } from './AttachmentTray'
@@ -21,24 +21,6 @@ import type { OutreachLang } from './types'
 const SUBJECT_MAX = 70
 const EMAIL = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[a-z]{2,}$/i
 
-/** Wrap the selection in a mark, or prefix each selected line; returns the new text and selection. */
-function applyMark(text: string, a: number, b: number, kind: string, url = ''): [string, number, number] {
-  const sel = text.slice(a, b)
-  const wrap = (l: string, r: string, empty: string) => { const inner = sel || empty; return [text.slice(0, a) + l + inner + r + text.slice(b), a + l.length, a + l.length + inner.length] as [string, number, number] }
-  if (kind === 'bold') return wrap('**', '**', 'bold words')
-  if (kind === 'italic') return wrap('*', '*', 'words')
-  if (kind === 'link') return wrap('[', `](${url})`, 'link words')
-  if (kind === 'rule') { const ins = `${a && text[a - 1] !== '\n' ? '\n\n' : ''}---\n\n`; return [text.slice(0, a) + ins + text.slice(b), a + ins.length, a + ins.length] }
-  // line marks: from the start of the first selected line to the end of the last
-  const s0 = text.lastIndexOf('\n', a - 1) + 1
-  const e0 = (() => { const i = text.indexOf('\n', b); return i < 0 ? text.length : i })()
-  const lines = text.slice(s0, e0).split('\n')
-  const pre = (i: number) => (kind === 'heading' ? '## ' : kind === 'bullet' ? '- ' : kind === 'number' ? `${i + 1}. ` : kind === 'center' ? '-> ' : '> ')
-  const strip = (l: string) => l.replace(/^(#{2,3}\s+|[-•]\s+|\d+[.)]\s+|->\s+|>\s?)/, '')
-  const all = lines.every((l) => l.startsWith(pre(0).trim()) || (kind === 'number' && /^\d+[.)]\s/.test(l)))
-  const out = lines.map((l, i) => (all ? strip(l) : pre(i) + strip(l))).join('\n')
-  return [text.slice(0, s0) + out + text.slice(e0), s0, s0 + out.length]
-}
 
 const TOOLS: { kind: string; icon: IconName; tip: string }[] = [
   { kind: 'bold', icon: 'bold', tip: 'Bold (Ctrl+B)' },
@@ -84,11 +66,11 @@ export function OutreachComposer() {
       who, subject: m.subject,
       html: withViewerMargin(renderEmail({
         body: m.body, signature: signatureOf(c), optOut: m.optOut, lang: c.lang, letterhead: c.letterhead, logoSrc: logo,
-        officialPad: c.officialPad, sidebarSrc: padSidebar, qrSrc: padQr, footerLine: s.footerLine,
-        headerBg: s.headerBg, fontFamily: s.fontFamily,
+        officialPad: c.officialPad, sidebarSrc: padSidebar, qrSrc: padQr, footerLine: s.footerLine, fontFamily: s.fontFamily,
+        headerBg: s.headerBg, footerBg: s.footerBg, stripeColors: s.stripeColors,
       }).html, c.letterhead, c.officialPad),
     }
-  }, [c, active, ui.view, logo, padSidebar, padQr, s.footerLine, s.headerBg, s.fontFamily, s.signatures]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [c, active, ui.view, logo, padSidebar, padQr, s.footerLine, s.headerBg, s.footerBg, s.stripeColors, s.fontFamily, s.signatures]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!c) {
     return (

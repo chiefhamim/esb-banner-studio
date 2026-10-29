@@ -113,9 +113,12 @@ function padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc }) {
  * `officialPad` (takes priority over `letterhead` — one chrome, never both stacked) wraps the letter in the full
  * gold-rail pad frame instead, see `padFrame`. `logoSrc`/`sidebarSrc`/`qrSrc` are "cid:esb-…" when sending and the
  * bundled image URL / a generated data URL in the preview. `fontFamily` is an id into EMAIL_FONTS (an unknown id
- * falls back to the default, never passed through as written); `headerBg` is a #rrggbb colour for the plain
- * letterhead's header block (ignored for official pad, which keeps its own gold rail) — an invalid value is dropped,
- * never inserted into the style attribute as given.
+ * falls back to the default, never passed through as written); `headerBg`/`footerBg` are #rrggbb colours for the
+ * plain letterhead's header and footer blocks (ignored for official pad, which keeps its own gold rail) — an invalid
+ * value is dropped, never inserted into the style attribute as given; the footer's own text switches to black or
+ * white automatically so a dark footerBg never leaves its text unreadable. `stripeColors` is "#rrggbb,#rrggbb,#rrggbb"
+ * for the three bars above the header and below the footer — a bar left blank or not a real hex keeps DEFAULT_STRIPES'
+ * colour for that bar.
  */
 // The plain letterhead's default footer line, in the letter's own marks ([text](https://link)) — the editor's own
 // text once they open Letter → Footer text, never hardcoded again after the first version had to be asked each
@@ -136,26 +139,42 @@ export const EMAIL_FONTS = [
   { id: 'courier', label: 'Courier New (monospace)', stack: "'Courier New',Courier,monospace" },
 ]
 const HEX_COLOR = /^#[0-9a-f]{6}$/i
+// the three bars above the header and below the footer — a fixed default, overridable per campaign
+export const DEFAULT_STRIPES = [BRAND.green, BRAND.red, BRAND.orange]
+
+/** Black or white, whichever reads on the given background — so a footer background the editor picks dark does not
+ *  also leave its own text unreadably grey; '' (no custom background) keeps the ordinary muted grey. */
+function textOn(hex) {
+  if (!HEX_COLOR.test(String(hex))) return ''
+  const n = parseInt(hex.slice(1), 16)
+  const yiq = (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000
+  return yiq >= 150 ? BRAND.ink : '#ffffff'
+}
 
 export function renderEmail({
   body, signature = '', optOut = '', lang = 'en', letterhead = false, logoSrc = 'cid:esb-logo',
   officialPad = false, sidebarSrc = 'cid:esb-pad-sidebar', qrSrc = 'cid:esb-pad-qr', footerLine = DEFAULT_FOOTER_LINE,
-  fontFamily = 'sans', headerBg = '',
+  fontFamily = 'sans', headerBg = '', footerBg = '', stripeColors = '',
 }) {
   // Bengali always keeps its own script font regardless of the Latin choice — substituting one of the picks above
   // for Bengali text would render as tofu in most clients, which have no Bengali glyphs in Georgia or Courier New.
   const latin = (EMAIL_FONTS.find((f) => f.id === fontFamily) ?? EMAIL_FONTS[0]).stack
   const font = lang === 'bn' ? "'Hind Siliguri','Noto Sans Bengali','Nirmala UI',Arial,sans-serif" : latin
   const headBg = HEX_COLOR.test(String(headerBg)) ? headerBg : ''
+  const footBg = HEX_COLOR.test(String(footerBg)) ? footerBg : ''
+  const footInk = textOn(footBg) || BRAND.muted
+  // one colour per bar; a bar whose value is missing or not a real hex keeps its own default rather than going blank
+  const given = String(stripeColors).split(',').map((s) => s.trim())
+  const bars = DEFAULT_STRIPES.map((def, i) => (HEX_COLOR.test(given[i]) ? given[i] : def))
   const sig = String(signature).trim()
   const foundation = String(footerLine).trim()
-  const stripes = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>${[BRAND.green, BRAND.red, BRAND.orange].map((c) => `<td style="height:4px;background:${c};font-size:0;line-height:0">&nbsp;</td>`).join('')}</tr></table>`
+  const stripes = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>${bars.map((c) => `<td style="height:4px;background:${c};font-size:0;line-height:0">&nbsp;</td>`).join('')}</tr></table>`
   const chrome = letterhead && !officialPad
   const head = chrome
     ? `${stripes}<div style="padding:20px 28px 8px${headBg ? `;background:${headBg}` : ''}"><img src="${escapeHtml(logoSrc)}" width="150" alt="ESB PowerLine" style="display:block;width:150px;height:auto;border:0"></div>`
     : ''
   const foot = chrome && foundation
-    ? `<div style="padding:14px 28px 22px;color:${BRAND.muted};font-size:12px;line-height:1.5;border-top:1px solid ${BRAND.line}">${inline(escapeHtml(foundation))}</div>${stripes}`
+    ? `<div style="padding:14px 28px 22px;color:${footInk};font-size:12px;line-height:1.5;border-top:1px solid ${BRAND.line}${footBg ? `;background:${footBg}` : ''}">${inline(escapeHtml(foundation))}</div>${stripes}`
     : chrome ? stripes : ''
   const inner = `${blocksToHtml(body, font)}`
     + (sig ? `<div style="margin:18px 0 0;color:#374151">${blocksToHtml(sig, font)}</div>` : '')

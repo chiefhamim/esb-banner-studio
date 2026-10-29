@@ -1,18 +1,17 @@
 // The desk's sheets: signatures, the house prompt every AI job follows, a name (rename / save as template) and
 // Review & send — the last look before a batch starts, now or at a time.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore, uid } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { cannotStart, eligible, followUpLetter, followUpQueue, inAudience, signatureOf, startBatch } from './campaign'
-import { skipReason, softBreakOnEnter } from './compose'
+import { applyMark, skipReason, softBreakOnEnter } from './compose'
 import { letterChecks } from './checks'
 import { OUTREACH_BLUEPRINTS, rewriteLetter } from './outreachAi'
 import { aiFor, aiPaused } from '../editorial/aiProviders'
-import { EMAIL_FONTS, logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
+import { DEFAULT_STRIPES, EMAIL_FONTS, logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
 import { Dialog, Field, Select, Switch } from '../ui/controls'
-import { Icon } from '../ui/Icon'
-import { useEffect } from 'react'
+import { Icon, type IconName } from '../ui/Icon'
 
 export function SignaturesDialog() {
   const s = useOutreachStore()
@@ -57,29 +56,73 @@ export function SignaturesDialog() {
   )
 }
 
+const FOOTER_TOOLS: { kind: string; icon: IconName; tip: string }[] = [
+  { kind: 'bold', icon: 'bold', tip: 'Bold' },
+  { kind: 'italic', icon: 'italic', tip: 'Italic' },
+  { kind: 'center', icon: 'alignTextCenter', tip: 'Centre this line' },
+  { kind: 'link', icon: 'link', tip: 'Link — https or mailto only' },
+]
+
 export function FooterDialog() {
   const s = useOutreachStore()
   const ui = useOutreachUi()
   const [text, setText] = useState(s.footerLine)
+  const [useBg, setUseBg] = useState(!!s.footerBg)
+  const [hex, setHex] = useState(s.footerBg || '#fff7e6')
   const [logo, setLogo] = useState('')
+  const ref = useRef<HTMLTextAreaElement>(null)
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
   const close = () => ui.set({ sheet: null })
-  const html = useMemo(() => renderEmail({ body: 'Dear Sir/Madam,\n\n…', letterhead: true, logoSrc: logo, footerLine: text, headerBg: s.headerBg, fontFamily: s.fontFamily }).html, [text, logo, s.headerBg, s.fontFamily])
+  const html = useMemo(() => renderEmail({
+    body: 'Dear Sir/Madam,\n\n…', letterhead: true, logoSrc: logo, footerLine: text, fontFamily: s.fontFamily,
+    headerBg: s.headerBg, footerBg: useBg ? hex : '', stripeColors: s.stripeColors,
+  }).html, [text, logo, s.headerBg, useBg, hex, s.stripeColors, s.fontFamily])
+  const mark = async (kind: string) => {
+    const el = ref.current
+    if (!el) return
+    const a0 = el.selectionStart, b0 = el.selectionEnd
+    let url = ''
+    if (kind === 'link') {
+      const v = await ask({ title: 'Add a link', input: { label: 'Link — https:// or mailto: only', value: 'https://', pattern: /^(https:\/\/\S+\.\S+|mailto:\S+@\S+)$/i }, ok: 'Add link' })
+      if (typeof v !== 'string') return
+      url = v.trim()
+    }
+    const [t, a, b] = applyMark(text, a0, b0, kind, url)
+    setText(t)
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a, b) })
+  }
+  const save = () => {
+    s.setFooterLine(text)
+    s.setFooterBg(useBg ? hex : '')
+    s.addLog('info', text.trim() ? 'Footer text saved' : 'Footer text cleared')
+    close()
+  }
   return (
     <Dialog title="Footer text" kicker="OUTREACH" width={760} onClose={close} footer={<>
-      <button type="button" className="btn" onClick={() => setText(DEFAULT_FOOTER_LINE)} disabled={text === DEFAULT_FOOTER_LINE}>Reset to default</button>
+      <button type="button" className="btn" onClick={() => { setText(DEFAULT_FOOTER_LINE); setUseBg(false) }} disabled={text === DEFAULT_FOOTER_LINE && !useBg}>Reset to default</button>
       <div className="spacer" />
       <button type="button" className="btn" onClick={close}>Cancel</button>
-      <button type="button" className="btn primary" onClick={() => { s.setFooterLine(text); s.addLog('info', text.trim() ? 'Footer text saved' : 'Footer text cleared'); close() }}>Save</button>
+      <button type="button" className="btn primary" onClick={save}>Save</button>
     </>}>
       <div className="stack" style={{ gap: 10 }}>
-        <p className="hint">The line under the plain ESB letterhead (Letter → "ESB letterhead", not the official pad, which has its own fuller footer). Your own words — nothing here is fixed. Same marks as the letter body: **bold**, [a link](https://esbpowerline.com), and start a line with "-&gt; " to centre it. Leave it empty for no footer line at all, just the brand stripes.</p>
-        <textarea className="input" rows={3} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => softBreakOnEnter(e, text, setText)} placeholder={DEFAULT_FOOTER_LINE} />
+        <p className="hint">The line under the plain ESB letterhead (Letter → "ESB letterhead", not the official pad, which has its own fuller footer). Your own words — nothing here is fixed. Leave it empty for no footer line at all, just the brand stripes.</p>
+        <div className="or-fmt" role="toolbar" aria-label="Footer formatting">
+          {FOOTER_TOOLS.map((t) => <button key={t.kind} type="button" className="ibtn" aria-label={t.tip} data-tip={t.tip} onMouseDown={(e) => e.preventDefault()} onClick={() => void mark(t.kind)}><Icon name={t.icon} size={14} /></button>)}
+        </div>
+        <textarea ref={ref} className="input" rows={3} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => softBreakOnEnter(e, text, setText)} placeholder={DEFAULT_FOOTER_LINE} />
+        <Field label="Footer background">
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <Switch checked={useBg} onChange={setUseBg} label={useBg ? hex.toUpperCase() : 'White (default)'} />
+            {useBg && <input type="color" className="input" style={{ width: 44, height: 32, padding: 2 }} value={hex} onChange={(e) => setHex(e.target.value)} aria-label="Footer background colour" />}
+          </div>
+        </Field>
         <iframe className="or-frame or-sig-frame" title="Footer preview" sandbox="" srcDoc={html} />
       </div>
     </Dialog>
   )
 }
+
+const STRIPE_NAMES = ['First bar', 'Second bar', 'Third bar']
 
 export function HeaderDialog() {
   const s = useOutreachStore()
@@ -87,22 +130,29 @@ export function HeaderDialog() {
   const [useBg, setUseBg] = useState(!!s.headerBg)
   const [hex, setHex] = useState(s.headerBg || '#ffe9c7')
   const [fontId, setFontId] = useState(s.fontFamily || DEFAULT_FONT_FAMILY)
+  const [stripes, setStripes] = useState<string[]>(() => {
+    const given = s.stripeColors ? s.stripeColors.split(',') : []
+    return DEFAULT_STRIPES.map((def, i) => given[i] || def)
+  })
+  const stripesCsv = stripes.join(',')
+  const stripesChanged = stripesCsv !== DEFAULT_STRIPES.join(',')
   const [logo, setLogo] = useState('')
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
   const close = () => ui.set({ sheet: null })
   const html = useMemo(() => renderEmail({
     body: 'Dear Sir/Madam,\n\nWe are pleased to introduce ESB PowerLine…', letterhead: true, logoSrc: logo,
-    footerLine: s.footerLine, headerBg: useBg ? hex : '', fontFamily: fontId,
-  }).html, [logo, s.footerLine, useBg, hex, fontId])
+    footerLine: s.footerLine, headerBg: useBg ? hex : '', footerBg: s.footerBg, fontFamily: fontId, stripeColors: stripesCsv,
+  }).html, [logo, s.footerLine, s.footerBg, useBg, hex, fontId, stripesCsv])
   const save = () => {
     s.setHeaderBg(useBg ? hex : '')
     s.setFontFamily(fontId)
-    s.addLog('info', `Header and font saved${useBg ? ` (${hex})` : ''} · ${EMAIL_FONTS.find((f) => f.id === fontId)?.label ?? fontId}`)
+    s.setStripeColors(stripesChanged ? stripesCsv : '')
+    s.addLog('info', `Header, stripes and font saved · ${EMAIL_FONTS.find((f) => f.id === fontId)?.label ?? fontId}`)
     close()
   }
   return (
     <Dialog title="Header & fonts" kicker="OUTREACH" width={760} onClose={close} footer={<>
-      <button type="button" className="btn" onClick={() => { setUseBg(false); setFontId(DEFAULT_FONT_FAMILY) }} disabled={!useBg && fontId === DEFAULT_FONT_FAMILY}>Reset to default</button>
+      <button type="button" className="btn" onClick={() => { setUseBg(false); setFontId(DEFAULT_FONT_FAMILY); setStripes(DEFAULT_STRIPES) }} disabled={!useBg && fontId === DEFAULT_FONT_FAMILY && !stripesChanged}>Reset to default</button>
       <div className="spacer" />
       <button type="button" className="btn" onClick={close}>Cancel</button>
       <button type="button" className="btn primary" onClick={save}>Save</button>
@@ -113,6 +163,17 @@ export function HeaderDialog() {
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <Switch checked={useBg} onChange={setUseBg} label={useBg ? hex.toUpperCase() : 'White (default)'} />
             {useBg && <input type="color" className="input" style={{ width: 44, height: 32, padding: 2 }} value={hex} onChange={(e) => setHex(e.target.value)} aria-label="Header background colour" />}
+          </div>
+        </Field>
+        <Field label="Brand stripes — the three bars above the header and below the footer">
+          <div style={{ display: 'flex', gap: 14 }}>
+            {stripes.map((c, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="color" className="input" style={{ width: 36, height: 28, padding: 2 }} value={c}
+                  onChange={(e) => setStripes((s0) => s0.map((x, j) => (j === i ? e.target.value : x)))} aria-label={STRIPE_NAMES[i]} />
+                <span className="hint">{STRIPE_NAMES[i]}</span>
+              </div>
+            ))}
           </div>
         </Field>
         <Field label="Font — the handful that render as themselves in Outlook, Gmail and Apple Mail, not whatever is installed on this PC (which the recipient's inbox never sees)">
