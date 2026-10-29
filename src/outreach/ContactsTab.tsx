@@ -9,6 +9,8 @@ import { useOutreachStore } from './outreachStore'
 import { skipReason } from './compose'
 import { inAudience } from './campaign'
 import { STATUS_LABEL, purposeLabel } from './directory'
+import { domainOf, roleMailbox, disposableDomain, summarizeChecks } from './addressCheck'
+import { ask } from './outreachUi'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/controls'
 import type { Contact } from './types'
@@ -36,6 +38,8 @@ export function ContactsTab() {
     campaigns: x.campaigns, activeId: x.activeId, campaign: x.campaign, activeContact: x.activeContact, contacts: x.contacts,
     importList: x.importList, importNote: x.importNote, lists: x.lists, query: x.query, run: x.run, setActiveContact: x.setActiveContact,
     setAudience: x.setAudience, setQuery: x.setQuery, setSheet: x.setSheet, setView: x.setView, sheets: x.sheets, view: x.view,
+    verifiedAddrs: x.verifiedAddrs, checkingAddresses: x.checkingAddresses, checkAddresses: x.checkAddresses, cancelCheckAddresses: x.cancelCheckAddresses,
+    approveMany: x.approveMany, undoApproveMany: x.undoApproveMany, lastBulkApproval: x.lastBulkApproval, approved: x.approved,
   })))
   const c = s.campaign()
   const file = useRef<HTMLInputElement>(null)
@@ -44,6 +48,34 @@ export function ContactsTab() {
 
   const inAud = useMemo(() => s.contacts.filter((x) => inAudience(x, c?.audience)), [s.contacts, c?.audience])
   const rows: Row[] = useMemo(() => inAud.map((x) => ({ c: x, skip: c ? skipReason(x, c.subject, c.body) : null })), [inAud, c?.subject, c?.body]) // eslint-disable-line react-hooks/exhaustive-deps
+  const eligibleForBulkApprove = useMemo(() => {
+    return inAud.filter((x) => {
+      if (x.approved) return false
+      if (x.status === 'OPTED_OUT' || x.status === 'BOUNCED') return false
+      if (x.mxStatus !== 'UNKNOWN' && x.mxStatus !== 'REVIEW_REQUIRED') return false
+      const dom = domainOf(x.email)
+      const ver = s.verifiedAddrs[dom]
+      return ver && (ver.mx || ver.a)
+    }).map((x) => x.email)
+  }, [inAud, s.verifiedAddrs])
+
+  const checkSummary = useMemo(() => {
+    if (Object.keys(s.verifiedAddrs).length === 0) return null
+    return summarizeChecks(inAud.map((x) => x.email), s.verifiedAddrs)
+  }, [inAud, s.verifiedAddrs])
+
+  const handleBulkApprove = async () => {
+    const count = eligibleForBulkApprove.length
+    if (!count) return
+    const ok = await ask({
+      title: `Approve ${count.toLocaleString()} addresses?`,
+      body: 'They will be included in this and every campaign. You can undo this now.',
+      ok: 'Approve',
+    })
+    if (ok) {
+      s.approveMany(eligibleForBulkApprove)
+    }
+  }
   const groups = useMemo(() => [...new Map(s.contacts.filter((x) => x.groupNo != null).map((x) => [x.groupNo!, x.sectorGroup])).entries()].sort((a, b) => a[0] - b[0]), [s.contacts])
   const purposes = useMemo(() => {
     const m = new Map<string, number>()
@@ -66,6 +98,16 @@ export function ContactsTab() {
       if (s.view === 'sent' && x.status !== 'SENT' && x.status !== 'REPLIED') return false
       if (s.view === 'failed' && x.status !== 'FAILED' && x.status !== 'BOUNCED') return false
       if (s.view === 'replied' && x.status !== 'REPLIED') return false
+      if (s.view === 'has_server') {
+        const ver = s.verifiedAddrs[domainOf(x.email)]
+        if (!ver || (!ver.mx && !ver.a)) return false
+      }
+      if (s.view === 'no_server') {
+        const ver = s.verifiedAddrs[domainOf(x.email)]
+        if (!ver || ver.mx || ver.a) return false
+      }
+      if (s.view === 'role' && !roleMailbox(x.email)) return false
+      if (s.view === 'disposable' && !disposableDomain(x.email)) return false
       return !q || [x.personName, x.organization, x.email, x.designation].some((v) => v.toLowerCase().includes(q))
     })
   }, [rows, s.view, s.query])
@@ -93,9 +135,16 @@ export function ContactsTab() {
               <b title={listMeta?.fileName}>{listMeta?.fileName ?? 'No list loaded'}</b>
               <span>{s.contacts.length ? `${inAud.length} of ${s.contacts.length} in the audience · ${counts.ready} ready` : 'Excel (.xlsx) or CSV with an Email column'}</span>
             </div>
-            <button type="button" className="btn sm" onClick={pick} disabled={!idle} data-tip={!idle ? 'Stop the batch to load another list' : 'Load a mailing list from this computer'}>
-              <Icon name="upload" size={13} /><span>{listMeta ? 'Replace' : 'Import'}</span>
-            </button>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {s.contacts.length > 0 && (
+                <button type="button" className="btn sm" onClick={() => void s.checkAddresses()} disabled={!idle || !!s.checkingAddresses?.active} data-tip="Check mail servers and disposable domains via DNS (no email sent)">
+                  <Icon name="search" size={13} /><span>Check addresses</span>
+                </button>
+              )}
+              <button type="button" className="btn sm" onClick={pick} disabled={!idle} data-tip={!idle ? 'Stop the batch to load another list' : 'Load a mailing list from this computer'}>
+                <Icon name="upload" size={13} /><span>{listMeta ? 'Replace' : 'Import'}</span>
+              </button>
+            </div>
           </div>
         )}
         <input ref={file} type="file" accept=".xlsx,.csv,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void s.importList(f); e.target.value = '' }} />
@@ -117,7 +166,41 @@ export function ContactsTab() {
         )}
         {s.contacts.length > 0 && (
           <>
-            <label className="or-search">
+                    {s.checkingAddresses?.active && (
+          <div className="or-checking-progress" role="status">
+            <Icon name="refresh" size={13} className="spin" />
+            <span>Checking {s.checkingAddresses.total.toLocaleString()} companies…</span>
+            <button type="button" className="btn xs" onClick={s.cancelCheckAddresses}>Cancel</button>
+          </div>
+        )}
+        {checkSummary && (
+          <div className="or-check-summary">
+            <button type="button" className={'or-fchip' + (s.view === 'has_server' ? ' on' : '')} onClick={() => s.setView(s.view === 'has_server' ? 'all' : 'has_server')}>{checkSummary.hasMailServer.toLocaleString()} have a mail server</button>
+            <span>·</span>
+            <button type="button" className={'or-fchip' + (s.view === 'no_server' ? ' on' : '')} onClick={() => s.setView(s.view === 'no_server' ? 'all' : 'no_server')}>{checkSummary.noMailServer.toLocaleString()} none</button>
+            <span>·</span>
+            <button type="button" className={'or-fchip' + (s.view === 'role' ? ' on' : '')} onClick={() => s.setView(s.view === 'role' ? 'all' : 'role')}>{checkSummary.sharedMailboxes.toLocaleString()} shared mailboxes</button>
+            <span>·</span>
+            <button type="button" className={'or-fchip' + (s.view === 'disposable' ? ' on' : '')} onClick={() => s.setView(s.view === 'disposable' ? 'all' : 'disposable')}>{checkSummary.disposable.toLocaleString()} disposable</button>
+          </div>
+        )}
+        {eligibleForBulkApprove.length > 0 && (
+          <div className="or-bulk-approve-bar">
+            <button type="button" className="btn sm primary or-bulk-approve-btn" onClick={handleBulkApprove}>
+              <Icon name="check" size={13} /><span>Approve all that pass checks ({eligibleForBulkApprove.length})</span>
+            </button>
+            {s.lastBulkApproval && (
+              <button type="button" className="or-link-btn" onClick={s.undoApproveMany}>Undo</button>
+            )}
+          </div>
+        )}
+        {eligibleForBulkApprove.length === 0 && s.lastBulkApproval && (
+          <div className="or-bulk-approve-bar">
+            <span>Bulk approval applied ({s.lastBulkApproval.added.length})</span>
+            <button type="button" className="or-link-btn" onClick={s.undoApproveMany}>Undo bulk approval</button>
+          </div>
+        )}
+<label className="or-search">
               <Icon name="search" size={13} />
               <input type="search" placeholder="Search name, organisation, email" value={s.query} onChange={(e) => s.setQuery(e.target.value)} aria-label="Search contacts" />
             </label>

@@ -108,6 +108,30 @@ export function groupNamesOf(sheets: Sheet[]): Map<number, string> {
 
 const isEmailHeader = (c: string) => /^e-?mail(\s+address)?$/i.test(c.trim())
 
+const RESERVED_FIELD_KEYS = new Set(['name', 'designation', 'organization', 'sector', 'email'])
+
+/**
+ * Turns an unmapped spreadsheet header into a safe placeholder key:
+ * lower-cased, non-alphanumerics to _, trimmed _, collisions get _2, reserved keys get _2,
+ * headers with no Latin letters become field_<index+1>.
+ */
+export function headerToFieldKey(header: string, index: number, usedKeys: Set<string>): string {
+  let base = (header || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  if (!/[a-z]/.test(base)) {
+    base = `field_${index + 1}`
+  }
+  let key = base
+  if (RESERVED_FIELD_KEYS.has(key) || usedKeys.has(key)) {
+    let suffix = 2
+    while (usedKeys.has(`${base}_${suffix}`) || RESERVED_FIELD_KEYS.has(`${base}_${suffix}`)) {
+      suffix++
+    }
+    key = `${base}_${suffix}`
+  }
+  usedKeys.add(key)
+  return key
+}
+
 export interface ParsedSheet { contacts: Contact[]; skipped: number; duplicates: number }
 
 /**
@@ -125,6 +149,19 @@ export function contactsFromRows(rows: string[][], groupNames: Map<number, strin
     organization: col(/organi[sz]ation|company|institution/i), group: col(/sector\s+group|^group$|^sector$/i), phone: col(/phone|mobile/i),
     purpose: col(/purpose/i), mx: col(/mail\s+server|^mx|dns\s+record/i), status: col(/deliverability|^status$/i), serial: col(/^(serial|sl\.?|s\.?\s?no\.?)$/i),
     diagnostic: col(/diagnostic|recommended\s+action|^issue/i),
+  }
+  const mappedIndices = new Set([
+    c.email, c.name, c.designation, c.organization, c.group, c.phone,
+    c.purpose, c.mx, c.status, c.serial, c.diagnostic,
+  ].filter((i) => i >= 0))
+  const extraCols: { index: number; key: string }[] = []
+  const usedKeys = new Set<string>()
+  for (let i = 0; i < head.length; i++) {
+    if (mappedIndices.has(i)) continue
+    if (!head[i]) continue
+    if (extraCols.length >= 30) break
+    const key = headerToFieldKey(head[i], i, usedKeys)
+    extraCols.push({ index: i, key })
   }
   const at = (r: string[], i: number) => (i >= 0 ? (r[i] ?? '').trim() : '')
   const contacts: Contact[] = []
@@ -150,6 +187,16 @@ export function contactsFromRows(rows: string[][], groupNames: Map<number, strin
     const g = parseGroupLabel(colGroup)
     const groupNo = g ? g[0] : group
     const statusWord = at(r, c.status)
+    let fields: Record<string, string> | undefined
+    if (extraCols.length > 0) {
+      for (const col of extraCols) {
+        const val = at(r, col.index)
+        if (val) {
+          if (!fields) fields = {}
+          fields[col.key] = val.slice(0, 500)
+        }
+      }
+    }
     contacts.push({
       id: email,
       serial: Number(at(r, c.serial)) || contacts.length + 1,
@@ -168,6 +215,7 @@ export function contactsFromRows(rows: string[][], groupNames: Map<number, strin
       sheet: sheetName,
       approved: false,
       status: 'QUEUED',
+      ...(fields ? { fields } : {}),
     })
   }
   return { contacts, skipped, duplicates }

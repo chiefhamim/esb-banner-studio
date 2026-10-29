@@ -45,7 +45,10 @@ export function softBreakOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, value: s
 }
 
 export const PLACEHOLDERS = ['name', 'designation', 'organization', 'sector'] as const
-type Placeholder = (typeof PLACEHOLDERS)[number]
+export type Placeholder = (typeof PLACEHOLDERS)[number]
+
+/** Syntax for template placeholders: {key} or {key|fallback text}. */
+export const PLACEHOLDER_RE = /\{([a-z][a-z0-9_]*)(?:\|([^{}\n]*))?\}/gi
 
 /** "GROUP 1: POWER GENERATION" → "Power Generation"; a bare "GROUP 2" names no sector. */
 export function sectorName(group: string): string {
@@ -53,25 +56,53 @@ export function sectorName(group: string): string {
   return s && s === s.toUpperCase() ? s.toLowerCase().replace(/\b\p{L}/gu, (ch) => ch.toUpperCase()).replace(/\b(And|Of|The|For|In)\b/g, (w) => w.toLowerCase()) : s
 }
 
-const value = (c: Contact, p: Placeholder): string =>
-  p === 'name' ? c.personName : p === 'designation' ? c.designation : p === 'organization' ? c.organization : sectorName(c.sectorGroup)
-
-/** The placeholders a template uses. */
-export function usedPlaceholders(...texts: string[]): Placeholder[] {
-  const all = texts.join('\n')
-  return PLACEHOLDERS.filter((p) => all.includes(`{${p}}`))
+export function fieldValue(c: Contact, key: string): string {
+  const k = key.toLowerCase()
+  if (k === 'name') return c.personName || ''
+  if (k === 'designation') return c.designation || ''
+  if (k === 'organization') return c.organization || ''
+  if (k === 'sector') return sectorName(c.sectorGroup) || ''
+  return c.fields?.[k] || ''
 }
 
-/** The fields this contact's row leaves empty but the template needs ({name} has a courteous fallback). */
-export function missingFields(c: Contact, subject: string, body: string): Placeholder[] {
-  return usedPlaceholders(subject, body).filter((p) => p !== 'name' && !value(c, p).trim())
+
+
+/** The placeholders a template uses. */
+export function usedPlaceholders(...texts: string[]): string[] {
+  const all = texts.join('\n')
+  const found: string[] = []
+  const re = new RegExp(PLACEHOLDER_RE.source, 'gi')
+  for (const m of all.matchAll(re)) {
+    const key = m[1].toLowerCase()
+    if (!found.includes(key)) found.push(key)
+  } 
+  return found
+}
+
+/** The fields this contact's row leaves empty but the template needs ({name} has a courteous fallback, and any placeholder with a fallback is satisfied). */
+export function missingFields(c: Contact, subject: string, body: string): string[] {
+  const all = `${subject}\n${body}`
+  const missing: string[] = []
+  const re = new RegExp(PLACEHOLDER_RE.source, 'gi')
+  for (const m of all.matchAll(re)) {
+    const key = m[1].toLowerCase()
+    const hasFallback = m[2] !== undefined
+    if (hasFallback) continue
+    if (key === 'name') continue
+    const v = fieldValue(c, key).trim()
+    if (!v && !missing.includes(key)) missing.push(key)
+  }
+  return missing
 }
 
 export function fill(text: string, c: Contact, lang: OutreachLang): string {
-  return text.replace(/\{(name|designation|organization|sector)\}/g, (_m, p: Placeholder) => {
-    const v = value(c, p).trim()
+  const re = new RegExp(PLACEHOLDER_RE.source, 'gi')
+  return text.replace(re, (_m, rawKey: string, fallback?: string) => {
+    const key = rawKey.toLowerCase()
+    const v = fieldValue(c, key).trim()
     if (v) return v
-    return p === 'name' ? (lang === 'bn' ? 'মহোদয়' : 'Sir/Madam') : ''
+    if (fallback !== undefined) return fallback
+    return key === 'name' ? (lang === 'bn' ? 'মহোদয়' : 'Sir/Madam') : ''
   })
 }
 

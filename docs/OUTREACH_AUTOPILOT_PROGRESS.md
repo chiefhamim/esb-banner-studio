@@ -68,11 +68,11 @@
 - [x] **3.9 Phase 3 Gate:** Full Activity desk visual screenshots & verification, 30 desktop screenshots verified.
 
 ### Phase 4 — Data, validation and exceptions
-- [ ] **4.1 Dynamic fields & fallbacks:** Support all spreadsheet columns (`{field|fallback}`) without dropping rows.
-- [ ] **4.2 In-app address verification:** DNS MX/A validation, role-mailbox, and disposable domain tagging.
-- [ ] **4.3 Bulk approval:** Single-click approval for deliverable contacts.
-- [ ] **4.4 Per-message verification & "Needs you":** Granular error detection & human exception queue.
-- [ ] **4.5 Phase 4 Gate:** Verified address import & exceptions workflow.
+- [x] **4.1 Dynamic fields & fallbacks:** Support all spreadsheet columns (`{field|fallback}`) without dropping rows.
+- [x] **4.2 In-app address verification:** DNS MX/A validation, role-mailbox, and disposable domain tagging.
+- [x] **4.3 Bulk approval:** Single-click approval for deliverable contacts.
+- [x] **4.4 Per-message verification & "Needs you":** Granular error detection & human exception queue.
+- [x] **4.5 Phase 4 Gate:** Verified address import & exceptions workflow, 30 desktop screenshots verified.
 
 ### Phase 5 — Personalisation
 - [ ] **5.1 Segment & version data model:** Audience sector/purpose variants.

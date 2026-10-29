@@ -2,7 +2,7 @@
 // as written (subject, body, signature, attachments, sources) and names the exact words it found, so the editor can
 // see why — not a score. The AI review in the right panel adds judgement on top; it never replaces these.
 
-import { PLACEHOLDERS, mentionsAttachment } from './compose'
+import { PLACEHOLDERS, PLACEHOLDER_RE, mentionsAttachment } from './compose'
 import type { AttachmentItem, Source } from './types'
 
 export type CheckLevel = 'bad' | 'warn' | 'ok'
@@ -23,7 +23,7 @@ export function unsourcedNumbers(body: string, sources: Source[], reference = ''
   return [...new Set(numbersIn(body.replace(/https?:\/\/\S+/g, '')))].filter((n) => !pool.has(digits(n)))
 }
 
-export function letterChecks(input: { subject: string; body: string; signature: string; attachments: AttachmentItem[]; sources: Source[]; reference?: string }): LetterCheck[] {
+export function letterChecks(input: { subject: string; body: string; signature: string; attachments: AttachmentItem[]; sources: Source[]; reference?: string; allowedFields?: string[] }): LetterCheck[] {
   const { subject, body, signature, attachments, sources, reference = '' } = input
   const out: LetterCheck[] = []
   const add = (id: string, level: CheckLevel, title: string, detail: string) => out.push({ id, level, title, detail })
@@ -40,9 +40,11 @@ export function letterChecks(input: { subject: string; body: string; signature: 
   else if (words > 400) add('length', 'warn', 'Long letter', `${words} words — officials read the first paragraph; keep the offer there.`)
   else add('length', 'ok', 'Length', `${words} words.`)
 
-  const unknown = [...all.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).filter((p) => !(PLACEHOLDERS as readonly string[]).includes(p))
+  const allowed = new Set([...PLACEHOLDERS, 'opener', ...(input.allowedFields ?? []).map((f) => f.toLowerCase())])
+  const unknown = [...all.matchAll(new RegExp(PLACEHOLDER_RE.source, 'gi'))].map((m) => m[1].toLowerCase()).filter((p) => !allowed.has(p))
   if (unknown.length) add('placeholders', 'bad', 'Unknown placeholder', `${[...new Set(unknown)].map((p) => `{${p}}`).join(', ')} would be sent as written. Use ${PLACEHOLDERS.map((p) => `{${p}}`).join(', ')}.`)
-  const broken = all.match(/\{[^}\n]*$|^[^{\n]*\}/m)
+  const withoutPlaceholders = all.replace(new RegExp(PLACEHOLDER_RE.source, 'gi'), '')
+  const broken = withoutPlaceholders.match(/\{[^}\n]*$|^[^{\n]*\}/m)
   if (broken) add('braces', 'bad', 'Unclosed brace', `“${broken[0].slice(0, 40)}” — a placeholder is missing a { or }.`)
 
   const found = SPAM_WORDS.filter((w) => new RegExp(`(^|[^\\p{L}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}])`, 'iu').test(forSpam))

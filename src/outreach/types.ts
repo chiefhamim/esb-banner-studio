@@ -37,6 +37,7 @@ export interface Contact {
   /** When they answered this campaign (read from the inbox). */
   repliedAt?: number
   error?: string
+  fields?: Record<string, string>
 }
 
 export type OutreachBlueprintId =
@@ -125,6 +126,16 @@ export interface Campaign {
   followed: Record<string, number>
   /** A batch that was running when the app closed: which kind, so it can be continued. */
   interrupted: 'first' | 'followup' | null
+  /** Flags approved by the editor for specific contacts in the Needs you queue. */
+  reviewed?: Record<string, string[]>
+  /** Segment/sector variants: subject & body per segment key, status draft | approved. */
+  variants?: Record<string, { subject: string; body: string; status: 'draft' | 'approved'; by: 'ai' | 'you'; at: number }>
+  /** Alternate subject lines picked by stable hash of recipient email. */
+  subjectVariants?: string[]
+  /** Guarded personal opening lines for high-value leadership contacts. */
+  openers?: Record<string, { text: string; at: number }>
+  /** Reply classification labels sorted by AI when enabled. */
+  replyLabels?: Record<string, { label: 'interested' | 'question' | 'not_now' | 'unsubscribe' | 'wrong_person' | 'other'; summary: string; at: number }>
 }
 
 /** A saved workbook (its rows live in IndexedDB under `list:{id}`). */

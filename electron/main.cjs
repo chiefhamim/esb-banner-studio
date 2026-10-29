@@ -469,22 +469,15 @@ ipcMain.handle('esb:outreach-settings', () => {
 ipcMain.handle('esb:outreach-settings-save', (_e, rawS) => {
   return outreachSettings.save(rawS)
 })
+let dnsCheckerInstance = null
+const getDnsChecker = () => (dnsCheckerInstance ??= require('./outreach-dns.cjs').createDnsChecker({
+  cacheFile: path.join(app.getPath('userData'), 'outreach-dns-cache.json'),
+}))
+
 ipcMain.handle('esb:outreach-check-addresses', async (_e, rawDomains) => {
   const g = outreachGuard.validateDomains(rawDomains)
   if (!g.ok) return {}
-  const out = {}
-  for (const dom of g.domains) {
-    try {
-      const [mx, a] = await Promise.all([
-        dns.promises.resolveMx(dom).then((r) => r && r.length > 0).catch(() => false),
-        dns.promises.lookup(dom).then(() => true).catch(() => false),
-      ])
-      out[dom] = { mx, a }
-    } catch (err) {
-      out[dom] = { mx: false, a: false, error: err.message || String(err) }
-    }
-  }
-  return out
+  return getDnsChecker().checkDomains(g.domains)
 })
 ipcMain.handle('esb:outreach-log-event', (_e, rawE) => {
   const g = outreachGuard.validateLogEvent(rawE)

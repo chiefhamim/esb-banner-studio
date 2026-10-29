@@ -10,6 +10,7 @@ import { fmtShortDay } from './activityFormat'
 import { buildMessage, mentionsAttachment } from './compose'
 import { applyMark, skipReason, softBreakOnEnter } from './compose'
 import { letterChecks } from './checks'
+import { reviewRendered, actionableFlags } from './rendered'
 import { OUTREACH_BLUEPRINTS, rewriteLetter } from './outreachAi'
 import { aiFor, aiPaused } from '../editorial/aiProviders'
 import { DEFAULT_STRIPES, EMAIL_FONTS, logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
@@ -257,7 +258,14 @@ export function ReviewSendDialog() {
   }, [audience, c.subject, c.body])
 
   const reference = OUTREACH_BLUEPRINTS.find((b) => b.id === c.blueprint)
-  const checks = letterChecks({ subject: c.subject, body: c.body, signature: signatureOf(c), attachments: s.attachments, sources: c.sources, reference: reference ? `${reference.defaultBody}\n${reference.bengaliBody}` : '' }).filter((x) => x.level !== 'ok')
+  const allowedFields = useMemo(() => {
+    const keys = new Set<string>()
+    for (const contact of s.contacts) {
+      if (contact.fields) for (const k of Object.keys(contact.fields)) keys.add(k)
+    }
+    return [...keys]
+  }, [s.contacts])
+  const checks = letterChecks({ subject: c.subject, body: c.body, signature: signatureOf(c), attachments: s.attachments, sources: c.sources, reference: reference ? `${reference.defaultBody}\n${reference.bengaliBody}` : '', allowedFields }).filter((x) => x.level !== 'ok')
   const why = cannotStart()
   const atMs = new Date(at).getTime()
 
@@ -268,6 +276,19 @@ export function ReviewSendDialog() {
   const attachOk = !attachMentioned || s.attachments.length > 0
   const testSent = s.log.some((l) => l.text.includes('Test sent to'))
   const checksBad = checks.some((x) => x.level === 'bad')
+
+  const needsYouCount = useMemo(() => {
+    let count = 0
+    const reviewedMap = c.reviewed || {}
+    for (const x of ready) {
+      const msg = buildMessage(x, c.subject, c.body, c.lang)
+      const flags = actionableFlags(reviewRendered(x, msg))
+      const approved = new Set(reviewedMap[x.email] || [])
+      if (flags.some((f) => !approved.has(f.kind))) count++
+    }
+    return count
+  }, [ready, c.subject, c.body, c.lang, c.reviewed])
+  const willBeSentCount = Math.max(0, ready.length - needsYouCount)
 
   // Calculate pacing plan
   useEffect(() => {
@@ -328,11 +349,19 @@ export function ReviewSendDialog() {
         {/* 1. Plan row (§5.5) */}
         <section className="or-rs-plan">
           <div className="or-rs-plan-stats">
-            <button type="button" onClick={() => { close(); ui.set({ left: 'contacts', view: 'edit' }) }}>
-              <b>{ready.length.toLocaleString()}</b> will be sent
+            <button type="button" onClick={() => { close(); ui.set({ left: 'contacts', view: 'edit' }); s.setView('ready') }}>
+              <b>{willBeSentCount.toLocaleString()}</b> will be sent
             </button>
             <span>·</span>
-            <button type="button" onClick={() => { close(); ui.set({ left: 'contacts', view: 'edit' }) }}>
+            {needsYouCount > 0 && (
+              <>
+                <button type="button" onClick={() => { close(); ui.set({ right: 'review' }) }}>
+                  <b>{needsYouCount.toLocaleString()}</b> need you
+                </button>
+                <span>·</span>
+              </>
+            )}
+            <button type="button" onClick={() => { close(); ui.set({ left: 'contacts', view: 'edit' }); s.setView('skipped') }}>
               <b>{skippedCount.toLocaleString()}</b> skipped
             </button>
           </div>

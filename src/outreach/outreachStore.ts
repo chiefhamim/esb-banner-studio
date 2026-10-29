@@ -12,6 +12,7 @@ import type { AttachmentItem, Campaign, Contact, ListMeta, OutreachBlueprintId, 
 import { OUTREACH_BLUEPRINTS } from './outreachAi'
 import { contactsFromRows, groupNamesOf, readMailingFile } from './directory'
 import type { Sheet } from './directory'
+import { domainOf, type DomainCheckResult } from './addressCheck'
 import { idbDel, idbGet, idbSet } from './idb'
 
 const KEY = 'esb-banner-studio/outreach/v2'
@@ -162,7 +163,14 @@ interface OutreachState extends Saved {
   contacts: Contact[]
   importNote: string | null
   activeContact: string | null
-  view: 'all' | 'ready' | 'skipped' | 'sent' | 'replied' | 'failed'
+  view: 'all' | 'ready' | 'skipped' | 'sent' | 'replied' | 'failed' | 'has_server' | 'no_server' | 'role' | 'disposable'
+  verifiedAddrs: Record<string, DomainCheckResult>
+  checkingAddresses: { total: number; checked: number; active: boolean } | null
+  lastBulkApproval: { previous: string[]; added: string[] } | null
+  approveMany: (emails: string[]) => void
+  undoApproveMany: () => void
+  checkAddresses: () => Promise<void>
+  cancelCheckAddresses: () => void
   query: string
   attachments: AttachmentItem[]
 
@@ -226,7 +234,7 @@ interface OutreachState extends Saved {
 }
 
 /** The sheet's contacts with what the editor and the ledgers know laid over them. */
-export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'> & { bouncedAddrs?: Record<string, string> }, c: Campaign | null, mail: EsbOutreachStatus | null): Contact[] {
+export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'> & { bouncedAddrs?: Record<string, string>; verified?: Record<string, DomainCheckResult> }, c: Campaign | null, mail: EsbOutreachStatus | null): Contact[] {
   const approved = new Set(s.approved), optOut = new Set(s.optOut), bounced = s.bouncedAddrs ?? {}
   const ledger = new Map((mail?.sentTo ?? []).map((e) => [e.to, e.t]))
   return list.map((x) => {
@@ -234,8 +242,13 @@ export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'> &
     const failed = c?.failed[x.email]
     const bounce = c?.bounced?.[x.email] ?? bounced[x.email]
     const replied = c?.replied?.[x.email]
+    const dom = domainOf(x.email)
+    const ver = s.verified?.[dom]
+    const noServer = ver && !ver.mx && !ver.a
     return {
       ...x,
+      mxStatus: noServer ? 'UNDELIVERABLE' : x.mxStatus,
+      rawStatus: noServer ? 'No mail server (checked)' : x.rawStatus,
       approved: x.approved || approved.has(x.email),
       status: optOut.has(x.email) ? 'OPTED_OUT' : bounce ? 'BOUNCED' : replied ? 'REPLIED' : sentAt ? 'SENT' : failed ? 'FAILED' : x.status === 'SENDING' ? 'SENDING' : 'QUEUED',
       sentAt,
@@ -244,7 +257,6 @@ export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'> &
     }
   })
 }
-
 /** Typed addresses for an ordinary email: each one is the editor's own choice, so it counts as approved. */
 export function directContacts(addresses: string[]): Contact[] {
   return addresses.map((email, i) => ({
@@ -259,7 +271,7 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     const s = get()
     save({ campaigns: s.campaigns, activeId: s.activeId, lists: s.lists, approved: s.approved, optOut: s.optOut, signatures: s.signatures, templates: s.templates, housePrompt: s.housePrompt, footerLine: s.footerLine, headerBg: s.headerBg, footerBg: s.footerBg, stripeColors: s.stripeColors, fontFamily: s.fontFamily, bouncedAddrs: s.bouncedAddrs })
   }
-  const relay = () => set({ contacts: overlay(get().contacts, get(), get().campaign(), get().mail) })
+  const relay = () => set({ contacts: overlay(get().contacts, { ...get(), verified: get().verifiedAddrs }, get().campaign(), get().mail) })
   const patchCampaign = (id: string, p: Partial<Campaign>) => {
     set({ campaigns: get().campaigns.map((c) => (c.id === id ? { ...c, ...p, updatedAt: Date.now() } : c)) })
     persist()
@@ -274,6 +286,8 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     if (!c) return set({ sheets: [], contacts: [], groupNames: new Map(), importNote: null })
     if (c.kind === 'direct') return set({ sheets: [], groupNames: new Map(), importNote: null, contacts: overlay(directContacts(c.recipients), get(), c, get().mail) })
     const sheets = c.listId ? (await idbGet<Sheet[]>(`list:${c.listId}`)) ?? [] : []
+    const verifiedAddrs = c.listId ? (await idbGet<Record<string, DomainCheckResult>>(`verify:${c.listId}`)) ?? {} : {}
+    set({ verifiedAddrs })
     if (seq !== contactsSeq || get().activeId !== c.id) return
     const groupNames = groupNamesOf(sheets)
     const sh = sheets.find((x) => x.name === c.sheet) ?? sheets.find((x) => x.rows.slice(0, 15).some((r) => r.some((v) => /^e-?mail(\s+address)?$/i.test(v))))
@@ -316,6 +330,55 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     smtp: { state: 'idle' },
     inbox: { state: 'idle' },
     log: [],
+    verifiedAddrs: {},
+    checkingAddresses: null,
+    lastBulkApproval: null,
+
+    approveMany: (emails: string[]) => {
+      const currentApproved = get().approved
+      const setApproved = new Set(currentApproved)
+      const toAdd = emails.filter((e) => !setApproved.has(e))
+      if (!toAdd.length) return
+      for (const e of toAdd) setApproved.add(e)
+      set({ approved: [...setApproved], lastBulkApproval: { previous: currentApproved, added: toAdd } })
+      persist()
+      relay()
+      get().addLog('ok', `Approved ${toAdd.length} address${toAdd.length === 1 ? '' : 'es'} that pass checks`)
+    },
+    undoApproveMany: () => {
+      const last = get().lastBulkApproval
+      if (!last) return
+      set({ approved: last.previous, lastBulkApproval: null })
+      persist()
+      relay()
+      get().addLog('info', `Undid approval of ${last.added.length} address${last.added.length === 1 ? '' : 'es'}`)
+    },
+    checkAddresses: async () => {
+      const c = get().campaign()
+      if (!c?.listId) return
+      const contacts = get().contacts
+      const domains = [...new Set(contacts.map((x) => domainOf(x.email)).filter(Boolean))]
+      if (!domains.length) return
+      set({ checkingAddresses: { total: domains.length, checked: 0, active: true } })
+      try {
+        const b = window.esb
+        let results: Record<string, DomainCheckResult> = {}
+        if (b?.outreachCheckAddresses) {
+          results = await b.outreachCheckAddresses(domains)
+        } else {
+          for (const d of domains) results[d] = { mx: !d.includes('dead') && !d.includes('nomail'), a: true }
+        }
+        const next = { ...get().verifiedAddrs, ...results }
+        set({ verifiedAddrs: next, checkingAddresses: null })
+        await idbSet(`verify:${c.listId}`, next)
+        relay()
+        get().addLog('ok', `Checked addresses for ${domains.length} companies`)
+      } catch (err) {
+        set({ checkingAddresses: null })
+        get().addLog('error', `Address check: ${(err as Error).message}`)
+      }
+    },
+    cancelCheckAddresses: () => set({ checkingAddresses: null }),
 
     campaign: () => get().campaigns.find((c) => c.id === get().activeId) ?? null,
 

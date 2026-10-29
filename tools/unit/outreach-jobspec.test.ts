@@ -47,7 +47,7 @@ function mockContact(i: number, over: Partial<Contact> = {}): Contact {
     sectorGroup: 'Power',
     groupNo: 1,
     organization: `Company ${i}`,
-    personName: `Person ${i}`,
+    personName: 'Tariq Rahman',
     designation: 'Director',
     email: `contact${i}@company${i}.example.com`,
     phone: '',
@@ -164,5 +164,31 @@ describe('outreach-jobspec: headless JobSpec builder (§2.2)', () => {
 
     expect(spec.messages).toHaveLength(5000)
     expect(elapsed).toBeLessThan(1000)
+  })
+
+  it('excludes flagged unreviewed contacts and includes them once reviewed (§4.4)', () => {
+    const campaign = mockCampaign()
+    const clean = mockContact(1, { personName: 'Tariq Rahman' })
+    const flagged = mockContact(2, { personName: 'Engr. Kamal 01', email: 'kamal@grid.com' }) // odd_name: digits
+
+    // Unreviewed: flagged contact excluded
+    const spec1 = buildJobSpec({
+      campaign,
+      contacts: [clean, flagged],
+      mode: 'first',
+    })
+    expect(spec1.messages).toHaveLength(1)
+    expect(spec1.messages[0].to).toBe(clean.email)
+
+    // Once reviewed on campaign: included
+    const reviewedCampaign = mockCampaign({
+      reviewed: { 'kamal@grid.com': ['odd_name'] },
+    })
+    const spec2 = buildJobSpec({
+      campaign: reviewedCampaign,
+      contacts: [clean, flagged],
+      mode: 'first',
+    })
+    expect(spec2.messages).toHaveLength(2)
   })
 })

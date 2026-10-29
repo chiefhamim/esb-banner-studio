@@ -18,6 +18,8 @@ import { ProviderMark } from '../editorial/ProviderMark'
 import { AutopilotCard } from './AutopilotCard'
 import { Icon } from '../ui/Icon'
 import { Switch, Tabs } from '../ui/controls'
+import { NeedsYou } from './NeedsYou'
+import { domainOf, roleMailbox, disposableDomain } from './addressCheck'
 
 const fmtWhen = (t: number) => new Date(t).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const mmss = (ms: number) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
@@ -172,6 +174,23 @@ function ContactTab() {
         {active.purposes.length > 0 && <><dt>Listed for</dt><dd className="or-purposes">{active.purposes.map((p) => <span key={p} className="or-chip">{purposeLabel(p)}</span>)}</dd></>}
         <dt>Sheet status</dt><dd>{STATUS_LABEL[active.mxStatus]}{active.rawStatus && active.rawStatus !== active.mxStatus ? ` (${active.rawStatus})` : ''}</dd>
         {active.mxHost && <><dt>Mail server</dt><dd>{active.mxHost}</dd></>}
+        {(() => {
+          const dom = domainOf(active.email)
+          const ver = s.verifiedAddrs[dom]
+          const isRole = roleMailbox(active.email)
+          const isDisp = disposableDomain(dom)
+          if (!ver && !isRole && !isDisp) return null
+          return (
+            <>
+              <dt>Address check</dt>
+              <dd>
+                {ver ? (ver.mx ? 'MX server verified' : ver.a ? 'A record server' : 'No mail server found') : ''}
+                {isRole ? (ver ? ' · Shared mailbox' : 'Shared mailbox') : ''}
+                {isDisp ? ' · Disposable domain' : ''}
+              </dd>
+            </>
+          )
+        })()}
         {active.diagnostic && <><dt>Sheet note</dt><dd>{active.diagnostic}</dd></>}
         {active.sheet && <><dt>From sheet</dt><dd>{active.sheet.replace(/_/g, ' ')}</dd></>}
         <dt>This campaign</dt><dd>{outside ? 'Outside the audience' : active.status === 'REPLIED' ? `Replied ${active.repliedAt ? fmtWhen(active.repliedAt) : ''}` : active.status === 'BOUNCED' ? `Bounced: ${active.error}` : active.status === 'SENT' ? `Sent ${active.sentAt ? fmtWhen(active.sentAt) : ''}` : active.status === 'FAILED' ? `Failed: ${active.error}` : reason ?? 'Will be sent'}</dd>
@@ -187,6 +206,7 @@ function ContactTab() {
 }
 
 function ReviewTab() {
+  const ui = useOutreachUi()
   const s = useOutreachStore()
   const c = s.campaign()
   const [notes, setNotes] = useState<{ list: ReviewNote[]; model: string; for: string } | null>(null)
@@ -201,7 +221,14 @@ function ReviewTab() {
   const fixAiName = providerMeta(fixAi?.provider ?? roleProvider(loadAiSettings(), 'outreach')).name
   const signature = signatureOf(c)
   const reference = useMemo(() => { const b = OUTREACH_BLUEPRINTS.find((x) => x.id === c?.blueprint); return b ? `${b.defaultBody}\n${b.bengaliBody}` : '' }, [c?.blueprint])
-  const checks = useMemo(() => (c ? letterChecks({ subject: c.subject, body: c.body, signature, attachments: s.attachments, sources: c.sources, reference }) : []), [c, signature, s.attachments, reference])
+  const allowedFields = useMemo(() => {
+    const keys = new Set<string>()
+    for (const contact of s.contacts) {
+      if (contact.fields) for (const k of Object.keys(contact.fields)) keys.add(k)
+    }
+    return [...keys]
+  }, [s.contacts])
+  const checks = useMemo(() => (c ? letterChecks({ subject: c.subject, body: c.body, signature, attachments: s.attachments, sources: c.sources, reference, allowedFields }) : []), [c, signature, s.attachments, reference, allowedFields])
   if (!c) return <div className="or-empty"><p>Open a campaign to review its letter.</p></div>
   const stamp = `${c.subject}\n${c.body}\n${signature}`
   const order = { bad: 0, warn: 1, ok: 2 }
@@ -234,6 +261,17 @@ function ReviewTab() {
 
   return (
     <>
+      {c && (
+        <NeedsYou
+          campaign={c}
+          contacts={s.contacts}
+          onPatchCampaign={s.patch}
+          onSelectContact={(email: string) => {
+            s.setActiveContact(email)
+            ui.set({ view: 'preview' })
+          }}
+        />
+      )}
       <section className="or-card">
         <header><Icon name="checkDouble" size={14} /><h3>Checks</h3><span className={'or-chip ' + (bad ? 'bad' : warn ? 'warn' : 'good')}>{bad ? `${bad} to fix` : warn ? `${warn} to look at` : 'All clear'}</span></header>
         <ul className="or-checks">

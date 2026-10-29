@@ -611,3 +611,173 @@
 .or-rs-spot-to { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .or-rs-spot-sub { color: var(--text-2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .or-rs-spot-body { color: var(--text-3); font-size: 11px; line-height: 14px; max-height: 42px; overflow: hidden; }
+
+/* ---------------------------------------------------------------- Step 4.2 - 4.4 Address Check & Needs You */
+.or-checking-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  font-size: 12px;
+  color: var(--text-2);
+  margin-top: 6px;
+}
+.or-check-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.or-check-summary .or-fchip {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+.or-bulk-approve-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  margin-top: 6px;
+}
+.or-bulk-approve-btn {
+  font-weight: 600;
+  font-size: 12px;
+}
+.or-needs-you {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  background: var(--card-bg, var(--surface));
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-3);
+  padding: 10px 12px;
+}
+.or-needs-you-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.or-needs-you-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--warning);
+}
+.or-needs-you-sub {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.or-needs-you-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--success);
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  margin-bottom: 10px;
+}
+.or-needs-you-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.or-flag-group {
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.or-flag-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.or-flag-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.or-flag-count {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--warning-soft);
+  color: var(--warning);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+.or-flag-items {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.or-flag-desc {
+  font-size: 11.5px;
+  color: var(--text-2);
+  margin: 0;
+}
+.or-flag-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--surface-2);
+  border-radius: var(--r-1);
+}
+.or-flag-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+.or-flag-contact b {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.or-flag-contact span {
+  color: var(--text-2);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.or-flag-sample {
+  font-size: 10.5px;
+  color: var(--warning);
+  background: var(--warning-soft);
+  padding: 2px 4px;
+  border-radius: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.or-flag-actions {
+  flex: none;
+}

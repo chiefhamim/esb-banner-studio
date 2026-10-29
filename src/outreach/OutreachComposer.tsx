@@ -72,6 +72,17 @@ export function OutreachComposer() {
     }
   }, [c, active, ui.view, logo, padSidebar, padQr, s.footerLine, s.headerBg, s.footerBg, s.stripeColors, s.fontFamily, s.signatures]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const allFieldKeys = useMemo(() => {
+    const custom = new Set<string>()
+    for (const contact of s.contacts) {
+      if (contact.fields) for (const k of Object.keys(contact.fields)) custom.add(k)
+    }
+    const extra = [...custom].filter((k) => !(PLACEHOLDERS as readonly string[]).includes(k))
+    return [...PLACEHOLDERS, ...extra]
+  }, [s.contacts])
+  const visibleFieldKeys = allFieldKeys.slice(0, 12)
+  const moreFieldKeys = allFieldKeys.slice(12)
+
   if (!c) {
     return (
       <main className="or-center" aria-label="Letter">
@@ -208,7 +219,8 @@ export function OutreachComposer() {
           <div className="or-fmt" role="toolbar" aria-label="Formatting">
             {TOOLS.map((t) => <button key={t.kind} type="button" className="ibtn" aria-label={t.tip} data-tip={t.tip} onMouseDown={(e) => e.preventDefault()} onClick={() => void mark(t.kind)}><Icon name={t.icon} size={14} /></button>)}
             <i className="or-fmt-sep" />
-            {PLACEHOLDERS.map((p) => <button key={p} type="button" className="or-tag" onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`{${p}}`)} data-tip={`Insert {${p}} — filled from each contact's row`}>{p}</button>)}
+            {visibleFieldKeys.map((p) => <button key={p} type="button" className="or-tag" onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`{${p}}`)} data-tip={`Insert {${p}} — filled from each contact's row`}>{p}</button>)}
+            {moreFieldKeys.length > 0 && <MenuButton label="More" className="or-tag-more" items={moreFieldKeys.map((k) => ({ label: `{${k}}`, onClick: () => insert(`{${k}}`) }))} />}
           </div>
           <textarea ref={bodyRef} className={'or-text' + (c.lang === 'bn' ? ' bn' : '')} value={c.body} onChange={(e) => setBody(e.target.value)} spellCheck aria-label="Message"
             placeholder="Write the letter. Enter starts a new paragraph; Shift+Enter breaks the line."

@@ -228,7 +228,7 @@ export interface LetterContext {
   example?: Contact
 }
 
-const RULES = (lang: OutreachLang) => `Placeholders: use exactly ${PLACEHOLDERS.map((p) => `{${p}}`).join(', ')} where each recipient's details go. Never write a real person's or organisation's name into the template.
+const RULES = (lang: OutreachLang, extraFields: string[] = []) => `Placeholders: use exactly ${[...PLACEHOLDERS, ...extraFields].map((p) => `{${p}}`).join(', ')} (or with fallbacks like {key|fallback text}, e.g. {designation|Representative} or {opener|}) where each recipient's details go. Never write a real person's or organisation's name into the template.
 
 Facts: use only what you are given — the reference letter, the talking points from the editor's sources, and the recipient's role. Do not invent figures, circulation or readership numbers, rankings, awards, projects, dates, meetings, prices or quotes, about ESB PowerLine or the recipient. A figure must appear in a talking point or the reference letter exactly as written there. If the reference letter mentions an attachment, keep that sentence; otherwise do not mention one.
 
