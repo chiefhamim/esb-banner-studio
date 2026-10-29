@@ -86,6 +86,8 @@ export interface EsbOutreachMail {
   letterhead?: boolean
   /** The gold-rail official pad (letterhead artwork + a generated contact QR), in place of `letterhead`. */
   officialPad?: boolean
+  /** The plain letterhead's footer line, in the letter's own marks — the editor's own text (Letter → Footer text). */
+  footerLine?: string
   attachments?: { name: string; dataUrl: string }[]
   isTest?: boolean
   resend?: boolean

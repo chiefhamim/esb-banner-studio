@@ -83,10 +83,10 @@ export function OutreachComposer() {
       who, subject: m.subject,
       html: withViewerMargin(renderEmail({
         body: m.body, signature: signatureOf(c), optOut: m.optOut, lang: c.lang, letterhead: c.letterhead, logoSrc: logo,
-        officialPad: c.officialPad, sidebarSrc: padSidebar, qrSrc: padQr,
+        officialPad: c.officialPad, sidebarSrc: padSidebar, qrSrc: padQr, footerLine: s.footerLine,
       }).html, c.letterhead, c.officialPad),
     }
-  }, [c, active, ui.view, logo, padSidebar, padQr, s.signatures]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [c, active, ui.view, logo, padSidebar, padQr, s.footerLine, s.signatures]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!c) {
     return (

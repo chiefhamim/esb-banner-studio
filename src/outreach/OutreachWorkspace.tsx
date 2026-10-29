@@ -13,8 +13,8 @@ import { OutreachComposer } from './OutreachComposer'
 import { OutreachInspector } from './OutreachInspector'
 import { SenderDialog } from './SenderDialog'
 import { OutreachActivity } from './OutreachActivity'
-import { AskDialog, FollowUpDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
-import { useOutreachStore } from './outreachStore'
+import { AskDialog, FollowUpDialog, FooterDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
+import { DEFAULT_FOOTER_LINE, useOutreachStore } from './outreachStore'
 import { ask, useOutreachUi, type LeftTab } from './outreachUi'
 import { downloadText, eligible, inAudience, resultsCsv } from './campaign'
 import { AiSettingsDialog } from '../editorial/AiSettingsDialog'
@@ -73,6 +73,7 @@ export function OutreachWorkspace() {
       { divider: true },
       { label: 'Signatures', icon: 'edit', onClick: () => ui.set({ sheet: 'signatures' }) },
       { label: 'ESB letterhead', checked: !!c?.letterhead && !c?.officialPad, disabled: !c || !!c?.officialPad, onClick: () => s.patch({ letterhead: !c?.letterhead }) },
+      { label: 'Footer text', icon: 'edit', hint: s.footerLine === DEFAULT_FOOTER_LINE ? 'Default' : s.footerLine ? 'Edited' : 'Off', onClick: () => ui.set({ sheet: 'footer' }) },
       { label: 'Official pad (gold rail + contact QR)', checked: !!c?.officialPad, disabled: !c, onClick: () => s.patch({ officialPad: !c?.officialPad }) },
       { label: 'House prompt', icon: 'sparkle', hint: s.housePrompt ? 'Set' : 'None', onClick: () => ui.set({ sheet: 'prompt' }) },
     ] },
@@ -167,6 +168,7 @@ export function OutreachWorkspace() {
       {ui.sheet === 'ai' && <AiSettingsDialog onClose={() => ui.set({ sheet: null })} onToast={(m) => s.addLog('info', m)} />}
       {ui.sheet === 'signatures' && <SignaturesDialog />}
       {ui.sheet === 'prompt' && <HousePromptDialog />}
+      {ui.sheet === 'footer' && <FooterDialog />}
       {ui.sheet === 'review-send' && c && <ReviewSendDialog />}
       {(ui.sheet === 'rename' || ui.sheet === 'save-template') && c && <NameDialog mode={ui.sheet} />}
       {ui.sheet === 'follow-up' && c && <FollowUpDialog />}

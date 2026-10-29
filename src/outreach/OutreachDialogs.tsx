@@ -2,7 +2,7 @@
 // Review & send — the last look before a batch starts, now or at a time.
 
 import { useMemo, useState } from 'react'
-import { useOutreachStore, uid } from './outreachStore'
+import { DEFAULT_FOOTER_LINE, useOutreachStore, uid } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { cannotStart, eligible, followUpLetter, followUpQueue, inAudience, signatureOf, startBatch } from './campaign'
 import { skipReason } from './compose'
@@ -50,6 +50,30 @@ export function SignaturesDialog() {
           <Field label="Signature — the same marks as the letter: **bold**, [words](https://link)"><textarea className="input or-sig-text" rows={7} value={text} onChange={(e) => setText(e.target.value)} /></Field>
           <iframe className="or-frame or-sig-frame" title="Signature preview" sandbox="" srcDoc={html} />
         </div>
+      </div>
+    </Dialog>
+  )
+}
+
+export function FooterDialog() {
+  const s = useOutreachStore()
+  const ui = useOutreachUi()
+  const [text, setText] = useState(s.footerLine)
+  const [logo, setLogo] = useState('')
+  useEffect(() => { void logoDataUrl().then(setLogo) }, [])
+  const close = () => ui.set({ sheet: null })
+  const html = useMemo(() => renderEmail({ body: 'Dear Sir/Madam,\n\n…', letterhead: true, logoSrc: logo, footerLine: text }).html, [text, logo])
+  return (
+    <Dialog title="Footer text" kicker="OUTREACH" width={760} onClose={close} footer={<>
+      <button type="button" className="btn" onClick={() => setText(DEFAULT_FOOTER_LINE)} disabled={text === DEFAULT_FOOTER_LINE}>Reset to default</button>
+      <div className="spacer" />
+      <button type="button" className="btn" onClick={close}>Cancel</button>
+      <button type="button" className="btn primary" onClick={() => { s.setFooterLine(text); s.addLog('info', text.trim() ? 'Footer text saved' : 'Footer text cleared'); close() }}>Save</button>
+    </>}>
+      <div className="stack" style={{ gap: 10 }}>
+        <p className="hint">The line under the plain ESB letterhead (Letter → "ESB letterhead", not the official pad, which has its own fuller footer). Your own words — nothing here is fixed. Same marks as the letter body: **bold**, [a link](https://esbpowerline.com). Leave it empty for no footer line at all, just the brand stripes.</p>
+        <textarea className="input" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={DEFAULT_FOOTER_LINE} />
+        <iframe className="or-frame or-sig-frame" title="Footer preview" sandbox="" srcDoc={html} />
       </div>
     </Dialog>
   )

@@ -11,7 +11,7 @@ import type { OutreachLang } from './types'
 
 export interface RenderInput {
   body: string; signature?: string; optOut?: string; lang?: OutreachLang; letterhead?: boolean; logoSrc?: string
-  officialPad?: boolean; sidebarSrc?: string; qrSrc?: string
+  officialPad?: boolean; sidebarSrc?: string; qrSrc?: string; footerLine?: string
 }
 export const renderEmail = render as (i: RenderInput) => { html: string; text: string }
 

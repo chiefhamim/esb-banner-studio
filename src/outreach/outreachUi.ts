@@ -7,7 +7,7 @@ import { create } from 'zustand'
 
 export type LeftTab = 'contacts' | 'campaigns' | 'sources'
 export type RightTab = 'send' | 'contact' | 'review'
-export type Sheet = null | 'sender' | 'ai' | 'signatures' | 'prompt' | 'review-send' | 'save-template' | 'rename' | 'follow-up' | 'templates'
+export type Sheet = null | 'sender' | 'ai' | 'signatures' | 'prompt' | 'footer' | 'review-send' | 'save-template' | 'rename' | 'follow-up' | 'templates'
 
 export interface AskRequest {
   title: string

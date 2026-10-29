@@ -111,20 +111,26 @@ function padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc }) {
  * gold-rail pad frame instead, see `padFrame`. `logoSrc`/`sidebarSrc`/`qrSrc` are "cid:esb-…" when sending and the
  * bundled image URL / a generated data URL in the preview.
  */
+// The plain letterhead's default footer line, in the letter's own marks ([text](https://link)) — the editor's own
+// text once they open Letter → Footer text, never hardcoded again after the first version had to be asked each
+// time a word in it needed to change.
+export const DEFAULT_FOOTER_LINE = 'ESB PowerLine · [esbpowerline.com](https://esbpowerline.com)'
+
 export function renderEmail({
   body, signature = '', optOut = '', lang = 'en', letterhead = false, logoSrc = 'cid:esb-logo',
-  officialPad = false, sidebarSrc = 'cid:esb-pad-sidebar', qrSrc = 'cid:esb-pad-qr',
+  officialPad = false, sidebarSrc = 'cid:esb-pad-sidebar', qrSrc = 'cid:esb-pad-qr', footerLine = DEFAULT_FOOTER_LINE,
 }) {
   const font = lang === 'bn' ? "'Hind Siliguri','Noto Sans Bengali','Nirmala UI',Arial,sans-serif" : "Arial,Helvetica,sans-serif"
   const sig = String(signature).trim()
+  const foundation = String(footerLine).trim()
   const stripes = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>${[BRAND.green, BRAND.red, BRAND.orange].map((c) => `<td style="height:4px;background:${c};font-size:0;line-height:0">&nbsp;</td>`).join('')}</tr></table>`
   const chrome = letterhead && !officialPad
   const head = chrome
     ? `${stripes}<div style="padding:20px 28px 8px"><img src="${escapeHtml(logoSrc)}" width="150" alt="ESB PowerLine" style="display:block;width:150px;height:auto;border:0"></div>`
     : ''
-  const foot = chrome
-    ? `<div style="padding:14px 28px 22px;color:${BRAND.muted};font-size:12px;line-height:1.5;border-top:1px solid ${BRAND.line}">ESB PowerLine · Express Broadcast and Communication Ltd. · <a href="https://esbpowerline.com" style="color:${BRAND.muted}">esbpowerline.com</a></div>${stripes}`
-    : ''
+  const foot = chrome && foundation
+    ? `<div style="padding:14px 28px 22px;color:${BRAND.muted};font-size:12px;line-height:1.5;border-top:1px solid ${BRAND.line}">${inline(escapeHtml(foundation))}</div>${stripes}`
+    : chrome ? stripes : ''
   const inner = `${blocksToHtml(body, font)}`
     + (sig ? `<div style="margin:18px 0 0;color:#374151">${blocksToHtml(sig, font)}</div>` : '')
     + (optOut ? `<p style="margin:22px 0 0;color:${BRAND.muted};font-size:12px;line-height:1.5">${escapeHtml(optOut)}</p>` : '')

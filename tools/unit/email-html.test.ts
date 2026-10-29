@@ -36,6 +36,23 @@ describe('email-html: the only HTML a recipient gets', () => {
     expect(text).toBe('Hello\n\nDesk\nESB PowerLine\n\n—\nReply unsubscribe')
     expect(renderEmail({ body: 'x', lang: 'bn' }).html).toContain('Hind Siliguri')
   })
+  it('the default footer line names ESB PowerLine and links the site — nothing else baked in', () => {
+    const { html } = renderEmail({ body: 'Hello', letterhead: true })
+    expect(html).toContain('ESB PowerLine')
+    expect(html).toContain('href="https://esbpowerline.com"')
+    expect(html).not.toContain('Express Broadcast and Communication Ltd.')
+  })
+  it('the footer line is the editor\'s own text (Letter → Footer text), same marks as the body', () => {
+    const { html } = renderEmail({ body: 'Hello', letterhead: true, footerLine: '**ESB Desk** — [reply here](mailto:desk@example.com)' })
+    expect(html).toContain('<strong>ESB Desk</strong>')
+    expect(html).toContain('href="mailto:desk@example.com"')
+    expect(html).not.toContain('esbpowerline.com') // the default text is gone, not merely appended to
+  })
+  it('an empty footer line removes the footer entirely — the stripes still show', () => {
+    const { html } = renderEmail({ body: 'Hello', letterhead: true, footerLine: '' })
+    expect(html).not.toContain('border-top:1px solid')
+    expect(html).toContain('#1e9b4a') // the brand stripes
+  })
   it('official pad: gold rail, logo, sidebar and QR by cid, the pad footer, and it wins over letterhead', () => {
     const { html } = renderEmail({ body: 'Hello', letterhead: true, officialPad: true })
     expect(html).toContain('#ffe4a6') // the rail's own gold, not a guess

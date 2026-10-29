@@ -32,11 +32,15 @@ interface Saved {
   templates: Template[]
   /** The editor's house style for every AI job on this desk; '' = none. */
   housePrompt: string
+  /** The letterhead footer's own line — same marks as the letter body ([text](https://link), **bold**). Editable
+   *  because it was hardcoded once and had to be asked to be changed each time; now it is the editor's own text. */
+  footerLine: string
   /** Addresses the mail system returned (address → its reason), from any campaign: no later campaign writes to them. */
   bouncedAddrs: Record<string, string>
 }
 
 export const DEFAULT_SIGNATURE: Signature = { id: 'sig-default', name: 'Outreach desk', text: 'With best regards,\n\nOutreach Desk\nESB PowerLine — Express Broadcast and Communication Ltd.\nDhaka, Bangladesh · https://esbpowerline.com' }
+export const DEFAULT_FOOTER_LINE = 'ESB PowerLine · [esbpowerline.com](https://esbpowerline.com)'
 
 const template = (id: OutreachBlueprintId, lang: OutreachLang) => {
   const b = OUTREACH_BLUEPRINTS.find((x) => x.id === id) ?? OUTREACH_BLUEPRINTS[0]
@@ -68,7 +72,7 @@ export function normalize(c: Campaign): Campaign {
 
 function load(): Saved {
   try { localStorage.removeItem(LEGACY_CONFIG) } catch { /* storage blocked */ }
-  const base: Saved = { campaigns: [], activeId: null, lists: [], approved: [], optOut: [], signatures: [DEFAULT_SIGNATURE], templates: [], housePrompt: '', bouncedAddrs: {} }
+  const base: Saved = { campaigns: [], activeId: null, lists: [], approved: [], optOut: [], signatures: [DEFAULT_SIGNATURE], templates: [], housePrompt: '', footerLine: DEFAULT_FOOTER_LINE, bouncedAddrs: {} }
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null') as Partial<Saved> | null
     if (s) return { ...base, ...s, campaigns: (s.campaigns ?? []).map(normalize), signatures: s.signatures?.length ? s.signatures : base.signatures }
@@ -147,6 +151,7 @@ interface OutreachState extends Saved {
   applyTemplate: (id: string) => void
   deleteTemplate: (id: string) => void
   setHousePrompt: (p: string) => void
+  setFooterLine: (line: string) => void
   setRun: (r: RunState, extra?: Partial<Pick<OutreachState, 'nextAt' | 'runSent' | 'runTotal'>>) => void
   setNextAt: (t: number | null) => void
   refreshMail: () => Promise<void>
@@ -186,7 +191,7 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
   const saved = load()
   const persist = () => {
     const s = get()
-    save({ campaigns: s.campaigns, activeId: s.activeId, lists: s.lists, approved: s.approved, optOut: s.optOut, signatures: s.signatures, templates: s.templates, housePrompt: s.housePrompt, bouncedAddrs: s.bouncedAddrs })
+    save({ campaigns: s.campaigns, activeId: s.activeId, lists: s.lists, approved: s.approved, optOut: s.optOut, signatures: s.signatures, templates: s.templates, housePrompt: s.housePrompt, footerLine: s.footerLine, bouncedAddrs: s.bouncedAddrs })
   }
   const relay = () => set({ contacts: overlay(get().contacts, get(), get().campaign(), get().mail) })
   const patchCampaign = (id: string, p: Partial<Campaign>) => {
@@ -413,6 +418,7 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     applyTemplate: (id) => { const t = get().templates.find((x) => x.id === id); if (t) get().patch({ blueprint: 'template', lang: t.lang, subject: t.subject, body: t.body }) },
     deleteTemplate: (id) => { set({ templates: get().templates.filter((x) => x.id !== id) }); persist() },
     setHousePrompt: (housePrompt) => { set({ housePrompt }); persist() },
+    setFooterLine: (line) => { set({ footerLine: line.trim() }); persist() },
 
     setRun: (run, extra = {}) => set({ run, ...extra, ...(run === 'idle' ? { nextAt: null, current: null } : {}) }),
     setNextAt: (nextAt) => set({ nextAt }),

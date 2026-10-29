@@ -96,13 +96,16 @@ function validateMail(m) {
   const signature = String(o.signature ?? '')
   if (signature.length > 3000) throw new Error('Signature is too long')
   const optOut = oneLine(o.optOut, 400)
+  // undefined/null (an older caller, or a test) means "not specified" → the usual default; the renderer always sends
+  // its own current text, including a deliberate '' once the editor has cleared it
+  const footerLine = o.footerLine == null ? DEFAULT_FOOTER_LINE : oneLine(o.footerLine, 300)
   const lang = o.lang === 'bn' ? 'bn' : 'en'
   const list = Array.isArray(o.attachments) ? o.attachments : []
   if (list.length > MAX_ATTACHMENTS) throw new Error(`At most ${MAX_ATTACHMENTS} attachments`)
   const attachments = list.map(attachmentFrom)
   const bytes = attachments.reduce((n, a) => n + a.content.length, 0)
   if (bytes > MAX_ATTACH_BYTES) throw new Error('Attachments are over 18 MB together — Gmail would refuse the message')
-  return { to: to.toLowerCase(), subject, body, signature, optOut, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
+  return { to: to.toLowerCase(), subject, body, signature, optOut, footerLine, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
 }
 
 /** May this send go now? Reads the ledger of earlier sends. */
@@ -140,6 +143,9 @@ function ledgerCheck(ledger, now, settings, mail) {
 const renderer = () => import('./email-html.mjs')
 const LOGO = path.join(__dirname, 'assets', 'esb-logo.png')
 const PAD_SIDEBAR = path.join(__dirname, 'assets', 'esb-pad-sidebar.png')
+// duplicated from email-html.mjs's own export (that module is ESM, loaded only async below; this sanitize step runs
+// synchronously) — keep the two in step if the default ever changes
+const DEFAULT_FOOTER_LINE = 'ESB PowerLine · [esbpowerline.com](https://esbpowerline.com)'
 // the vCard text is duplicated from officialPad.ts (that file is TS, read only by the renderer bundle) — see the
 // comment there; the QR is generated fresh per process start, never read from the printed pad.
 const PAD_VCARD = [
@@ -253,6 +259,7 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
       const { html, text } = renderEmail({
         body: mail.body, signature: mail.signature, optOut: mail.optOut, lang: mail.lang, letterhead: mail.letterhead,
         logoSrc: 'cid:esb-logo', officialPad: mail.officialPad, sidebarSrc: 'cid:esb-pad-sidebar', qrSrc: 'cid:esb-pad-qr',
+        footerLine: mail.footerLine,
       })
       // every pad/letterhead image travels inside the message (cid:), never as a link to a server; the QR is built
       // fresh from PAD_VCARD above, not read off the printed pad

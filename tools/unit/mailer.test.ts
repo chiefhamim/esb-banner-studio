@@ -122,6 +122,19 @@ describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on eve
     now += 120e3
     expect(await mailer.send({ to: 'md@example.com', subject: 'S', text: 'again' })).toMatchObject({ ok: false, duplicate: true })
   })
+  it('footer text: an unspecified footer defaults, an explicitly cleared one sends no footer at all', async () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
+    mailer.saveSettings(settings, 'abcdefghijklmnop')
+    await mailer.send({ to: 'a@example.com', subject: 'S', body: 'B', letterhead: true })
+    expect(String(sent[0].html)).toContain('ESB PowerLine')
+    expect(String(sent[0].html)).toContain('esbpowerline.com')
+    now += 60e3
+    await mailer.send({ to: 'b@example.com', subject: 'S', body: 'B', letterhead: true, footerLine: '' })
+    expect(String(sent[1].html)).not.toContain('border-top:1px solid')
+    now += 60e3
+    await mailer.send({ to: 'c@example.com', subject: 'S', body: 'B', letterhead: true, footerLine: '**ESB Desk**' })
+    expect(String(sent[2].html)).toContain('<strong>ESB Desk</strong>')
+  })
   it('official pad: logo, the real sidebar artwork and a freshly generated QR all ride inline as cid attachments', async () => {
     const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
     mailer.saveSettings(settings, 'abcdefghijklmnop')
