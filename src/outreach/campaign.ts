@@ -44,7 +44,11 @@ export function signatureOf(c: Campaign | null): string {
 /** Everything the main process needs to build one recipient's message. */
 export function mailFor(contact: Contact, c: Campaign): Omit<EsbOutreachMail, 'to' | 'attachments'> {
   const m = buildMessage(contact, c.subject, c.body, c.lang)
-  return { subject: m.subject, body: m.body, optOut: m.optOut, signature: signatureOf(c), lang: c.lang, letterhead: c.letterhead, officialPad: c.officialPad, footerLine: useOutreachStore.getState().footerLine }
+  const st = useOutreachStore.getState()
+  return {
+    subject: m.subject, body: m.body, optOut: m.optOut, signature: signatureOf(c), lang: c.lang, letterhead: c.letterhead,
+    officialPad: c.officialPad, footerLine: st.footerLine, headerBg: st.headerBg, fontFamily: st.fontFamily,
+  }
 }
 
 const sleepUntil = (t: number, id: number) => new Promise<boolean>((resolve) => {

@@ -5,6 +5,23 @@
 // List-Unsubscribe header.
 
 import type { Contact, OutreachLang } from './types'
+import type { KeyboardEvent } from 'react'
+
+/** Gmail's own rule, so the plain-marks model (blank line = new paragraph) matches how the editor actually types:
+ *  Enter alone starts a new paragraph; Shift+Enter is a line break within the one they're on. A bare textarea makes
+ *  no such distinction — both keys insert one "\n" — so the desk's editors intercept Enter themselves. */
+export function softBreakOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, value: string, onChange: (v: string) => void) {
+  if (e.key !== 'Enter' || e.shiftKey) return
+  e.preventDefault()
+  const el = e.currentTarget
+  const a = el.selectionStart, b = el.selectionEnd
+  // already at a paragraph break (blank line before the cursor): one more "\n" is enough, not two
+  const before = value.slice(0, a)
+  const ins = /\n\s*\n\s*$/.test(before) || before === '' ? '\n' : '\n\n'
+  const next = value.slice(0, a) + ins + value.slice(b)
+  onChange(next)
+  requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = a + ins.length })
+}
 
 export const PLACEHOLDERS = ['name', 'designation', 'organization', 'sector'] as const
 type Placeholder = (typeof PLACEHOLDERS)[number]

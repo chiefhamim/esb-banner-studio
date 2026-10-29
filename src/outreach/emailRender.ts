@@ -2,7 +2,7 @@
 // Preview is the email itself, not a look-alike. Only the logo's address differs: cid: in the mail, a data URL here.
 
 // @ts-expect-error — plain ESM shared with the main process, no type declarations
-import { renderEmail as render } from '../../electron/email-html.mjs'
+import { renderEmail as render, EMAIL_FONTS as FONTS } from '../../electron/email-html.mjs'
 import QRCode from 'qrcode'
 import logoUrl from '../assets/images/esb-logo.png'
 import sidebarUrl from '../assets/images/outreach/pad-sidebar.png'
@@ -11,9 +11,12 @@ import type { OutreachLang } from './types'
 
 export interface RenderInput {
   body: string; signature?: string; optOut?: string; lang?: OutreachLang; letterhead?: boolean; logoSrc?: string
-  officialPad?: boolean; sidebarSrc?: string; qrSrc?: string; footerLine?: string
+  officialPad?: boolean; sidebarSrc?: string; qrSrc?: string; footerLine?: string; fontFamily?: string; headerBg?: string
 }
 export const renderEmail = render as (i: RenderInput) => { html: string; text: string }
+/** The only Latin fonts the desk offers — chosen for rendering the same in Outlook, Gmail and Apple Mail, not for
+ *  what happens to be installed on this PC (which a recipient's mail client never sees). See email-html.mjs. */
+export const EMAIL_FONTS = FONTS as { id: string; label: string; stack: string }[]
 
 // the preview frame is sandboxed with no origin, so bundled images go in as data URLs, read once
 const asDataUrl = (url: string) => fetch(url).then((r) => r.blob()).then((b) => new Promise<string>((res, rej) => {

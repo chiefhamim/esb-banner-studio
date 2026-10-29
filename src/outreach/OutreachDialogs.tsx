@@ -2,15 +2,15 @@
 // Review & send — the last look before a batch starts, now or at a time.
 
 import { useMemo, useState } from 'react'
-import { DEFAULT_FOOTER_LINE, useOutreachStore, uid } from './outreachStore'
+import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore, uid } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { cannotStart, eligible, followUpLetter, followUpQueue, inAudience, signatureOf, startBatch } from './campaign'
-import { skipReason } from './compose'
+import { skipReason, softBreakOnEnter } from './compose'
 import { letterChecks } from './checks'
 import { OUTREACH_BLUEPRINTS, rewriteLetter } from './outreachAi'
 import { aiFor, aiPaused } from '../editorial/aiProviders'
-import { logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
-import { Dialog, Field, Select } from '../ui/controls'
+import { EMAIL_FONTS, logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
+import { Dialog, Field, Select, Switch } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import { useEffect } from 'react'
 
@@ -26,7 +26,7 @@ export function SignaturesDialog() {
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
   const open = (sid: string) => { const x = s.signatures.find((y) => y.id === sid); if (!x) return; setId(sid); setName(x.name); setText(x.text) }
   const dirty = !!cur && (name !== cur.name || text !== cur.text)
-  const html = useMemo(() => withViewerMargin(renderEmail({ body: 'Dear Sir/Madam,\n\n…', signature: text, letterhead: false, logoSrc: logo }).html, false), [text, logo])
+  const html = useMemo(() => withViewerMargin(renderEmail({ body: 'Dear Sir/Madam,\n\n…', signature: text, letterhead: false, logoSrc: logo, fontFamily: s.fontFamily }).html, false), [text, logo, s.fontFamily])
   const close = () => ui.set({ sheet: null })
 
   return (
@@ -47,7 +47,9 @@ export function SignaturesDialog() {
         </div>
         <div className="stack" style={{ gap: 10 }}>
           <Field label="Name (only you see it)"><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></Field>
-          <Field label="Signature — the same marks as the letter: **bold**, [words](https://link)"><textarea className="input or-sig-text" rows={7} value={text} onChange={(e) => setText(e.target.value)} /></Field>
+          <Field label="Signature — the same marks as the letter: **bold**, [words](https://link). Enter = new paragraph, Shift+Enter = line break">
+            <textarea className="input or-sig-text" rows={7} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => softBreakOnEnter(e, text, setText)} />
+          </Field>
           <iframe className="or-frame or-sig-frame" title="Signature preview" sandbox="" srcDoc={html} />
         </div>
       </div>
@@ -62,7 +64,7 @@ export function FooterDialog() {
   const [logo, setLogo] = useState('')
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
   const close = () => ui.set({ sheet: null })
-  const html = useMemo(() => renderEmail({ body: 'Dear Sir/Madam,\n\n…', letterhead: true, logoSrc: logo, footerLine: text }).html, [text, logo])
+  const html = useMemo(() => renderEmail({ body: 'Dear Sir/Madam,\n\n…', letterhead: true, logoSrc: logo, footerLine: text, headerBg: s.headerBg, fontFamily: s.fontFamily }).html, [text, logo, s.headerBg, s.fontFamily])
   return (
     <Dialog title="Footer text" kicker="OUTREACH" width={760} onClose={close} footer={<>
       <button type="button" className="btn" onClick={() => setText(DEFAULT_FOOTER_LINE)} disabled={text === DEFAULT_FOOTER_LINE}>Reset to default</button>
@@ -71,9 +73,52 @@ export function FooterDialog() {
       <button type="button" className="btn primary" onClick={() => { s.setFooterLine(text); s.addLog('info', text.trim() ? 'Footer text saved' : 'Footer text cleared'); close() }}>Save</button>
     </>}>
       <div className="stack" style={{ gap: 10 }}>
-        <p className="hint">The line under the plain ESB letterhead (Letter → "ESB letterhead", not the official pad, which has its own fuller footer). Your own words — nothing here is fixed. Same marks as the letter body: **bold**, [a link](https://esbpowerline.com). Leave it empty for no footer line at all, just the brand stripes.</p>
-        <textarea className="input" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder={DEFAULT_FOOTER_LINE} />
+        <p className="hint">The line under the plain ESB letterhead (Letter → "ESB letterhead", not the official pad, which has its own fuller footer). Your own words — nothing here is fixed. Same marks as the letter body: **bold**, [a link](https://esbpowerline.com), and start a line with "-&gt; " to centre it. Leave it empty for no footer line at all, just the brand stripes.</p>
+        <textarea className="input" rows={3} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => softBreakOnEnter(e, text, setText)} placeholder={DEFAULT_FOOTER_LINE} />
         <iframe className="or-frame or-sig-frame" title="Footer preview" sandbox="" srcDoc={html} />
+      </div>
+    </Dialog>
+  )
+}
+
+export function HeaderDialog() {
+  const s = useOutreachStore()
+  const ui = useOutreachUi()
+  const [useBg, setUseBg] = useState(!!s.headerBg)
+  const [hex, setHex] = useState(s.headerBg || '#ffe9c7')
+  const [fontId, setFontId] = useState(s.fontFamily || DEFAULT_FONT_FAMILY)
+  const [logo, setLogo] = useState('')
+  useEffect(() => { void logoDataUrl().then(setLogo) }, [])
+  const close = () => ui.set({ sheet: null })
+  const html = useMemo(() => renderEmail({
+    body: 'Dear Sir/Madam,\n\nWe are pleased to introduce ESB PowerLine…', letterhead: true, logoSrc: logo,
+    footerLine: s.footerLine, headerBg: useBg ? hex : '', fontFamily: fontId,
+  }).html, [logo, s.footerLine, useBg, hex, fontId])
+  const save = () => {
+    s.setHeaderBg(useBg ? hex : '')
+    s.setFontFamily(fontId)
+    s.addLog('info', `Header and font saved${useBg ? ` (${hex})` : ''} · ${EMAIL_FONTS.find((f) => f.id === fontId)?.label ?? fontId}`)
+    close()
+  }
+  return (
+    <Dialog title="Header & fonts" kicker="OUTREACH" width={760} onClose={close} footer={<>
+      <button type="button" className="btn" onClick={() => { setUseBg(false); setFontId(DEFAULT_FONT_FAMILY) }} disabled={!useBg && fontId === DEFAULT_FONT_FAMILY}>Reset to default</button>
+      <div className="spacer" />
+      <button type="button" className="btn" onClick={close}>Cancel</button>
+      <button type="button" className="btn primary" onClick={save}>Save</button>
+    </>}>
+      <div className="stack" style={{ gap: 14 }}>
+        <p className="hint">Only the plain ESB letterhead (Letter → "ESB letterhead") — the official pad keeps its own gold rail, which this does not touch. The font applies to the whole letter, not only the header.</p>
+        <Field label="Header background">
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <Switch checked={useBg} onChange={setUseBg} label={useBg ? hex.toUpperCase() : 'White (default)'} />
+            {useBg && <input type="color" className="input" style={{ width: 44, height: 32, padding: 2 }} value={hex} onChange={(e) => setHex(e.target.value)} aria-label="Header background colour" />}
+          </div>
+        </Field>
+        <Field label="Font — the handful that render as themselves in Outlook, Gmail and Apple Mail, not whatever is installed on this PC (which the recipient's inbox never sees)">
+          <Select<string> value={fontId} onChange={setFontId} options={EMAIL_FONTS.map((f) => ({ value: f.id, label: f.label }))} />
+        </Field>
+        <iframe className="or-frame or-sig-frame" title="Header preview" sandbox="" srcDoc={html} />
       </div>
     </Dialog>
   )

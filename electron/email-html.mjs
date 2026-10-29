@@ -3,7 +3,8 @@
 // what goes out, byte for byte apart from the logo's address (cid: in the mail, a bundled URL in the preview).
 //
 // The editor writes plain text with a few marks, the same family as the Editorial body:
-//   blank line = new paragraph · "## " heading · "- " bullets · "1. " numbered · "> " quote · "---" divider
+//   blank line = new paragraph (plain Enter in the desk's editors; Shift+Enter breaks the line instead) ·
+//   "## " heading · "- " bullets · "1. " numbered · "> " quote · "-> " centred · "---" divider ·
 //   **bold** · *italic* · [words](https://link) · bare https:// links
 // Every character is escaped before a mark is read, and a link may only be https: or mailto:, so no markup from a
 // workbook cell, a pasted text or an AI reply reaches a recipient as markup.
@@ -57,6 +58,7 @@ export function blocksToHtml(text, font) {
     if (lines.every((l) => /^\s*[-•]\s+/.test(l))) { out.push(`<ul style="margin:0 0 14px;padding-left:22px">${lines.map((l) => `<li style="margin:0 0 6px">${inline(escapeHtml(l.replace(/^\s*[-•]\s+/, '')))}</li>`).join('')}</ul>`); continue }
     if (lines.every((l) => /^\s*\d+[.)]\s+/.test(l))) { out.push(`<ol style="margin:0 0 14px;padding-left:22px">${lines.map((l) => `<li style="margin:0 0 6px">${inline(escapeHtml(l.replace(/^\s*\d+[.)]\s+/, '')))}</li>`).join('')}</ol>`); continue }
     if (lines.every((l) => /^>\s?/.test(l))) { out.push(`<blockquote style="margin:0 0 14px;padding:4px 0 4px 14px;border-left:3px solid ${BRAND.line};color:#374151">${lines.map((l) => inline(escapeHtml(l.replace(/^>\s?/, '')))).join('<br>')}</blockquote>`); continue }
+    if (lines.every((l) => /^->\s+/.test(l))) { out.push(p(lines.map((l) => inline(escapeHtml(l.replace(/^->\s+/, '')))).join('<br>'), 'text-align:center')); continue }
     out.push(p(lines.map((l) => inline(escapeHtml(l))).join('<br>')))
   }
   return out.join('\n')
@@ -70,6 +72,7 @@ export function blocksToText(text) {
     .replace(/(^|[^*\w])\*([^*\n]+)\*(?=[^*\w]|$)/g, '$1$2')
     .replace(/^#{2,3}\s+/gm, '')
     .replace(/^>\s?/gm, '')
+    .replace(/^->\s+/gm, '')
     .trim()
 }
 
@@ -109,24 +112,47 @@ function padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc }) {
  * The whole message. `letterhead` adds the plain ESB header (logo + the three brand stripes) and footer;
  * `officialPad` (takes priority over `letterhead` — one chrome, never both stacked) wraps the letter in the full
  * gold-rail pad frame instead, see `padFrame`. `logoSrc`/`sidebarSrc`/`qrSrc` are "cid:esb-…" when sending and the
- * bundled image URL / a generated data URL in the preview.
+ * bundled image URL / a generated data URL in the preview. `fontFamily` is an id into EMAIL_FONTS (an unknown id
+ * falls back to the default, never passed through as written); `headerBg` is a #rrggbb colour for the plain
+ * letterhead's header block (ignored for official pad, which keeps its own gold rail) — an invalid value is dropped,
+ * never inserted into the style attribute as given.
  */
 // The plain letterhead's default footer line, in the letter's own marks ([text](https://link)) — the editor's own
 // text once they open Letter → Footer text, never hardcoded again after the first version had to be asked each
 // time a word in it needed to change.
 export const DEFAULT_FOOTER_LINE = 'ESB PowerLine · [esbpowerline.com](https://esbpowerline.com)'
 
+// Latin font choices, picked for one reason: these are the handful that render as themselves (not a silent fallback)
+// across Outlook desktop, Gmail, Apple Mail and the rest — not "whatever is installed on the editor's PC", which has
+// no effect on how a recipient's own mail client renders the message. A fixed list, not free text: the value ends up
+// inside a style="" attribute, so an id the list doesn't know about is refused rather than inserted as written.
+export const EMAIL_FONTS = [
+  { id: 'sans', label: 'Arial (default)', stack: 'Arial,Helvetica,sans-serif' },
+  { id: 'verdana', label: 'Verdana', stack: 'Verdana,Geneva,sans-serif' },
+  { id: 'tahoma', label: 'Tahoma', stack: 'Tahoma,Geneva,sans-serif' },
+  { id: 'trebuchet', label: 'Trebuchet MS', stack: "'Trebuchet MS',Helvetica,sans-serif" },
+  { id: 'georgia', label: 'Georgia (serif)', stack: "Georgia,'Times New Roman',serif" },
+  { id: 'times', label: 'Times New Roman (serif)', stack: "'Times New Roman',Times,serif" },
+  { id: 'courier', label: 'Courier New (monospace)', stack: "'Courier New',Courier,monospace" },
+]
+const HEX_COLOR = /^#[0-9a-f]{6}$/i
+
 export function renderEmail({
   body, signature = '', optOut = '', lang = 'en', letterhead = false, logoSrc = 'cid:esb-logo',
   officialPad = false, sidebarSrc = 'cid:esb-pad-sidebar', qrSrc = 'cid:esb-pad-qr', footerLine = DEFAULT_FOOTER_LINE,
+  fontFamily = 'sans', headerBg = '',
 }) {
-  const font = lang === 'bn' ? "'Hind Siliguri','Noto Sans Bengali','Nirmala UI',Arial,sans-serif" : "Arial,Helvetica,sans-serif"
+  // Bengali always keeps its own script font regardless of the Latin choice — substituting one of the picks above
+  // for Bengali text would render as tofu in most clients, which have no Bengali glyphs in Georgia or Courier New.
+  const latin = (EMAIL_FONTS.find((f) => f.id === fontFamily) ?? EMAIL_FONTS[0]).stack
+  const font = lang === 'bn' ? "'Hind Siliguri','Noto Sans Bengali','Nirmala UI',Arial,sans-serif" : latin
+  const headBg = HEX_COLOR.test(String(headerBg)) ? headerBg : ''
   const sig = String(signature).trim()
   const foundation = String(footerLine).trim()
   const stripes = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>${[BRAND.green, BRAND.red, BRAND.orange].map((c) => `<td style="height:4px;background:${c};font-size:0;line-height:0">&nbsp;</td>`).join('')}</tr></table>`
   const chrome = letterhead && !officialPad
   const head = chrome
-    ? `${stripes}<div style="padding:20px 28px 8px"><img src="${escapeHtml(logoSrc)}" width="150" alt="ESB PowerLine" style="display:block;width:150px;height:auto;border:0"></div>`
+    ? `${stripes}<div style="padding:20px 28px 8px${headBg ? `;background:${headBg}` : ''}"><img src="${escapeHtml(logoSrc)}" width="150" alt="ESB PowerLine" style="display:block;width:150px;height:auto;border:0"></div>`
     : ''
   const foot = chrome && foundation
     ? `<div style="padding:14px 28px 22px;color:${BRAND.muted};font-size:12px;line-height:1.5;border-top:1px solid ${BRAND.line}">${inline(escapeHtml(foundation))}</div>${stripes}`

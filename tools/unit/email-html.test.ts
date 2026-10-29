@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — plain ESM shared with the main process, no type declarations
-import { renderEmail, blocksToHtml, blocksToText } from '../../electron/email-html.mjs'
+import { renderEmail, blocksToHtml, blocksToText, EMAIL_FONTS } from '../../electron/email-html.mjs'
 
 describe('email-html: the only HTML a recipient gets', () => {
   it('escapes markup from a workbook cell or an AI reply', () => {
@@ -70,5 +70,27 @@ describe('email-html: the only HTML a recipient gets', () => {
   it('official pad never uses a CSS background-image — Outlook\'s Word engine does not render one', () => {
     const { html } = renderEmail({ body: 'Hello', officialPad: true })
     expect(html).not.toMatch(/background-image\s*:/)
+  })
+  it('"-> " centres a paragraph, in HTML and stripped from the plain-text part', () => {
+    const h = blocksToHtml('-> A centred line\n-> and a second one', 'Arial')
+    expect(h).toMatch(/<p style="margin:0 0 14px;text-align:center">A centred line<br>and a second one<\/p>/)
+    expect(blocksToText('-> Centred\n\nNormal')).toBe('Centred\n\nNormal')
+  })
+  it('font family: a known id selects its stack, an unknown one falls back, Bengali never substitutes', () => {
+    const georgia = EMAIL_FONTS.find((f: { id: string }) => f.id === 'georgia')
+    expect(renderEmail({ body: 'x', fontFamily: 'georgia' }).html).toContain(`font-family:${georgia.stack}`)
+    expect(renderEmail({ body: 'x', fontFamily: 'not-a-real-font' }).html).toContain('font-family:Arial,Helvetica,sans-serif')
+    expect(renderEmail({ body: 'x', fontFamily: 'georgia', lang: 'bn' }).html).toContain("font-family:'Hind Siliguri'")
+  })
+  it('header background: a valid hex is used, an invalid one is dropped rather than inserted as written', () => {
+    const ok = renderEmail({ body: 'x', letterhead: true, headerBg: '#112233' }).html
+    expect(ok).toContain('background:#112233')
+    const bad = renderEmail({ body: 'x', letterhead: true, headerBg: '"></div><script>alert(1)</script>' }).html
+    expect(bad).not.toContain('<script>')
+    expect(bad).not.toContain('background:"')
+  })
+  it('header background never applies to the official pad — it keeps its own gold rail', () => {
+    const { html } = renderEmail({ body: 'x', officialPad: true, headerBg: '#112233' })
+    expect(html).not.toContain('background:#112233')
   })
 })

@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOutreachStore } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { OUTREACH_BLUEPRINTS, REWRITES, rewriteLetter, suggestBlueprint, writeOutreachWithAi, type LetterContext, type RewriteAction } from './outreachAi'
-import { PLACEHOLDERS, buildMessage, mentionsAttachment, missingFields } from './compose'
+import { PLACEHOLDERS, buildMessage, mentionsAttachment, missingFields, softBreakOnEnter } from './compose'
 import { eligible, inAudience, signatureOf, STAND_IN } from './campaign'
 import { logoDataUrl, padQrDataUrl, padSidebarDataUrl, renderEmail, withViewerMargin } from './emailRender'
 import { AttachmentTray } from './AttachmentTray'
@@ -33,8 +33,8 @@ function applyMark(text: string, a: number, b: number, kind: string, url = ''): 
   const s0 = text.lastIndexOf('\n', a - 1) + 1
   const e0 = (() => { const i = text.indexOf('\n', b); return i < 0 ? text.length : i })()
   const lines = text.slice(s0, e0).split('\n')
-  const pre = (i: number) => (kind === 'heading' ? '## ' : kind === 'bullet' ? '- ' : kind === 'number' ? `${i + 1}. ` : '> ')
-  const strip = (l: string) => l.replace(/^(#{2,3}\s+|[-•]\s+|\d+[.)]\s+|>\s?)/, '')
+  const pre = (i: number) => (kind === 'heading' ? '## ' : kind === 'bullet' ? '- ' : kind === 'number' ? `${i + 1}. ` : kind === 'center' ? '-> ' : '> ')
+  const strip = (l: string) => l.replace(/^(#{2,3}\s+|[-•]\s+|\d+[.)]\s+|->\s+|>\s?)/, '')
   const all = lines.every((l) => l.startsWith(pre(0).trim()) || (kind === 'number' && /^\d+[.)]\s/.test(l)))
   const out = lines.map((l, i) => (all ? strip(l) : pre(i) + strip(l))).join('\n')
   return [text.slice(0, s0) + out + text.slice(e0), s0, s0 + out.length]
@@ -47,6 +47,7 @@ const TOOLS: { kind: string; icon: IconName; tip: string }[] = [
   { kind: 'bullet', icon: 'listBullet', tip: 'Bulleted list' },
   { kind: 'number', icon: 'listOrdered', tip: 'Numbered list' },
   { kind: 'quote', icon: 'quote', tip: 'Quotation' },
+  { kind: 'center', icon: 'alignTextCenter', tip: 'Centre this paragraph' },
   { kind: 'link', icon: 'link', tip: 'Link (Ctrl+K) — https or mailto only' },
   { kind: 'rule', icon: 'rule', tip: 'Divider' },
 ]
@@ -84,9 +85,10 @@ export function OutreachComposer() {
       html: withViewerMargin(renderEmail({
         body: m.body, signature: signatureOf(c), optOut: m.optOut, lang: c.lang, letterhead: c.letterhead, logoSrc: logo,
         officialPad: c.officialPad, sidebarSrc: padSidebar, qrSrc: padQr, footerLine: s.footerLine,
+        headerBg: s.headerBg, fontFamily: s.fontFamily,
       }).html, c.letterhead, c.officialPad),
     }
-  }, [c, active, ui.view, logo, padSidebar, padQr, s.footerLine, s.signatures]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [c, active, ui.view, logo, padSidebar, padQr, s.footerLine, s.headerBg, s.fontFamily, s.signatures]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!c) {
     return (
@@ -227,11 +229,13 @@ export function OutreachComposer() {
             {PLACEHOLDERS.map((p) => <button key={p} type="button" className="or-tag" onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`{${p}}`)} data-tip={`Insert {${p}} — filled from each contact's row`}>{p}</button>)}
           </div>
           <textarea ref={bodyRef} className={'or-text' + (c.lang === 'bn' ? ' bn' : '')} value={c.body} onChange={(e) => setBody(e.target.value)} spellCheck aria-label="Message"
-            placeholder="Write the letter. Blank line = new paragraph."
+            placeholder="Write the letter. Enter starts a new paragraph; Shift+Enter breaks the line."
             onKeyDown={(e) => {
-              if (!(e.ctrlKey || e.metaKey)) return
-              const k = e.key.toLowerCase()
-              if (k === 'b' || k === 'i' || k === 'k') { e.preventDefault(); void mark(k === 'b' ? 'bold' : k === 'i' ? 'italic' : 'link') }
+              if (e.ctrlKey || e.metaKey) {
+                const k = e.key.toLowerCase()
+                if (k === 'b' || k === 'i' || k === 'k') { e.preventDefault(); void mark(k === 'b' ? 'bold' : k === 'i' ? 'italic' : 'link'); return }
+              }
+              softBreakOnEnter(e, c.body, setBody)
             }} />
 
           <div className="or-foot">

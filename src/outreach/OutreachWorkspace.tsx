@@ -13,8 +13,8 @@ import { OutreachComposer } from './OutreachComposer'
 import { OutreachInspector } from './OutreachInspector'
 import { SenderDialog } from './SenderDialog'
 import { OutreachActivity } from './OutreachActivity'
-import { AskDialog, FollowUpDialog, FooterDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
-import { DEFAULT_FOOTER_LINE, useOutreachStore } from './outreachStore'
+import { AskDialog, FollowUpDialog, FooterDialog, HeaderDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
+import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore } from './outreachStore'
 import { ask, useOutreachUi, type LeftTab } from './outreachUi'
 import { downloadText, eligible, inAudience, resultsCsv } from './campaign'
 import { AiSettingsDialog } from '../editorial/AiSettingsDialog'
@@ -74,6 +74,7 @@ export function OutreachWorkspace() {
       { label: 'Signatures', icon: 'edit', onClick: () => ui.set({ sheet: 'signatures' }) },
       { label: 'ESB letterhead', checked: !!c?.letterhead && !c?.officialPad, disabled: !c || !!c?.officialPad, onClick: () => s.patch({ letterhead: !c?.letterhead }) },
       { label: 'Footer text', icon: 'edit', hint: s.footerLine === DEFAULT_FOOTER_LINE ? 'Default' : s.footerLine ? 'Edited' : 'Off', onClick: () => ui.set({ sheet: 'footer' }) },
+      { label: 'Header & fonts', icon: 'edit', hint: s.headerBg || s.fontFamily !== DEFAULT_FONT_FAMILY ? 'Edited' : 'Default', onClick: () => ui.set({ sheet: 'header' }) },
       { label: 'Official pad (gold rail + contact QR)', checked: !!c?.officialPad, disabled: !c, onClick: () => s.patch({ officialPad: !c?.officialPad }) },
       { label: 'House prompt', icon: 'sparkle', hint: s.housePrompt ? 'Set' : 'None', onClick: () => ui.set({ sheet: 'prompt' }) },
     ] },
@@ -169,6 +170,7 @@ export function OutreachWorkspace() {
       {ui.sheet === 'signatures' && <SignaturesDialog />}
       {ui.sheet === 'prompt' && <HousePromptDialog />}
       {ui.sheet === 'footer' && <FooterDialog />}
+      {ui.sheet === 'header' && <HeaderDialog />}
       {ui.sheet === 'review-send' && c && <ReviewSendDialog />}
       {(ui.sheet === 'rename' || ui.sheet === 'save-template') && c && <NameDialog mode={ui.sheet} />}
       {ui.sheet === 'follow-up' && c && <FollowUpDialog />}

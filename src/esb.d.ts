@@ -88,6 +88,10 @@ export interface EsbOutreachMail {
   officialPad?: boolean
   /** The plain letterhead's footer line, in the letter's own marks — the editor's own text (Letter → Footer text). */
   footerLine?: string
+  /** The plain letterhead header's background, #rrggbb — an invalid value is dropped, never inserted as given. */
+  headerBg?: string
+  /** An id into EMAIL_FONTS — an unknown id falls back to the default, never passed through as written. */
+  fontFamily?: string
   attachments?: { name: string; dataUrl: string }[]
   isTest?: boolean
   resend?: boolean
