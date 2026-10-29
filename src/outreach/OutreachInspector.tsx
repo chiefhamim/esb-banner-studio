@@ -11,7 +11,7 @@ import { cannotStart, downloadText, eligible, followUpQueue, followUpReason, inA
 import { skipReason } from './compose'
 import { STATUS_LABEL, purposeLabel } from './directory'
 import { letterChecks } from './checks'
-import { OUTREACH_BLUEPRINTS, reviewLetter, type ReviewNote } from './outreachAi'
+import { fixLetterWithAi, OUTREACH_BLUEPRINTS, reviewLetter, type LetterProblem, type ReviewNote } from './outreachAi'
 import { STATUS_TEXT } from './CampaignsTab'
 import { aiFor, aiPaused, loadAiSettings, providerMeta, roleProvider } from '../editorial/aiProviders'
 import { ProviderMark } from '../editorial/ProviderMark'
@@ -189,8 +189,13 @@ function ReviewTab() {
   const [notes, setNotes] = useState<{ list: ReviewNote[]; model: string; for: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fixing, setFixing] = useState(false)
+  const [fixError, setFixError] = useState<string | null>(null)
+  const [undo, setUndo] = useState<{ subject: string; body: string; model: string } | null>(null)
   const ai = aiFor('review')
   const aiName = providerMeta(ai?.provider ?? roleProvider(loadAiSettings(), 'review')).name
+  const fixAi = aiFor('outreach')
+  const fixAiName = providerMeta(fixAi?.provider ?? roleProvider(loadAiSettings(), 'outreach')).name
   const signature = signatureOf(c)
   const reference = useMemo(() => { const b = OUTREACH_BLUEPRINTS.find((x) => x.id === c?.blueprint); return b ? `${b.defaultBody}\n${b.bengaliBody}` : '' }, [c?.blueprint])
   const checks = useMemo(() => (c ? letterChecks({ subject: c.subject, body: c.body, signature, attachments: s.attachments, sources: c.sources, reference }) : []), [c, signature, s.attachments, reference])
@@ -199,6 +204,11 @@ function ReviewTab() {
   const order = { bad: 0, warn: 1, ok: 2 }
   const sorted = [...checks].sort((a, b) => order[a.level] - order[b.level])
   const bad = checks.filter((x) => x.level === 'bad').length, warn = checks.filter((x) => x.level === 'warn').length
+  // what "Fix all" sends: the free checks that failed, plus the AI reader's own notes if it has read this exact
+  // letter — a stale review (the letter changed since) is dropped rather than fixing problems that may be gone
+  const checkProblems: LetterProblem[] = checks.filter((x) => x.level !== 'ok').map((x) => ({ text: `${x.title}: ${x.detail}` }))
+  const noteProblems: LetterProblem[] = notes && notes.for === stamp ? notes.list.filter((n) => n.level !== 'ok').map((n) => ({ text: n.text, quote: n.quote || undefined })) : []
+  const problems = [...checkProblems, ...noteProblems]
 
   const run = async () => {
     setBusy(true); setError(null)
@@ -206,6 +216,17 @@ function ReviewTab() {
       const r = await reviewLetter({ subject: c.subject, body: c.body, signature }, { blueprint: c.blueprint, lang: c.lang, housePrompt: s.housePrompt, sources: c.sources })
       setNotes({ list: r.notes, model: r.model, for: stamp })
     } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
+  }
+
+  const fixAll = async () => {
+    setFixing(true); setFixError(null)
+    try {
+      const r = await fixLetterWithAi({ subject: c.subject, body: c.body }, problems, { blueprint: c.blueprint, lang: c.lang, housePrompt: s.housePrompt, sources: c.sources })
+      setUndo({ subject: c.subject, body: c.body, model: r.model })
+      s.patch({ subject: r.subject, body: r.body })
+      s.addLog('ok', `Fixed ${problems.length} issue${problems.length === 1 ? '' : 's'} with ${r.model}`)
+      setNotes(null) // the letter changed; the old review no longer describes it
+    } catch (e) { setFixError((e as Error).message); s.addLog('error', `Fix all: ${(e as Error).message}`) } finally { setFixing(false) }
   }
 
   return (
@@ -220,10 +241,19 @@ function ReviewTab() {
             </li>
           ))}
         </ul>
+        <div className="or-actions">
+          <button type="button" className="btn sm ai-btn" data-provider={fixAi?.provider} disabled={!fixAi || aiPaused() || fixing || !problems.length}
+            onClick={() => void fixAll()}
+            data-tip={aiPaused() ? 'AI is OFF' : !problems.length ? 'Nothing to fix' : fixAi ? `Rewrites only what's failing (${problems.length} issue${problems.length === 1 ? '' : 's'}) — same facts, nothing else changes` : `Add a ${fixAiName} key for the Letter job`}>
+            {fixing ? <Icon name="refresh" size={13} className="spin" /> : <Icon name="sparkle" size={13} />}<span>{fixing ? 'Fixing' : `Fix all with AI${problems.length ? ` (${problems.length})` : ''}`}</span>
+          </button>
+          {undo && <button type="button" className="btn sm" onClick={() => { s.patch({ subject: undo.subject, body: undo.body }); setUndo(null); s.addLog('info', 'Undid the AI fix') }}><Icon name="undo" size={13} /><span>Undo</span></button>}
+        </div>
+        {fixError && <p className="or-note">{fixError}</p>}
       </section>
       <section className="or-card">
         <header><span className="or-card-mark">{ai ? <ProviderMark id={ai.provider} size={14} /> : <Icon name="sparkle" size={14} />}</span><h3>Second reader</h3></header>
-        <p className="or-muted">{aiName} reads the letter as a cautious senior editor would before it goes to officials: unsupported claims, tone, the ask, the subject. Advice only — nothing is changed.</p>
+        <p className="or-muted">{aiName} reads the letter as a cautious senior editor would before it goes to officials: unsupported claims, tone, the ask, the subject. Its notes feed "Fix all with AI" above; nothing changes until you press that.</p>
         <button type="button" className="btn sm ai-btn or-wide" data-provider={ai?.provider} onClick={() => void run()} disabled={!ai || aiPaused() || busy || !c.body.trim()}
           data-tip={aiPaused() ? 'AI is OFF' : ai ? 'One request with the letter, its signature and your ticked talking points' : `Add a ${aiName} key for the Review job`}>
           {busy ? <Icon name="refresh" size={13} className="spin" /> : <Icon name="sparkle" size={13} />}<span>{busy ? 'Reading' : notes ? 'Review again' : 'Review the letter'}</span>

@@ -337,6 +337,36 @@ Task: ${ask[action]}`
   return { ...d, lang: to }
 }
 
+/**
+ * Fix all with AI: the same Letter job, told exactly which problems a checklist found — the free deterministic
+ * checks (checks.ts) and/or the AI Review's own notes — and nothing else. Mirrors Editorial's "Fix all with AI" for
+ * SEO (seoFix.ts): fix only what is named, touch nothing else, same facts-locked guard as every other Letter call
+ * (`finish()` refuses a draft that names the example recipient instead of a placeholder).
+ */
+export interface LetterProblem { text: string; quote?: string }
+
+export async function fixLetterWithAi(current: { subject: string; body: string }, problems: LetterProblem[], ctx: LetterContext): Promise<AiOutreachDraft> {
+  const ai = need('outreach', 'the Letter job')
+  if (!problems.length) throw new Error('Nothing to fix')
+  const reference = referenceOf(ctx, current)
+  const points = sourceBrief(ctx.sources)
+  const list = problems.map((p, i) => `${i + 1}. ${p.text}${p.quote ? ` — "${p.quote}"` : ''}`).join('\n')
+  const system = `You edit outreach emails for ESB PowerLine (esbpowerline.com), a Bangladesh energy and power news publisher.
+
+${RULES(ctx.lang)}
+${ctx.housePrompt.trim() ? `\nThe editor's house style:\n${ctx.housePrompt.trim()}\n` : ''}
+A checklist found problems in this letter. Fix ONLY the problems listed below; change nothing else in wording, tone or length beyond what each fix needs. Do not add any fact, figure, name, date or claim that is not already in the letter or in the talking points below.`
+  const user = `${points ? `Talking points:\n${points}\n\n` : ''}The letter:
+Subject: ${current.subject}
+
+${current.body}
+
+Problems to fix:
+${list}`
+  const res = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model: ai.model, system, user, schema: draftSchema, maxTokens: 4096, effort: 'low' })
+  return finish(res.data, ctx, `${reference}\n${current.body}`, `${providerMeta(ai.provider).name} · ${res.model}`)
+}
+
 // ------------------------------------------------------------------ Research: sources → talking points
 /**
  * The Research job reads one source and lists what an outreach letter could use from it. Every point must carry the
