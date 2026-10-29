@@ -463,7 +463,8 @@ ipcMain.handle('esb:outreach-plan', (_e, rawQ) => {
   return outreachEngineInstance.plan(g.count)
 })
 ipcMain.handle('esb:outreach-settings', () => {
-  return outreachSettings.get()
+  const s = outreachSettings.get()
+  return { ...s, dryRun: !!(process.env.ESB_OUTREACH_DRYRUN || process.env.ESB_DRYRUN) }
 })
 ipcMain.handle('esb:outreach-settings-save', (_e, rawS) => {
   return outreachSettings.save(rawS)

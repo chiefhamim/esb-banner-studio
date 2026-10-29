@@ -15,6 +15,7 @@ import { fixLetterWithAi, OUTREACH_BLUEPRINTS, reviewLetter, type LetterProblem,
 import { STATUS_TEXT } from './CampaignsTab'
 import { aiFor, aiPaused, loadAiSettings, providerMeta, roleProvider } from '../editorial/aiProviders'
 import { ProviderMark } from '../editorial/ProviderMark'
+import { AutopilotCard } from './AutopilotCard'
 import { Icon } from '../ui/Icon'
 import { Switch, Tabs } from '../ui/controls'
 
@@ -90,6 +91,8 @@ function SendTab() {
           </>
         )}
       </section>
+
+      <AutopilotCard />
 
       {c?.interrupted && s.run === 'idle' && (
         <section className="or-card or-interrupted">
@@ -353,7 +356,16 @@ function SendFooter() {
           {s.run === 'running'
             ? <button type="button" className="btn" onClick={pauseBatch}><Icon name="pause" size={14} /><span>Pause</span></button>
             : <button type="button" className="btn primary" onClick={resumeBatch}><Icon name="play" size={14} /><span>Resume</span></button>}
-          <button type="button" className="btn" onClick={stopBatch}><Icon name="x" size={14} /><span>Stop</span></button>
+          <button type="button" className="btn" onClick={async () => {
+            if (await ask({
+              title: 'Stop sending?',
+              body: 'Nobody else is emailed from this campaign. Everyone already emailed stays recorded. You can start a new run for the rest.',
+              ok: 'Stop sending',
+              danger: true,
+            })) {
+              void stopBatch()
+            }
+          }}><Icon name="x" size={14} /><span>Stop</span></button>
         </div>
       </footer>
     )

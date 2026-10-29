@@ -2,7 +2,7 @@
 
 > **Branch:** `outreach-autopilot`  
 > **Started:** 2026-10-30  
-> **Status:** In Progress (Phase 0 Complete)
+> **Status:** Phase 2 Complete (In Progress: Phase 3)
 
 ---
 
@@ -48,13 +48,13 @@
 - [x] **2.1 Projection (`reconcile.ts`, `engineClient.ts`, `engineStore.ts`):** Event cursor & state reconciliation; extracted `applyInboxResult`. (`876ae81`)
 - [x] **2.2 Replace in-window loop (`jobSpec.ts`, `campaign.ts`):** Headless job submission.
 - [x] **2.3 Scheduler & inbox move to main:** App-level scheduler offload; engineClient init.
-- [ ] **2.4 Controls & Autopilot card:** Send tab card, Pause/Resume/Stop, human status sentences.
-- [ ] **2.5 Header, banner row, status-bar pill:** Dynamic Autopilot status indicators.
-- [ ] **2.6 Review & send sheet:** Plan metrics, pre-flight checks, spot checks.
-- [ ] **2.7 Autopilot settings sheet (`AutopilotDialog.tsx`):** UI configuration modal.
-- [ ] **2.8 Interrupted card:** Resumption from unexpected close.
-- [ ] **2.9 Quit & close integration:** Tray-aware confirmation dialog.
-- [ ] **2.10 Phase 2 Gate:** UI dry-run E2E tests, visual diff review.
+- [x] **2.4 Controls & Autopilot card:** Send tab card, Pause/Resume/Stop, human status sentences. (`activityFormat.ts`, `AutopilotCard.tsx`)
+- [x] **2.5 Header, banner row, status-bar pill:** Dynamic Autopilot status indicators.
+- [x] **2.6 Review & send sheet:** Plan metrics, pre-flight checks, spot checks.
+- [x] **2.7 Autopilot settings sheet (`AutopilotDialog.tsx`):** UI configuration modal.
+- [x] **2.8 Interrupted card:** Resumption from unexpected close.
+- [x] **2.9 Quit & close integration:** Tray-aware confirmation dialog.
+- [x] **2.10 Phase 2 Gate:** UI dry-run E2E tests, visual diff review, 30 desktop screenshots verified.
 
 ### Phase 3 — The Activity desk
 - [ ] **3.1 Stats aggregation (`outreach-stats.cjs`):** Hourly, daily, duration, and median metrics.

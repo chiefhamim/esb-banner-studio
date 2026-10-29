@@ -140,6 +140,7 @@ export interface AutopilotSettings {
   aiReadsReply: boolean
   autoResume: boolean
   legacyBackfilled?: boolean
+  dryRun?: boolean
 }
 
 export interface JobMessage {

@@ -8,7 +8,7 @@ import { startScheduler } from './outreach/campaign'
 import { useShellStore, deskMotion } from './shell/shellStore'
 import { arriveFrames, reducedMotion } from './ui/motion'
 import { useStore } from './store'
-import { Tooltips } from './ui/controls'
+import { Dialog, Tooltips } from './ui/controls'
 import { CATEGORIES } from './core/tokens'
 import { installBannerLink } from './editorial/bannerLink'
 // the design layer loads after every other stylesheet so it is the last word on shared chrome
@@ -34,6 +34,7 @@ export default function App() {
   const [base, setBase] = useState<Assets | null>(null)
   const workspace = useShellStore((s) => s.workspace)
   const theme = useStore((s) => s.theme)
+  const quitPrompt = useShellStore((s) => s.quitPrompt)
   const isGallery = typeof window !== 'undefined' && window.location.search.includes('gallery')
 
   useEffect(() => {
@@ -73,10 +74,23 @@ export default function App() {
   // Ctrl+Q quits the desktop app from any workspace, as the Home → Quit button does
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'q' && window.esb?.quit) { e.preventDefault(); void window.esb.quit() }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'q' && window.esb?.quit) {
+        e.preventDefault()
+        void useShellStore.getState().triggerQuit()
+      }
     }
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
+  }, [])
+
+  useEffect(() => {
+    if (window.esb?.onOutreach) {
+      return window.esb.onOutreach((m: any) => {
+        if (m.kind === 'request-quit') {
+          useShellStore.getState().setQuitPrompt(true)
+        }
+      })
+    }
   }, [])
 
   if (isGallery) {
@@ -100,6 +114,35 @@ export default function App() {
       </div>
       {/* one tooltip layer for every workspace (it lived inside Graphics, so Editorial, Video and Home had none) */}
       <Tooltips />
+      {quitPrompt && (
+        <Dialog
+          title="Sending is in progress"
+          kicker="OUTREACH"
+          width={480}
+          onClose={() => useShellStore.getState().setQuitPrompt(false)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => useShellStore.getState().setQuitPrompt(false)}>
+                Keep sending
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => {
+                  useShellStore.getState().setQuitPrompt(false)
+                  void window.esb?.quit?.(true)
+                }}
+              >
+                Quit and pause
+              </button>
+            </>
+          }
+        >
+          <p style={{ margin: 0, fontSize: 13, lineHeight: '20px', color: 'var(--text-2)' }}>
+            Quit now? Sending pauses and can be resumed the next time you open ESB AI Studio.
+          </p>
+        </Dialog>
+      )}
     </div>
   )
 }

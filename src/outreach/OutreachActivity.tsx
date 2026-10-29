@@ -6,6 +6,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useOutreachStore, type LogEntry } from './outreachStore'
+import { useOutreachUi } from './outreachUi'
 import { Icon, type IconName } from '../ui/Icon'
 
 type Kind = 'all' | 'ok' | 'info' | 'problem'
@@ -72,6 +73,18 @@ export function OutreachActivity() {
               </li>
             ))}
           </ul>
+          <div className="or-tp-footer">
+            <button
+              type="button"
+              className="or-link-btn"
+              onClick={() => {
+                setOpen(false)
+                useOutreachUi.getState().set({ desk: 'activity' })
+              }}
+            >
+              Open full Activity →
+            </button>
+          </div>
         </div>,
         document.body,
       )}

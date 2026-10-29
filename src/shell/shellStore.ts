@@ -15,6 +15,9 @@ interface ShellState {
   returnTo: WorkspaceId | null
   openGraphicsFrom: (from: WorkspaceId, focus: 'photos' | null) => void
   consumeGraphicsFocus: () => 'photos' | null
+  quitPrompt: boolean
+  setQuitPrompt: (on: boolean) => void
+  triggerQuit: (force?: boolean) => Promise<void>
 }
 
 const STORAGE_KEY = 'esb-banner-studio/shell'
@@ -66,5 +69,14 @@ export const useShellStore = create<ShellState>((set, get) => ({
     const f = get().graphicsFocus
     if (f) set({ graphicsFocus: null })
     return f
+  },
+  quitPrompt: false,
+  setQuitPrompt: (quitPrompt) => set({ quitPrompt }),
+  triggerQuit: async (force = false) => {
+    if (!window.esb?.quit) return
+    const ok = await window.esb.quit(force)
+    if (ok === false) {
+      set({ quitPrompt: true })
+    }
   },
 }))

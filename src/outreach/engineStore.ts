@@ -94,3 +94,5 @@ export const useEngineStore = create<EngineStoreState>((set, get) => ({
     return active || matching[0]
   },
 }))
+
+if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') Object.assign(window, { __engineStore: useEngineStore })

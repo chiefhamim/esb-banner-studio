@@ -7,7 +7,21 @@ import { create } from 'zustand'
 
 export type LeftTab = 'contacts' | 'campaigns' | 'sources'
 export type RightTab = 'send' | 'contact' | 'review'
-export type Sheet = null | 'sender' | 'ai' | 'signatures' | 'prompt' | 'footer' | 'header' | 'review-send' | 'save-template' | 'rename' | 'follow-up' | 'templates'
+export type DeskView = 'compose' | 'activity'
+export type Sheet =
+  | null
+  | 'sender'
+  | 'ai'
+  | 'signatures'
+  | 'prompt'
+  | 'footer'
+  | 'header'
+  | 'review-send'
+  | 'save-template'
+  | 'rename'
+  | 'follow-up'
+  | 'templates'
+  | 'autopilot'
 
 export interface AskRequest {
   title: string
@@ -19,6 +33,7 @@ export interface AskRequest {
 }
 
 interface UiState {
+  desk: DeskView
   left: LeftTab
   right: RightTab
   view: 'edit' | 'preview'
@@ -29,7 +44,13 @@ interface UiState {
 }
 
 export const useOutreachUi = create<UiState>((set) => ({
-  left: 'contacts', right: 'send', view: 'edit', sheet: null, showLog: false, asking: null,
+  desk: 'compose',
+  left: 'contacts',
+  right: 'send',
+  view: 'edit',
+  sheet: null,
+  showLog: false,
+  asking: null,
   set: (p) => set(p),
 }))
 
@@ -39,3 +60,5 @@ export function ask(req: AskRequest): Promise<string | true | null> {
     useOutreachUi.setState({ asking: { ...req, resolve: (v) => { useOutreachUi.setState({ asking: null }); resolve(v) } } })
   })
 }
+
+if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') Object.assign(window, { __outreachUi: useOutreachUi })

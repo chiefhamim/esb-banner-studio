@@ -508,3 +508,5 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     addLog: (level, text) => set({ log: [...get().log.slice(-299), { t: Date.now(), level, text }] }),
   }
 })
+
+if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') Object.assign(window, { __outreachStore: useOutreachStore })

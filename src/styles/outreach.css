@@ -421,3 +421,193 @@
 .menu.or-new-menu .mi-label small { display: block; margin: 0; line-height: 16px; white-space: normal; overflow-wrap: anywhere; text-wrap: balance; }
 /* "Show 200 more" at the foot of a long contact list */
 .or-list .or-more { flex: none; margin: 4px 0 8px; color: var(--text-2); font-weight: 500; }
+
+
+/* ---------------------------------------------------------------- Autopilot card */
+.or-autopilot-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.or-autopilot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.or-autopilot-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.or-autopilot-meter-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 600;
+}
+.or-autopilot-meter-row .or-percent {
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.or-autopilot-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--text-2);
+}
+.or-autopilot-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.or-autopilot-actions .or-right-link {
+  margin-left: auto;
+}
+.or-link-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.or-link-btn:hover {
+  color: var(--text);
+}
+
+
+/* ---------------------------------------------------------------- Banner row & Autopilot pill */
+.or-banner-row {
+  grid-area: log;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 32px;
+}
+.or-banner-row.warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.or-banner-row.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.or-banner-row .or-banner-action {
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.or-desk-seg {
+  flex: none;
+}
+.or-ap-short-text {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .or-desk-seg .or-desk-lbl {
+    display: none;
+  }
+  .or-ap-full-text {
+    display: none;
+  }
+  .or-ap-short-text {
+    display: inline;
+  }
+}
+.or-tp-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--card-line);
+  display: flex;
+  justify-content: flex-end;
+}
+
+
+/* ---------------------------------------------------------------- Review & Send sheet */
+.or-rs-plan {
+  padding: 12px 14px;
+  background: var(--fill);
+  border-radius: var(--r-2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.or-rs-plan-stats {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.or-rs-plan-stats button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+.or-rs-plan-stats button:hover {
+  text-decoration: underline;
+}
+.or-rs-plan-sub {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.or-rs-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+.or-rs-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+.or-rs-check-row.good { color: var(--success); }
+.or-rs-check-row.warn { color: var(--warning); }
+.or-rs-check-row.bad { color: var(--danger); }
+.or-rs-check-row span.detail { color: var(--text-2); margin-left: 4px; font-weight: normal; }
+.or-rs-spot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+.or-rs-spot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+.or-rs-spot-card {
+  padding: 8px 10px;
+  background: var(--card-bg, var(--fill));
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-2);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.or-rs-spot-to { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.or-rs-spot-sub { color: var(--text-2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.or-rs-spot-body { color: var(--text-3); font-size: 11px; line-height: 14px; max-height: 42px; overflow: hidden; }

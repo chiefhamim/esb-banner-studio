@@ -5,6 +5,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore, uid } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { cannotStart, eligible, followUpLetter, followUpQueue, inAudience, signatureOf, startBatch } from './campaign'
+import { engineClient } from './engineClient'
+import { fmtShortDay } from './activityFormat'
+import { buildMessage, mentionsAttachment } from './compose'
 import { applyMark, skipReason, softBreakOnEnter } from './compose'
 import { letterChecks } from './checks'
 import { OUTREACH_BLUEPRINTS, rewriteLetter } from './outreachAi'
@@ -239,23 +242,61 @@ export function ReviewSendDialog() {
   const c = s.campaign()!
   const [when, setWhen] = useState<'now' | 'later'>('now')
   const [at, setAt] = useState(() => toLocalInput(Date.now() + 3600_000))
+  const [planSummary, setPlanSummary] = useState('')
   const close = () => ui.set({ sheet: null })
   const set = s.mail?.settings
   const audience = useMemo(() => s.contacts.filter((x) => inAudience(x, c.audience)), [s.contacts, c.audience])
   const ready = eligible(s.contacts, c.subject, c.body, c.audience)
   const room = set ? Math.max(0, set.dailyLimit - (s.mail?.sent24h ?? 0)) : 0
-  const today = Math.min(ready.length, room)
+  const skippedCount = audience.length - ready.length
+
   const reasons = useMemo(() => {
     const m = new Map<string, number>()
     for (const x of audience) { const r = skipReason(x, c.subject, c.body); if (r) { const k = r.replace(/\s*\(.*?\)/, '').replace(/ — .*/, ''); m.set(k, (m.get(k) ?? 0) + 1) } }
     return [...m].sort((a, b) => b[1] - a[1])
   }, [audience, c.subject, c.body])
+
   const reference = OUTREACH_BLUEPRINTS.find((b) => b.id === c.blueprint)
   const checks = letterChecks({ subject: c.subject, body: c.body, signature: signatureOf(c), attachments: s.attachments, sources: c.sources, reference: reference ? `${reference.defaultBody}\n${reference.bengaliBody}` : '' }).filter((x) => x.level !== 'ok')
   const why = cannotStart()
   const atMs = new Date(at).getTime()
-  const avg = set ? (set.minDelaySec + set.maxDelaySec) / 2 : 0
-  const span = today > 1 ? Math.round(((today - 1) * avg) / 60) : 0
+
+  // Pre-flight deterministic checks (§5.5)
+  const senderSigned = !!set && !!s.mail?.hasPassword && s.smtp.state !== 'bad'
+  const hasRoom = room > 0
+  const attachMentioned = mentionsAttachment(c.body)
+  const attachOk = !attachMentioned || s.attachments.length > 0
+  const testSent = s.log.some((l) => l.text.includes('Test sent to'))
+  const checksBad = checks.some((x) => x.level === 'bad')
+
+  // Calculate pacing plan
+  useEffect(() => {
+    if (!ready.length) return
+    void engineClient.plan({ count: ready.length }).then((p) => {
+      if (p && p.days) {
+        setPlanSummary(`About ${p.days} sending ${p.days === 1 ? 'day' : 'days'}${p.firstAt && p.lastAt ? `, from ${fmtShortDay(p.firstAt)} to ${fmtShortDay(p.lastAt)}` : ''}, up to ${set?.dailyLimit ?? 100} a day.`)
+      }
+    })
+  }, [ready.length, set?.dailyLimit])
+
+  // Spot check contacts (3 stable samples)
+  const spots = useMemo(() => {
+    if (!ready.length) return []
+    const indices = [0, Math.floor(ready.length / 2), ready.length - 1]
+    const uniq = Array.from(new Set(indices)).map((i) => ready[i]).filter(Boolean)
+    return uniq.map((ct) => ({
+      contact: ct,
+      msg: buildMessage(ct, c.subject, c.body, c.lang),
+    }))
+  }, [ready, c])
+
+  const badReason = !senderSigned
+    ? 'Save the sender account and app password first'
+    : checksBad
+    ? 'Letter has serious issues that must be fixed'
+    : !attachOk
+    ? 'Attachment is mentioned in letter but no file is attached'
+    : why
 
   const go = () => {
     if (when === 'later') {
@@ -266,39 +307,117 @@ export function ReviewSendDialog() {
       return
     }
     close()
-    void startBatch()
+    void startBatch('first')
   }
 
   return (
-    <Dialog title="Review & send" kicker={c.name.toUpperCase()} width={620} onClose={close} footer={<>
+    <Dialog title="Review & send" kicker={c.name.toUpperCase()} width={660} onClose={close} footer={<>
       <div className="spacer" />
       <button type="button" className="btn" onClick={close}>Cancel</button>
-      <button type="button" className="btn primary" onClick={go} disabled={!!why && when === 'now' || (when === 'later' && (!(atMs > Date.now() + 30_000) || !ready.length || !set))}>
-        <Icon name={when === 'now' ? 'send' : 'clock'} size={14} /><span>{when === 'now' ? `Send to ${today}` : 'Schedule'}</span>
+      <button
+        type="button"
+        className="btn primary"
+        onClick={go}
+        disabled={!!badReason && when === 'now' || (when === 'later' && (!(atMs > Date.now() + 30_000) || !ready.length || !set))}
+      >
+        <Icon name={when === 'now' ? 'send' : 'clock'} size={14} />
+        <span>{when === 'now' ? 'Start sending' : 'Start at a time…'}</span>
       </button>
     </>}>
-      <div className="or-rs">
+      <div className="or-rs stack" style={{ gap: 14 }}>
+        {/* 1. Plan row (§5.5) */}
+        <section className="or-rs-plan">
+          <div className="or-rs-plan-stats">
+            <button type="button" onClick={() => { close(); ui.set({ left: 'contacts', view: 'edit' }) }}>
+              <b>{ready.length.toLocaleString()}</b> will be sent
+            </button>
+            <span>·</span>
+            <button type="button" onClick={() => { close(); ui.set({ left: 'contacts', view: 'edit' }) }}>
+              <b>{skippedCount.toLocaleString()}</b> skipped
+            </button>
+          </div>
+          {planSummary && <p className="or-rs-plan-sub">{planSummary}</p>}
+        </section>
+
+        {/* 2. Checks list (§5.5) */}
+        <section className="or-rs-checks">
+          <div className={`or-rs-check-row ${senderSigned ? 'good' : 'bad'}`}>
+            <Icon name={senderSigned ? 'check' : 'x'} size={14} />
+            <span><b>Sender:</b> {senderSigned ? `Signed in as ${set?.user}` : 'Not signed in'}</span>
+          </div>
+          <div className={`or-rs-check-row ${hasRoom ? 'good' : 'warn'}`}>
+            <Icon name={hasRoom ? 'check' : 'info'} size={14} />
+            <span><b>Today’s room:</b> {hasRoom ? `${room} emails can go today` : 'Daily quota reached for today'}</span>
+          </div>
+          <div className="or-rs-check-row good">
+            <Icon name="check" size={14} />
+            <span><b>Pacing window:</b> Send window active</span>
+          </div>
+          <div className={`or-rs-check-row ${checksBad ? 'bad' : checks.length > 0 ? 'warn' : 'good'}`}>
+            <Icon name={checksBad ? 'x' : checks.length > 0 ? 'info' : 'check'} size={14} />
+            <span><b>Letter checks:</b> {checks.length === 0 ? 'Passed all checks' : `${checks.length} warning${checks.length === 1 ? '' : 's'} in Review tab`}</span>
+          </div>
+          <div className={`or-rs-check-row ${attachOk ? 'good' : 'bad'}`}>
+            <Icon name={attachOk ? 'check' : 'x'} size={14} />
+            <span><b>Attachments:</b> {attachOk ? (s.attachments.length ? `${s.attachments.length} attached` : 'None needed') : 'Mentioned in body but not attached'}</span>
+          </div>
+          <div className={`or-rs-check-row ${testSent ? 'good' : 'warn'}`}>
+            <Icon name={testSent ? 'check' : 'info'} size={14} />
+            <span><b>Test email:</b> {testSent ? 'Sent to yourself' : 'Not sent to yourself yet'}</span>
+          </div>
+        </section>
+
+        {/* 3. Spot check (§5.5) */}
+        {spots.length > 0 && (
+          <section className="or-rs-spot">
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>Spot check (samples):</span>
+            <div className="or-rs-spot-grid">
+              {spots.map(({ contact: ct, msg }) => (
+                <div key={ct.id} className="or-rs-spot-card">
+                  <span className="or-rs-spot-to">{ct.personName || ct.email}</span>
+                  <span className="or-rs-spot-sub">{msg.subject}</span>
+                  <span className="or-rs-spot-body">{msg.body.slice(0, 100)}…</span>
+                  <button
+                    type="button"
+                    className="or-link-btn"
+                    style={{ marginTop: 4, textAlign: 'left' }}
+                    onClick={() => {
+                      s.setActiveContact(ct.id)
+                      ui.set({ view: 'preview', sheet: null })
+                    }}
+                  >
+                    Open full preview →
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 4. Audience details */}
         <dl className="or-facts">
           <dt>From</dt><dd>{set ? `${set.name} <${set.user}>` : 'No sender — set it up in Send → Settings'}</dd>
           <dt>Subject</dt><dd><b>{c.subject || '(none)'}</b></dd>
           <dt>Audience</dt><dd>{audience.length} contact{audience.length === 1 ? '' : 's'} · <b>{ready.length} ready</b>{reasons.length ? ` · ${audience.length - ready.length} not sent` : ''}</dd>
           {reasons.length > 0 && <><dt />
             <dd className="or-reasons">{reasons.slice(0, 6).map(([r, n]) => <span key={r}><b>{n}</b> {r.toLowerCase()}</span>)}</dd></>}
-          <dt>Today</dt><dd>{set ? <>{today} of {ready.length} can go today{ready.length > today ? ' — the rest on later days' : ''}{today > 1 ? ` · about ${span >= 60 ? `${Math.floor(span / 60)} h ${span % 60} min` : `${span} min`} at ${set.minDelaySec >= 60 ? `${Math.round(set.minDelaySec / 60)}–${Math.round(set.maxDelaySec / 60)} min` : `${set.minDelaySec}–${set.maxDelaySec} s`} apart` : ''}</> : '—'}</dd>
           <dt>With it</dt><dd>{[c.letterhead ? 'ESB letterhead' : 'No letterhead', c.signatureId === 'none' ? 'no signature' : `signature “${s.signatures.find((x) => x.id === c.signatureId)?.name ?? '—'}”`, s.attachments.length ? `${s.attachments.length} file${s.attachments.length === 1 ? '' : 's'}` : 'no files', 'an unsubscribe line'].join(' · ')}</dd>
         </dl>
-        {checks.length > 0 && (
-          <ul className="or-checks">
-            {checks.map((x) => <li key={x.id + x.title} className={x.level}><Icon name="info" size={13} /><span><b>{x.title}</b><small>{x.detail}</small></span></li>)}
-          </ul>
-        )}
+
+        {/* 5. Schedule timing picker */}
         <div className="or-when" role="radiogroup" aria-label="When">
           <label className={when === 'now' ? 'on' : ''}><input type="radio" checked={when === 'now'} onChange={() => setWhen('now')} /><span><b>Send now</b><small>The first email goes at once; the rest follow at your pace.</small></span></label>
-          <label className={when === 'later' ? 'on' : ''}><input type="radio" checked={when === 'later'} onChange={() => setWhen('later')} /><span><b>Start at a time</b><small>Starts while ESB Studio is open on this computer — nothing sends while it is closed.</small></span>
+          <label className={when === 'later' ? 'on' : ''}><input type="radio" checked={when === 'later'} onChange={() => setWhen('later')} /><span><b>Start at a time…</b><small>Starts while ESB Studio is open on this computer.</small></span>
             {when === 'later' && <input className="input or-at" type="datetime-local" value={at} min={toLocalInput(Date.now())} onChange={(e) => setAt(e.target.value)} />}
           </label>
         </div>
-        {why && when === 'now' && <div className="callout warn"><Icon name="info" size={14} /><span>{why}</span></div>}
+
+        {badReason && when === 'now' && (
+          <div className="callout warn" role="alert">
+            <Icon name="info" size={14} />
+            <span>{badReason}</span>
+          </div>
+        )}
       </div>
     </Dialog>
   )

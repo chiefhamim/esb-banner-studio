@@ -167,7 +167,7 @@ export function HomeWorkspace() {
         </button>
         {canQuit && <i className="home-head-sep" aria-hidden />}
         {canQuit && (
-          <button type="button" className="home-head-btn quit" data-tip="Quit ESB AI Studio (Ctrl+Q)" onClick={() => void window.esb?.quit?.()}>
+          <button type="button" className="home-head-btn quit" data-tip="Quit ESB AI Studio (Ctrl+Q)" onClick={() => void useShellStore.getState().triggerQuit()}>
             <Icon name="x" size={14} />
             <span>Quit</span>
           </button>

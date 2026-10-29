@@ -12,11 +12,14 @@ import { SourcesTab } from './SourcesTab'
 import { OutreachComposer } from './OutreachComposer'
 import { OutreachInspector } from './OutreachInspector'
 import { SenderDialog } from './SenderDialog'
+import { AutopilotDialog } from './AutopilotDialog'
 import { OutreachActivity } from './OutreachActivity'
 import { AskDialog, FollowUpDialog, FooterDialog, HeaderDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
 import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore } from './outreachStore'
 import { ask, useOutreachUi, type LeftTab } from './outreachUi'
-import { downloadText, eligible, inAudience, resultsCsv } from './campaign'
+import { downloadText, eligible, inAudience, resultsCsv, resumeBatch } from './campaign'
+import { useEngineStore } from './engineStore'
+import { describeRun, fmtDay } from './activityFormat'
 import { AiSettingsDialog } from '../editorial/AiSettingsDialog'
 import { EngineStatus } from '../editorial/EngineStatus'
 import { ProviderMark } from '../editorial/ProviderMark'
@@ -51,6 +54,33 @@ export function OutreachWorkspace() {
   const totalReplies = s.campaigns.reduce((n, x) => n + Object.keys(x.replied).length, 0)
   const set = s.mail?.settings
   const desktop = !!window.esb?.outreachSend
+  const engine = useEngineStore()
+  const job = engine.jobForCampaign(c?.id)
+  const settings = engine.settings
+  const desc = describeRun(job, settings)
+
+  let banner: React.ReactNode = null
+  if (job?.status === 'paused' && job.reason === 'circuit') {
+    banner = (
+      <div className="or-banner-row danger" role="status">
+        <span>Sending paused to protect your account — addresses were refused.</span>
+        <button type="button" className="or-banner-action" onClick={() => void resumeBatch()}>Resume</button>
+      </div>
+    )
+  } else if (job?.status === 'paused' && job.reason === 'auth') {
+    banner = (
+      <div className="or-banner-row danger" role="status">
+        <span>Sign-in problem — sending is paused. Open the sender account.</span>
+        <button type="button" className="or-banner-action" onClick={() => ui.set({ sheet: 'sender' })}>Open sender account</button>
+      </div>
+    )
+  } else if (settings?.dryRun || job?.dry) {
+    banner = (
+      <div className="or-banner-row warning" role="status">
+        <span>Test run — nothing is really sent.</span>
+      </div>
+    )
+  }
 
   const openTab = (left: LeftTab) => ui.set({ left })
   const menus: MenuDef[] = [
@@ -63,6 +93,7 @@ export function OutreachWorkspace() {
       { label: 'Review & send', icon: 'send', disabled: !c || !idle, onClick: () => ui.set({ sheet: 'review-send' }) },
       { label: 'Check the inbox for replies', icon: 'inbox', disabled: !desktop || !s.mail?.hasPassword || s.inbox.state === 'busy', onClick: () => void s.checkInbox(true) },
       { label: 'Export results (CSV)', icon: 'download', disabled: !c || !s.contacts.length, onClick: () => c && downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts)) },
+      { label: 'Autopilot settings', icon: 'sliders', onClick: () => ui.set({ sheet: 'autopilot' }) },
       { divider: true },
       { label: 'Delete campaign', icon: 'trash', danger: true, disabled: !c || !idle, onClick: async () => { if (c && await ask({ title: `Delete “${c.name}”?`, body: 'Its letter, sources and results go with it. Addresses it already emailed stay protected by the 7-day rule.', ok: 'Delete', danger: true })) void s.deleteCampaign(c.id) } },
     ] },
@@ -87,6 +118,9 @@ export function OutreachWorkspace() {
       { label: 'Sender account', icon: 'mail', disabled: !desktop, onClick: () => ui.set({ sheet: 'sender' }) },
     ] },
     { label: 'View', items: [
+      { label: 'Compose desk', icon: 'edit', checked: ui.desk === 'compose', onClick: () => ui.set({ desk: 'compose' }) },
+      { label: 'Activity desk', icon: 'activity', checked: ui.desk === 'activity', onClick: () => ui.set({ desk: 'activity' }) },
+      { divider: true },
       { label: 'Contacts', checked: ui.left === 'contacts', onClick: () => openTab('contacts') },
       { label: 'Campaigns', checked: ui.left === 'campaigns', onClick: () => openTab('campaigns') },
       { label: 'Sources', checked: ui.left === 'sources', onClick: () => openTab('sources') },
@@ -117,6 +151,26 @@ export function OutreachWorkspace() {
             <span className="dpc-tag">{c.kind === 'direct' ? `${audience.length} to` : `${ready} ready`}</span>
           </button>
         )}
+        <div className="seg or-desk-seg">
+          <button
+            type="button"
+            className={'btn xs' + (ui.desk === 'compose' ? ' on' : '')}
+            onClick={() => ui.set({ desk: 'compose' })}
+            data-tip="Compose desk — contacts, letters and sending"
+          >
+            <Icon name="edit" size={13} />
+            <span className="or-desk-lbl">Compose</span>
+          </button>
+          <button
+            type="button"
+            className={'btn xs' + (ui.desk === 'activity' ? ' on' : '')}
+            onClick={() => ui.set({ desk: 'activity' })}
+            data-tip="Activity desk — overview, charts, logs and reports"
+          >
+            <Icon name="activity" size={13} />
+            <span className="or-desk-lbl">Activity</span>
+          </button>
+        </div>
         <div className="spacer" />
         <OutreachActivity />
         <button type="button" className={'ed-ai-chip' + (letterAi ? ' on' : '') + (ai.paused ? ' paused' : '')} data-provider={letterAi?.provider} onClick={() => ui.set({ sheet: 'ai' })} aria-label="AI keys and roles"
@@ -129,6 +183,8 @@ export function OutreachWorkspace() {
         </button>
         <input ref={file} type="file" accept=".xlsx,.csv,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void s.importList(f); e.target.value = '' }} />
       </header>
+
+      {banner}
 
       <div className="or-body">
         <aside className="or-left" aria-label="Contacts, campaigns and sources">
@@ -158,14 +214,38 @@ export function OutreachWorkspace() {
           </button>
         </>}
         <div className="sep" />
+        <button
+          type="button"
+          className={'sb-cms or-sb-autopilot ' + (desc.status === 'problem' ? 'off' : 'on')}
+          onClick={() => ui.set({ desk: 'activity' })}
+          data-tip={`Autopilot — ${desc.sentence}. Click to open full Activity`}
+        >
+          <span className="sb-k">Autopilot</span>
+          <span className="sb-pill">
+            <i className={'sb-dot ' + (desc.status === 'sending' ? 'cs-sending' : desc.status === 'waiting' || desc.status === 'paused' ? 'cs-paused' : desc.status === 'problem' ? 'bad' : '')} aria-hidden />
+            <span className="sb-text or-ap-full-text">
+              {desc.status === 'sending'
+                ? `Sending ${job?.sent ?? 0}/${job?.total ?? 0}${desc.nextInText ? ` · ${desc.nextInText.replace('Next in ', '')}` : ''}`
+                : desc.status === 'waiting'
+                ? (job?.why === 'window' ? `Waiting · opens ${fmtDay(job.until || Date.now(), settings?.window?.tz)}` : desc.sentence)
+                : desc.status === 'paused'
+                ? 'Paused'
+                : 'Idle'}
+            </span>
+            <span className="sb-text or-ap-short-text">
+              {desc.status === 'sending' ? `${job?.sent ?? 0}/${job?.total ?? 0}` : desc.label}
+            </span>
+          </span>
+        </button>
+        <div className="sep" />
         <EngineStatus ai={ai} offline={false} onAddKey={() => ui.set({ sheet: 'ai' })} roles={['outreach', 'research', 'review']} />
         <div className="spacer" />
         <span>{c?.kind === 'direct' ? `${audience.length} recipient${audience.length === 1 ? '' : 's'}` : `${audience.length} in audience`} · {ready} ready · {sent} sent</span>
         {set && <><div className="sep" /><span>{s.mail?.sent24h ?? 0} of {set.dailyLimit} today</span></>}
-        {!idle && <><div className="sep" /><span className="or-status-run">{s.run === 'running' ? 'Sending' : 'Paused'} · {s.runSent}/{s.runTotal}</span></>}
       </footer>
 
       {ui.sheet === 'sender' && <SenderDialog onClose={() => { ui.set({ sheet: null }); void s.checkSmtp(true) }} />}
+      {ui.sheet === 'autopilot' && <AutopilotDialog onClose={() => ui.set({ sheet: null })} />}
       {ui.sheet === 'ai' && <AiSettingsDialog onClose={() => ui.set({ sheet: null })} onToast={(m) => s.addLog('info', m)} />}
       {ui.sheet === 'signatures' && <SignaturesDialog />}
       {ui.sheet === 'prompt' && <HousePromptDialog />}
