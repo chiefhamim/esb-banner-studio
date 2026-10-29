@@ -10,8 +10,9 @@ import { useOutreachStore } from './outreachStore'
 import { buildMessage, missingFields, skipReason } from './compose'
 import type { Campaign, Contact } from './types'
 import type { EsbOutreachMail } from '../esb'
-
-let runId = 0
+import { buildJobSpec } from './jobSpec'
+import { engineClient } from './engineClient'
+import { useEngineStore } from './engineStore'
 
 /** The campaign's audience: one group and/or any of the chosen purposes ("" filters nothing). */
 export function inAudience(c: Contact, a: Campaign['audience'] | undefined): boolean {
@@ -51,17 +52,6 @@ export function mailFor(contact: Contact, c: Campaign): Omit<EsbOutreachMail, 't
     headerBg: st.headerBg, footerBg: st.footerBg, stripeColors: st.stripeColors,
   }
 }
-
-const sleepUntil = (t: number, id: number) => new Promise<boolean>((resolve) => {
-  const tick = () => {
-    const s = useOutreachStore.getState()
-    if (id !== runId || s.run === 'idle') return resolve(false)
-    if (s.run === 'paused') { setTimeout(tick, 500); return }
-    if (Date.now() >= t) return resolve(true)
-    setTimeout(tick, Math.min(500, t - Date.now()))
-  }
-  tick()
-})
 
 const attachmentsOf = () => useOutreachStore.getState().attachments.map((a) => ({ name: a.name, dataUrl: a.dataUrl }))
 
@@ -107,111 +97,85 @@ export function followUpQueue(contacts: Contact[], c: Campaign, now = Date.now()
 export function cannotStart(mode: 'first' | 'followup' = 'first'): string | null {
   const s = useOutreachStore.getState()
   const c = s.campaign()
-  if (!window.esb?.outreachSend) return 'Sending needs the ESB Studio desktop app'
+  if (!window.esb?.outreachSend && !window.esb?.outreachJobSubmit) return 'Sending needs the ESB Studio desktop app'
   if (!c) return 'Open or create a campaign first'
   if (!s.mail?.hasPassword || !s.mail.settings) return 'Save the sender account and app password first'
   if (mode === 'first') {
     if (!c.subject.trim() || !c.body.trim()) return 'The letter needs a subject and a body'
     if (!eligible(s.contacts, c.subject, c.body, c.audience).length) return 'Nobody in this audience is ready to send to'
   } else if (!followUpQueue(s.contacts, c).due.length) return 'Nobody is due a follow-up yet'
-  if (s.mail.sent24h >= s.mail.settings.dailyLimit) return `Today's limit of ${s.mail.settings.dailyLimit} is used up`
   return null
 }
 
 /** Send the first letter to everyone ready (mode 'first'), or the follow-up to everyone due (mode 'followup'). */
-export async function startBatch(mode: 'first' | 'followup' = 'first') {
+export async function startBatch(mode: 'first' | 'followup' = 'first', startAt?: number | null) {
   const s = useOutreachStore.getState()
   await s.refreshMail()
   const why = cannotStart(mode)
   if (why) { s.addLog('warn', why); return }
   const c = s.campaign()!
-  const mail = useOutreachStore.getState().mail!
-  const queue = mode === 'first' ? eligible(useOutreachStore.getState().contacts, c.subject, c.body, c.audience) : followUpQueue(useOutreachStore.getState().contacts, c).due
-  const room = Math.max(0, mail.settings!.dailyLimit - mail.sent24h)
-  const id = ++runId
-  const total = Math.min(queue.length, room)
-  const campaignId = c.id
-  const what = mode === 'first' ? 'email' : 'follow-up'
-  // `interrupted` says which kind of batch this is, so one cut short by closing the app can be continued
-  s.patch({ status: 'sending', scheduledAt: null, interrupted: mode })
-  s.setRun('running', { runSent: 0, runTotal: total, nextAt: null })
-  s.addLog('info', `${c.name}: ${total} ${what}${total === 1 ? '' : 's'}, ${mail.settings!.minDelaySec}–${mail.settings!.maxDelaySec} s apart`)
 
-  let sent = 0
-  const list = queue.slice(0, total)
-  const finish = (status: Campaign['status']) => { useOutreachStore.getState().patch({ status, interrupted: null }); useOutreachStore.getState().setRun('idle') }
-  const blocked = (x: Contact, cur: Campaign) => (mode === 'first' ? skipReason(x, cur.subject, cur.body) : followUpReason(x, cur))
-  for (let i = 0; i < list.length; ) {
-    const target = list[i]
-    // the contact may have been opted out, approved away, answered or sent by hand since the batch began
-    let st = useOutreachStore.getState()
-    const cur = st.campaign()
-    if (!cur || cur.id !== campaignId) return
-    const now = st.contacts.find((x) => x.email === target.email)
-    if (!now || blocked(now, cur)) { i++; continue }
-    if (!(await sleepUntil(st.nextAt ?? 0, id))) return
-    st = useOutreachStore.getState()
-    const live = st.campaign()!
-    st.markSending(target.email)
-    const payload = mode === 'first' ? mailFor(now, live) : { ...mailFor(now, { ...live, ...followUpLetter(live) }), followUp: true }
-    let r: Awaited<ReturnType<NonNullable<NonNullable<typeof window.esb>['outreachSend']>>>
-    try {
-      r = await window.esb!.outreachSend!({ to: target.email, ...payload, attachments: mode === 'first' ? attachmentsOf() : [] })
-    } catch (e) {
-      // the bridge itself failed (not the mail server): stop cleanly rather than leave the desk stuck on "running"
-      useOutreachStore.getState().markSending(null)
-      if (id !== runId) return
-      finish('paused')
-      useOutreachStore.getState().addLog('error', `${target.email}: the send could not be handed to the mailer — ${(e as Error).message}`)
-      return
-    }
-    st = useOutreachStore.getState()
-    st.markSending(null)
-    if (id !== runId) return
-    if (!r.ok && r.nextAt && /too soon/i.test(r.error)) {
-      // the main process keeps a floor between sends: wait it out and try the same contact again
-      st.setNextAt(r.nextAt + 1000)
-      continue
-    }
-    i++
-    const mark = (t: number) => (mode === 'first' ? st.markSent(target.email, t) : st.markFollowed(target.email, t))
-    if (r.ok) {
-      sent++
-      mark(Date.now())
-      st.addLog('ok', `${mode === 'first' ? 'Sent to' : 'Followed up'} ${now.personName || target.email}${now.organization ? `, ${now.organization}` : ''}`)
-    } else if (r.duplicate) {
-      mark(Date.now())
-      st.addLog('warn', `${target.email}: ${r.error}`)
-    } else {
-      if (mode === 'first') st.markFailed(target.email, r.error)
-      st.addLog('error', `${target.email}: ${r.error}`)
-      // the account or the daily limit refused: every later send would fail the same way
-      if (r.nextAt || /password|auth|login|credential|limit/i.test(r.error)) {
-        finish('paused')
-        st.addLog('warn', r.nextAt ? `Stopped — the next send is allowed at ${new Date(r.nextAt).toLocaleTimeString()}` : 'Stopped — check the sender account')
-        await st.refreshMail()
-        return
-      }
-    }
-    useOutreachStore.setState({ runSent: sent })
-    await useOutreachStore.getState().refreshMail()
-    const m = useOutreachStore.getState().mail?.settings
-    const lo = (m?.minDelaySec ?? 180) * 1000, hi = (m?.maxDelaySec ?? 480) * 1000
-    // no wait after the last one
-    useOutreachStore.getState().setNextAt(i < list.length ? Date.now() + lo + Math.random() * (hi - lo) : null)
+  const spec = buildJobSpec({
+    campaign: c,
+    contacts: s.contacts,
+    mode,
+    attachments: mode === 'first' ? attachmentsOf() : [],
+    startAt,
+  })
+
+  s.patch({
+    status: startAt ? 'scheduled' : 'sending',
+    scheduledAt: startAt ?? null,
+    interrupted: mode,
+  })
+
+  const what = mode === 'first' ? 'email' : 'follow-up'
+  s.addLog('info', `${c.name}: ${spec.messages.length} ${what}${spec.messages.length === 1 ? '' : 's'} submitted to autopilot`)
+
+  const res = await engineClient.submit(spec)
+  if (!res.ok) {
+    s.patch({ status: 'paused', interrupted: null })
+    s.addLog('error', `Could not start batch: ${res.error}`)
   }
-  if (id !== runId) return
-  const after = useOutreachStore.getState()
-  const left = mode === 'first' ? eligible(after.contacts, c.subject, c.body, c.audience).length : followUpQueue(after.contacts, after.campaign()!).due.length
-  finish(left ? 'paused' : 'done')
-  after.addLog('info', `${c.name}: ${sent} ${what}${sent === 1 ? '' : 's'} sent${left ? ` · ${left} left for another day` : ''}`)
 }
 
-export function pauseBatch() { useOutreachStore.getState().setRun('paused'); useOutreachStore.getState().patch({ status: 'paused' }); useOutreachStore.getState().addLog('warn', 'Batch paused') }
-export function resumeBatch() { useOutreachStore.getState().setRun('running'); useOutreachStore.getState().patch({ status: 'sending' }); useOutreachStore.getState().addLog('info', 'Batch resumed') }
-export function stopBatch() {
-  runId++
+export async function pauseBatch() {
   const s = useOutreachStore.getState()
+  const c = s.campaign()
+  if (c) {
+    const job = useEngineStore.getState().jobForCampaign(c.id)
+    if (job) {
+      await engineClient.control(job.jobId, 'pause')
+    }
+  }
+  s.setRun('paused')
+  s.patch({ status: 'paused' })
+  s.addLog('warn', 'Batch paused')
+}
+
+export async function resumeBatch() {
+  const s = useOutreachStore.getState()
+  const c = s.campaign()
+  if (c) {
+    const job = useEngineStore.getState().jobForCampaign(c.id)
+    if (job) {
+      await engineClient.control(job.jobId, 'resume')
+    }
+  }
+  s.setRun('running')
+  s.patch({ status: 'sending' })
+  s.addLog('info', 'Batch resumed')
+}
+
+export async function stopBatch() {
+  const s = useOutreachStore.getState()
+  const c = s.campaign()
+  if (c) {
+    const job = useEngineStore.getState().jobForCampaign(c.id)
+    if (job) {
+      await engineClient.control(job.jobId, 'stop')
+    }
+  }
   s.markSending(null)
   s.setRun('idle')
   s.patch({ status: 'paused', interrupted: null })
@@ -238,41 +202,8 @@ export async function sendTest(to: string, sample: Contact | undefined) {
 // A campaign set to start at a time starts then — while the app is open. Nothing runs when it is closed (there is no
 // server here), and a time that passed while it was closed starts the batch at the next launch only if it is less than
 // 12 hours late; older ones wait for the editor, so a forgotten schedule never fires a week later.
-const LATE_LIMIT = 12 * 3600_000
-let scheduler: ReturnType<typeof setInterval> | null = null
 export function startScheduler() {
-  if (scheduler) return
-  // replies and bounces: read the inbox on launch and every 15 minutes while anything was sent (main caches 5 min)
-  const inbox = () => {
-    const s = useOutreachStore.getState()
-    if (s.run === 'idle' && s.campaigns.some((c) => Object.keys(c.sent).length)) void s.refreshMail().then(() => { if (useOutreachStore.getState().mail?.hasPassword) void useOutreachStore.getState().checkInbox() })
-  }
-  setTimeout(inbox, 20_000)
-  setInterval(inbox, 15 * 60_000)
-  scheduler = setInterval(() => {
-    const s = useOutreachStore.getState()
-    if (s.run !== 'idle') return
-    const due = s.campaigns.find((c) => c.status === 'scheduled' && c.scheduledAt && c.scheduledAt <= Date.now())
-    if (!due) return
-    if (Date.now() - due.scheduledAt! > LATE_LIMIT) {
-      s.patchById(due.id, { status: 'draft', scheduledAt: null })
-      s.addLog('warn', `${due.name}: its start time passed while the app was closed — schedule it again`)
-      return
-    }
-    void (async () => {
-      // a start that cannot happen (no password, the day's limit used, nobody left) goes back to a draft once, with the
-      // reason — it used to stay scheduled and retry every 15 s, reopening the campaign and logging the same warning
-      if (s.activeId !== due.id) await s.openCampaign(due.id)
-      const why = cannotStart()
-      if (why) {
-        useOutreachStore.getState().patchById(due.id, { status: 'draft', scheduledAt: null })
-        useOutreachStore.getState().addLog('warn', `${due.name}: the scheduled start did not happen — ${why}`)
-        return
-      }
-      s.addLog('info', `${due.name}: scheduled start`)
-      await startBatch()
-    })()
-  }, 15_000)
+  void engineClient.init()
 }
 
 // ------------------------------------------------------------------ results
