@@ -45,7 +45,7 @@
 - [x] **1.9 Phase 1 Gate:** Unit & E2E verification; zero UI regression. Ready to commit.
 
 ### Phase 2 — Make the desk drive the engine
-- [ ] **2.1 Projection (`reconcile.ts`, `engineClient.ts`, `engineStore.ts`):** Event cursor & state reconciliation.
+- [x] **2.1 Projection (`reconcile.ts`, `engineClient.ts`, `engineStore.ts`):** Event cursor & state reconciliation; extracted `applyInboxResult`.
 - [ ] **2.2 Replace in-window loop (`jobSpec.ts`, `campaign.ts`):** Headless job submission.
 - [ ] **2.3 Scheduler & inbox move to main:** App-level scheduler offload.
 - [ ] **2.4 Controls & Autopilot card:** Send tab card, Pause/Resume/Stop, human status sentences.

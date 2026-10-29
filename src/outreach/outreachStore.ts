@@ -101,6 +101,55 @@ function save(s: Saved) {
   try { localStorage.setItem(KEY, JSON.stringify(s)) } catch { /* full: the main process's ledger still prevents repeats */ }
 }
 
+export interface InboxUpdateData {
+  ok?: boolean
+  at?: number
+  scanned?: number
+  note?: string
+  error?: string
+  replies?: Array<{ email: string; at: number; auto?: boolean; unsubscribe?: boolean }>
+  bounces?: Array<{ email: string; at: number; reason: string }>
+}
+
+export function applyInboxResultToCampaigns(
+  campaigns: Campaign[],
+  currentOptOut: string[],
+  currentBounced: Record<string, string>,
+  r: InboxUpdateData
+): {
+  campaigns: Campaign[]
+  optOut: string[]
+  bouncedAddrs: Record<string, string>
+  news: Array<{ level: 'ok' | 'warn'; text: string }>
+} {
+  const optOut = new Set(currentOptOut)
+  const bouncedAddrs = { ...currentBounced }
+  const news: Array<{ level: 'ok' | 'warn'; text: string }> = []
+  const nextCampaigns = campaigns.map((c) => {
+    const replied = { ...c.replied }
+    const bounced = { ...c.bounced }
+    for (const x of r.replies ?? []) {
+      const sentAt = Math.min(c.sent[x.email] ?? Infinity, c.followed[x.email] ?? Infinity)
+      if (x.auto || !(x.at >= sentAt - 60_000) || replied[x.email]) continue
+      replied[x.email] = x.at
+      news.push({ level: 'ok', text: `${x.email} replied${x.unsubscribe ? ' and asked not to be emailed' : ''} — ${c.name}` })
+    }
+    for (const x of r.bounces ?? []) {
+      if (c.sent[x.email] && !bounced[x.email]) {
+        bounced[x.email] = x.reason
+        news.push({ level: 'warn', text: `${x.email} bounced: ${x.reason} — ${c.name}` })
+      }
+    }
+    return Object.keys(replied).length !== Object.keys(c.replied).length ||
+      Object.keys(bounced).length !== Object.keys(c.bounced).length
+      ? { ...c, replied, bounced }
+      : c
+  })
+  for (const x of r.replies ?? []) if (x.unsubscribe) optOut.add(x.email)
+  for (const x of r.bounces ?? []) bouncedAddrs[x.email] ??= x.reason
+  return { campaigns: nextCampaigns, optOut: [...optOut], bouncedAddrs, news }
+}
+
 export type RunState = 'idle' | 'running' | 'paused'
 export interface LogEntry { t: number; level: 'info' | 'ok' | 'warn' | 'error'; text: string }
 export type InboxCheck = { state: 'idle' } | { state: 'busy'; at?: number } | { state: 'ok'; at: number; scanned: number; note?: string } | { state: 'bad'; at: number; error: string }
@@ -149,6 +198,7 @@ interface OutreachState extends Saved {
   markFailed: (email: string, error: string) => void
   markSending: (email: string | null) => void
   markFollowed: (email: string, t: number) => void
+  applyInboxResult: (r: EsbInboxResult | InboxUpdateData) => void
   checkInbox: (force?: boolean) => Promise<void>
   selectBlueprint: (id: OutreachBlueprintId) => void
   setLang: (lang: OutreachLang) => void
@@ -377,31 +427,32 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
       const c = get().campaign(); if (!c) return
       patchCampaign(c.id, { followed: { ...c.followed, [email]: t } })
     },
+    applyInboxResult: (r) => {
+      const { campaigns, optOut, bouncedAddrs, news } = applyInboxResultToCampaigns(
+        get().campaigns,
+        get().optOut,
+        get().bouncedAddrs,
+        r
+      )
+      const isOk = !('ok' in r) || r.ok
+      set({
+        campaigns,
+        optOut,
+        bouncedAddrs,
+        ...(isOk && 'at' in r && typeof r.at === 'number'
+          ? { inbox: { state: 'ok', at: r.at, scanned: ('scanned' in r ? r.scanned : undefined) ?? 0, note: 'note' in r ? r.note : undefined } }
+          : {})
+      })
+      persist(); relay()
+      for (const n of news) get().addLog(/bounced/.test(n.text) ? 'warn' : 'ok', n.text)
+    },
     checkInbox: async (force = false) => {
       const b = window.esb
       if (!b?.outreachInbox || get().inbox.state === 'busy') return
       set({ inbox: { state: 'busy', at: get().inbox.state === 'ok' ? (get().inbox as { at: number }).at : undefined } })
       const r = await b.outreachInbox(force).catch((e: Error) => ({ ok: false, at: Date.now(), error: e.message }) as EsbInboxResult)
       if (!r.ok) { set({ inbox: { state: 'bad', at: r.at, error: r.error ?? 'The inbox did not answer' } }); return }
-      // lay what came back over every campaign that wrote to those addresses — only after its own letter went
-      const optOut = new Set(get().optOut), bouncedAddrs = { ...get().bouncedAddrs }
-      const news: string[] = []
-      const campaigns = get().campaigns.map((c) => {
-        const replied = { ...c.replied }, bounced = { ...c.bounced }
-        for (const x of r.replies ?? []) {
-          const sentAt = Math.min(c.sent[x.email] ?? Infinity, c.followed[x.email] ?? Infinity)
-          if (x.auto || !(x.at >= sentAt - 60_000) || replied[x.email]) continue
-          replied[x.email] = x.at
-          news.push(`${x.email} replied${x.unsubscribe ? ' and asked not to be emailed' : ''} — ${c.name}`)
-        }
-        for (const x of r.bounces ?? []) if (c.sent[x.email] && !bounced[x.email]) { bounced[x.email] = x.reason; news.push(`${x.email} bounced: ${x.reason} — ${c.name}`) }
-        return Object.keys(replied).length !== Object.keys(c.replied).length || Object.keys(bounced).length !== Object.keys(c.bounced).length ? { ...c, replied, bounced } : c
-      })
-      for (const x of r.replies ?? []) if (x.unsubscribe) optOut.add(x.email)
-      for (const x of r.bounces ?? []) bouncedAddrs[x.email] ??= x.reason
-      set({ campaigns, optOut: [...optOut], bouncedAddrs, inbox: { state: 'ok', at: r.at, scanned: r.scanned ?? 0, note: r.note } })
-      persist(); relay()
-      for (const n of news) get().addLog(/bounced/.test(n) ? 'warn' : 'ok', n)
+      get().applyInboxResult(r)
     },
     markSending: (email) => set({ current: email, contacts: get().contacts.map((c) => (c.email === email ? { ...c, status: 'SENDING' } : c.status === 'SENDING' ? { ...c, status: 'QUEUED' } : c)) }),
 
