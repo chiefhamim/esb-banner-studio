@@ -135,7 +135,18 @@ function createEventLog(options = {}) {
     }
   }
 
+  let dirEnsured = false
+  function ensureDir() {
+    if (!dirEnsured) {
+      try {
+        ensureDir()
+        dirEnsured = true
+      } catch {}
+    }
+  }
+
   // Initial load
+  ensureDir()
   const now = clock()
   const monthFiles = listMonthFiles()
   for (const mf of monthFiles) {
@@ -159,7 +170,7 @@ function createEventLog(options = {}) {
     const filePath = fileNameForMonth(dir, mKey)
 
     const line = JSON.stringify(ev) + '\n'
-    fs.mkdirSync(dir, { recursive: true })
+    ensureDir()
     fs.appendFileSync(filePath, line, 'utf8')
 
     applySuppression(ev)
@@ -258,6 +269,123 @@ function createEventLog(options = {}) {
     return recentEvents.slice(-limit).reverse()
   }
 
+  function stats(options = {}) {
+    const from = typeof options.from === 'number' ? options.from : 0
+    const to = typeof options.to === 'number' ? options.to : Date.now()
+    const jobId = options.jobId
+    const campaignId = options.campaignId
+    const includeDry = options.includeDry !== undefined ? options.includeDry : false
+    const jobsList = Array.isArray(options.jobs) ? options.jobs : []
+    const settings = options.settings || {}
+
+    const res = read({ from, to, jobId, campaignId, limit: 100000, includeDry })
+    const evs = res.events
+
+    const totals = {
+      sent: 0,
+      failed: 0,
+      rejected: 0,
+      skipped: 0,
+      bounced: 0,
+      replied: 0,
+      optedOut: 0,
+      retries: 0,
+    }
+
+    const byHour = Array.from({ length: 24 }, (_, h) => ({ h, sent: 0, failed: 0 }))
+    const byDayMap = new Map()
+    const today = Array.from({ length: 24 }, (_, h) => ({ t: h, sent: 0, failed: 0 }))
+
+    const todayDateStr = new Date(to).toISOString().slice(0, 10)
+    const sendTimes = []
+    const sendMsList = []
+    let firstSendAt = null
+    let lastSendAt = null
+
+    for (const e of evs) {
+      const d = new Date(e.t)
+      const h = d.getHours()
+      const dStr = d.toISOString().slice(0, 10)
+
+      if (!byDayMap.has(dStr)) {
+        byDayMap.set(dStr, { day: dStr, sent: 0, failed: 0, bounced: 0, replied: 0 })
+      }
+      const dayEntry = byDayMap.get(dStr)
+
+      if (e.type === 'send.ok') {
+        totals.sent++
+        byHour[h].sent++
+        dayEntry.sent++
+        if (dStr === todayDateStr) today[h].sent++
+        if (typeof e.ms === 'number' && e.ms > 0) sendMsList.push(e.ms)
+        sendTimes.push(e.t)
+        if (firstSendAt === null || e.t < firstSendAt) firstSendAt = e.t
+        if (lastSendAt === null || e.t > lastSendAt) lastSendAt = e.t
+      } else if (e.type === 'send.fail') {
+        totals.failed++
+        byHour[h].failed++
+        dayEntry.failed++
+        if (dStr === todayDateStr) today[h].failed++
+      } else if (e.type === 'send.retry') {
+        totals.retries++
+      } else if (e.type === 'send.skip') {
+        totals.skipped++
+      } else if (e.type === 'bounce') {
+        totals.bounced++
+        dayEntry.bounced++
+      } else if (e.type === 'reply') {
+        totals.replied++
+        dayEntry.replied++
+      } else if (e.type === 'optout') {
+        if (e.on !== false) totals.optedOut++
+      }
+    }
+
+    // Durations calculation
+    sendMsList.sort((a, b) => a - b)
+    const avgSendMs = sendMsList.length ? Math.round(sendMsList.reduce((a, b) => a + b, 0) / sendMsList.length) : 0
+    const p95Idx = Math.floor(sendMsList.length * 0.95)
+    const p95SendMs = sendMsList.length ? sendMsList[p95Idx] : 0
+
+    let avgGapSec = 0
+    if (sendTimes.length >= 2) {
+      sendTimes.sort((a, b) => a - b)
+      let sumGaps = 0
+      for (let i = 1; i < sendTimes.length; i++) {
+        sumGaps += (sendTimes[i] - sendTimes[i - 1]) / 1000
+      }
+      avgGapSec = Math.round(sumGaps / (sendTimes.length - 1))
+    }
+
+    const elapsedMs = Math.max(0, to - from)
+    const activeMs = totals.sent * (avgSendMs + avgGapSec * 1000)
+    const activeHours = activeMs / 3600000
+    const perActiveHour = activeHours > 0 ? Math.round(totals.sent / activeHours) : totals.sent
+
+    const byDay = [...byDayMap.values()].sort((a, b) => a.day.localeCompare(b.day))
+
+    return {
+      totals,
+      byHour,
+      byDay,
+      today,
+      window: settings.window || null,
+      cap: settings.dailyLimit || 100,
+      durations: {
+        avgSendMs,
+        p95SendMs,
+        avgGapSec,
+        activeMs,
+        elapsedMs,
+        perActiveHour,
+      },
+      replyMedianMs: null,
+      firstSendAt,
+      lastSendAt,
+      jobs: jobsList,
+    }
+  }
+
   function close() {
     // No-op for sync append
   }
@@ -268,6 +396,7 @@ function createEventLog(options = {}) {
     suppression,
     count,
     recent,
+    stats,
     close,
     getBadLinesCount: () => badLines,
   }

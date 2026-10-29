@@ -35,7 +35,7 @@ export interface EsbBridge {
   prepareDragFile: (name: string, bytes: Uint8Array) => Promise<string | null>
   startDrag: (filePathOrName: string, bytes?: Uint8Array) => void
   saveVideo?: (name: string, bytes: Uint8Array) => Promise<string | null>
-  quit?: () => Promise<boolean>
+  quit?: (force?: boolean) => Promise<boolean>
   openSiteAs?: (cookies: { name: string; value: string }[], sitePath: string) => Promise<boolean>
   siteSignOut?: () => Promise<boolean>
   siteUpload?: (cookies: { name: string; value: string }[], bytes: Uint8Array, mime: string, name: string) => Promise<{ ok: boolean; url?: string; status?: number; error?: string }>
@@ -47,6 +47,21 @@ export interface EsbBridge {
   outreachVerify?: (force?: boolean) => Promise<{ ok: boolean; ms?: number; error?: string; at: number }>
   outreachInbox?: (force?: boolean) => Promise<EsbInboxResult>
   outreachSend?: (mail: EsbOutreachMail) => Promise<{ ok: true; messageId: string; sent24h: number } | { ok: false; error: string; nextAt?: number; duplicate?: boolean }>
+  outreachJobSubmit?: (spec: JobSpec) => Promise<{ ok: true; jobId: string; rejected: { index: number; error: string }[] } | { ok: false; error: string }>
+  outreachJobControl?: (jobId: string, action: 'pause' | 'resume' | 'stop' | 'hold' | 'release', arg?: string | number) => Promise<{ ok: boolean; error?: string }>
+  outreachPauseAll?: (on: boolean) => Promise<{ ok: boolean }>
+  outreachJobs?: () => Promise<JobSnapshot[]>
+  outreachEvents?: (q?: { since?: string; before?: string; from?: number; to?: number; jobId?: string; campaignId?: string; types?: string[]; q?: string; limit?: number }) => Promise<{ events: OutreachEvent[]; hasMore: boolean }>
+  outreachStats?: (q: { from: number; to: number; jobId?: string; campaignId?: string; includeDry?: boolean }) => Promise<OutreachStats>
+  outreachPlan?: (q: { count: number }) => Promise<{ days: number; firstAt: number | null; lastAt: number | null; perDay: number[]; notes: string[] }>
+  outreachSettings?: () => Promise<AutopilotSettings>
+  outreachSettingsSave?: (s: Partial<AutopilotSettings>) => Promise<{ ok: true; settings: AutopilotSettings } | { ok: false; error: string; field?: string }>
+  outreachCheckAddresses?: (domains: string[]) => Promise<Record<string, { mx: boolean; a: boolean; error?: string }>>
+  outreachLogEvent?: (e: { type: 'ai.action' | 'note'; text: string; command?: string; status?: string; campaignId?: string }) => Promise<{ ok: boolean }>
+  outreachOptOut?: (email: string, on: boolean) => Promise<{ ok: boolean }>
+  outreachSyncOptOuts?: (emails: string[]) => Promise<{ ok: boolean; added: number }>
+  outreachReplyTexts?: (emails: string[]) => Promise<{ email: string; text: string }[]>
+  onOutreach?: (cb: (m: OutreachPush) => void) => () => void
 }
 
 /** The sender account and pacing; the app password is passed separately and never read back. */
@@ -103,6 +118,139 @@ export interface EsbOutreachMail {
   /** A second letter to someone who did not answer: the main process checks there was a first one, threads it under it. */
   followUp?: boolean
 }
+
+export interface AutopilotSettings {
+  window: {
+    enabled: boolean
+    from: string
+    to: string
+    days: number[]
+    tz: string
+  }
+  dailyLimit: number
+  ramp: boolean
+  pace: 'auto' | 'manual'
+  minDelaySec: number
+  maxDelaySec: number
+  domainMaxPerDay: number
+  domainMinGapSec: number
+  contactCooldownDays: number
+  traySending: boolean
+  aiAutonomy: 'suggest' | 'confirm' | 'auto-safe'
+  aiReadsReply: boolean
+  autoResume: boolean
+  legacyBackfilled?: boolean
+}
+
+export interface JobMessage {
+  to: string
+  subject: string
+  body: string
+  optOut?: string
+  name?: string
+  org?: string
+  key?: string
+}
+
+export interface JobSpec {
+  campaignId: string
+  campaignName: string
+  kind?: 'first' | 'followup'
+  shared?: Partial<EsbOutreachMail>
+  attachments?: { name: string; dataUrl: string }[]
+  messages: JobMessage[]
+  startAt?: number | null
+  autoResume?: boolean
+}
+
+export interface JobSnapshot {
+  jobId: string
+  campaignId: string
+  name: string
+  kind: 'first' | 'followup'
+  status: 'queued' | 'running' | 'waiting' | 'paused' | 'done' | 'stopped'
+  why?: 'window' | 'cap' | 'ramp' | 'gap' | 'domain' | 'offline' | 'quota' | 'schedule' | 'held' | null
+  until?: number | null
+  reason?: 'user' | 'all' | 'auth' | 'circuit' | 'quit' | 'content' | null
+  dry: boolean
+  total: number
+  sent: number
+  failed: number
+  skipped: number
+  held: number
+  remaining: number
+  createdAt: number
+  startedAt?: number | null
+  endedAt?: number | null
+  etaAt?: number | null
+}
+
+export interface OutreachEvent {
+  id: string
+  t: number
+  type: string
+  jobId?: string
+  campaignId?: string
+  email?: string
+  run?: 'first' | 'followup'
+  name?: string
+  org?: string
+  key?: string
+  messageId?: string
+  ms?: number
+  attempt?: number
+  kind?: string
+  code?: string | number
+  error?: string
+  reason?: string
+  dry?: boolean
+  clean?: boolean
+  on?: boolean
+  by?: string
+  at?: number
+  subject?: string
+  auto?: boolean
+  unsubscribe?: boolean
+  text?: string
+  command?: string
+  status?: string
+  [key: string]: any
+}
+
+export interface OutreachStats {
+  totals: {
+    sent: number
+    failed: number
+    rejected: number
+    skipped: number
+    bounced: number
+    replied: number
+    optedOut: number
+    retries: number
+  }
+  byHour: { h: number; sent: number; failed: number }[]
+  byDay: { day: string; sent: number; failed: number; bounced: number; replied: number }[]
+  today: { t: number; sent: number; failed: number }[]
+  window: { from: string; to: string; days: number[]; tz: string } | null
+  cap: number
+  durations: {
+    avgSendMs: number
+    p95SendMs: number
+    avgGapSec: number
+    activeMs: number
+    elapsedMs: number
+    perActiveHour: number
+  }
+  replyMedianMs: number | null
+  firstSendAt: number | null
+  lastSendAt: number | null
+  jobs: JobSnapshot[]
+}
+
+export type OutreachPush =
+  | { kind: 'progress'; jobId: string; campaignId: string; status: string; why?: string; until?: number; reason?: string; sent: number; total: number; failed: number; current?: string; nextAt?: number | null }
+  | { kind: 'event'; event: OutreachEvent }
+  | { kind: 'inbox'; result: EsbInboxResult }
 
 declare global {
   interface Window {

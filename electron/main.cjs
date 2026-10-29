@@ -1,6 +1,6 @@
 const { spawn } = require('node:child_process')
 // ESB Studio — desktop shell. Everything runs locally; no network access is needed.
-const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell, Tray, nativeImage } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const { FsScope } = require('./fs-scope.cjs')
@@ -8,6 +8,13 @@ const { fetchArticleHtml, fetchImageData } = require('./net-guard.cjs')
 const siteUpload = require('./site-upload.cjs')
 const guard = require('./ipc-guard.cjs')
 const { pathToFileURL } = require('node:url')
+const dns = require('node:dns')
+const { createEventLog } = require('./outreach-events.cjs')
+const { createJobStore } = require('./outreach-jobs.cjs')
+const { createSettingsManager } = require('./outreach-settings.cjs')
+const { createEngine } = require('./outreach-engine.cjs')
+const { createTray } = require('./outreach-tray.cjs')
+const outreachGuard = require('./outreach-guard.cjs')
 
 // Last line of defence: a stray network or stream error in the main process is logged (userData/main-errors.log) instead
 // of stopping the editor with Electron's "A JavaScript error occurred in the main process" dialog. Each cause found is
@@ -43,6 +50,30 @@ const defaultDir = () => path.join(app.getPath('pictures'), 'ESB Banners')
 let win
 
 const fsScope = new FsScope()
+
+let outreachEvents = null
+let outreachJobs = null
+let outreachSettings = null
+let outreachEngineInstance = null
+let outreachTrayInstance = null
+let isQuitting = false
+
+function pushToWindow(channel, payload) {
+  if (win && !win.isDestroyed() && win.webContents) {
+    win.webContents.send(channel, payload)
+  }
+}
+
+async function checkOnline() {
+  try {
+    const s = outreachMailer().status()
+    const host = (s.settings && s.settings.host) || 'smtp.gmail.com'
+    await dns.promises.lookup(host)
+    return true
+  } catch {
+    return false
+  }
+}
 
 app.on('second-instance', () => {
   if (win) {
@@ -95,6 +126,18 @@ function createWindow() {
   })
   ses.setPermissionCheckHandler((wc, permission) => {
     return permission === 'media' && wc === win.webContents
+  })
+
+  win.on('close', (e) => {
+    if (isQuitting) return
+    const cfg = outreachSettings ? outreachSettings.get() : {}
+    if (cfg.traySending !== false && outreachEngineInstance && outreachEngineInstance.isActive()) {
+      e.preventDefault()
+      win.hide()
+      if (outreachTrayInstance) {
+        outreachTrayInstance.showBalloonOnce()
+      }
+    }
   })
 }
 
@@ -157,8 +200,15 @@ ipcMain.handle('esb:site-upload', async (_e, cookies, bytes, mime, name) => {
 ipcMain.handle('esb:site-upload-probe', async (_e, cookies) => siteUpload.probeUpload(cookies))
 ipcMain.handle('esb:site-revalidate', async (_e, cookies, slugs) => siteUpload.revalidateSite(cookies, slugs))
 
-// Home → Quit: close every window and end the app (app.quit runs before-quit/will-quit, so nothing is cut short).
-ipcMain.handle('esb:quit', () => { app.quit(); return true })
+// Home → Quit: close every window and end the app (refused if sending is active, unless forced).
+ipcMain.handle('esb:quit', (_e, force) => {
+  if (!force && outreachEngineInstance && outreachEngineInstance.isActive()) {
+    return false
+  }
+  isQuitting = true
+  app.quit()
+  return true
+})
 
 // Signing out of the Studio signs the CMS window out too.
 ipcMain.handle('esb:site-sign-out', async () => {
@@ -374,6 +424,99 @@ let inbox = null
 const outreachInbox = () => (inbox ??= require('./inbox.cjs').createInbox({ ledger: () => outreachMailer().ledger(), account: () => outreachMailer().inboxAccount(), ImapFlow: require('imapflow').ImapFlow }))
 ipcMain.handle('esb:outreach-inbox', (_e, force) => outreachInbox().check(force === true))
 
+// --- Outreach Autopilot IPC Handlers (§1.8, Appendix A) ---
+ipcMain.handle('esb:outreach-job-submit', (_e, rawSpec) => {
+  const g = outreachGuard.validateJobSpec(rawSpec)
+  if (!g.ok) return { ok: false, error: g.error, rejected: g.rejected || [] }
+  const res = outreachEngineInstance.submit(g.cleaned)
+  if (!res.ok) return { ok: false, error: res.error, rejected: g.rejected }
+  return { ok: true, jobId: res.jobId, rejected: g.rejected }
+})
+ipcMain.handle('esb:outreach-job-control', (_e, jobId, action, arg) => {
+  const g = outreachGuard.validateControl(jobId, action, arg)
+  if (!g.ok) return { ok: false, error: g.error }
+  return outreachEngineInstance.control(g.jobId, g.action, g.arg)
+})
+ipcMain.handle('esb:outreach-pause-all', (_e, on) => {
+  return outreachEngineInstance.pauseAll(on === true)
+})
+ipcMain.handle('esb:outreach-jobs', () => {
+  return outreachEngineInstance.snapshot()
+})
+ipcMain.handle('esb:outreach-events', (_e, rawQ) => {
+  const g = outreachGuard.validateEventsQuery(rawQ)
+  if (!g.ok) return { events: [], hasMore: false, error: g.error }
+  return outreachEvents.read(g.query)
+})
+ipcMain.handle('esb:outreach-stats', (_e, rawQ) => {
+  const g = outreachGuard.validateStatsQuery(rawQ)
+  if (!g.ok) return { error: g.error }
+  return outreachEvents.stats({
+    ...g.query,
+    jobs: outreachEngineInstance.snapshot(),
+    settings: outreachSettings.get(),
+  })
+})
+ipcMain.handle('esb:outreach-plan', (_e, rawQ) => {
+  const g = outreachGuard.validatePlanQuery(rawQ)
+  if (!g.ok) return { days: 0, firstAt: null, lastAt: null, perDay: [], notes: [g.error] }
+  return outreachEngineInstance.plan(g.count)
+})
+ipcMain.handle('esb:outreach-settings', () => {
+  return outreachSettings.get()
+})
+ipcMain.handle('esb:outreach-settings-save', (_e, rawS) => {
+  return outreachSettings.save(rawS)
+})
+ipcMain.handle('esb:outreach-check-addresses', async (_e, rawDomains) => {
+  const g = outreachGuard.validateDomains(rawDomains)
+  if (!g.ok) return {}
+  const out = {}
+  for (const dom of g.domains) {
+    try {
+      const [mx, a] = await Promise.all([
+        dns.promises.resolveMx(dom).then((r) => r && r.length > 0).catch(() => false),
+        dns.promises.lookup(dom).then(() => true).catch(() => false),
+      ])
+      out[dom] = { mx, a }
+    } catch (err) {
+      out[dom] = { mx: false, a: false, error: err.message || String(err) }
+    }
+  }
+  return out
+})
+ipcMain.handle('esb:outreach-log-event', (_e, rawE) => {
+  const g = outreachGuard.validateLogEvent(rawE)
+  if (!g.ok) return { ok: false, error: g.error }
+  outreachEvents.append(g.event)
+  return { ok: true }
+})
+ipcMain.handle('esb:outreach-opt-out', (_e, email, on) => {
+  if (typeof email !== 'string' || !email.trim()) return { ok: false }
+  outreachEvents.append({ type: 'optout', email: email.toLowerCase().trim(), on: on === true, by: 'user' })
+  return { ok: true }
+})
+ipcMain.handle('esb:outreach-sync-opt-outs', (_e, rawEmails) => {
+  if (!Array.isArray(rawEmails)) return { ok: false, added: 0 }
+  const supp = outreachEvents.suppression()
+  let added = 0
+  for (const em of rawEmails) {
+    if (typeof em === 'string') {
+      const norm = em.toLowerCase().trim()
+      if (norm && !supp.has(norm)) {
+        outreachEvents.append({ type: 'optout', email: norm, on: true, by: 'import' })
+        added++
+      }
+    }
+  }
+  return { ok: true, added }
+})
+ipcMain.handle('esb:outreach-reply-texts', async (_e, rawEmails) => {
+  const cfg = outreachSettings.get()
+  if (!cfg.aiReadsReply) return []
+  return []
+})
+
 // no page in this app may embed a <webview>, and any window not covered above opens nothing
 app.on('web-contents-created', (_e, contents) => {
   contents.on('will-attach-webview', (e) => e.preventDefault())
@@ -405,8 +548,88 @@ app.whenReady().then(() => {
   fsScope.allow(app.getPath('userData'))
   fsScope.allow(path.join(app.getPath('temp'), 'esb-studio-drag')) // the drag staging folder only, never the whole temp directory
 
+  const userData = app.getPath('userData')
+  outreachEvents = createEventLog({ dir: userData })
+  outreachJobs = createJobStore({ dir: userData })
+  outreachSettings = createSettingsManager({ dir: userData })
+
+  // Legacy back-fill (§1.8f)
+  const currentCfg = outreachSettings.get()
+  if (!currentCfg.legacyBackfilled) {
+    try {
+      const l = outreachMailer().ledger()
+      if (Array.isArray(l) && l.length > 0) {
+        for (const entry of l) {
+          outreachEvents.append({
+            type: 'legacy.sent',
+            email: entry.to,
+            t: entry.t,
+            run: entry.kind === 'followup' ? 'followup' : 'first',
+          })
+        }
+      }
+      outreachSettings.save({ legacyBackfilled: true })
+    } catch (e) {
+      console.warn('Legacy backfill warning:', e)
+    }
+  }
+
+  outreachEngineInstance = createEngine({
+    events: outreachEvents,
+    jobs: outreachJobs,
+    settings: outreachSettings,
+    mailer: {
+      send: (mail) => outreachMailer().send(mail),
+      status: () => outreachMailer().status(),
+    },
+    inbox: {
+      check: (force) => outreachInbox().check(force),
+    },
+    online: checkOnline,
+    emit: (kind, data) => {
+      pushToWindow('esb:outreach-push', { kind, ...data })
+      if (outreachTrayInstance) {
+        outreachTrayInstance.updateMenu()
+      }
+    },
+    env: process.env,
+  })
+
+  outreachEngineInstance.start()
+
+  outreachTrayInstance = createTray({
+    Tray,
+    Menu,
+    nativeImage,
+    iconPath: path.join(__dirname, '..', 'build', 'icon.png'),
+    getWindow: () => win,
+    engine: outreachEngineInstance,
+    onQuitRequest: () => {
+      if (!win || win.isDestroyed()) {
+        isQuitting = true
+        app.quit()
+        return
+      }
+      win.show()
+      win.focus()
+      if (outreachEngineInstance && outreachEngineInstance.isActive()) {
+        pushToWindow('esb:outreach-push', { kind: 'request-quit' })
+      } else {
+        isQuitting = true
+        app.quit()
+      }
+    },
+  })
+
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
+})
+
+app.on('before-quit', () => {
+  isQuitting = true
+  if (outreachEngineInstance) {
+    outreachEngineInstance.shutdown({ clean: true })
+  }
 })
 
 app.on('will-quit', () => {
