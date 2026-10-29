@@ -265,9 +265,11 @@
 .or-contact b { font-size: 14px; line-height: 20px; }
 .or-contact span { font-size: 12px; line-height: 17px; color: var(--text-2); overflow-wrap: anywhere; }
 .or-purposes { display: flex; flex-wrap: wrap; gap: 4px; }
-.or-test { display: flex; gap: 6px; }
+.or-test { display: flex; flex-wrap: wrap; gap: 6px; }
 .or-test .or-input { height: 32px; padding: 0 10px; font-size: 12.5px; }
 .or-test .btn { flex: none; }
+/* a send-test result (ok or the real server error) wraps rather than overflowing the card — errors can run long */
+.or-test .or-chip { gap: 5px; white-space: normal; height: auto; min-height: 22px; line-height: 1.4; max-width: 100%; }
 .or-right .switch { font-size: 12.5px; line-height: 18px; }
 .or-checks { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .or-checks li { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: var(--r-2); }

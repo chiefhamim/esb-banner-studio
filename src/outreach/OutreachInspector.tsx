@@ -4,7 +4,7 @@
 // process's ledger, the campaign or the list; nothing here is a placeholder. In the browser preview (no desktop
 // bridge) the column says sending needs the desktop app instead of pretending to send.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOutreachStore } from './outreachStore'
 import { ask, useOutreachUi, type RightTab } from './outreachUi'
 import { cannotStart, downloadText, eligible, followUpQueue, followUpReason, inAudience, pauseBatch, resultsCsv, resumeBatch, sendTest, signatureOf, startBatch, stopBatch } from './campaign'
@@ -45,6 +45,8 @@ function SendTab() {
   const desktop = !!window.esb?.outreachSend
   const [testTo, setTestTo] = useState('')
   const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const testResultTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [, tick] = useState(0)
 
   // the countdown re-renders once a second while a wait is running
@@ -54,6 +56,7 @@ function SendTab() {
     return () => clearInterval(t)
   }, [s.nextAt])
   useEffect(() => { if (!testTo && s.mail?.settings?.user) setTestTo(s.mail.settings.user) }, [s.mail?.settings?.user]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (testResultTimer.current) clearTimeout(testResultTimer.current) }, [])
 
   const set = s.mail?.settings
   const ready = s.mail?.hasPassword && !!set
@@ -122,9 +125,23 @@ function SendTab() {
         <p className="or-muted">Sends the letter to you first, filled with {active ? <b>{active.personName || active.email}</b> : 'a nameless recipient'}’s details. Does not count toward today.</p>
         <div className="or-test">
           <input type="email" className="or-input" placeholder="your@address" value={testTo} onChange={(e) => setTestTo(e.target.value)} aria-label="Test address" />
-          <button type="button" className="btn" disabled={!desktop || !ready || testing || !c || !/^\S+@\S+\.\S+$/.test(testTo)} onClick={async () => { setTesting(true); await sendTest(testTo.trim(), active); setTesting(false) }}>
-            <Icon name="send" size={13} /><span>{testing ? 'Sending' : 'Send test'}</span>
+          <button
+            type="button"
+            className="btn"
+            disabled={!desktop || !ready || testing || !c || !/^\S+@\S+\.\S+$/.test(testTo)}
+            onClick={async () => {
+              if (testResultTimer.current) clearTimeout(testResultTimer.current)
+              setTestResult(null)
+              setTesting(true)
+              const r = await sendTest(testTo.trim(), active)
+              setTesting(false)
+              setTestResult({ ok: r.ok, msg: r.ok ? 'Sent' : r.error })
+              testResultTimer.current = setTimeout(() => setTestResult(null), 5000)
+            }}
+          >
+            <Icon name={testing ? 'send' : testResult?.ok ? 'check' : 'send'} size={13} /><span>{testing ? 'Sending' : 'Send test'}</span>
           </button>
+          {testResult && <span className={'or-chip ' + (testResult.ok ? 'good' : 'bad')} role="status">{testResult.ok ? <Icon name="check" size={12} /> : <Icon name="info" size={12} />}<span>{testResult.msg}</span></span>}
         </div>
       </section>
     </>
