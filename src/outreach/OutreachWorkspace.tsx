@@ -12,6 +12,7 @@ import { SourcesTab } from './SourcesTab'
 import { OutreachComposer } from './OutreachComposer'
 import { OutreachInspector } from './OutreachInspector'
 import { SenderDialog } from './SenderDialog'
+import { ActivityDesk } from './ActivityDesk'
 import { AutopilotDialog } from './AutopilotDialog'
 import { OutreachActivity } from './OutreachActivity'
 import { AskDialog, FollowUpDialog, FooterDialog, HeaderDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
@@ -186,18 +187,22 @@ export function OutreachWorkspace() {
 
       {banner}
 
-      <div className="or-body">
-        <aside className="or-left" aria-label="Contacts, campaigns and sources">
-          <Tabs<LeftTab> className="or-tabs" value={ui.left} onChange={openTab} options={[
-            { value: 'contacts', label: 'Contacts', icon: 'users' },
-            { value: 'campaigns', label: 'Campaigns', icon: 'send' },
-            { value: 'sources', label: 'Sources', icon: 'quote' },
-          ]} />
-          {ui.left === 'contacts' ? <ContactsTab /> : ui.left === 'campaigns' ? <CampaignsTab /> : <SourcesTab />}
-        </aside>
-        <OutreachComposer />
-        <OutreachInspector />
-      </div>
+      {ui.desk === 'activity' ? (
+        <ActivityDesk />
+      ) : (
+        <div className="or-body">
+          <aside className="or-left" aria-label="Contacts, campaigns and sources">
+            <Tabs<LeftTab> className="or-tabs" value={ui.left} onChange={openTab} options={[
+              { value: 'contacts', label: 'Contacts', icon: 'users' },
+              { value: 'campaigns', label: 'Campaigns', icon: 'send' },
+              { value: 'sources', label: 'Sources', icon: 'quote' },
+            ]} />
+            {ui.left === 'contacts' ? <ContactsTab /> : ui.left === 'campaigns' ? <CampaignsTab /> : <SourcesTab />}
+          </aside>
+          <OutreachComposer />
+          <OutreachInspector />
+        </div>
+      )}
 
       <footer className="statusbar ed-statusbar or-status">
         <button type="button" className={'sb-cms ' + (smtpOn ? 'on' : 'off')} onClick={() => { if (s.mail?.hasPassword) void s.checkSmtp(true); else if (desktop) ui.set({ sheet: 'sender' }) }}

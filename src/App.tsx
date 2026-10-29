@@ -15,6 +15,7 @@ import { installBannerLink } from './editorial/bannerLink'
 import './styles/studio.css'
 import './styles/home.css'
 import './styles/outreach.css'
+import './styles/outreach-activity.css'
 
 installBannerLink()
 

@@ -1,4 +1,4 @@
-import type { AutopilotSettings, JobSnapshot, OutreachEvent } from '../esb'
+import type { AutopilotSettings, JobSnapshot, OutreachEvent, OutreachStats } from '../esb'
 
 const DOW_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -73,6 +73,14 @@ export function fmtShortDay(ts: number, tz = 'Asia/Dhaka'): string {
     const d = new Date(ts)
     return `${DOW_NAMES[d.getDay()]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`
   }
+}
+
+
+export function fmtDurationHours(sec: number): string {
+  const s = Math.max(0, Math.floor(sec))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  return `${h} h ${String(m).padStart(2, '0')} m`
 }
 
 export function fmtCountdown(ms: number): string {
@@ -289,4 +297,23 @@ export function describeEvent(ev: OutreachEvent): string {
     default:
       return ev.type
   }
+}
+
+/** Plain text report summary built from numbers only (§5.7) */
+export function reportSummary(stats: OutreachStats, campaignName = 'All campaigns'): string {
+  const sent = (stats.totals?.sent || 0).toLocaleString()
+  const failed = (stats.totals?.failed || 0).toLocaleString()
+  const bounced = (stats.totals?.bounced || 0).toLocaleString()
+  const replies = (stats.totals?.replied || 0).toLocaleString()
+  const optedOut = (stats.totals?.optedOut || 0).toLocaleString()
+
+  const tz = stats.window?.tz || 'Asia/Dhaka'
+  const timeRange = stats.firstSendAt && stats.lastSendAt
+    ? ` between ${fmtDay(stats.firstSendAt, tz)} and ${fmtDay(stats.lastSendAt, tz)}`
+    : ''
+
+  const timeSending = fmtDurationHours(Math.round((stats.durations?.activeMs || 0) / 1000))
+  const avgGap = fmtDuration(stats.durations?.avgGapSec || 0)
+
+  return `${campaignName} — ${sent} sent${timeRange}; ${failed} failed; ${bounced} bounced; ${replies} replies (${optedOut} unsubscribed). Time sending: ${timeSending}; average gap ${avgGap}.`
 }

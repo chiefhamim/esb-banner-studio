@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { describeRun, describeEvent, fmtDuration, fmtClock, fmtDay } from '../../src/outreach/activityFormat'
+import { describeRun, describeEvent, fmtDuration, fmtClock, fmtDay, reportSummary } from '../../src/outreach/activityFormat'
 import type { AutopilotSettings, JobSnapshot, OutreachEvent } from '../../src/esb'
 
 const mockSettings: AutopilotSettings = {
@@ -160,6 +160,10 @@ describe('activityFormat: durations and clocks (§3.2, §5.8)', () => {
     expect(fmtDuration(238)).toBe('3 m 58 s')
     expect(fmtDuration(7500)).toBe('2 h 05 m')
     expect(fmtDuration(17 * 86400)).toBe('17 days')
+    expect(fmtDuration(3599)).toBe('59 m 59 s')
+    expect(fmtDuration(86400)).toBe('1 day')
+    expect(fmtDuration(100 * 86400)).toBe('100 days')
+
   })
 
   it('formats clock in specified timezone', () => {
@@ -175,5 +179,21 @@ describe('activityFormat: describeEvent (§5.7)', () => {
     expect(describeEvent({ id: '3', t: 1000, type: 'reply', email: 'lead@example.com', unsubscribe: true })).toBe('lead@example.com replied with unsubscribe request')
     expect(describeEvent({ id: '4', t: 1000, type: 'bounce', email: 'dead@example.com', reason: '5.1.1 Address rejected' })).toBe('dead@example.com bounced: 5.1.1 Address rejected')
     expect(describeEvent({ id: '5', t: 1000, type: 'engine.quit' })).toBe('Engine quit cleanly')
+  })
+})
+
+describe('activityFormat: reportSummary (§5.7)', () => {
+  it('formats plain text report from stats', () => {
+    const stats: any = {
+      totals: { sent: 2400, failed: 31, bounced: 12, replied: 88, optedOut: 3 },
+      firstSendAt: Date.UTC(2026, 10, 1, 3, 12),
+      lastSendAt: Date.UTC(2026, 10, 19, 9, 48),
+      window: { tz: 'Asia/Dhaka' },
+      durations: { activeMs: (41 * 3600 + 12 * 60) * 1000, avgGapSec: 238 },
+    }
+    const sum = reportSummary(stats, 'Magazine run')
+    expect(sum).toContain('Magazine run — 2,400 sent')
+    expect(sum).toContain('31 failed; 12 bounced; 88 replies (3 unsubscribed)')
+    expect(sum).toContain('Time sending: 41 h 12 m; average gap 3 m 58 s')
   })
 })

@@ -2,7 +2,7 @@
 
 > **Branch:** `outreach-autopilot`  
 > **Started:** 2026-10-30  
-> **Status:** Phase 2 Complete (In Progress: Phase 3)
+> **Status:** Phase 3 Complete (In Progress: Phase 4)
 
 ---
 
@@ -57,15 +57,15 @@
 - [x] **2.10 Phase 2 Gate:** UI dry-run E2E tests, visual diff review, 30 desktop screenshots verified.
 
 ### Phase 3 — The Activity desk
-- [ ] **3.1 Stats aggregation (`outreach-stats.cjs`):** Hourly, daily, duration, and median metrics.
-- [ ] **3.2 Activity state & formatters (`activityStore.ts`, `activityFormat.ts`):** Paged event list & time formatters.
-- [ ] **3.3 SVG Charts (`charts.tsx`):** Token-styled bar, line, and stacked charts.
-- [ ] **3.4 Activity Overview (`ActivityOverview.tsx`):** Full-screen KPI strip, hourly distribution, running jobs.
-- [ ] **3.5 Activity Log (`ActivityLog.tsx`):** Filterable, searchable, expandable transaction log.
-- [ ] **3.6 Activity Reports (`ActivityReports.tsx`):** Aggregated day/run summaries & CSV exports.
-- [ ] **3.7 Desk switch integration (`ActivityDesk.tsx`):** Compose vs. Activity header switch.
-- [ ] **3.8 Styling (`outreach-activity.css`):** Scoped CSS tokens and responsive layout.
-- [ ] **3.9 Phase 3 Gate:** Full Activity desk visual screenshots & verification.
+- [x] **3.1 Stats aggregation (`outreach-stats.cjs`):** Hourly, daily, duration, and median metrics. (`tools/unit/outreach-stats.test.ts`)
+- [x] **3.2 Activity state & formatters (`activityStore.ts`, `activityFormat.ts`):** Paged event list & time formatters.
+- [x] **3.3 SVG Charts (`charts.tsx`):** Token-styled bar, line, and stacked charts.
+- [x] **3.4 Activity Overview (`ActivityOverview.tsx`):** Full-screen KPI strip, hourly distribution, running jobs.
+- [x] **3.5 Activity Log (`ActivityLog.tsx`):** Filterable, searchable, expandable transaction log.
+- [x] **3.6 Activity Reports (`ActivityReports.tsx`):** Aggregated day/run summaries & CSV exports.
+- [x] **3.7 Desk switch integration (`ActivityDesk.tsx`):** Compose vs. Activity header switch.
+- [x] **3.8 Styling (`outreach-activity.css`):** Scoped CSS tokens and responsive layout.
+- [x] **3.9 Phase 3 Gate:** Full Activity desk visual screenshots & verification, 30 desktop screenshots verified.
 
 ### Phase 4 — Data, validation and exceptions
 - [ ] **4.1 Dynamic fields & fallbacks:** Support all spreadsheet columns (`{field|fallback}`) without dropping rows.

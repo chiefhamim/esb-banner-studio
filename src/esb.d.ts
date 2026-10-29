@@ -51,7 +51,7 @@ export interface EsbBridge {
   outreachJobControl?: (jobId: string, action: 'pause' | 'resume' | 'stop' | 'hold' | 'release', arg?: string | number) => Promise<{ ok: boolean; error?: string }>
   outreachPauseAll?: (on: boolean) => Promise<{ ok: boolean }>
   outreachJobs?: () => Promise<JobSnapshot[]>
-  outreachEvents?: (q?: { since?: string; before?: string; from?: number; to?: number; jobId?: string; campaignId?: string; types?: string[]; q?: string; limit?: number }) => Promise<{ events: OutreachEvent[]; hasMore: boolean }>
+  outreachEvents?: (q?: { since?: string; before?: string; from?: number; to?: number; jobId?: string; campaignId?: string; types?: string[]; q?: string; limit?: number; includeDry?: boolean }) => Promise<{ events: OutreachEvent[]; hasMore: boolean }>
   outreachStats?: (q: { from: number; to: number; jobId?: string; campaignId?: string; includeDry?: boolean }) => Promise<OutreachStats>
   outreachPlan?: (q: { count: number }) => Promise<{ days: number; firstAt: number | null; lastAt: number | null; perDay: number[]; notes: string[] }>
   outreachSettings?: () => Promise<AutopilotSettings>
