@@ -4,6 +4,7 @@ import { buildMessage } from './compose'
 import { reviewRendered, actionableFlags } from './rendered'
 import { eligible, followUpLetter, followUpQueue, signatureOf } from './campaign'
 import { useOutreachStore } from './outreachStore'
+import { letterFor } from './segments'
 
 export interface BuildJobSpecOptions {
   campaign: Campaign
@@ -32,7 +33,9 @@ export function buildJobSpec(opts: BuildJobSpecOptions): JobSpec {
   const reviewedMap = campaign.reviewed || {}
   const queue = rawQueue.filter((c) => {
     if (mode !== 'first') return true
-    const m = buildMessage(c, campaign.subject, campaign.body, campaign.lang)
+    const resolved = letterFor(c, campaign)
+    const opener = campaign.openers?.[c.email]?.text
+    const m = buildMessage(c, resolved.subject, resolved.body, campaign.lang, opener)
     const flags = actionableFlags(reviewRendered(c, m))
     if (!flags.length) return true
     const approved = new Set(reviewedMap[c.email] || [])
@@ -42,9 +45,11 @@ export function buildJobSpec(opts: BuildJobSpecOptions): JobSpec {
   const fu = mode === 'followup' ? followUpLetter(campaign) : null
 
   const messages: JobMessage[] = queue.map((c) => {
-    const subject = fu ? fu.subject : campaign.subject
-    const body = fu ? fu.body : campaign.body
-    const m = buildMessage(c, subject, body, campaign.lang)
+    const resolved = mode === 'first' ? letterFor(c, campaign) : null
+    const opener = mode === 'first' ? campaign.openers?.[c.email]?.text : undefined
+    const subject = fu ? fu.subject : resolved!.subject
+    const body = fu ? fu.body : resolved!.body
+    const m = buildMessage(c, subject, body, campaign.lang, opener)
     return {
       to: c.email,
       subject: m.subject,

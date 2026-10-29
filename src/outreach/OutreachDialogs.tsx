@@ -11,7 +11,7 @@ import { buildMessage, mentionsAttachment } from './compose'
 import { applyMark, skipReason, softBreakOnEnter } from './compose'
 import { letterChecks } from './checks'
 import { reviewRendered, actionableFlags } from './rendered'
-import { OUTREACH_BLUEPRINTS, rewriteLetter } from './outreachAi'
+import { OUTREACH_BLUEPRINTS, reviewLetter, rewriteLetter } from './outreachAi'
 import { aiFor, aiPaused } from '../editorial/aiProviders'
 import { DEFAULT_STRIPES, EMAIL_FONTS, logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
 import { Dialog, Field, Select, Switch } from '../ui/controls'
@@ -269,6 +269,67 @@ export function ReviewSendDialog() {
   const why = cannotStart()
   const atMs = new Date(at).getTime()
 
+  // AI Second Reading (§5.5)
+  const aiReviewer = !aiPaused() && !!aiFor('review')
+  const [secondReading, setSecondReading] = useState<{
+    status: 'idle' | 'running' | 'done' | 'error'
+    badNotes: string[]
+    warnNotes: string[]
+  }>({ status: 'idle', badNotes: [], warnNotes: [] })
+
+  useEffect(() => {
+    if (!aiReviewer || !c) return
+    let active = true
+    setSecondReading({ status: 'running', badNotes: [], warnNotes: [] })
+
+    const approvedVariants = Object.entries(c.variants || {})
+      .filter(([_, v]) => v.status === 'approved')
+      .slice(0, 5)
+
+    const versionsToRead = [
+      { name: 'Main letter', subject: c.subject, body: c.body },
+      ...approvedVariants.map(([key, v]) => ({ name: 'Segment ' + key, subject: v.subject, body: v.body })),
+    ]
+
+    const runReadings = async () => {
+      const allBad: string[] = []
+      const allWarn: string[] = []
+      try {
+        for (const ver of versionsToRead) {
+          const res = await reviewLetter(
+            { subject: ver.subject, body: ver.body, signature: signatureOf(c) },
+            { blueprint: c.blueprint, lang: c.lang, housePrompt: s.housePrompt, sources: c.sources }
+          )
+          if (!active) return
+          for (const note of res.notes) {
+            if (note.level === 'bad') allBad.push(ver.name + ': ' + note.text)
+            else if (note.level === 'warn') allWarn.push(ver.name + ': ' + note.text)
+          }
+        }
+        if (active) {
+          setSecondReading({
+            status: 'done',
+            badNotes: allBad,
+            warnNotes: allWarn,
+          })
+        }
+      } catch (err) {
+        if (active) {
+          setSecondReading({
+            status: 'error',
+            badNotes: [],
+            warnNotes: ['Second reading unavailable'],
+          })
+        }
+      }
+    }
+
+    void runReadings()
+    return () => {
+      active = false
+    }
+  }, [aiReviewer, c?.id, c?.subject, c?.body])
+
   // Pre-flight deterministic checks (§5.5)
   const senderSigned = !!set && !!s.mail?.hasPassword && s.smtp.state !== 'bad'
   const hasRoom = room > 0
@@ -315,6 +376,8 @@ export function ReviewSendDialog() {
     ? 'Save the sender account and app password first'
     : checksBad
     ? 'Letter has serious issues that must be fixed'
+    : secondReading.badNotes.length > 0
+    ? 'Second reading: ' + secondReading.badNotes[0]
     : !attachOk
     ? 'Attachment is mentioned in letter but no file is attached'
     : why
@@ -386,6 +449,44 @@ export function ReviewSendDialog() {
             <Icon name={checksBad ? 'x' : checks.length > 0 ? 'info' : 'check'} size={14} />
             <span><b>Letter checks:</b> {checks.length === 0 ? 'Passed all checks' : `${checks.length} warning${checks.length === 1 ? '' : 's'} in Review tab`}</span>
           </div>
+          {aiReviewer && (
+            <div
+              className={`or-rs-check-row ${
+                secondReading.status === 'running'
+                  ? 'warn'
+                  : secondReading.badNotes.length > 0
+                  ? 'bad'
+                  : secondReading.status === 'error' || secondReading.warnNotes.length > 0
+                  ? 'warn'
+                  : 'good'
+              }`}
+            >
+              <Icon
+                name={
+                  secondReading.status === 'running'
+                    ? 'clock'
+                    : secondReading.badNotes.length > 0
+                    ? 'x'
+                    : secondReading.status === 'error' || secondReading.warnNotes.length > 0
+                    ? 'info'
+                    : 'check'
+                }
+                size={14}
+              />
+              <span>
+                <b>Second reading:</b>{' '}
+                {secondReading.status === 'running'
+                  ? 'Reading… (senior editor AI)'
+                  : secondReading.badNotes.length > 0
+                  ? `${secondReading.badNotes.length} critical issue${secondReading.badNotes.length === 1 ? '' : 's'}`
+                  : secondReading.status === 'error'
+                  ? 'Second reading unavailable'
+                  : secondReading.warnNotes.length > 0
+                  ? `${secondReading.warnNotes.length} warning${secondReading.warnNotes.length === 1 ? '' : 's'}`
+                  : 'Passed senior editor reading'}
+              </span>
+            </div>
+          )}
           <div className={`or-rs-check-row ${attachOk ? 'good' : 'bad'}`}>
             <Icon name={attachOk ? 'check' : 'x'} size={14} />
             <span><b>Attachments:</b> {attachOk ? (s.attachments.length ? `${s.attachments.length} attached` : 'None needed') : 'Mentioned in body but not attached'}</span>

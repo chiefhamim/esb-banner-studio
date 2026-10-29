@@ -200,6 +200,41 @@ function ContactTab() {
         <Switch checked={active.approved} onChange={(v) => s.approve(active.email, v)} label="I checked this address — include it" />
       )}
       <Switch checked={active.status === 'OPTED_OUT'} onChange={(v) => s.optOutAddress(active.email, v)} label="Asked not to be emailed" />
+      {c && (
+        <div className="or-opener-edit" style={{ marginTop: 10, padding: 8, background: 'var(--chip-bg, rgba(0,0,0,0.03))', borderRadius: 6, border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>Personal opening line ({'{opener|}'})</span>
+            {c.openers?.[active.email]?.text && (
+              <button
+                type="button"
+                className="or-link-btn"
+                style={{ fontSize: 11 }}
+                onClick={() => {
+                  const updated = { ...(c.openers || {}) }
+                  delete updated[active.email]
+                  s.patch({ openers: updated })
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <textarea
+            className="input textarea sm"
+            rows={2}
+            style={{ width: '100%', fontSize: 12, resize: 'vertical' }}
+            placeholder="No personal opener set. Will render empty without leaving a blank paragraph."
+            value={c.openers?.[active.email]?.text || ''}
+            onChange={(e) => {
+              const val = e.target.value
+              const updated = { ...(c.openers || {}) }
+              if (!val.trim()) delete updated[active.email]
+              else updated[active.email] = { text: val.trim(), at: Date.now() }
+              s.patch({ openers: updated })
+            }}
+          />
+        </div>
+      )}
       <button type="button" className="btn sm or-wide" onClick={() => ui.set({ view: 'preview' })}><Icon name="eye" size={13} /><span>Preview their email</span></button>
     </section>
   )

@@ -13,6 +13,7 @@ import type { EsbOutreachMail } from '../esb'
 import { buildJobSpec } from './jobSpec'
 import { engineClient } from './engineClient'
 import { useEngineStore } from './engineStore'
+import { letterFor } from './segments'
 
 /** The campaign's audience: one group and/or any of the chosen purposes ("" filters nothing). */
 export function inAudience(c: Contact, a: Campaign['audience'] | undefined): boolean {
@@ -44,7 +45,9 @@ export function signatureOf(c: Campaign | null): string {
 
 /** Everything the main process needs to build one recipient's message. */
 export function mailFor(contact: Contact, c: Campaign): Omit<EsbOutreachMail, 'to' | 'attachments'> {
-  const m = buildMessage(contact, c.subject, c.body, c.lang)
+  const resolved = letterFor(contact, c)
+  const opener = c.openers?.[contact.email]?.text
+  const m = buildMessage(contact, resolved.subject, resolved.body, c.lang, opener)
   const st = useOutreachStore.getState()
   return {
     subject: m.subject, body: m.body, optOut: m.optOut, signature: signatureOf(c), lang: c.lang, letterhead: c.letterhead,

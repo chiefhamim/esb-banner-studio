@@ -10,7 +10,7 @@ export interface LetterCheck { id: string; level: CheckLevel; title: string; det
 
 // Words that filters weigh against bulk mail from a new sender. Short on purpose: this is about a professional letter
 // to officials, where any of these reads as a sales blast as well.
-const SPAM_WORDS = ['free', 'guarantee', 'guaranteed', 'act now', 'limited time', 'urgent', 'winner', 'congratulations', 'risk-free', 'no obligation', 'click here', 'buy now', 'cash', 'offer expires', '100%', 'best price', 'cheap', 'exclusive deal', 'special promotion']
+export const SPAM_WORDS = ['free', 'guarantee', 'guaranteed', 'act now', 'limited time', 'urgent', 'winner', 'congratulations', 'risk-free', 'no obligation', 'click here', 'buy now', 'cash', 'offer expires', '100%', 'best price', 'cheap', 'exclusive deal', 'special promotion']
 
 /** Numbers as written: 1,200 · 3.5 · 40% · 2026 — kept with their punctuation so "1,200" matches "1,200". */
 export const numbersIn = (t: string) => [...t.matchAll(/\d[\d,]*(?:\.\d+)?%?/g)].map((m) => m[0].replace(/[,.]$/, '')).filter((n) => n.replace(/\D/g, '').length >= 2)

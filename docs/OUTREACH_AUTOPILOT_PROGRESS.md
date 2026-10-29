@@ -2,7 +2,7 @@
 
 > **Branch:** `outreach-autopilot`  
 > **Started:** 2026-10-30  
-> **Status:** Phase 3 Complete (In Progress: Phase 4)
+> **Status:** Phase 5 Complete (In Progress: Phase 6)
 
 ---
 
@@ -75,12 +75,12 @@
 - [x] **4.5 Phase 4 Gate:** Verified address import & exceptions workflow, 30 desktop screenshots verified.
 
 ### Phase 5 — Personalisation
-- [ ] **5.1 Segment & version data model:** Audience sector/purpose variants.
-- [ ] **5.2 Versions by sector UI (`SegmentsDialog.tsx`):** Sector-tailored AI drafts with approval gates.
-- [ ] **5.3 Subject variants:** Rotating subject lines.
-- [ ] **5.4 VIP openers:** Guarded 1–2 sentence personal introductions.
-- [ ] **5.5 AI second reading:** Review & send pre-flight checks.
-- [ ] **5.6 Phase 5 Gate:** Segmented draft & opener verification.
+- [x] **5.1 Segment & version data model:** Audience sector/purpose variants.
+- [x] **5.2 Versions by sector UI (`SegmentsDialog.tsx`):** Sector-tailored AI drafts with approval gates.
+- [x] **5.3 Subject variants:** Rotating subject lines.
+- [x] **5.4 VIP openers:** Guarded 1–2 sentence personal introductions.
+- [x] **5.5 AI second reading:** Review & send pre-flight checks.
+- [x] **5.6 Phase 5 Gate:** Segmented draft & opener verification, 30 desktop screenshots verified.
 
 ### Phase 6 — AI Assistant
 - [ ] **6.1 Command registry (`commands.ts`):** Structured typed command surface.

@@ -219,8 +219,28 @@ export function OutreachComposer() {
           <div className="or-fmt" role="toolbar" aria-label="Formatting">
             {TOOLS.map((t) => <button key={t.kind} type="button" className="ibtn" aria-label={t.tip} data-tip={t.tip} onMouseDown={(e) => e.preventDefault()} onClick={() => void mark(t.kind)}><Icon name={t.icon} size={14} /></button>)}
             <i className="or-fmt-sep" />
-            {visibleFieldKeys.map((p) => <button key={p} type="button" className="or-tag" onMouseDown={(e) => e.preventDefault()} onClick={() => insert(`{${p}}`)} data-tip={`Insert {${p}} — filled from each contact's row`}>{p}</button>)}
-            {moreFieldKeys.length > 0 && <MenuButton label="More" className="or-tag-more" items={moreFieldKeys.map((k) => ({ label: `{${k}}`, onClick: () => insert(`{${k}}`) }))} />}
+            {visibleFieldKeys.map((p) => (
+              <button
+                key={p}
+                type="button"
+                className="or-tag"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insert(p === 'opener' ? '{opener|}' : `{${p}}`)}
+                data-tip={p === 'opener' ? 'Insert {opener|} — optional personal opening line for VIP contacts' : `Insert {${p}} — filled from each contact's row`}
+              >
+                {p}
+              </button>
+            ))}
+            {moreFieldKeys.length > 0 && (
+              <MenuButton
+                label="More"
+                className="or-tag-more"
+                items={moreFieldKeys.map((k) => ({
+                  label: `{${k}}`,
+                  onClick: () => insert(k === 'opener' ? '{opener|}' : `{${k}}`),
+                }))}
+              />
+            )}
           </div>
           <textarea ref={bodyRef} className={'or-text' + (c.lang === 'bn' ? ' bn' : '')} value={c.body} onChange={(e) => setBody(e.target.value)} spellCheck aria-label="Message"
             placeholder="Write the letter. Enter starts a new paragraph; Shift+Enter breaks the line."

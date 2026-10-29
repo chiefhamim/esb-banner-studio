@@ -14,6 +14,8 @@ import { OutreachInspector } from './OutreachInspector'
 import { SenderDialog } from './SenderDialog'
 import { ActivityDesk } from './ActivityDesk'
 import { AutopilotDialog } from './AutopilotDialog'
+import { SegmentsDialog } from './SegmentsDialog'
+import { SubjectVersionsDialog } from './SubjectVersionsDialog'
 import { OutreachActivity } from './OutreachActivity'
 import { AskDialog, FollowUpDialog, FooterDialog, HeaderDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
 import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore } from './outreachStore'
@@ -99,6 +101,9 @@ export function OutreachWorkspace() {
       { label: 'Delete campaign', icon: 'trash', danger: true, disabled: !c || !idle, onClick: async () => { if (c && await ask({ title: `Delete “${c.name}”?`, body: 'Its letter, sources and results go with it. Addresses it already emailed stay protected by the 7-day rule.', ok: 'Delete', danger: true })) void s.deleteCampaign(c.id) } },
     ] },
     { label: 'Letter', items: [
+      { label: 'Versions by sector…', icon: 'layers', disabled: !c, onClick: () => ui.set({ sheet: 'segments' }) },
+      { label: 'Subject versions…', icon: 'edit', disabled: !c, onClick: () => ui.set({ sheet: 'subject-versions' }) },
+      { divider: true },
       { label: 'Save as template', icon: 'filePlus', disabled: !c?.body.trim(), onClick: () => ui.set({ sheet: 'save-template' }) },
       { label: 'Templates', icon: 'folder', hint: s.templates.length ? String(s.templates.length) : 'None yet', onClick: () => ui.set({ sheet: 'templates' }) },
       { label: 'Follow-up letter', icon: 'refresh', disabled: !c, onClick: () => ui.set({ sheet: 'follow-up' }) },
@@ -260,6 +265,8 @@ export function OutreachWorkspace() {
       {(ui.sheet === 'rename' || ui.sheet === 'save-template') && c && <NameDialog mode={ui.sheet} />}
       {ui.sheet === 'follow-up' && c && <FollowUpDialog />}
       {ui.sheet === 'templates' && <TemplatesDialog />}
+      {ui.sheet === 'segments' && c && <SegmentsDialog onClose={() => ui.set({ sheet: null })} />}
+      {ui.sheet === 'subject-versions' && c && <SubjectVersionsDialog onClose={() => ui.set({ sheet: null })} />}
       <AskDialog />
     </div>
   )

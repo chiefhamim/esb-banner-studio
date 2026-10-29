@@ -44,7 +44,7 @@ export function softBreakOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, value: s
   requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = a + ins.length })
 }
 
-export const PLACEHOLDERS = ['name', 'designation', 'organization', 'sector'] as const
+export const PLACEHOLDERS = ['name', 'designation', 'organization', 'sector', 'opener'] as const
 export type Placeholder = (typeof PLACEHOLDERS)[number]
 
 /** Syntax for template placeholders: {key} or {key|fallback text}. */
@@ -56,16 +56,15 @@ export function sectorName(group: string): string {
   return s && s === s.toUpperCase() ? s.toLowerCase().replace(/\b\p{L}/gu, (ch) => ch.toUpperCase()).replace(/\b(And|Of|The|For|In)\b/g, (w) => w.toLowerCase()) : s
 }
 
-export function fieldValue(c: Contact, key: string): string {
+export function fieldValue(c: Contact, key: string, opener?: string): string {
   const k = key.toLowerCase()
   if (k === 'name') return c.personName || ''
   if (k === 'designation') return c.designation || ''
   if (k === 'organization') return c.organization || ''
   if (k === 'sector') return sectorName(c.sectorGroup) || ''
+  if (k === 'opener') return opener || c.fields?.['opener'] || ''
   return c.fields?.[k] || ''
 }
-
-
 
 /** The placeholders a template uses. */
 export function usedPlaceholders(...texts: string[]): string[] {
@@ -80,7 +79,7 @@ export function usedPlaceholders(...texts: string[]): string[] {
 }
 
 /** The fields this contact's row leaves empty but the template needs ({name} has a courteous fallback, and any placeholder with a fallback is satisfied). */
-export function missingFields(c: Contact, subject: string, body: string): string[] {
+export function missingFields(c: Contact, subject: string, body: string, opener?: string): string[] {
   const all = `${subject}\n${body}`
   const missing: string[] = []
   const re = new RegExp(PLACEHOLDER_RE.source, 'gi')
@@ -89,21 +88,22 @@ export function missingFields(c: Contact, subject: string, body: string): string
     const hasFallback = m[2] !== undefined
     if (hasFallback) continue
     if (key === 'name') continue
-    const v = fieldValue(c, key).trim()
+    const v = fieldValue(c, key, opener).trim()
     if (!v && !missing.includes(key)) missing.push(key)
   }
   return missing
 }
 
-export function fill(text: string, c: Contact, lang: OutreachLang): string {
+export function fill(text: string, c: Contact, lang: OutreachLang, opener?: string): string {
   const re = new RegExp(PLACEHOLDER_RE.source, 'gi')
-  return text.replace(re, (_m, rawKey: string, fallback?: string) => {
+  const filled = text.replace(re, (_m, rawKey: string, fallback?: string) => {
     const key = rawKey.toLowerCase()
-    const v = fieldValue(c, key).trim()
+    const v = fieldValue(c, key, opener).trim()
     if (v) return v
     if (fallback !== undefined) return fallback
     return key === 'name' ? (lang === 'bn' ? 'মহোদয়' : 'Sir/Madam') : ''
   })
+  return filled.replace(/\n{3,}/g, '\n\n')
 }
 
 export const OPT_OUT_LINE: Record<OutreachLang, string> = {
@@ -112,15 +112,19 @@ export const OPT_OUT_LINE: Record<OutreachLang, string> = {
 }
 
 /** The subject, body (with its marks) and opt-out line one recipient gets; the main process renders the HTML. */
-export function buildMessage(c: Contact, subject: string, body: string, lang: OutreachLang): { subject: string; body: string; optOut: string } {
-  return { subject: fill(subject, c, lang).replace(/\s+/g, ' ').trim(), body: fill(body, c, lang).trim(), optOut: OPT_OUT_LINE[lang] }
+export function buildMessage(c: Contact, subject: string, body: string, lang: OutreachLang, opener?: string): { subject: string; body: string; optOut: string } {
+  return {
+    subject: fill(subject, c, lang, opener).replace(/\s+/g, ' ').trim(),
+    body: fill(body, c, lang, opener).trim(),
+    optOut: OPT_OUT_LINE[lang],
+  }
 }
 
 /** The body promises an attachment ("attached", "enclosed", "সংযুক্ত") — then there must be one. */
 export const mentionsAttachment = (body: string) => /\b(attached|enclosed|attachment|please find)\b|সংযুক্ত|সংযোজিত/i.test(body)
 
 /** Why the batch would skip this contact, or null when it will be sent. */
-export function skipReason(c: Contact, subject: string, body: string): string | null {
+export function skipReason(c: Contact, subject: string, body: string, opener?: string): string | null {
   if (c.status === 'SENT') return 'Already sent'
   if (c.status === 'OPTED_OUT') return 'Asked not to be emailed'
   if (c.status === 'BOUNCED') return `Bounced earlier${c.error ? ` (${c.error})` : ''} — the address did not take mail`
@@ -131,7 +135,7 @@ export function skipReason(c: Contact, subject: string, body: string): string | 
     const why = c.mxStatus === 'UNKNOWN' ? 'No status in the sheet' : c.mxStatus === 'TECHNICAL_ONLY' ? 'Technical address' : 'Marked for review'
     return `${why}${c.rawStatus ? ` (${c.rawStatus})` : ''} — approve to include`
   }
-  const miss = missingFields(c, subject, body)
+  const miss = missingFields(c, subject, body, opener)
   if (miss.length) return `Missing ${miss.join(', ')}`
   return null
 }

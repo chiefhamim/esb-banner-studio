@@ -22,6 +22,9 @@ export type Sheet =
   | 'follow-up'
   | 'templates'
   | 'autopilot'
+  | 'segments'
+  | 'subject-versions'
+  | 'assistant'
 
 export interface AskRequest {
   title: string
