@@ -3,7 +3,6 @@ import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
 const {
-  zonedParts,
   windowState,
   secondsLeftInWindow,
   rampCap,
@@ -138,7 +137,6 @@ describe('outreach-schedule: pure scheduling, window, pacing & domain throttle (
     const sent = new Set<number>()
     const domainStats = new Map<string, { lastSentAt: number; countToday: number }>()
     let now = 1000000
-    const gapMs = 20 * 60 * 1000
 
     const pickedSequence: string[] = []
 

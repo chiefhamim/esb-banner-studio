@@ -123,7 +123,7 @@ describe('outreach-jobs: job store & atomic state persistence (§4.3)', () => {
     }
 
     const t0 = performance.now()
-    const job = store.create({
+    store.create({
       campaignId: 'cmp-large',
       campaignName: 'Large Batch 20K',
       messages,

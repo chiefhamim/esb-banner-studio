@@ -34,15 +34,15 @@
 - [x] **0.5 Progress file created:** Committed with step 0.4.
 
 ### Phase 1 — The engine (main process)
-- [ ] **1.1 Event log (`outreach-events.cjs`):** Append-only monthly JSONL log & suppression fold.
-- [ ] **1.2 Error classification (`outreach-errors.cjs`):** SMTP error taxonomy & 45-day/60,000 ledger update.
-- [ ] **1.3 Scheduling maths (`outreach-schedule.cjs`):** Pure window, cap, autoGap, domain throttle, plan schedule.
-- [ ] **1.4 Job store (`outreach-jobs.cjs`):** Immutable message files & atomic state files.
-- [ ] **1.5 Engine (`outreach-engine.cjs`):** Headless single-timer queue, retries, circuit breaker, inbox loop.
-- [ ] **1.6 Settings (`outreach-settings.cjs`):** Autopilot configuration schema & validation.
-- [ ] **1.7 IPC guard (`outreach-guard.cjs`):** Strict argument sanitization for all outreach bridge calls.
-- [ ] **1.8 Wiring (main, preload, types, tray):** System tray, close-to-tray, IPC handlers, push channel.
-- [ ] **1.9 Phase 1 Gate:** Unit & E2E verification; zero UI regression.
+- [x] **1.1 Event log (`outreach-events.cjs`):** Append-only monthly JSONL log & suppression fold. (`a6b2669`)
+- [x] **1.2 Error classification (`outreach-errors.cjs`):** SMTP error taxonomy & 45-day/60,000 ledger update. (`6f393ac`)
+- [x] **1.3 Scheduling maths (`outreach-schedule.cjs`):** Pure window, cap, autoGap, domain throttle, plan schedule. (`9445995`)
+- [x] **1.4 Job store (`outreach-jobs.cjs`):** Immutable message files & atomic state files. (`c32473a`)
+- [x] **1.5 Engine (`outreach-engine.cjs`):** Headless single-timer queue, retries, circuit breaker, inbox loop. (`d5b30f9`)
+- [x] **1.6 Settings (`outreach-settings.cjs`):** Autopilot configuration schema & validation. (`d71ae05`)
+- [x] **1.7 IPC guard (`outreach-guard.cjs`):** Strict argument sanitization for all outreach bridge calls. (`2863dfa`)
+- [x] **1.8 Wiring (main, preload, types, tray):** System tray, close-to-tray, IPC handlers, push channel. (`c320c9d`)
+- [x] **1.9 Phase 1 Gate:** Unit & E2E verification; zero UI regression. Ready to commit.
 
 ### Phase 2 — Make the desk drive the engine
 - [ ] **2.1 Projection (`reconcile.ts`, `engineClient.ts`, `engineStore.ts`):** Event cursor & state reconciliation.

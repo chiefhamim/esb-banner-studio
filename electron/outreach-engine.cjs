@@ -274,14 +274,14 @@ function createEngine(deps = {}) {
     }
 
     const elapsedSinceLastSendMs = now - lastSendAt
-    const gapMs = requiredGapSec * 1000
-    if (lastSendAt > 0 && elapsedSinceLastSendMs < gapMs) {
+    const effectiveGapMs = Math.round((requiredGapSec * 1000) / speed)
+    if (lastSendAt > 0 && elapsedSinceLastSendMs < effectiveGapMs) {
       job.status = 'waiting'
       job.why = 'gap'
-      job.until = lastSendAt + gapMs
+      job.until = lastSendAt + effectiveGapMs
       jobs.saveState(job)
       pushProgress(job)
-      const waitMs = Math.max(500, Math.round((job.until - now) / speed))
+      const waitMs = Math.max(50, Math.round(job.until - now))
       activeTimer = setTimer(tick, waitMs)
       return
     }
@@ -291,9 +291,10 @@ function createEngine(deps = {}) {
     const sentIndexes = new Set(job.state.sent || [])
     const heldIndexes = new Set(job.state.held || [])
 
+    const effectiveDomainGapSec = Math.max(1, Math.round((cfg.domainMinGapSec ?? 20 * 60) / speed))
     const pick = pickNext(msgs, sentIndexes, now, domainStats, {
       domainMaxPerDay: cfg.domainMaxPerDay ?? 3,
-      domainMinGapSec: cfg.domainMinGapSec ?? 20 * 60,
+      domainMinGapSec: effectiveDomainGapSec,
       heldSet: heldIndexes,
     })
 

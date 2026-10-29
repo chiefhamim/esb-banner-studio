@@ -97,6 +97,27 @@ try {
   const pwOk = saveOk.ok ? saveOk.status.hasPassword === saveOk.status.encryption && !stored.includes('abcdefgh') && !JSON.stringify(saveOk).includes('abcd') : /encrypt/.test(saveOk.error)
   console.log(!badHost.ok && pwOk ? 'PASS' : 'FAIL', 'sender settings validated in main; the app password is encrypted or refused, never stored or returned in clear', JSON.stringify({ badHost: badHost.error, saved: saveOk.ok ? saveOk.status.hasPassword : saveOk.error }))
 
+  // Autopilot bridge verification (§1.9)
+  const apFns = await page.evaluate(() => [
+    'outreachJobSubmit', 'outreachJobControl', 'outreachPauseAll', 'outreachJobs',
+    'outreachEvents', 'outreachStats', 'outreachPlan', 'outreachSettings',
+    'outreachSettingsSave', 'outreachCheckAddresses', 'outreachLogEvent',
+    'outreachOptOut', 'outreachSyncOptOuts', 'onOutreach'
+  ].every((fn) => typeof window.esb[fn] === 'function'))
+  console.log(apFns ? 'PASS' : 'FAIL', 'new outreach autopilot bridge functions exist')
+
+  const apJobs = await page.evaluate(() => window.esb.outreachJobs())
+  console.log(Array.isArray(apJobs) && apJobs.length === 0 ? 'PASS' : 'FAIL', 'outreachJobs returns empty array on fresh profile')
+
+  const apSettings = await page.evaluate(() => window.esb.outreachSettings())
+  console.log(apSettings && apSettings.dailyLimit === 100 && apSettings.window.tz === 'Asia/Dhaka' ? 'PASS' : 'FAIL', 'outreachSettings returns §4.7 defaults')
+
+  const hostileSubmit = await page.evaluate(() => {
+    const msgs = Array.from({ length: 30000 }, () => ({ to: 'u@example.com', subject: 's', body: 'b' }))
+    return window.esb.outreachJobSubmit({ campaignId: 'c-too-large', messages: msgs })
+  })
+  console.log(!hostileSubmit.ok && hostileSubmit.error.includes('20,000') ? 'PASS' : 'FAIL', 'hostile outreachJobSubmit (>20,000 messages) is refused', hostileSubmit.error)
+
   await page.evaluate(() => window.esb.siteSignOut())
   const afterOut = await app.evaluate(async ({ session }) => (await session.fromPartition('persist:esb-site').cookies.get({ url: 'https://esbpowerline.com' })).length)
   console.log(afterOut === 0 ? 'PASS' : 'FAIL', 'signing out clears the site session')

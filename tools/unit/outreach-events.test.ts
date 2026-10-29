@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 const require = createRequire(import.meta.url)
-const { createEventLog, monthKeyOf } = require('../../electron/outreach-events.cjs')
+const { createEventLog } = require('../../electron/outreach-events.cjs')
 
 describe('outreach-events: append-only log & suppression fold', () => {
   let tmpDir: string
