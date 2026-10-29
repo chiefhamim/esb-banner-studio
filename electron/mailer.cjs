@@ -102,7 +102,7 @@ function validateMail(m) {
   const attachments = list.map(attachmentFrom)
   const bytes = attachments.reduce((n, a) => n + a.content.length, 0)
   if (bytes > MAX_ATTACH_BYTES) throw new Error('Attachments are over 18 MB together — Gmail would refuse the message')
-  return { to: to.toLowerCase(), subject, body, signature, optOut, lang, letterhead: o.letterhead === true, attachments, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
+  return { to: to.toLowerCase(), subject, body, signature, optOut, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
 }
 
 /** May this send go now? Reads the ledger of earlier sends. */
@@ -139,6 +139,25 @@ function ledgerCheck(ledger, now, settings, mail) {
 
 const renderer = () => import('./email-html.mjs')
 const LOGO = path.join(__dirname, 'assets', 'esb-logo.png')
+const PAD_SIDEBAR = path.join(__dirname, 'assets', 'esb-pad-sidebar.png')
+// the vCard text is duplicated from officialPad.ts (that file is TS, read only by the renderer bundle) — see the
+// comment there; the QR is generated fresh per process start, never read from the printed pad.
+const PAD_VCARD = [
+  'BEGIN:VCARD', 'VERSION:3.0', 'N:;ESB PowerLine;;;', 'FN:ESB PowerLine',
+  'ORG:ESB PowerLine;Express Broadcast and Communication Ltd.',
+  'TEL;TYPE=WORK,VOICE:+88 01711 378733', 'EMAIL;TYPE=WORK:news@esbpowerline.com',
+  'URL:https://esbpowerline.com',
+  'ADR;TYPE=WORK:;;House#36/1, Avenue#01, Block#A, Section#10, Mirpur, Pallabi, Dhaka-1216;;;;Bangladesh',
+  'NOTE:Facebook: https://www.facebook.com/esbpowerlineofficial  |  YouTube: https://www.youtube.com/@esbplbd',
+  'END:VCARD',
+].join('\n')
+let padQrBuffer = null
+async function padQrPng() {
+  if (padQrBuffer) return padQrBuffer
+  const QRCode = await import('qrcode')
+  padQrBuffer = await QRCode.toBuffer(PAD_VCARD, { margin: 0, scale: 6, color: { dark: '#1f2937', light: '#ffffff' } })
+  return padQrBuffer
+}
 
 function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), render = renderer }) {
   const settingsFile = path.join(dir, 'outreach-smtp.json')
@@ -231,16 +250,28 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     if (!gate.ok) return { ok: false, error: gate.reason, nextAt: gate.nextAt, duplicate: !!gate.duplicate }
     try {
       const { renderEmail } = await render()
-      const { html, text } = renderEmail({ body: mail.body, signature: mail.signature, optOut: mail.optOut, lang: mail.lang, letterhead: mail.letterhead, logoSrc: 'cid:esb-logo' })
-      // the letterhead's logo travels inside the message (cid:), never as a link to a server
-      const logo = mail.letterhead && fs.existsSync(LOGO) ? [{ filename: 'esb-logo.png', path: LOGO, cid: 'esb-logo', contentType: 'image/png' }] : []
+      const { html, text } = renderEmail({
+        body: mail.body, signature: mail.signature, optOut: mail.optOut, lang: mail.lang, letterhead: mail.letterhead,
+        logoSrc: 'cid:esb-logo', officialPad: mail.officialPad, sidebarSrc: 'cid:esb-pad-sidebar', qrSrc: 'cid:esb-pad-qr',
+      })
+      // every pad/letterhead image travels inside the message (cid:), never as a link to a server; the QR is built
+      // fresh from PAD_VCARD above, not read off the printed pad
+      const logo = mail.letterhead && !mail.officialPad && fs.existsSync(LOGO)
+        ? [{ filename: 'esb-logo.png', path: LOGO, cid: 'esb-logo', contentType: 'image/png' }] : []
+      const pad = mail.officialPad
+        ? [
+            { filename: 'esb-logo.png', path: LOGO, cid: 'esb-logo', contentType: 'image/png' },
+            ...(fs.existsSync(PAD_SIDEBAR) ? [{ filename: 'esb-pad-sidebar.png', path: PAD_SIDEBAR, cid: 'esb-pad-sidebar', contentType: 'image/png' }] : []),
+            { filename: 'esb-pad-qr.png', content: await padQrPng(), cid: 'esb-pad-qr', contentType: 'image/png' },
+          ]
+        : []
       const info = await transportFor(saved).sendMail({
         from: { name: saved.name, address: saved.user },
         to: mail.to,
         subject: mail.subject,
         text,
         html,
-        attachments: [...logo, ...mail.attachments],
+        attachments: [...logo, ...pad, ...mail.attachments],
         list: { unsubscribe: `mailto:${saved.user}?subject=unsubscribe` },
         // a follow-up sits under the first letter in the recipient's mail client
         ...(gate.inReplyTo ? { inReplyTo: gate.inReplyTo, references: [gate.inReplyTo] } : {}),

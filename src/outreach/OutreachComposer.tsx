@@ -9,7 +9,7 @@ import { ask, useOutreachUi } from './outreachUi'
 import { OUTREACH_BLUEPRINTS, REWRITES, rewriteLetter, suggestBlueprint, writeOutreachWithAi, type LetterContext, type RewriteAction } from './outreachAi'
 import { PLACEHOLDERS, buildMessage, mentionsAttachment, missingFields } from './compose'
 import { eligible, inAudience, signatureOf, STAND_IN } from './campaign'
-import { logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
+import { logoDataUrl, padQrDataUrl, padSidebarDataUrl, renderEmail, withViewerMargin } from './emailRender'
 import { AttachmentTray } from './AttachmentTray'
 import { purposeLabel } from './directory'
 import { aiFor, aiPaused, loadAiSettings, providerMeta, roleProvider } from '../editorial/aiProviders'
@@ -60,12 +60,15 @@ export function OutreachComposer() {
   const [aiNote, setAiNote] = useState<{ model: string; unsourced: string[]; undo: { subject: string; body: string; lang: OutreachLang } } | null>(null)
   const [toText, setToText] = useState('')
   const [logo, setLogo] = useState('')
+  const [padSidebar, setPadSidebar] = useState('')
+  const [padQr, setPadQr] = useState('')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const ai = aiFor('outreach')
   const aiName = providerMeta(ai?.provider ?? roleProvider(loadAiSettings(), 'outreach')).name
   const active = s.contacts.find((x) => x.id === s.activeContact) ?? s.contacts[0]
 
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
+  useEffect(() => { void padSidebarDataUrl().then(setPadSidebar); void padQrDataUrl().then(setPadQr) }, [])
   useEffect(() => { setToText(c?.kind === 'direct' ? c.recipients.join(', ') : ''); setVariants([]); setAiNote(null) }, [c?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const audience = useMemo(() => s.contacts.filter((x) => inAudience(x, c?.audience)), [s.contacts, c?.audience])
@@ -76,8 +79,14 @@ export function OutreachComposer() {
     if (!c || ui.view !== 'preview') return null
     const who = active ?? STAND_IN
     const m = buildMessage(who, c.subject, c.body, c.lang)
-    return { who, subject: m.subject, html: withViewerMargin(renderEmail({ body: m.body, signature: signatureOf(c), optOut: m.optOut, lang: c.lang, letterhead: c.letterhead, logoSrc: logo }).html, c.letterhead) }
-  }, [c, active, ui.view, logo, s.signatures]) // eslint-disable-line react-hooks/exhaustive-deps
+    return {
+      who, subject: m.subject,
+      html: withViewerMargin(renderEmail({
+        body: m.body, signature: signatureOf(c), optOut: m.optOut, lang: c.lang, letterhead: c.letterhead, logoSrc: logo,
+        officialPad: c.officialPad, sidebarSrc: padSidebar, qrSrc: padQr,
+      }).html, c.letterhead, c.officialPad),
+    }
+  }, [c, active, ui.view, logo, padSidebar, padQr, s.signatures]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!c) {
     return (

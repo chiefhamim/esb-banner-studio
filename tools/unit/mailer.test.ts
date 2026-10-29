@@ -122,6 +122,18 @@ describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on eve
     now += 120e3
     expect(await mailer.send({ to: 'md@example.com', subject: 'S', text: 'again' })).toMatchObject({ ok: false, duplicate: true })
   })
+  it('official pad: logo, the real sidebar artwork and a freshly generated QR all ride inline as cid attachments', async () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
+    mailer.saveSettings(settings, 'abcdefghijklmnop')
+    const r = await mailer.send({ to: 'md@example.com', subject: 'S', body: 'Dear Sir,\n\nBody', officialPad: true })
+    expect(r.ok).toBe(true)
+    const cids = (sent[0].attachments as { cid?: string; filename?: string }[]).map((a) => a.cid)
+    expect(cids).toEqual(expect.arrayContaining(['esb-logo', 'esb-pad-sidebar', 'esb-pad-qr']))
+    const qr = (sent[0].attachments as { cid?: string; content?: Buffer }[]).find((a) => a.cid === 'esb-pad-qr')
+    expect(qr?.content?.length).toBeGreaterThan(100) // a real PNG, not a stub
+    expect(String(sent[0].html)).toContain('src="cid:esb-pad-qr"')
+    expect(String(sent[0].html)).toContain('src="cid:esb-pad-sidebar"')
+  })
   it('a follow-up is sent with In-Reply-To the first letter and recorded as a follow-up', async () => {
     const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
     mailer.saveSettings(settings, 'abcdefghijklmnop')

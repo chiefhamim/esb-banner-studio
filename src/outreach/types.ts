@@ -109,6 +109,9 @@ export interface Campaign {
   body: string
   signatureId: string
   letterhead: boolean
+  /** The gold-rail "official pad" frame (letterhead artwork + a contact QR), in place of the plain `letterhead`
+   *  header when on — see officialPad.ts. Optional on the type so a campaign saved before this existed loads as off. */
+  officialPad?: boolean
   sources: Source[]
   scheduledAt: number | null
   sent: Record<string, number>

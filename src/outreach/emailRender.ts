@@ -3,20 +3,41 @@
 
 // @ts-expect-error — plain ESM shared with the main process, no type declarations
 import { renderEmail as render } from '../../electron/email-html.mjs'
+import QRCode from 'qrcode'
 import logoUrl from '../assets/images/esb-logo.png'
+import sidebarUrl from '../assets/images/outreach/pad-sidebar.png'
+import { buildVCard } from './officialPad'
 import type { OutreachLang } from './types'
 
-export interface RenderInput { body: string; signature?: string; optOut?: string; lang?: OutreachLang; letterhead?: boolean; logoSrc?: string }
+export interface RenderInput {
+  body: string; signature?: string; optOut?: string; lang?: OutreachLang; letterhead?: boolean; logoSrc?: string
+  officialPad?: boolean; sidebarSrc?: string; qrSrc?: string
+}
 export const renderEmail = render as (i: RenderInput) => { html: string; text: string }
 
-// the preview frame is sandboxed with no origin, so the logo goes in as a data URL (read once from the bundled file)
+// the preview frame is sandboxed with no origin, so bundled images go in as data URLs, read once
+const asDataUrl = (url: string) => fetch(url).then((r) => r.blob()).then((b) => new Promise<string>((res, rej) => {
+  const f = new FileReader(); f.onload = () => res(String(f.result)); f.onerror = () => rej(f.error); f.readAsDataURL(b)
+})).catch(() => '')
+
 let logo: Promise<string> | null = null
 export function logoDataUrl(): Promise<string> {
-  return (logo ??= fetch(logoUrl).then((r) => r.blob()).then((b) => new Promise<string>((res, rej) => {
-    const f = new FileReader(); f.onload = () => res(String(f.result)); f.onerror = () => rej(f.error); f.readAsDataURL(b)
-  })).catch(() => ''))
+  return (logo ??= asDataUrl(logoUrl))
+}
+
+let sidebar: Promise<string> | null = null
+export function padSidebarDataUrl(): Promise<string> {
+  return (sidebar ??= asDataUrl(sidebarUrl))
+}
+
+// generated, not read from a file — the QR printed on paper encodes nothing this app can verify, so the preview
+// builds its own from the same facts officialPad.ts states, exactly as a real send will
+let qr: Promise<string> | null = null
+export function padQrDataUrl(): Promise<string> {
+  return (qr ??= QRCode.toDataURL(buildVCard(), { margin: 0, scale: 6, color: { dark: '#1f2937', light: '#ffffff' } }).catch(() => ''))
 }
 
 /** For the preview frames only: a mail client shows a message inside its own margin, so a letter without the
  *  letterhead gets one here. The message that is sent is unchanged. */
-export const withViewerMargin = (html: string, letterhead: boolean) => (letterhead ? html : html.replace('<body style="margin:0;padding:0;', '<body style="margin:0;padding:20px 24px;'))
+export const withViewerMargin = (html: string, letterhead: boolean, officialPad = false) =>
+  (letterhead || officialPad ? html : html.replace('<body style="margin:0;padding:0;', '<body style="margin:0;padding:20px 24px;'))

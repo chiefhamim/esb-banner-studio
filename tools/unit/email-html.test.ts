@@ -36,4 +36,22 @@ describe('email-html: the only HTML a recipient gets', () => {
     expect(text).toBe('Hello\n\nDesk\nESB PowerLine\n\n—\nReply unsubscribe')
     expect(renderEmail({ body: 'x', lang: 'bn' }).html).toContain('Hind Siliguri')
   })
+  it('official pad: gold rail, logo, sidebar and QR by cid, the pad footer, and it wins over letterhead', () => {
+    const { html } = renderEmail({ body: 'Hello', letterhead: true, officialPad: true })
+    expect(html).toContain('#ffe4a6') // the rail's own gold, not a guess
+    expect(html).toContain('src="cid:esb-logo"')
+    expect(html).toContain('src="cid:esb-pad-sidebar"')
+    expect(html).toContain('src="cid:esb-pad-qr"')
+    expect(html).toContain('valign="bottom"') // the QR is pinned to the rail's foot with table alignment, not CSS position
+    expect(html).toContain('Safe Energy Safe Nation')
+    expect(html).toContain('facebook.com/esbpowerlineofficial')
+    expect(html).toContain('youtube.com/@esbplbd')
+    expect(html).toContain('House#36/1, Avenue#01, Block#A, Section#10, Mirpur, Pallabi, Dhaka-1216')
+    // the plain letterhead chrome (brand stripes) must not also render underneath the pad
+    expect(html).not.toContain('#1e9b4a')
+  })
+  it('official pad never uses a CSS background-image — Outlook\'s Word engine does not render one', () => {
+    const { html } = renderEmail({ body: 'Hello', officialPad: true })
+    expect(html).not.toMatch(/background-image\s*:/)
+  })
 })

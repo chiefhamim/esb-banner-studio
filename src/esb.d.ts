@@ -84,6 +84,8 @@ export interface EsbOutreachMail {
   lang?: 'en' | 'bn'
   /** ESB letterhead: logo and brand stripes, the logo attached inline. */
   letterhead?: boolean
+  /** The gold-rail official pad (letterhead artwork + a generated contact QR), in place of `letterhead`. */
+  officialPad?: boolean
   attachments?: { name: string; dataUrl: string }[]
   isTest?: boolean
   resend?: boolean

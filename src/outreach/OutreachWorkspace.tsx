@@ -72,7 +72,8 @@ export function OutreachWorkspace() {
       { label: 'Follow-up letter', icon: 'refresh', disabled: !c, onClick: () => ui.set({ sheet: 'follow-up' }) },
       { divider: true },
       { label: 'Signatures', icon: 'edit', onClick: () => ui.set({ sheet: 'signatures' }) },
-      { label: 'ESB letterhead', checked: !!c?.letterhead, disabled: !c, onClick: () => s.patch({ letterhead: !c?.letterhead }) },
+      { label: 'ESB letterhead', checked: !!c?.letterhead && !c?.officialPad, disabled: !c || !!c?.officialPad, onClick: () => s.patch({ letterhead: !c?.letterhead }) },
+      { label: 'Official pad (gold rail + contact QR)', checked: !!c?.officialPad, disabled: !c, onClick: () => s.patch({ officialPad: !c?.officialPad }) },
       { label: 'House prompt', icon: 'sparkle', hint: s.housePrompt ? 'Set' : 'None', onClick: () => ui.set({ sheet: 'prompt' }) },
     ] },
     { label: 'List', items: [

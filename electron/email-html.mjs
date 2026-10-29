@@ -10,6 +10,22 @@
 
 const BRAND = { green: '#1e9b4a', red: '#e52d2d', orange: '#ec8e3c', ink: '#1f2937', muted: '#6b7280', line: '#e5e7eb' }
 
+// The printed letterhead's own palette (sampled from the artwork) and the facts its footer and QR state. Kept as a
+// plain copy rather than an import so this file stays dependency-free on the main-process side — see officialPad.ts
+// for the one this mirrors; edit both if a contact detail changes.
+const PAD = { gold: '#ffe4a6', cream: '#fffef2' }
+const PAD_CONTACT = {
+  org: 'ESB PowerLine',
+  tagline: 'Safe Energy Safe Nation',
+  url: 'https://esbpowerline.com',
+  urlLabel: 'esbpowerline.com',
+  email: 'news@esbpowerline.com',
+  phone: '+88 01711 378733',
+  addressLine: 'House#36/1, Avenue#01, Block#A, Section#10, Mirpur, Pallabi, Dhaka-1216',
+  facebook: 'https://www.facebook.com/esbpowerlineofficial',
+  youtube: 'https://www.youtube.com/@esbplbd',
+}
+
 export const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
 const safeUrl = (u) => (/^(https:\/\/[^\s"'<>]+|mailto:[^\s"'<>]+)$/i.test(u) ? u : null)
@@ -58,27 +74,67 @@ export function blocksToText(text) {
 }
 
 /**
- * The whole message. `letterhead` adds the ESB header (logo + the three brand stripes) and footer; `logoSrc` is
- * "cid:esb-logo" when sending and the bundled image URL in the preview.
+ * The official-pad frame: the printed letterhead reproduced as an email table (not a background image behind the
+ * text — Outlook's Word engine does not render CSS background-image, and a background-heavy, text-light email is
+ * exactly what spam filters flag, which matters at 2,000 recipients). Gold left rail, the real sidebar artwork
+ * cropped from the letterhead, the contact QR pinned to the bottom of the rail with `valign="bottom"` (plain table
+ * alignment — works in every client, unlike flexbox), logo + tagline header, the pad's own contact footer.
+ * `sidebarSrc`/`qrSrc` are cid: addresses when sending, data URLs in the preview — same pattern as `logoSrc`.
  */
-export function renderEmail({ body, signature = '', optOut = '', lang = 'en', letterhead = false, logoSrc = 'cid:esb-logo' }) {
+function padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc }) {
+  const c = PAD_CONTACT
+  const header = `<div style="padding:22px 26px 6px">`
+    + `<img src="${escapeHtml(logoSrc)}" width="140" alt="${escapeHtml(c.org)}" style="display:block;width:140px;height:auto;border:0">`
+    + `<div style="margin-top:6px;font-size:12px;letter-spacing:.04em;color:${BRAND.muted}">${escapeHtml(c.tagline)}</div>`
+    + `</div>`
+  const footer = `<div style="padding:14px 26px 20px;border-top:1px solid ${BRAND.line};color:${BRAND.muted};font-size:11.5px;line-height:1.7">`
+    + `<a href="${c.url}" style="color:${BRAND.muted};text-decoration:none">${escapeHtml(c.urlLabel)}</a>`
+    + ` &nbsp;·&nbsp; <a href="mailto:${c.email}" style="color:${BRAND.muted};text-decoration:none">${escapeHtml(c.email)}</a>`
+    + ` &nbsp;·&nbsp; ${escapeHtml(c.phone)}<br>`
+    + `${escapeHtml(c.addressLine)}<br>`
+    + `<a href="${c.facebook}" style="color:${BRAND.muted};text-decoration:none">Facebook</a>`
+    + ` &nbsp;·&nbsp; <a href="${c.youtube}" style="color:${BRAND.muted};text-decoration:none">YouTube</a>`
+    + `</div>`
+  const rail = `<td width="72" valign="bottom" style="background:${PAD.gold};padding:0;font-size:0;line-height:0">`
+    + `<img src="${escapeHtml(sidebarSrc)}" width="72" alt="" style="display:block;width:72px;height:auto;border:0">`
+    + `<div style="padding:10px 9px;background:${PAD.gold}"><img src="${escapeHtml(qrSrc)}" width="54" height="54" alt="Scan for ${escapeHtml(c.org)}'s contact details" style="display:block;width:54px;height:54px;border:4px solid ${PAD.cream};background:#ffffff"></div>`
+    + `</td>`
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;max-width:680px;margin:0 auto;background:${PAD.cream}"><tr>`
+    + rail
+    + `<td valign="top" style="background:${PAD.cream}">${header}<div style="padding:4px 26px 8px">${inner}</div>${footer}</td>`
+    + `</tr></table>`
+}
+
+/**
+ * The whole message. `letterhead` adds the plain ESB header (logo + the three brand stripes) and footer;
+ * `officialPad` (takes priority over `letterhead` — one chrome, never both stacked) wraps the letter in the full
+ * gold-rail pad frame instead, see `padFrame`. `logoSrc`/`sidebarSrc`/`qrSrc` are "cid:esb-…" when sending and the
+ * bundled image URL / a generated data URL in the preview.
+ */
+export function renderEmail({
+  body, signature = '', optOut = '', lang = 'en', letterhead = false, logoSrc = 'cid:esb-logo',
+  officialPad = false, sidebarSrc = 'cid:esb-pad-sidebar', qrSrc = 'cid:esb-pad-qr',
+}) {
   const font = lang === 'bn' ? "'Hind Siliguri','Noto Sans Bengali','Nirmala UI',Arial,sans-serif" : "Arial,Helvetica,sans-serif"
   const sig = String(signature).trim()
   const stripes = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>${[BRAND.green, BRAND.red, BRAND.orange].map((c) => `<td style="height:4px;background:${c};font-size:0;line-height:0">&nbsp;</td>`).join('')}</tr></table>`
-  const head = letterhead
+  const chrome = letterhead && !officialPad
+  const head = chrome
     ? `${stripes}<div style="padding:20px 28px 8px"><img src="${escapeHtml(logoSrc)}" width="150" alt="ESB PowerLine" style="display:block;width:150px;height:auto;border:0"></div>`
     : ''
-  const foot = letterhead
+  const foot = chrome
     ? `<div style="padding:14px 28px 22px;color:${BRAND.muted};font-size:12px;line-height:1.5;border-top:1px solid ${BRAND.line}">ESB PowerLine · Express Broadcast and Communication Ltd. · <a href="https://esbpowerline.com" style="color:${BRAND.muted}">esbpowerline.com</a></div>${stripes}`
     : ''
-  const html = `<!doctype html><html lang="${lang === 'bn' ? 'bn' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>`
-    + `<body style="margin:0;padding:0;background:#ffffff">`
-    + `<div style="max-width:640px;margin:0 auto;background:#ffffff;font-family:${font};font-size:15px;line-height:1.6;color:${BRAND.ink}">`
-    + head
-    + `<div style="padding:${letterhead ? '12px 28px 8px' : '4px 0'}">${blocksToHtml(body, font)}`
+  const inner = `${blocksToHtml(body, font)}`
     + (sig ? `<div style="margin:18px 0 0;color:#374151">${blocksToHtml(sig, font)}</div>` : '')
     + (optOut ? `<p style="margin:22px 0 0;color:${BRAND.muted};font-size:12px;line-height:1.5">${escapeHtml(optOut)}</p>` : '')
-    + `</div>${foot}</div></body></html>`
+  const body_ = officialPad
+    ? padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc })
+    : `<div style="max-width:640px;margin:0 auto;background:#ffffff;font-family:${font};font-size:15px;line-height:1.6;color:${BRAND.ink}">${head}<div style="padding:${chrome ? '12px 28px 8px' : '4px 0'}">${inner}</div>${foot}</div>`
+  const html = `<!doctype html><html lang="${lang === 'bn' ? 'bn' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>`
+    + `<body style="margin:0;padding:0;background:${officialPad ? PAD.cream : '#ffffff'};font-family:${font};font-size:15px;line-height:1.6;color:${BRAND.ink}">`
+    + body_
+    + `</body></html>`
   const text = [blocksToText(body), sig ? blocksToText(sig) : '', optOut ? `—\n${optOut}` : ''].filter(Boolean).join('\n\n')
   return { html, text }
 }
