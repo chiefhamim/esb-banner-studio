@@ -17,7 +17,9 @@ import { aiFor, aiPaused, loadAiSettings, providerMeta, roleProvider } from '../
 import { ProviderMark } from '../editorial/ProviderMark'
 import { AutopilotCard } from './AutopilotCard'
 import { Icon } from '../ui/Icon'
-import { Switch, Tabs } from '../ui/controls'
+import { Dialog, Switch, Tabs } from '../ui/controls'
+import { buildMessage } from './compose'
+import { renderEmail, withViewerMargin } from './emailRender'
 import { NeedsYou } from './NeedsYou'
 import { domainOf, roleMailbox, disposableDomain } from './addressCheck'
 
@@ -156,8 +158,29 @@ function SendTab() {
 function ContactTab() {
   const s = useOutreachStore()
   const ui = useOutreachUi()
+  const [previewModal, setPreviewModal] = useState(false)
   const c = s.campaign()
   const active = s.contacts.find((x) => x.id === s.activeContact)
+  const personalPreview = useMemo(() => {
+    if (!c || !active || !previewModal) return null
+    const m = buildMessage(active, c.subject, c.body, c.lang)
+    return {
+      subject: m.subject,
+      html: withViewerMargin(renderEmail({
+        body: m.body,
+        signature: signatureOf(c),
+        optOut: m.optOut,
+        lang: c.lang,
+        letterhead: c.letterhead,
+        footerLine: s.footerLine,
+        fontFamily: s.fontFamily,
+        headerBg: s.headerBg,
+        footerBg: s.footerBg,
+        stripeColors: s.stripeColors,
+        officialPad: c.officialPad,
+      }).html, c.letterhead, c.officialPad)
+    }
+  }, [c, active, previewModal, s.footerLine, s.fontFamily, s.headerBg, s.footerBg, s.stripeColors, s.signatures])
   if (!active) return <div className="or-empty"><Icon name="user" size={22} /><p>Pick a contact in the list to see what the sheet says about them.</p></div>
   const reason = c ? skipReason(active, c.subject, c.body) : null
   const outside = c && !inAudience(active, c.audience)
@@ -246,7 +269,38 @@ function ContactTab() {
           />
         </div>
       )}
-      <button type="button" className="btn sm or-wide" onClick={() => ui.set({ view: 'preview' })}><Icon name="eye" size={13} /><span>Preview their email</span></button>
+      <button type="button" className="btn sm or-wide" onClick={() => setPreviewModal(true)}><Icon name="eye" size={13} /><span>Preview their email</span></button>
+      {previewModal && (
+        <Dialog
+          title={`Email preview · ${active.personName || active.email}`}
+          kicker="RECIPIENT PREVIEW"
+          width={760}
+          onClose={() => setPreviewModal(false)}
+          footer={
+            <button type="button" className="btn primary" onClick={() => setPreviewModal(false)}>
+              Done
+            </button>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <dl style={{ display: 'grid', gridTemplateColumns: '60px 1fr', gap: '6px 12px', margin: 0, padding: '10px 14px', background: 'var(--fill)', borderRadius: 'var(--r-2)', fontSize: 13 }}>
+              <dt style={{ color: 'var(--text-3)', fontWeight: 600 }}>From</dt>
+              <dd style={{ margin: 0 }}>{s.mail?.settings ? `${s.mail.settings.name} <${s.mail.settings.user}>` : 'desk@esbpowerline.com'}</dd>
+              <dt style={{ color: 'var(--text-3)', fontWeight: 600 }}>To</dt>
+              <dd style={{ margin: 0, fontWeight: 600 }}>{active.personName ? `${active.personName} <${active.email}>` : active.email}</dd>
+              <dt style={{ color: 'var(--text-3)', fontWeight: 600 }}>Subject</dt>
+              <dd style={{ margin: 0, fontWeight: 600 }}>{personalPreview?.subject || c.subject}</dd>
+            </dl>
+            <iframe
+              className="or-frame"
+              style={{ width: '100%', height: 440, border: '1px solid var(--card-line)', borderRadius: 'var(--r-2)', background: '#fff' }}
+              title="Recipient email preview"
+              sandbox=""
+              srcDoc={personalPreview?.html || ''}
+            />
+          </div>
+        </Dialog>
+      )}
     </section>
   )
 }

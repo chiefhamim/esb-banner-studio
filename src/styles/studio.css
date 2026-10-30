@@ -188,7 +188,7 @@
   border: 1px solid transparent;
   box-shadow: none;
 }
-.input:focus, input[type=text]:focus, input[type=email]:focus, input[type=password]:focus, input[type=url]:focus, input[type=number]:focus, textarea.input:focus,
+.input:focus, input[type=text]:focus, input[type=email]:focus, input[type=password]:focus, input[type=url]:focus, input[type=search]:focus, input[type=number]:focus, textarea.input:focus,
 .select.open, .scrub:focus-within, .colorfield:focus-within, .search:focus-within {
   background: var(--card);
   border: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 65%, transparent);
@@ -246,12 +246,12 @@
 .source-reader-title-input, .source-reader-title-input:hover, .source-reader-title-input:focus { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 
 /* secondary buttons: raised chips */
-.btn:not(.primary):not(.ghost) {
+.btn:not(.primary):not(.ghost):not(.ai-btn) {
   background: var(--raised);
   border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
-.btn:not(.primary):not(.ghost):hover:not(:disabled) {
+.btn:not(.primary):not(.ghost):not(.ai-btn):hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--ink) 24%, transparent);
   background: color-mix(in srgb, var(--fill) 50%, var(--raised));
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -1414,9 +1414,9 @@ label.switch:active i { filter: brightness(.94); }
 .ed-link-row { display: flex; gap: 10px; }
 .ed-link-field { position: relative; flex: 1 1 auto; display: flex; align-items: center; gap: 10px; min-width: 0; height: 44px; padding: 0 14px; color: var(--text-3); background: var(--row-bg); border: 1px solid var(--row-line); border-radius: 10px; transition: border-color var(--t-2) var(--ease), background var(--t-2) var(--ease), box-shadow var(--t-2) var(--ease); }
 .ed-link-field:hover { background: var(--row-bg-hover); }
-.ed-link-field:focus-within { color: var(--text); background: var(--card); border-color: var(--sel); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sel) 16%, transparent); }
+.ed-link-field:focus-within { color: var(--text); background: var(--card) !important; border-color: color-mix(in srgb, var(--accent, #3b82f6) 65%, transparent) !important; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent, #3b82f6) 24%, transparent) !important; }
 .ed-link-field svg { flex: none; }
-.ed-link-field .ed-link-input { flex: 1 1 auto; min-width: 0; height: 100%; padding: 0; font: 500 14px/20px var(--ui); color: var(--text); background: transparent !important; box-shadow: none !important; border: 0; outline: 0; text-overflow: ellipsis; }
+.ed-link-field .ed-link-input { flex: 1 1 auto; min-width: 0; height: 100%; padding: 0 80px 0 0; font: 500 14px/20px var(--ui); color: var(--text); background: transparent !important; box-shadow: none !important; border: 0 !important; outline: 0 !important; text-overflow: ellipsis; }
 .ed-link-field .ed-link-input::placeholder { color: var(--text-3); font-weight: 400; }
 .ed-link-row .btn { flex: none; height: 44px; padding: 0 18px; border-radius: 10px; }
 .ed-link-hint { margin: 0; font: 400 12px/16px var(--ui); color: var(--text-3); }
@@ -1635,22 +1635,22 @@ label.switch:active i { filter: brightness(.94); }
 }
 
 /* Premium Button Tactile Depth & Bevel */
-.btn:not(.primary):not(.ghost) {
+.btn:not(.primary):not(.ghost):not(.ai-btn) {
   background: var(--raised);
   border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 1px 2px rgba(15, 23, 42, 0.05);
 }
-:root[data-theme="dark"] .btn:not(.primary):not(.ghost) {
+:root[data-theme="dark"] .btn:not(.primary):not(.ghost):not(.ai-btn) {
   background: color-mix(in srgb, var(--raised) 92%, #ffffff 2%);
   border: 1px solid rgba(255, 255, 255, 0.075);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 3px rgba(0, 0, 0, 0.35);
 }
-.btn:not(.primary):not(.ghost):hover:not(:disabled) {
+.btn:not(.primary):not(.ghost):not(.ai-btn):hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--ink) 20%, transparent);
   background: color-mix(in srgb, var(--fill) 50%, var(--raised));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 2px 4px rgba(15, 23, 42, 0.08);
 }
-:root[data-theme="dark"] .btn:not(.primary):not(.ghost):hover:not(:disabled) {
+:root[data-theme="dark"] .btn:not(.primary):not(.ghost):not(.ai-btn):hover:not(:disabled) {
   border-color: rgba(255, 255, 255, 0.13);
   background: color-mix(in srgb, var(--raised) 86%, #ffffff 5%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 5px rgba(0, 0, 0, 0.45);
@@ -1787,4 +1787,39 @@ label.switch:active i { filter: brightness(.94); }
   border-bottom: 2px wavy var(--warning);
   padding: 1px 3px;
   border-radius: 3px;
+}
+
+/* High-contrast AI Button and Chip discipline in both light & dark themes */
+.btn.ai-btn[data-provider] {
+  color: #ffffff !important;
+  background: var(--ai-fill) !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+  font-weight: 500 !important;
+}
+.btn.ai-btn[data-provider] svg {
+  color: #ffffff !important;
+}
+.btn.ai-btn[data-provider]:hover:not(:disabled) {
+  color: #ffffff !important;
+  background: var(--ai-fill) !important;
+  filter: brightness(1.08) saturate(1.05) !important;
+}
+.btn.ai-btn:not([data-provider]) {
+  color: var(--text) !important;
+  background: var(--raised) !important;
+  border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+}
+.btn.ai-btn:not([data-provider]) svg {
+  color: var(--accent, var(--text)) !important;
+}
+:root[data-theme="light"] .btn.ai-btn:not([data-provider]) {
+  color: #0f172a !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.2) !important;
+}
+:root[data-theme="light"] .btn.ai-btn:not([data-provider]):hover:not(:disabled) {
+  background: #f8fafc !important;
+  border-color: rgba(15, 23, 42, 0.3) !important;
 }

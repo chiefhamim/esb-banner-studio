@@ -95,9 +95,10 @@
 .or-file-text b { font-size: 13px; line-height: 18px; }
 .or-file-text span { font-size: 11px; line-height: 16px; color: var(--text-3); }
 .or-file .btn { flex: none; }
-.or-search { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; color: var(--text-3); background: var(--field); border-radius: var(--r-2); }
-.or-search:focus-within { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text) 35%, transparent); }
-.or-search input { flex: 1; min-width: 0; height: 100%; padding: 0; font: 500 12px/1 var(--font-ui); color: var(--text); background: none; border: 0; outline: none; }
+.or-search { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; color: var(--text-3); background: var(--field); border: 1px solid transparent; border-radius: var(--r-2); box-sizing: border-box; transition: background var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring); }
+.or-search:hover { background: var(--field-hover); border-color: transparent; }
+.or-search:focus-within { background: var(--card) !important; border-color: color-mix(in srgb, var(--accent, #3b82f6) 65%, transparent) !important; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent, #3b82f6) 24%, transparent) !important; color: var(--text) !important; }
+.or-search input, .or-search input:focus, .or-search input:focus-visible { border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent !important; }
 .or-filter { display: flex; width: 100%; }
 .or-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
 .or-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -808,3 +809,10 @@
 .or-flag-actions {
   flex: none;
 }
+
+/* Sources > Link paste and add horizontal row alignment */
+.or-source-link-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.or-source-input-wrap { position: relative; flex: 1 1 auto; display: flex; align-items: center; min-width: 0; }
+.or-source-input-wrap .or-input { height: 32px; padding-right: 68px; width: 100%; box-sizing: border-box; }
+.or-source-paste-btn { position: absolute; right: 4px; height: 24px; padding: 0 8px; }
+.or-source-link-row .btn.sm { height: 32px; flex: none; }

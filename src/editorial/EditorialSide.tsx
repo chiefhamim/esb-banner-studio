@@ -120,7 +120,7 @@ export function EditorialSide(p: {
         </Panel>
 
         {/* 3 · clear what is left */}
-        <Panel id="ed-side-publish" icon="check" title="Before you publish" persist={false}
+        <Panel id="ed-side-publish" icon="check" title="Before publication" persist={false}
           actions={<><span className={'es-count ' + t.state}>{open.length ? `${open.length} open` : t.ignored.length ? `${t.ignored.length} ignored` : 'All clear'}</span></>}>
           <div className="es-todo">
             {open.length > 1 && <div className="es-todo-head"><span>{open.length} open</span><button type="button" className="btn-link" onClick={() => ignore(p.storyId, open.map((c) => c.id))}>Ignore all</button></div>}
