@@ -1265,8 +1265,12 @@ body { letter-spacing: -.003em; }
 /* white controls floating on grey, with a hairline ring and a whisper of lift */
 .input, input[type=text], textarea.input, .select, .scrub, .colorfield, .search, .cp-hex, .btn, .fmtpick, .pv-btn, .collage, .cat, .slot, .preset, .tcard, .fcard { border-color: transparent; box-shadow: var(--ctl-shadow); }
 .input:hover, .select:hover, .scrub:hover, .colorfield:hover, .btn:hover:not(:disabled), .fmtpick:hover, .pv-btn:hover, .cat:hover { border-color: transparent; box-shadow: var(--ctl-shadow-hover); }
-.btn.ghost, .btn.ghost:hover { box-shadow: none; }
-.btn.primary { border-color: transparent; }
+.btn { border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6); }
+.btn:hover:not(:disabled) { border-color: color-mix(in srgb, var(--text) 24%, transparent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8); }
+:root[data-theme=dark] .btn { border-color: color-mix(in srgb, var(--text) 18%, transparent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+:root[data-theme=dark] .btn:hover:not(:disabled) { border-color: color-mix(in srgb, var(--text) 28%, transparent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+.btn.ghost, .btn.ghost:hover { border-color: transparent; box-shadow: none; }
+.btn.primary { border-color: transparent; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
 .pillbar, .insp-actions, .align-bar, .seg-ctl, .side-tabs { background: color-mix(in srgb, var(--ink) 7%, var(--side)); border-color: transparent; box-shadow: none; }
 .seg-ctl button.on, .side-tabs button.on { background: var(--bg-1); box-shadow: 0 .5px 1px rgb(0 0 0 / .18), 0 0 0 .5px rgb(0 0 0 / .06); }
 .side-tabs button.on { box-shadow: 0 .5px 1px rgb(0 0 0 / .18), 0 0 0 .5px rgb(0 0 0 / .06), inset 0 -2px 0 var(--ink); }

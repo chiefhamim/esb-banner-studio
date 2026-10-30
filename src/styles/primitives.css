@@ -58,7 +58,7 @@
 .btn.sm {
   height: var(--h-control-sm);
   gap: var(--s-3);
-  padding: 0 var(--s-4);
+  padding: 0 12px;
   font-size: 12px;
 }
 
