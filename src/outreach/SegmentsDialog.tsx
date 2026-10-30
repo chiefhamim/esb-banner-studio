@@ -98,7 +98,7 @@ export function SegmentsDialog({ onClose }: SegmentsDialogProps) {
     const unapproved = segments.filter((seg) => variants[seg.key]?.status !== 'approved')
     if (unapproved.length === 0) return
 
-    setDraftAllProgress(`Drafting 0 of ${unapproved.length}…`)
+    setDraftAllProgress(`Drafting 0 of ${unapproved.length}`)
     let done = 0
 
     // Concurrency pool of 2
@@ -108,7 +108,7 @@ export function SegmentsDialog({ onClose }: SegmentsDialogProps) {
         const item = queue.shift()!
         await draftSegment(item.key, item.blueprintId, item.sample)
         done++
-        setDraftAllProgress(`Drafting ${done} of ${unapproved.length}…`)
+        setDraftAllProgress(`Drafting ${done} of ${unapproved.length}`)
       }
     }
 
@@ -167,13 +167,13 @@ export function SegmentsDialog({ onClose }: SegmentsDialogProps) {
   const draftAllOpeners = async () => {
     if (!aiAvailable || candidates.length === 0) return
     setDraftingOpeners(true)
-    setOpenerProgress(`Writing openers for 0 of ${candidates.length}…`)
+    setOpenerProgress(`Writing openers for 0 of ${candidates.length}`)
     let count = 0
     const newOpeners = { ...(campaign.openers || {}) }
 
     for (const cand of candidates) {
       count++
-      setOpenerProgress(`Writing opener for ${cand.personName || cand.email} (${count}/${candidates.length})…`)
+      setOpenerProgress(`Writing opener for ${cand.personName || cand.email} (${count}/${candidates.length})`)
       const res = await writeOpenerWithAi(cand, {
         lang: campaign.lang,
         sources: campaign.sources,
@@ -296,7 +296,7 @@ export function SegmentsDialog({ onClose }: SegmentsDialogProps) {
                         title={aiAvailable ? 'Draft version for this sector with AI' : 'Connect an AI to draft'}
                       >
                         <Icon name="sparkle" size={12} />
-                        <span>{isBusy ? 'Drafting…' : 'Draft with AI'}</span>
+                        <span>{isBusy ? 'Drafting' : 'Draft with AI'}</span>
                       </button>
 
                       <button
@@ -432,7 +432,7 @@ export function SegmentsDialog({ onClose }: SegmentsDialogProps) {
                       <input
                         className="input sm"
                         style={{ flex: 1, fontSize: 12 }}
-                        placeholder="Courteous 1–2 sentence personal opening greeting line…"
+                        placeholder="Courteous 1–2 sentence personal opening greeting line"
                         value={current}
                         onChange={(e) => updateOpener(cand.email, e.target.value)}
                       />

@@ -192,7 +192,7 @@ const EXPLORE_LINKS = ['Latest News', 'All Categories', 'Monthly Magazine', 'Gri
 function SitePage(p: SitePreviewProps) {
   const banner = p.theme === 'midnight' ? bannerMidnight : p.theme === 'dark' ? bannerDark : bannerWhite
   const cat = NAV_CATEGORIES.find((c) => c.name === p.category) ?? NAV_CATEGORIES[0]
-  const initials = (p.author || 'ESB PowerLine').substring(0, 2)
+  const initials = (p.author || 'ESB Power Line').substring(0, 2)
   // formatted stories split into their top-level blocks, as the site does for the ad slot
   const blocks = p.bodyHtml ? Array.from(new DOMParser().parseFromString(`<body>${p.bodyHtml}</body>`, 'text/html').body.children).map((e) => e.outerHTML) : null
   const items = blocks ?? p.paragraphs
@@ -207,8 +207,8 @@ function SitePage(p: SitePreviewProps) {
       {/* ---- header: masthead banner + primary nav (components/shared/PublicNavbar.tsx) ---- */}
       <header className="public-site-header">
         <div className="container container--shell">
-          <a href="#" className="block" aria-label="ESB PowerLine — home">
-            <img src={banner} alt="ESB PowerLine — Safe Energy Safe Nation" className="site-banner__image block mx-auto" style={{ width: '100%', height: 'auto' }} />
+          <a href="#" className="block" aria-label="ESB Power Line — home">
+            <img src={banner} alt="ESB Power Line — Safe Energy Safe Nation" className="site-banner__image block mx-auto" style={{ width: '100%', height: 'auto' }} />
           </a>
         </div>
         <nav className="public-nav-bar" aria-label="Primary">
@@ -319,7 +319,7 @@ function SitePage(p: SitePreviewProps) {
               <div className="article-meta-left-group">
                 <a href="#" className="article-meta-avatar rounded-full bg-muted flex items-center justify-center font-bold text-muted-foreground uppercase shadow-sm shrink-0">{initials}</a>
                 <div className="article-meta-text flex flex-col min-w-0">
-                  <div className="article-meta-author"><a href="#" className="hover:text-primary transition-colors">{p.author || 'ESB PowerLine'}</a></div>
+                  <div className="article-meta-author"><a href="#" className="hover:text-primary transition-colors">{p.author || 'ESB Power Line'}</a></div>
                   <div className="article-meta-subline">
                     <div className="article-meta-date-wrapper"><span className="article-meta-date article-meta-details">{formatArticleDate(p.date)}</span></div>
                     <span className="article-meta-separator article-meta-mobile-hide">•</span>
@@ -414,7 +414,7 @@ function SitePage(p: SitePreviewProps) {
       <footer className="border-t border-border/60 bg-card/30">
         <div className="container container--shell py-10 md:py-12">
           <div className="flex flex-col items-start gap-4 border-b border-border/40 pb-8 sm:flex-row sm:items-center sm:gap-6">
-            <span className="brand-logo inline-block public-footer-logo"><span className="brand-logo__frame shrink-0 rounded-md border-0 bg-transparent px-0 py-0 shadow-none"><img src={siteLogo} alt="ESB PowerLine — Energy Solution of Bangladesh" className="brand-logo__img h-11 w-auto max-w-[240px]" /></span></span>
+            <span className="brand-logo inline-block public-footer-logo"><span className="brand-logo__frame shrink-0 rounded-md border-0 bg-transparent px-0 py-0 shadow-none"><img src={siteLogo} alt="ESB Power Line — Energy Solution of Bangladesh" className="brand-logo__img h-11 w-auto max-w-[240px]" /></span></span>
             <div className="brand-deck min-w-0 flex-1">
               <p className="brand-deck__kicker">News portal &amp; magazine</p>
               <p className="brand-deck__lede">{FOOTER.lede}</p>
@@ -462,7 +462,7 @@ function SitePage(p: SitePreviewProps) {
               </div>
             </div>
             <div className="border-t border-border/20 pt-4 text-center md:text-left space-y-1.5">
-              <p className="text-xs font-semibold text-foreground/60 leading-normal">© {year} ESB PowerLine. All rights reserved.</p>
+              <p className="text-xs font-semibold text-foreground/60 leading-normal">© {year} ESB Power Line. All rights reserved.</p>
               <p className="text-[10px] text-foreground/70 font-normal leading-normal">Developed in-house by <span className="font-medium">chiefhamim</span></p>
             </div>
           </div>
@@ -494,7 +494,7 @@ function ContactItem({ glyph, label, children }: { glyph: keyof typeof GLYPHS; l
 
 // English copy, verbatim from the site's lib/i18n/messages.ts.
 const FOOTER = {
-  lede: 'Bangladesh\'s power sector news portal and the ESB PowerLine monthly magazine — daily reporting, sector data, and analysis from generation and grid to policy and projects.',
+  lede: 'Bangladesh\'s power sector news portal and the ESB Power Line monthly magazine — daily reporting, sector data, and analysis from generation and grid to policy and projects.',
   guestPitch: 'Sign in to save articles and magazine issues, download data packages, join discussions, and unlock in-depth analysis across the power sector.',
   join: 'Member login',
   staffNote: 'Editorial staff and administrators use the same sign-in with assigned roles.',

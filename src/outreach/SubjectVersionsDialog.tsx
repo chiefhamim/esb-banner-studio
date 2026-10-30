@@ -151,7 +151,7 @@ Rules:
               title={aiAvailable ? 'Generate alternate subject lines with AI' : 'Connect an AI'}
             >
               <Icon name="sparkle" size={12} />
-              <span>{busy ? 'Generating…' : 'Suggest with AI'}</span>
+              <span>{busy ? 'Generating' : 'Suggest with AI'}</span>
             </button>
           </div>
 
@@ -196,7 +196,7 @@ Rules:
               <input
                 className="input sm"
                 style={{ flex: 1, fontSize: 12 }}
-                placeholder="Add alternate subject line…"
+                placeholder="Add alternate subject line"
                 value={newSubj}
                 onChange={(e) => setNewSubj(e.target.value)}
               />

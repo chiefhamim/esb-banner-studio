@@ -407,7 +407,7 @@ export function AssistantDialog({ onClose }: { onClose: () => void }) {
                   }}
                 >
                   <Icon name="refresh" size={12} className="spin" />
-                  <span>The assistant is thinking…</span>
+                  <span>The assistant is thinking</span>
                 </div>
               )}
               <div ref={chatBottomRef} />
@@ -441,7 +441,7 @@ export function AssistantDialog({ onClose }: { onClose: () => void }) {
                 ref={inputRef}
                 type="text"
                 className="input"
-                placeholder="Ask the assistant (e.g. 'What is the schedule?', 'Pause sending')…"
+                placeholder="Ask the assistant (e.g. 'What is the schedule?', 'Pause sending')"
                 value={input}
                 disabled={busy}
                 onChange={(e) => setInput(e.target.value)}

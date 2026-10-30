@@ -709,7 +709,7 @@ function buildTitleCard(format: FormatId, doc: Doc, cat: Category): El[] {
     text: `${dp.weekday} · ${dp.num} ${dp.monthYear}`, size: 18, weight: 700, color: '#64748b', ls: 0.8,
   }))
   const footerBrand = settle(F.text('footer-brand', 'Footer branding', 'Footer', W - 320, H - 76, {
-    text: 'ESB POWERLINE STUDIO', size: 18, weight: 700, color: accent, ls: 1,
+    text: 'ESB POWER LINE STUDIO', size: 18, weight: 700, color: accent, ls: 1,
   }))
   els.push(dateEl, footerBrand)
 
@@ -746,7 +746,7 @@ function buildEndCard(format: FormatId, doc: Doc, cat: Category): El[] {
   els.push(link)
 
   const footerText = settle(F.text('social-handles', 'Social channels', 'Footer', (W - 1000) / 2, H - 120, {
-    text: 'FACEBOOK: @esbpowerline  ·  YOUTUBE: ESB PowerLine  ·  LINKEDIN: Energy Sector Bangladesh',
+    text: 'FACEBOOK: @esbpowerline  ·  YOUTUBE: ESB Power Line  ·  LINKEDIN: Energy Sector Bangladesh',
     size: 18, weight: 700, color: '#64748b', align: 'center', fit: 'box', w: 1000, ls: 0.8,
   }))
   els.push(footerText)

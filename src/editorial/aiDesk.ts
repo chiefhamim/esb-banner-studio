@@ -96,7 +96,7 @@ export async function aiSeo(ai: Ai, story: Story, onStep?: OnStep): Promise<SeoR
 
 // ------------------------------------------------------------------ social captions
 
-const SOCIAL_SYSTEM = `You write the social posts for ESB PowerLine, a Bangladesh energy and power news site, from the English story you are given.
+const SOCIAL_SYSTEM = `You write the social posts for ESB Power Line, a Bangladesh energy and power news site, from the English story you are given.
 Rules:
 - Use only facts the story states: no new figures, quotes, names or claims, no opinion, no clickbait.
 - Every post except Facebook ends with the article link, exactly as given, on its own line.
@@ -159,7 +159,7 @@ export function storyCaptions(story: { headline: string; deck: string; categoryI
   return sanitizeCaptions({
     facebook: lines(head, tags),
     x: lines(head, '#ESBPowerLine'),
-    linkedin: lines(head, summary, 'Full report on ESB PowerLine, covering Bangladesh\'s power and energy sector.', tags),
+    linkedin: lines(head, summary, 'Full report on ESB Power Line, covering Bangladesh\'s power and energy sector.', tags),
     telegram: lines(`📰 *${head}*`, summary),
   }, url)
 }

@@ -123,7 +123,7 @@ export async function askAssistant(
   const ctx = overrideContext ?? buildOperatorContext()
 
   const system = [
-    'You are the AI Assistant for the Outreach desk of ESB PowerLine.',
+    'You are the AI Assistant for the Outreach desk of ESB Power Line.',
     'You help operators manage campaigns, check metrics, inspect skip reasons, adjust send windows, and run safe actions.',
     'You MUST return valid JSON adhering to the provided schema with "say" and "actions".',
     'CRITICAL RULES:',

@@ -169,7 +169,7 @@ export function ContactsTab() {
                     {s.checkingAddresses?.active && (
           <div className="or-checking-progress" role="status">
             <Icon name="refresh" size={13} className="spin" />
-            <span>Checking {s.checkingAddresses.total.toLocaleString()} companies…</span>
+            <span>Checking {s.checkingAddresses.total.toLocaleString()} companies</span>
             <button type="button" className="btn xs" onClick={s.cancelCheckAddresses}>Cancel</button>
           </div>
         )}

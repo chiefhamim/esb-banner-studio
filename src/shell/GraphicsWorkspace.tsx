@@ -564,10 +564,10 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       )}
 
       {showAbout && (
-        <Dialog title="About ESB AI Studio" kicker="ESB PowerLine" onClose={() => setShowAbout(false)} width={480}>
+        <Dialog title="About ESB AI Studio" kicker="ESB Power Line" onClose={() => setShowAbout(false)} width={480}>
           <div className="about2">
             <div className="about2-hero">
-              <span className="logo-wrap big"><img src={logoUrl} alt="ESB PowerLine" /></span>
+              <span className="logo-wrap big"><img src={logoUrl} alt="ESB Power Line" /></span>
               <div className="about2-stripe" aria-hidden><i /><i /><i /></div>
               <h3>ESB AI <span>Studio</span></h3>
               <p>Where stories are written, imagination is designed and reality is cut.</p>
@@ -587,7 +587,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
               </div>
               <a className="about2-link" href="https://facebook.com/chiefhamim" target="_blank" rel="noopener noreferrer"><Icon name="link" size={14} />Facebook</a>
             </div>
-            <p className="about2-foot">Everything runs on this PC — fonts, artwork and templates are bundled. © ESB PowerLine, Express Broadcast and Communication Ltd.</p>
+            <p className="about2-foot">Everything runs on this PC — fonts, artwork and templates are bundled. © ESB Power Line, Express Broadcast and Communication Ltd.</p>
           </div>
         </Dialog>
       )}

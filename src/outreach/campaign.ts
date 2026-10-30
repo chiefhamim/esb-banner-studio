@@ -62,7 +62,7 @@ const attachmentsOf = () => useOutreachStore.getState().attachments.map((a) => (
 const DAY = 24 * 3600_000
 
 export const FOLLOW_UP_DEFAULT: Record<'en' | 'bn', string> = {
-  en: 'Dear {name},\n\nI wrote to you recently on behalf of ESB PowerLine and wanted to make sure my letter reached you.\n\nIf it is of interest, a short reply is all we need. If not, there is no need to answer, and we will not write about it again.',
+  en: 'Dear {name},\n\nI wrote to you recently on behalf of ESB Power Line and wanted to make sure my letter reached you.\n\nIf it is of interest, a short reply is all we need. If not, there is no need to answer, and we will not write about it again.',
   bn: 'শ্রদ্ধেয় {name},\n\nসম্প্রতি ইএসবি পাওয়ারলাইনের পক্ষ থেকে আপনাকে একটি চিঠি পাঠিয়েছিলাম; সেটি আপনার কাছে পৌঁছেছে কি না, তা নিশ্চিত হতে চাইছি।\n\nআগ্রহী হলে একটি সংক্ষিপ্ত উত্তরই যথেষ্ট। আগ্রহী না হলে উত্তর দেওয়ার প্রয়োজন নেই; এ বিষয়ে আমরা আর লিখব না।',
 }
 

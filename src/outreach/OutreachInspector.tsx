@@ -132,7 +132,7 @@ function SendTab() {
           <input type="email" className="or-input" placeholder="your@address" value={testTo} onChange={(e) => setTestTo(e.target.value)} aria-label="Test address" />
           <button
             type="button"
-            className="btn"
+            className={'btn' + (testing ? ' sending' : '')}
             disabled={!desktop || !ready || testing || !c || !/^\S+@\S+\.\S+$/.test(testTo)}
             onClick={async () => {
               if (testResultTimer.current) clearTimeout(testResultTimer.current)
@@ -144,7 +144,7 @@ function SendTab() {
               testResultTimer.current = setTimeout(() => setTestResult(null), 5000)
             }}
           >
-            <Icon name={testing ? 'send' : testResult?.ok ? 'check' : 'send'} size={13} /><span>{testing ? 'Sending' : 'Send test'}</span>
+            <Icon name={testing ? 'refresh' : testResult?.ok ? 'check' : 'send'} size={13} className={testing ? 'spin' : ''} /><span>{testing ? 'Sending' : 'Send test'}</span>
           </button>
           {testResult && <span className={'or-chip ' + (testResult.ok ? 'good' : 'bad')} role="status">{testResult.ok ? <Icon name="check" size={12} /> : <Icon name="info" size={12} />}<span>{testResult.msg}</span></span>}
         </div>

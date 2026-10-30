@@ -268,6 +268,16 @@
 .or-test { display: flex; flex-wrap: wrap; gap: 6px; }
 .or-test .or-input { height: 32px; padding: 0 10px; font-size: 12.5px; }
 .or-test .btn { flex: none; }
+.or-test .btn.sending {
+  opacity: 1 !important;
+  cursor: wait !important;
+  background: var(--ink) !important;
+  color: var(--bg-1) !important;
+  border-color: var(--ink) !important;
+}
+.or-test .btn.sending svg.spin {
+  animation: ed-spin 800ms linear infinite;
+}
 /* a send-test result (ok or the real server error) wraps rather than overflowing the card — errors can run long */
 .or-test .or-chip { gap: 5px; white-space: normal; height: auto; min-height: 22px; line-height: 1.4; max-width: 100%; }
 .or-right .switch { font-size: 12.5px; line-height: 18px; }

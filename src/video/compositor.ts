@@ -213,7 +213,7 @@ function renderOverlayClip(
     // Overline
     ctx.fillStyle = '#a1a1aa'
     ctx.font = `600 ${Math.round(13 * scale)}px "ESB Sans", sans-serif`
-    ctx.fillText('ESB POWERLINE BROADCAST', textX, boxY + 32 * scale)
+    ctx.fillText('ESB POWER LINE BROADCAST', textX, boxY + 32 * scale)
 
     // Name
     ctx.fillStyle = '#f4f4f5'
@@ -360,7 +360,7 @@ function renderStationBug(
   ctx.font = `700 ${Math.round(12 * scale)}px "ESB Sans", sans-serif`
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
-  ctx.fillText('ESB POWERLINE', textOffsetX, bugY + 20 * scale)
+  ctx.fillText('ESB POWER LINE', textOffsetX, bugY + 20 * scale)
 
   ctx.restore()
 }

@@ -3,7 +3,7 @@
 // together on one line at the bottom. The style text below is given to the model that writes it (the translation call
 // and the Social "Write with AI" job); `sanitizeFacebook` then holds whatever comes back to the same shape.
 
-export const FACEBOOK_STYLE = `Facebook caption (the text under the banner picture on the ESB PowerLine Page):
+export const FACEBOOK_STYLE = `Facebook caption (the text under the banner picture on the ESB Power Line Page):
 - Write like a sharp human news editor, not a bot: plain, specific, active voice. Open with the single most striking fact in the story (a number, a place, a decision), then stop.
 - One or two short lines, 125 characters in all, so no "See more" button appears on a phone or a desktop. Never a paragraph.
 - No link, and no "read more", "click", "link in comments" or question that baits a click.

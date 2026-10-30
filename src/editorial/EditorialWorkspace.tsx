@@ -1,4 +1,4 @@
-// Editorial Desk — the ESB PowerLine CMS article editor, with the source beside it and the banner behind it.
+// Editorial Desk — the ESB Power Line CMS article editor, with the source beside it and the banner behind it.
 //   Left: the original article (link, extraction report, Bengali headline/deck, figures to check, paragraphs) and a
 //         "New link" tab for the next story.
 //   Centre: the CMS editor — "Headline & deck", then "Story" as its own panel (Body · SEO · Social · Preview).
@@ -1483,7 +1483,7 @@ export function EditorialWorkspace() {
                       excerpt={draft.deck}
                       slug={draft.slug}
                       category={catData.name}
-                      author={draft.postAsNewsDesk ? 'ESB News Desk' : (staffSession?.name || draft.byline || 'ESB PowerLine')}
+                      author={draft.postAsNewsDesk ? 'ESB News Desk' : (staffSession?.name || draft.byline || 'ESB Power Line')}
                       date={previewDate}
                       readTime={readTimeMin}
                       heroUrl={heroMode === 'banner' ? webBannerUrl : bannerLeadImage}

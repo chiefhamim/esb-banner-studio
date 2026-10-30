@@ -56,12 +56,12 @@ export function generatePlatformCaption(platform: SocialPlatform, c: Pick<Conten
         return `“${shortQuote}”${attribution}\n\nRead full story: https://esbpowerline.com\n#ESBPowerLine #Bangladesh`
       }
       case 'linkedin':
-        return `“${quote}”${attribution}\n\nEnergy and power sector statement covered by ESB PowerLine.\n\nRead the full report: https://esbpowerline.com\n\n${tags.slice(0, 4).join(' ')}`
+        return `“${quote}”${attribution}\n\nEnergy and power sector statement covered by ESB Power Line.\n\nRead the full report: https://esbpowerline.com\n\n${tags.slice(0, 4).join(' ')}`
       case 'telegram':
-        return `*“${quote}”*${attribution ? `\n_${attribution}_` : ''}\n\n📰 *ESB PowerLine*\n🔗 https://esbpowerline.com`
+        return `*“${quote}”*${attribution ? `\n_${attribution}_` : ''}\n\n📰 *ESB Power Line*\n🔗 https://esbpowerline.com`
       case 'facebook':
       default:
-        return `“${quote}”${attribution}\n\nRead the full coverage on ESB PowerLine: https://esbpowerline.com\n\n${tags.slice(0, 4).join(' ')}`
+        return `“${quote}”${attribution}\n\nRead the full coverage on ESB Power Line: https://esbpowerline.com\n\n${tags.slice(0, 4).join(' ')}`
     }
   }
 
@@ -76,7 +76,7 @@ export function generatePlatformCaption(platform: SocialPlatform, c: Pick<Conten
       case 'twitter':
         return `⚡ ${num} — ${label}${delta}${note}\n\nRead more at https://esbpowerline.com\n#ESBPowerLine #EnergyData`
       case 'linkedin':
-        return `📊 Key Industry Metric: ${num}\n${label}${delta}${note}\n\nFollow ESB PowerLine for daily Bangladesh power & energy sector intelligence.\n\n🔗 https://esbpowerline.com\n\n${tags.join(' ')}`
+        return `📊 Key Industry Metric: ${num}\n${label}${delta}${note}\n\nFollow ESB Power Line for daily Bangladesh power & energy sector intelligence.\n\n🔗 https://esbpowerline.com\n\n${tags.join(' ')}`
       case 'telegram':
         return `📊 *${num}* — ${label}${delta}${note}\n\n🔗 https://esbpowerline.com\n#ESBPowerLine`
       case 'facebook':
@@ -257,7 +257,7 @@ export interface ParsedArticle {
   author?: string
 }
 
-/** Match text or URL keywords against ESB PowerLine's 10 desks (Bengali and English). */
+/** Match text or URL keywords against ESB Power Line's 10 desks (Bengali and English). */
 export function detectCategory(text: string): string | undefined {
   const t = text.toLowerCase()
   if (/\b(policy|regulat|berc|ministry|power division|act|reform|guideline)\b|নীতিমালা|নিয়ন্ত্রক|বিইআরসি|মন্ত্রণালয়/i.test(t)) return '01'

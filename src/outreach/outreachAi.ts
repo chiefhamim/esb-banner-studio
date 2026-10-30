@@ -8,12 +8,12 @@ export const OUTREACH_BLUEPRINTS: OutreachBlueprint[] = [
     id: 'magazine_distribution',
     label: 'Magazine Distribution',
     tag: 'Distribution',
-    defaultSubject: 'Complimentary Executive Copy: ESB PowerLine Bangladesh Energy Directory & Magazine ({organization})',
+    defaultSubject: 'Complimentary Executive Copy: ESB Power Line Bangladesh Energy Directory & Magazine ({organization})',
     defaultBody: `Dear {name},
 
-Greetings from ESB PowerLine (https://esbpowerline.com).
+Greetings from ESB Power Line (https://esbpowerline.com).
 
-In your capacity as {designation} at {organization}, we are pleased to present the latest executive edition of ESB PowerLine Magazine, featuring our comprehensive census of Bangladesh's national energy ecosystem.
+In your capacity as {designation} at {organization}, we are pleased to present the latest executive edition of ESB Power Line Magazine, featuring our comprehensive census of Bangladesh's national energy ecosystem.
 
 Our editorial and technical research desk has cataloged strategic developments across power generation, transmission reliability, regional distribution, and clean energy transitions. As a key institutional stakeholder in {sector}, we would be honoured to provide your leadership desk with ongoing complimentary print and digital editions.
 
@@ -22,7 +22,7 @@ Please find our editorial prospectus attached. Should you wish to update your of
 With highest regards,
 
 Executive Outreach Desk
-ESB PowerLine — Express Broadcast and Communication Ltd.
+ESB Power Line — Express Broadcast and Communication Ltd.
 Dhaka, Bangladesh | https://esbpowerline.com`,
     bengaliSubject: 'ইএসবি পাওয়ারলাইন ম্যাগাজিন ও বাংলাদেশ এনার্জি ডিরেক্টরি — সম্মানিত কপি প্রদান ({organization})',
     bengaliBody: `শ্রদ্ধেয় {name},
@@ -38,17 +38,17 @@ Dhaka, Bangladesh | https://esbpowerline.com`,
 শ্রদ্ধা ও শুভকামনাসহ,
 
 আউটরিচ ও জনসংযোগ সেল
-ইএসবি পাওয়ারলাইন (ESB PowerLine)
+ইএসবি পাওয়ারলাইন (ESB Power Line)
 ঢাকা, বাংলাদেশ | https://esbpowerline.com`,
   },
   {
     id: 'corporate_sponsorship',
     label: 'Corporate Sponsorship & Rate Card',
     tag: 'Sponsorship',
-    defaultSubject: 'Partnership & Institutional Brand Feature: ESB PowerLine Energy Directory ({organization})',
+    defaultSubject: 'Partnership & Institutional Brand Feature: ESB Power Line Energy Directory ({organization})',
     defaultBody: `Dear {name},
 
-On behalf of ESB PowerLine (https://esbpowerline.com), Bangladesh's premier energy and infrastructure publishing platform, we invite {organization} to partner with us for our upcoming national energy supplement.
+On behalf of ESB Power Line (https://esbpowerline.com), Bangladesh's premier energy and infrastructure publishing platform, we invite {organization} to partner with us for our upcoming national energy supplement.
 
 As {designation}, your perspective on industry modernization and sustainable infrastructure aligns directly with the themes of our high-circulation print annual and web portal. We are offering exclusive institutional profile spreads, technical advertorials, and prominent leadership placements to showcase {organization}'s achievements before key decision-makers at MPEMR, BERC, utilities, and international development partners.
 
@@ -57,7 +57,7 @@ Our comprehensive Media Kit, Editorial Calendar, and Corporate Rate Card are att
 Sincerely,
 
 Strategic Partnerships Desk
-ESB PowerLine | Dhaka, Bangladesh`,
+ESB Power Line | Dhaka, Bangladesh`,
     bengaliSubject: 'কর্পোরেট পার্টনারশিপ ও ব্র্যান্ড প্রোফাইল সুযোগ: ইএসবি পাওয়ারলাইন ({organization})',
     bengaliBody: `শ্রদ্ধেয় {name},
 
@@ -80,7 +80,7 @@ ESB PowerLine | Dhaka, Bangladesh`,
     defaultSubject: 'Editorial Interview Invitation: Leadership Perspective ({name}, {organization})',
     defaultBody: `Dear {name},
 
-ESB PowerLine's editorial board cordially requests the privilege of an exclusive interview with you regarding your vision and operational milestones as {designation} at {organization}.
+ESB Power Line's editorial board cordially requests the privilege of an exclusive interview with you regarding your vision and operational milestones as {designation} at {organization}.
 
 Our flagship sector review covers critical macro themes including power sector financial sustainability, transmission wheeling, and grid digitalization. An in-depth conversation featuring your insights will provide invaluable clarity to sovereign regulators, EPC contractors, and multilateral stakeholders following Bangladesh's power landscape.
 
@@ -89,7 +89,7 @@ The interview can be arranged at your office in Dhaka or via videoconference acc
 With sincere respect,
 
 Chief Editor / Senior Energy Desk
-ESB PowerLine — https://esbpowerline.com`,
+ESB Power Line — https://esbpowerline.com`,
     bengaliSubject: 'সাক্ষাৎকার গ্রহণের সশ্রদ্ধ অনুরোধ: {organization}-এর উন্নয়ন অগ্রযাত্রা ({name})',
     bengaliBody: `শ্রদ্ধেয় {name},
 
@@ -110,14 +110,14 @@ ESB PowerLine — https://esbpowerline.com`,
     defaultSubject: 'Energy Sector Intelligence Alert: Policy & Infrastructure Analysis ({organization})',
     defaultBody: `Dear {name},
 
-ESB PowerLine has released an exclusive technical brief regarding current macroeconomic, tariff, and infrastructural shifts impacting {sector} and entities like {organization}.
+ESB Power Line has released an exclusive technical brief regarding current macroeconomic, tariff, and infrastructural shifts impacting {sector} and entities like {organization}.
 
 As {designation}, we believe this verified intelligence report will assist your executive planning desk. The complete research brief and high-resolution infographics from our graphics studio are enclosed.
 
 You may access further verified data at https://esbpowerline.com.
 
 Warm regards,
-Energy Research Group | ESB PowerLine`,
+Energy Research Group | ESB Power Line`,
     bengaliSubject: 'বিশেষ জ্বালানি ও বিদ্যুৎ খাত বিশ্লেষণ প্রতিবেদন: {organization}',
     bengaliBody: `শ্রদ্ধেয় {name},
 
@@ -133,10 +133,10 @@ Energy Research Group | ESB PowerLine`,
     id: 'institutional_dialogue',
     label: 'Institutional Dialogue',
     tag: 'Policy',
-    defaultSubject: 'Institutional Dialogue & Collaborative Forum: ESB PowerLine & {organization}',
+    defaultSubject: 'Institutional Dialogue & Collaborative Forum: ESB Power Line & {organization}',
     defaultBody: `Dear {name},
 
-We write to explore avenues for formal institutional engagement and policy dialogue between {organization} and ESB PowerLine.
+We write to explore avenues for formal institutional engagement and policy dialogue between {organization} and ESB Power Line.
 
 Our directory initiative catalogs over 200 sovereign, utility, and private energy entities across Bangladesh. We invite {organization} to participate in our upcoming executive roundtable and contribute editorial insights to our quarterly statutory review.
 
@@ -144,7 +144,7 @@ Please let us know if we may coordinate with your executive office to arrange an
 
 Best regards,
 Institutional Relations Desk
-ESB PowerLine | Dhaka`,
+ESB Power Line | Dhaka`,
     bengaliSubject: 'প্রাতিষ্ঠানিক সংলাপ ও পারস্পরিক সহযোগিতা প্রসঙ্গে: {organization}',
     bengaliBody: `শ্রদ্ধেয় {name},
 
@@ -162,17 +162,17 @@ ESB PowerLine | Dhaka`,
     id: 'custom_pitch',
     label: 'Custom Promotional Pitch',
     tag: 'Custom',
-    defaultSubject: 'ESB PowerLine Outreach: Initiative & Collaboration ({organization})',
+    defaultSubject: 'ESB Power Line Outreach: Initiative & Collaboration ({organization})',
     defaultBody: `Dear {name},
 
-Greetings from ESB PowerLine (https://esbpowerline.com).
+Greetings from ESB Power Line (https://esbpowerline.com).
 
 We are reaching out to you in your capacity as {designation} at {organization} regarding our specialized energy sector outreach and publishing initiatives.
 
 Our team would be delighted to connect with your desk to discuss mutually beneficial collaboration.
 
 Kind regards,
-Outreach Desk | ESB PowerLine`,
+Outreach Desk | ESB Power Line`,
     bengaliSubject: 'ইএসবি পাওয়ারলাইন — সহযোগিতার প্রস্তাব ({organization})',
     bengaliBody: `শ্রদ্ধেয় {name},
 
@@ -230,7 +230,7 @@ export interface LetterContext {
 
 const RULES = (lang: OutreachLang, extraFields: string[] = []) => `Placeholders: use exactly ${[...PLACEHOLDERS, ...extraFields].map((p) => `{${p}}`).join(', ')} (or with fallbacks like {key|fallback text}, e.g. {designation|Representative} or {opener|}) where each recipient's details go. Never write a real person's or organisation's name into the template.
 
-Facts: use only what you are given — the reference letter, the talking points from the editor's sources, and the recipient's role. Do not invent figures, circulation or readership numbers, rankings, awards, projects, dates, meetings, prices or quotes, about ESB PowerLine or the recipient. A figure must appear in a talking point or the reference letter exactly as written there. If the reference letter mentions an attachment, keep that sentence; otherwise do not mention one.
+Facts: use only what you are given — the reference letter, the talking points from the editor's sources, and the recipient's role. Do not invent figures, circulation or readership numbers, rankings, awards, projects, dates, meetings, prices or quotes, about ESB Power Line or the recipient. A figure must appear in a talking point or the reference letter exactly as written there. If the reference letter mentions an attachment, keep that sentence; otherwise do not mention one.
 
 Style: courteous, direct, no hype, no emojis. ${lang === 'bn' ? 'Write in formal Bangla (আনুষ্ঠানিক সরকারি ও করপোরেট শিষ্টাচার) with proper honorifics.' : 'Write in clear British English.'} Blank lines between paragraphs. You may use these marks, sparingly: "## " for a short heading, "- " bullets, **bold** for one key phrase, [words](https://link) for a link that appears in the sources or reference. No other markdown. Do not add a signature or an unsubscribe line; the app adds both.`
 
@@ -279,7 +279,7 @@ export async function writeOutreachWithAi(ctx: LetterContext, directive = ''): P
   const bp = OUTREACH_BLUEPRINTS.find((b) => b.id === ctx.blueprint) ?? OUTREACH_BLUEPRINTS[0]
   const reference = ctx.lang === 'bn' ? bp.bengaliBody : bp.defaultBody
   const points = sourceBrief(ctx.sources)
-  const system = `You write outreach emails for ESB PowerLine (esbpowerline.com), a Bangladesh energy and power news publisher, to officials and executives in the sector.
+  const system = `You write outreach emails for ESB Power Line (esbpowerline.com), a Bangladesh energy and power news publisher, to officials and executives in the sector.
 
 Write ONE email template for a whole mailing list, 120–220 words.
 
@@ -320,7 +320,7 @@ export async function rewriteLetter(action: RewriteAction, current: { subject: s
   }
   const reference = referenceOf(ctx, current)
   const points = sourceBrief(ctx.sources)
-  const system = `You edit outreach emails for ESB PowerLine (esbpowerline.com), a Bangladesh energy and power news publisher.
+  const system = `You edit outreach emails for ESB Power Line (esbpowerline.com), a Bangladesh energy and power news publisher.
 
 ${RULES(to)}
 ${ctx.housePrompt.trim() ? `\nThe editor's house style:\n${ctx.housePrompt.trim()}\n` : ''}
@@ -351,7 +351,7 @@ export async function fixLetterWithAi(current: { subject: string; body: string }
   const reference = referenceOf(ctx, current)
   const points = sourceBrief(ctx.sources)
   const list = problems.map((p, i) => `${i + 1}. ${p.text}${p.quote ? ` — "${p.quote}"` : ''}`).join('\n')
-  const system = `You edit outreach emails for ESB PowerLine (esbpowerline.com), a Bangladesh energy and power news publisher.
+  const system = `You edit outreach emails for ESB Power Line (esbpowerline.com), a Bangladesh energy and power news publisher.
 
 ${RULES(ctx.lang)}
 ${ctx.housePrompt.trim() ? `\nThe editor's house style:\n${ctx.housePrompt.trim()}\n` : ''}
@@ -375,7 +375,7 @@ ${list}`
  */
 export async function researchSource(src: Source, purpose: string): Promise<{ points: TalkingPoint[]; dropped: number; model: string }> {
   const ai = need('research', 'the Research job')
-  const system = `You are the research desk of ESB PowerLine, a Bangladesh energy news publisher. From the document, list 3 to 6 facts an outreach email about "${purpose}" could cite. Each point is one short sentence in English. Each must come with "quote": a sentence copied character for character from the document that states it (no paraphrase, no ellipsis, no translation). Use only what the document says. If it has nothing useful, return an empty list.`
+  const system = `You are the research desk of ESB Power Line, a Bangladesh energy news publisher. From the document, list 3 to 6 facts an outreach email about "${purpose}" could cite. Each point is one short sentence in English. Each must come with "quote": a sentence copied character for character from the document that states it (no paraphrase, no ellipsis, no translation). Use only what the document says. If it has nothing useful, return an empty list.`
   const schema: AiSchema = { type: 'object', properties: { points: { type: 'string', description: 'JSON array of {"text": string, "quote": string}' } }, required: ['points'] }
   const res = await aiJson<Record<string, string>>({ provider: ai.provider, key: ai.key, model: ai.model, system, user: `Document: ${src.title}\n"""\n${src.text.slice(0, 24000)}\n"""`, schema, maxTokens: 3000, effort: 'low' })
   let raw: unknown = []

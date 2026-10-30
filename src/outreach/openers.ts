@@ -157,7 +157,7 @@ export async function writeOpenerWithAi(
   if (!ai) return null
 
   const usedPoints = ctx.sources.flatMap((s) => s.points.filter((p) => p.use).map((p) => p.text))
-  const system = `You write a courteous 1–2 sentence personal opening greeting line for an outreach email from ESB PowerLine.
+  const system = `You write a courteous 1–2 sentence personal opening greeting line for an outreach email from ESB Power Line.
 Strict Rules:
 - The opener must be directly relevant to the recipient's role, organisation, and sector.
 - Language: ${ctx.lang === 'bn' ? 'Formal Bengali (আনুষ্ঠানিক সরকারি ও করপোরেট শিষ্টাচার)' : 'Formal British English'}.

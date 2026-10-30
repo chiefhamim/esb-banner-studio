@@ -43,7 +43,7 @@ export function StoryVideoPanel() {
   const [note, setNote] = useState<string | null>(null)
 
   const points = useMemo(() => storyPoints(draft.deck, draft.body), [draft.deck, draft.body])
-  const desk = CATEGORIES.find((c) => c.id === categoryId)?.name ?? 'ESB PowerLine'
+  const desk = CATEGORIES.find((c) => c.id === categoryId)?.name ?? 'ESB Power Line'
   const total = Math.max(4, Math.min(7, holdFor(draft.headline))) + points.reduce((n, p) => n + holdFor(p), 0) + 4
 
   if (!draft.headline.trim()) {

@@ -50,7 +50,7 @@ export function ActivityLog() {
           <input
             type="search"
             className="input xs oa-search-input"
-            placeholder="Search address, name, company..."
+            placeholder="Search address, name, company"
             value={store.searchQuery}
             onChange={(e) => store.setSearchQuery(e.target.value)}
           />

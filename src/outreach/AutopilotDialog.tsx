@@ -160,7 +160,7 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
             Cancel
           </button>
           <button type="button" className="btn primary" onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? 'Saving' : 'Save'}
           </button>
         </>
       }
@@ -243,7 +243,7 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
                         {x.label}
                       </option>
                     ))}
-                    <option value="other">Other…</option>
+                    <option value="other">Other</option>
                   </select>
 
                   {isOtherTz && (

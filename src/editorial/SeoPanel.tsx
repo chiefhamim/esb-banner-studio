@@ -76,7 +76,7 @@ export function SeoPanel({ hasImage, onCheckSlug, slugStatus, onAiSeo, aiBusy = 
       <div className="seo-serp" aria-label="Google result preview">
         <div className="seo-serp-site">
           <img className="seo-serp-fav" src={siteIcon} alt="" />
-          <div><b>ESB PowerLine</b><span>esbpowerline.com › articles › {draft.slug || 'story-slug'}</span></div>
+          <div><b>ESB Power Line</b><span>esbpowerline.com › articles › {draft.slug || 'story-slug'}</span></div>
         </div>
         <div className="seo-serp-title">{shownTitle || 'Your headline'}</div>
         <div className="seo-serp-desc">{desc ? <><span className="seo-serp-date">{today} — </span>{bold(desc)}</> : 'Write a meta description — otherwise Google picks a sentence from the page.'}</div>

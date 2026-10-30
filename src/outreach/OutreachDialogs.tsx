@@ -405,7 +405,7 @@ export function ReviewSendDialog() {
         disabled={!!badReason && when === 'now' || (when === 'later' && (!(atMs > Date.now() + 30_000) || !ready.length || !set))}
       >
         <Icon name={when === 'now' ? 'send' : 'clock'} size={14} />
-        <span>{when === 'now' ? 'Start sending' : 'Start at a time…'}</span>
+        <span>{when === 'now' ? 'Start sending' : 'Start at a time'}</span>
       </button>
     </>}>
       <div className="or-rs stack" style={{ gap: 14 }}>
@@ -476,7 +476,7 @@ export function ReviewSendDialog() {
               <span>
                 <b>Second reading:</b>{' '}
                 {secondReading.status === 'running'
-                  ? 'Reading… (senior editor AI)'
+                  ? 'Reading (senior editor AI)'
                   : secondReading.badNotes.length > 0
                   ? `${secondReading.badNotes.length} critical issue${secondReading.badNotes.length === 1 ? '' : 's'}`
                   : secondReading.status === 'error'
@@ -537,7 +537,7 @@ export function ReviewSendDialog() {
         {/* 5. Schedule timing picker */}
         <div className="or-when" role="radiogroup" aria-label="When">
           <label className={when === 'now' ? 'on' : ''}><input type="radio" checked={when === 'now'} onChange={() => setWhen('now')} /><span><b>Send now</b><small>The first email goes at once; the rest follow at your pace.</small></span></label>
-          <label className={when === 'later' ? 'on' : ''}><input type="radio" checked={when === 'later'} onChange={() => setWhen('later')} /><span><b>Start at a time…</b><small>Starts while ESB Studio is open on this computer.</small></span>
+          <label className={when === 'later' ? 'on' : ''}><input type="radio" checked={when === 'later'} onChange={() => setWhen('later')} /><span><b>Start at a time</b><small>Starts while ESB Studio is open on this computer.</small></span>
             {when === 'later' && <input className="input or-at" type="datetime-local" value={at} min={toLocalInput(Date.now())} onChange={(e) => setAt(e.target.value)} />}
           </label>
         </div>

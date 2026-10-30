@@ -784,7 +784,7 @@ export function VideoWorkspace() {
                     <button
                       type="button"
                       className="btn xs"
-                      onClick={() => handleAddOverlay('logo', 'ESB PowerLine Monogram')}
+                      onClick={() => handleAddOverlay('logo', 'ESB Power Line Monogram')}
                     >
                       <Icon name="plus" size={12} />Add
                     </button>

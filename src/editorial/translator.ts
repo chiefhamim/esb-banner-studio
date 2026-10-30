@@ -1,4 +1,4 @@
-// Bilingual journalistic translation and CMS story compilation engine for ESB PowerLine.
+// Bilingual journalistic translation and CMS story compilation engine for ESB Power Line.
 // Strictly adheres to the professional newsroom translator prompt specification.
 
 import { polishJournalisticEnglish, translateBengaliToEnglish } from '../core/newsroom'

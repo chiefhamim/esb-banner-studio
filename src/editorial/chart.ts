@@ -119,7 +119,7 @@ export function renderChart(spec: ChartSpec, accent: string): HTMLCanvasElement 
   const footY = CHART_H - 52
   ctx.font = font(500, 22); ctx.fillStyle = MUTED; ctx.textBaseline = 'alphabetic'
   ctx.fillText(spec.source ? `Source: ${spec.source}` : '', M, footY + 24)
-  ctx.textAlign = 'right'; ctx.font = font(700, 22); ctx.fillStyle = INK; ctx.fillText('ESB PowerLine · esbpowerline.com', CHART_W - M, footY + 24)
+  ctx.textAlign = 'right'; ctx.font = font(700, 22); ctx.fillStyle = INK; ctx.fillText('ESB Power Line · esbpowerline.com', CHART_W - M, footY + 24)
   ctx.textAlign = 'left'
   const legendNeeded = spec.series.length > 1 && spec.type !== 'pie'
   if (legendNeeded) {

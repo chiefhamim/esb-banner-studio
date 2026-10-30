@@ -47,7 +47,7 @@ export function AutopilotCard() {
             className="or-link-btn"
             onClick={() => ui.set({ sheet: 'assistant' })}
           >
-            Ask the assistant…
+            Ask the assistant
           </button>
           <button
             type="button"
@@ -130,7 +130,7 @@ export function AutopilotCard() {
           className="or-link-btn"
           onClick={() => ui.set({ sheet: 'assistant' })}
         >
-          Ask the assistant…
+          Ask the assistant
         </button>
 
         <button

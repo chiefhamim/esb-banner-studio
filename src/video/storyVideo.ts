@@ -76,7 +76,7 @@ export function buildStoryTimeline(input: StoryVideoInput): VideoProject {
     const photo = still(input.photoUrl ?? input.bannerUrl, pointsStart, t - pointsStart, 'Photo', 'out')
     if (photo) clips.push(photo)
     const lt = Math.min(5, t - pointsStart)
-    clips.push({ id: id('l'), trackId: 'v2', title: 'Lower third', kind: 'overlay', start: pointsStart, duration: lt, in: 0, out: lt, color: '#059669', overlayType: 'lower-third', overlayText: input.desk, overlaySub: input.credit ? `Photo: ${input.credit}` : 'ESB PowerLine' })
+    clips.push({ id: id('l'), trackId: 'v2', title: 'Lower third', kind: 'overlay', start: pointsStart, duration: lt, in: 0, out: lt, color: '#059669', overlayType: 'lower-third', overlayText: input.desk, overlaySub: input.credit ? `Photo: ${input.credit}` : 'ESB Power Line' })
   }
 
   // 3. close

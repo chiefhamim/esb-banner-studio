@@ -142,7 +142,7 @@ function Post({ base, device, zoom }: { base: Assets; device: Device; zoom: numb
           <div className="fb-link-meta">
             <small>ESBPOWERLINE.COM</small>
             <b>{content.headline.trim() || cat.name}</b>
-            <span>{cat.name} — ESB PowerLine</span>
+            <span>{cat.name} — ESB Power Line</span>
           </div>
         </div>
       ) : (
