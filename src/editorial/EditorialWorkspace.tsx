@@ -964,7 +964,24 @@ export function EditorialWorkspace() {
                   onChange={(e) => setUrlInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
                   spellCheck={false}
+                  title="Paste article URL (or press Ctrl+V)"
                 />
+                {!urlInput && (
+                  <button
+                    type="button"
+                    className="ed-link-quick-paste"
+                    title="Paste URL from clipboard"
+                    onClick={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText()
+                        if (text) setUrlInput(text.trim())
+                      } catch {}
+                    }}
+                  >
+                    <Icon name="link" size={12} />
+                    <span>Paste</span>
+                  </button>
+                )}
               </div>
             </div>
             <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
@@ -986,14 +1003,33 @@ export function EditorialWorkspace() {
       {launcherTab === 'url' && compact && (
         <div className="ed-intake-body">
           <div className="ed-intake-url">
-            <input
-              type="url"
-              className="input ed-url-input"
-              placeholder={compact ? "Paste a news link…" : "https://bonikbarta.net/news/… or prothomalo.com/…"}
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
-            />
+            <div className="ed-url-field-wrap">
+              <input
+                type="url"
+                className="input ed-url-input"
+                placeholder={compact ? "Paste a news link…" : "https://bonikbarta.net/news/… or prothomalo.com/…"}
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
+                title="Paste news link (or press Ctrl+V)"
+              />
+              {!urlInput && (
+                <button
+                  type="button"
+                  className="ed-quick-paste-btn"
+                  title="Paste link from clipboard"
+                  onClick={async () => {
+                    try {
+                      const text = await navigator.clipboard.readText()
+                      if (text) setUrlInput(text.trim())
+                    } catch {}
+                  }}
+                >
+                  <Icon name="link" size={12} />
+                  <span>Paste</span>
+                </button>
+              )}
+            </div>
             <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
               {loading ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
               <span>{loading ? 'Extracting…' : 'Fetch & Auto-Translate'}</span>
@@ -1031,12 +1067,31 @@ export function EditorialWorkspace() {
             )}
           </div>
           {docInfo && !docBusy && docInfo.warnings.length > 0 && <p className="ed-doc-warn"><Icon name="info" size={13} /><span>{docInfo.warnings.join(' ')}</span></p>}
-          <textarea
-            className="input ed-paste-area"
-            placeholder="…or paste the Bengali headline on the first line, then the story"
-            value={rawBengaliInput}
-            onChange={(e) => { setRawBengaliInput(e.target.value); if (docInfo) setDocInfo(null) }}
-          />
+          <div className="ed-paste-area-wrap">
+            <textarea
+              className="input ed-paste-area"
+              placeholder="…or paste the Bengali headline on the first line, then the story"
+              value={rawBengaliInput}
+              onChange={(e) => { setRawBengaliInput(e.target.value); if (docInfo) setDocInfo(null) }}
+              title="Paste Bengali story text (or press Ctrl+V)"
+            />
+            {!rawBengaliInput && (
+              <button
+                type="button"
+                className="ed-quick-paste-banner"
+                title="Click to paste story from clipboard"
+                onClick={async () => {
+                  try {
+                    const text = await navigator.clipboard.readText()
+                    if (text) setRawBengaliInput(text)
+                  } catch {}
+                }}
+              >
+                <Icon name="copy" size={12} />
+                <span>Paste from clipboard</span>
+              </button>
+            )}
+          </div>
           <div className="ed-intake-foot">
             <span className="mono hint">{rawBengaliInput.trim().length} characters</span>
             <button type="button" className="btn primary" onClick={() => void handleTranslateRawBengali()} disabled={translating || docBusy || !rawBengaliInput.trim()}>

@@ -45,8 +45,8 @@ select {
 
 /* ---------------------------------------------------------------- Text Selection */
 ::selection {
-  background-color: var(--accent);
-  color: var(--on-accent);
+  background-color: color-mix(in srgb, var(--accent, #3b82f6) 28%, transparent);
+  color: inherit;
 }
 
 /* ---------------------------------------------------------------- Bengali Typography */

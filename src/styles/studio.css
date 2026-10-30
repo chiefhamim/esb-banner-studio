@@ -173,29 +173,77 @@
 .pnl-body .cat-ico { width: 28px; height: 28px; border-radius: 6px; }
 .pnl-body .cat-txt b { overflow-wrap: normal; word-break: normal; hyphens: auto; -webkit-hyphens: auto; }
 
-/* ---------------------------------------------------------------- fields: filled, ring on focus */
+/* ---------------------------------------------------------------- fields: filled, restrained focus */
 .input, input[type=text], input[type=email], input[type=password], input[type=url], input[type=search], input[type=number], textarea.input,
-.select, .scrub, .colorfield, .search, .ed-input, .ed-slug .ed-slug-input, .ed-tags {
+.select, .scrub, .colorfield, .search {
   background: var(--field);
-  border: 0;
+  border: 1px solid transparent;
+  box-sizing: border-box;
   box-shadow: none;
-  transition: background var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring);
+  transition: background var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring);
 }
 .input:hover, input[type=text]:hover, input[type=email]:hover, input[type=password]:hover, input[type=url]:hover, input[type=number]:hover, textarea.input:hover,
-.select:hover, .scrub:hover, .colorfield:hover, .search:hover, .ed-input:hover, .ed-slug .ed-slug-input:hover, .ed-tags:hover {
+.select:hover, .scrub:hover, .colorfield:hover, .search:hover {
   background: var(--field-hover);
-  border: 0;
+  border: 1px solid transparent;
   box-shadow: none;
 }
 .input:focus, input[type=text]:focus, input[type=email]:focus, input[type=password]:focus, input[type=url]:focus, input[type=number]:focus, textarea.input:focus,
-.select.open, .scrub:focus-within, .colorfield:focus-within, .search:focus-within, .ed-input:focus, .ed-slug .ed-slug-input:focus, .ed-tags:focus-within {
+.select.open, .scrub:focus-within, .colorfield:focus-within, .search:focus-within {
   background: var(--card);
-  border: 0;
-  outline: none;
-  box-shadow: 0 0 0 1px var(--line-3), 0 0 0 4px var(--ink-ring);
+  border: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 65%, transparent);
+  outline: none !important;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent, #3b82f6) 24%, transparent) !important;
 }
-.ed-tags input[type=text], .ed-tags input[type=text]:hover, .ed-tags input[type=text]:focus { background: transparent; box-shadow: none; }
-.source-reader-title-input, .source-reader-title-input:hover, .source-reader-title-input:focus { background: transparent !important; box-shadow: none !important; }
+
+/* Zero-layout-shift discipline for editorial copy fields: strictly invariant 1px borders */
+.ed-input,
+.ed-input-headline,
+.ed-input-deck,
+.ed-input-body,
+.ed-input-social,
+#draft-headline,
+#draft-deck {
+  box-sizing: border-box !important;
+  border: 1px solid transparent !important;
+  margin: 0 !important;
+  transform: none !important;
+  transition: background var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring);
+}
+.ed-input:hover,
+.ed-input-headline:hover,
+.ed-input-deck:hover,
+.ed-input-body:hover,
+.ed-input-social:hover,
+#draft-headline:hover,
+#draft-deck:hover {
+  border: 1px solid transparent !important;
+  background: var(--field-hover) !important;
+  transform: none !important;
+}
+.ed-input:focus,
+.ed-input-headline:focus,
+.ed-input-deck:focus,
+.ed-input-body:focus,
+.ed-input-social:focus,
+#draft-headline:focus,
+#draft-deck:focus {
+  border: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 65%, transparent) !important;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent, #3b82f6) 24%, transparent) !important;
+  background: var(--card) !important;
+  outline: none !important;
+  transform: none !important;
+}
+.ed-tags {
+  border: 1px solid transparent;
+  box-sizing: border-box;
+}
+.ed-tags:focus-within {
+  border: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 65%, transparent);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent, #3b82f6) 24%, transparent);
+}
+.ed-tags input[type=text], .ed-tags input[type=text]:hover, .ed-tags input[type=text]:focus { background: transparent; border: 0 !important; box-shadow: none !important; }
+.source-reader-title-input, .source-reader-title-input:hover, .source-reader-title-input:focus { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 
 /* secondary buttons: raised chips */
 .btn:not(.primary):not(.ghost) {
@@ -1519,8 +1567,15 @@ label.switch:active i { filter: brightness(.94); }
 
 /* 1. Global Focus-Visible & Tactile Surface Physics */
 :focus-visible {
-  outline: none !important;
-  box-shadow: 0 0 0 2px var(--surface-app), 0 0 0 4px color-mix(in srgb, var(--ink) 35%, transparent) !important;
+  outline: 2px solid var(--accent, #3b82f6) !important;
+  outline-offset: 1px !important;
+  box-shadow: none !important;
+}
+
+/* Global Professional Text Selection */
+::selection {
+  background-color: color-mix(in srgb, var(--accent, #3b82f6) 28%, transparent) !important;
+  color: inherit !important;
 }
 
 /* 2. Global Button Perimeter Geometry, Sizing Consistency & Tactile Depth */
