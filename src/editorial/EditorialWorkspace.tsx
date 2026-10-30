@@ -953,7 +953,7 @@ export function EditorialWorkspace() {
           <div className="ed-link-paste">
             <label htmlFor="ed-link-input">Article link</label>
             <div className="ed-link-row">
-              <div className="ed-link-field">
+              <div className="ed-link-field" onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'BUTTON') document.getElementById('ed-link-input')?.focus() }}>
                 <Icon name="link" size={16} />
                 <input
                   id="ed-link-input"

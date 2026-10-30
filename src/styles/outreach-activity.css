@@ -16,31 +16,24 @@
 }
 
 .oa-toolbar {
-  height: 40px;
-  min-height: 40px;
+  height: 46px;
+  min-height: 46px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
-  gap: 16px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--card-line, var(--border));
+  background: var(--header-bg, var(--surface-2));
+  gap: 12px;
+  box-sizing: border-box;
 }
 
 .oa-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   flex: 1;
-}
-
-.oa-sep {
-  width: 1px;
-  height: 16px;
-  background: var(--border);
-  margin: 0 4px;
-  flex: none;
 }
 
 .oa-toolbar-right {
@@ -50,25 +43,44 @@
   flex-shrink: 0;
 }
 
+.oa-toolbar-right .btn,
+.oa-toolbar-right .btn.sm {
+  height: 32px !important;
+  min-height: 32px !important;
+  line-height: 30px !important;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--r-2);
+  gap: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
 .oa-desk-tabs {
   flex-shrink: 0;
 }
 
 .oa-desk-tabs button {
   height: 28px;
-  min-width: 96px;
-  padding: 0 12px;
-  font-size: 12px;
+  width: 104px;
+  min-width: 104px;
+  max-width: 104px;
+  padding: 0 8px;
+  font-size: 12.5px;
   font-weight: 500;
   gap: 6px;
   justify-content: center;
   text-align: center;
+  box-sizing: border-box;
 }
 
 .oa-sep {
   width: 1px;
-  height: 18px;
-  background: var(--border);
+  height: 20px;
+  background: var(--card-line, var(--border));
   flex-shrink: 0;
   margin: 0 2px;
 }
@@ -97,22 +109,27 @@
 
 .oa-range-seg button {
   height: 28px;
-  min-width: 72px;
-  padding: 0 8px;
-  font-size: 12px;
+  width: 76px;
+  min-width: 76px;
+  max-width: 76px;
+  padding: 0 6px;
+  font-size: 12.5px;
   font-weight: 500;
   justify-content: center;
   text-align: center;
+  box-sizing: border-box;
 }
 
 .oa-dry-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
+  gap: 8px;
+  padding: 0 4px;
+  font-size: 12.5px;
+  color: var(--text-2, var(--muted));
   cursor: pointer;
   white-space: nowrap;
+  user-select: none;
 }
 
 .oa-content-scroll {
