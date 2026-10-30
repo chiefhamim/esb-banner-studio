@@ -157,7 +157,6 @@ function SendTab() {
 
 function ContactTab() {
   const s = useOutreachStore()
-  const ui = useOutreachUi()
   const [previewModal, setPreviewModal] = useState(false)
   const c = s.campaign()
   const active = s.contacts.find((x) => x.id === s.activeContact)
@@ -289,7 +288,7 @@ function ContactTab() {
               <dt style={{ color: 'var(--text-3)', fontWeight: 600 }}>To</dt>
               <dd style={{ margin: 0, fontWeight: 600 }}>{active.personName ? `${active.personName} <${active.email}>` : active.email}</dd>
               <dt style={{ color: 'var(--text-3)', fontWeight: 600 }}>Subject</dt>
-              <dd style={{ margin: 0, fontWeight: 600 }}>{personalPreview?.subject || c.subject}</dd>
+              <dd style={{ margin: 0, fontWeight: 600 }}>{personalPreview?.subject || c?.subject || '(No subject)'}</dd>
             </dl>
             <iframe
               className="or-frame"
