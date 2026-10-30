@@ -110,6 +110,12 @@
   color-scheme: light;
 
   /* ---------------------------------------------------------------- Legacy aliases (App.css vocabulary) */
+  --bg: var(--surface-app);
+  --dock: var(--surface-panel);
+  --lp: var(--r-pill);
+  --lpb: var(--r-pill);
+  --p: 0px;
+  --vw-ar: 16 / 9;
 
   /* ---- Studio surfaces (2026-10): cards on a quiet canvas, filled toolbar controls, spring motion ---- */
   --card: #ffffff;
