@@ -24,7 +24,9 @@
     "audit:center": "node tools/audit/center-audit.mjs",
     "audit:text-fit": "node tools/audit/text-fit-audit.mjs",
     "audit:contrast": "node tools/audit/contrast-audit.mjs",
-    "audit:a11y": "node tools/audit/a11y-audit.mjs"
+    "audit:a11y": "node tools/audit/a11y-audit.mjs",
+    "audit:suite": "node tools/audit/capture-visual-suite.mjs",
+    "audit:pdf": "node tools/audit/generate-pdf-report.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

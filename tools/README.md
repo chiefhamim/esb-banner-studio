@@ -8,6 +8,9 @@
 | `e2e/outreach-crash.mjs` | Phase 7.2 Crash Recovery Test: 200-msg run mid-kill auto-resume & clean quit state preservation | `node tools/e2e/outreach-crash.mjs` |
 | `e2e/web-cases.json` | The nine extra web-banner golden cases | `node tools/e2e/golden-test.mjs "$(cat tools/e2e/web-cases.json)"` |
 | `audit/` | Visual and quality sweeps that report findings rather than pass or fail: centring, text-fit, contrast, a11y, overflow, perf, CSS census | `npm run audit:center`, `audit:text-fit`, `audit:contrast`, `audit:a11y`, `census` |
+| `audit/capture-visual-suite.mjs` | Multi-theme & multi-workspace visual screenshot capture across all 4 production desks | `node tools/audit/capture-visual-suite.mjs [before\|after]` |
+| `audit/stitch-comparisons.mjs` | Stitches before & after PNGs side-by-side with hairline divider | `node tools/audit/stitch-comparisons.mjs` |
+| `audit/generate-pdf-report.mjs` | Generates high-fidelity A3 landscape presentation PDF with side-by-side visual comparisons | `node tools/audit/generate-pdf-report.mjs` |
 | `golden/` | Reference banner PNGs. **Protected brand output: never redraw or re-encode.** | — |
 | `fixtures/` | Synthetic test pages and media (see `fixtures/README.md`) | — |
 | `launch-browser.mjs` | Shared Chromium launcher used by every runner | — |
