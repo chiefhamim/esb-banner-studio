@@ -59,7 +59,7 @@
 
 /* menu bar titles are plain text until hovered or open — macOS style */
 .topbar .menubar { gap: 0; margin: 0 2px; }
-.topbar .mb-item { height: 28px; padding: 0 10px; color: var(--text); background: transparent; }
+.topbar .mb-item { height: 32px; padding: 0 10px; color: var(--text); background: transparent; border-radius: var(--r-2); }
 .topbar .mb-item:hover, .topbar .mb-item.open { background: var(--fill-hover); }
 
 /* grouped icon buttons */
@@ -430,10 +430,10 @@
 
 /* ---------------------------------------------------------------- workspace switcher: Home on its own, the three desks together */
 .ws-wrap { display: inline-flex; flex: none; align-items: center; gap: 6px; }
-.ws-home-btn { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--text-2); background: var(--fill); border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring), border-color var(--t-1) var(--ease); }
+.ws-home-btn { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-2); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring); }
 .ws-home-btn:hover { color: var(--text); background: var(--fill-hover); }
 .ws-home-btn:active { transform: scale(.96); }
-.ws-home-btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow), 0 0 0 1px var(--card-line); }
+.ws-home-btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
 .ws-home-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .ws-home-btn svg { transition: filter var(--t-2) var(--ease); }
 .ws-home-btn:hover svg, .ws-home-btn:focus-visible svg { stroke: url(#ws-home-ig); filter: drop-shadow(0 0 4px rgba(120, 110, 255, .4)); }

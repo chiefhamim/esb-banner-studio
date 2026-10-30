@@ -11,11 +11,11 @@ import { useStore } from './store'
 import { Dialog, Tooltips } from './ui/controls'
 import { CATEGORIES } from './core/tokens'
 import { installBannerLink } from './editorial/bannerLink'
-// the design layer loads after every other stylesheet so it is the last word on shared chrome
-import './styles/studio.css'
 import './styles/home.css'
 import './styles/outreach.css'
 import './styles/outreach-activity.css'
+// the design layer loads after every other stylesheet so it is the last word on shared chrome
+import './styles/studio.css'
 
 installBannerLink()
 

@@ -78,9 +78,11 @@
   width: auto;
   min-width: 150px;
   max-width: 240px;
-  height: 28px;
-  padding: 0 10px;
-  font-size: 12px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--r-2);
 }
 
 .oa-campaign-select .select-label {

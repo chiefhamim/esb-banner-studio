@@ -78,8 +78,8 @@
 .or-note { margin: 0; font-size: 11.5px; line-height: 16px; color: var(--warning); }
 .or-wide { width: 100%; justify-content: center; }
 .or-actions { display: flex; gap: 6px; }
-.or-actions .btn { flex: 1; justify-content: center; }
-.or-tabs.side-tabs { flex: none; margin: 10px 10px 2px; }
+.or-actions .btn { flex: 1; justify-content: center; height: 32px; min-height: 32px; border-radius: var(--r-2); }
+.or-tabs.side-tabs { flex: none; margin: 10px 10px 4px; background: var(--fill); border: 0; box-shadow: none; border-radius: var(--r-2); }
 
 /* ---------------------------------------------------------------- left: contacts, campaigns, sources */
 .or-left { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--side); border-right: 1px solid var(--card-line); }
@@ -354,7 +354,7 @@
    edge; on this desk it gets 4 px all round, and the options a 2 px gap between them. */
 /* the letter toolbar's language and Edit/Preview switches sit at the toolbar's 32 px (the 4 px well is now in studio.css for every desk) */
 .or-body .or-toolbar .seg-ctl { height: 32px; box-sizing: border-box; align-items: center; }
-.or-tabs.side-tabs { margin: 12px 12px 4px; }
+.or-tabs.side-tabs { margin: 10px 10px 4px; }
 .or-left-head { padding: 8px 12px 12px; }
 .or-list { padding: 10px 8px 12px 12px; gap: 6px; }
 .or-right-scroll { padding: 8px 12px 12px; }
@@ -371,7 +371,7 @@
 .or-right-foot { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--side); border-top: 1px solid var(--card-line); }
 .or-foot-note { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-2); }
 .or-foot-note b { color: var(--text); font-variant-numeric: tabular-nums; }
-.or-send-btn { height: 40px; font-size: 14px; }
+.or-send-btn { height: 36px; min-height: 36px; font-size: 13px; font-weight: 600; border-radius: var(--r-2); }
 .or-right-foot .or-actions .btn { flex: 1; justify-content: center; }
 
 /* Sources: the story in full before it is added, PDF / Word like Editorial, every source readable whole */
