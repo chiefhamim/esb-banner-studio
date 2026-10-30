@@ -710,7 +710,7 @@
 .ed-quick-paste-banner:hover { color: var(--text); background: var(--fill-hover); border-color: color-mix(in srgb, var(--ink) 24%, transparent); transform: translateY(-1px); }
 
 /* Paste Text / File section vertical expansion */
-.ed-launcher-wrap .ed-intake:not(.compact) { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.ed-launcher-wrap .ed-intake:not(.compact) .ed-intake-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap { flex: 1 1 auto; min-height: 280px; display: flex; flex-direction: column; height: 100%; }
-.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap .ed-paste-area { flex: 1 1 auto; min-height: 280px; height: 100%; resize: vertical; }
+.ed-launcher-wrap .ed-intake:not(.compact) { flex: 1 1 auto; min-height: 304px; height: auto; display: flex; flex-direction: column; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-intake-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap { flex: 1 1 auto; min-height: 160px; height: auto; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap .ed-paste-area { flex: 1 1 auto; min-height: 160px; height: 160px; max-height: 280px; resize: vertical; }

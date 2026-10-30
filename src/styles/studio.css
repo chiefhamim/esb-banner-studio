@@ -1352,16 +1352,18 @@ label.switch:active i { filter: brightness(.94); }
 
 /* Story Desk: the card never changes size. The intake block has one fixed height; link, paste and site tabs fill it and scroll
    inside it when they have more. The story list is exactly three rows tall (rows are a fixed 64 px, one line of title). */
-.ed-launcher-wrap .ed-intake:not(.compact) { height: 304px; min-height: 0; }
-.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body { flex: 1 1 auto; min-height: 0; }
+.ed-launcher-wrap .ed-intake:not(.compact) { height: auto; min-height: 304px; display: flex; flex-direction: column; }
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body:has(> .ed-intake-url + p.hint) { justify-content: center; }
-.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area { flex: 1 1 auto; min-height: 0; height: auto; resize: none; overflow-y: auto; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap { flex: 1 1 auto; min-height: 160px; height: auto; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area { flex: 1 1 auto; min-height: 160px; height: 160px; max-height: 280px; resize: vertical; overflow-y: auto; }
 .ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list { flex: 1 1 auto; min-height: 0; max-height: none; box-sizing: border-box; gap: 6px; padding: 2px; scroll-snap-type: y proximity; scroll-padding: 2px 0; }
+.ed-launcher-wrap .ed-intake-foot { flex: none; display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
 .ed-launcher-wrap .ed-feed-item { height: 64px; flex: none; box-sizing: border-box; scroll-snap-align: start; background: var(--fill); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent); border-radius: var(--r-3); }
 .ed-launcher-wrap .ed-feed-item:hover { background: var(--fill-hover); }
 .ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-error { flex: none; }
-.ed-launcher-queue .sq-list { box-sizing: border-box; height: 206px; max-height: none; overflow-y: auto; scroll-snap-type: y proximity; scroll-padding: 3px 0; }
-.ed-launcher-queue .sq-row { height: 64px; flex: none; justify-content: center; scroll-snap-align: start; }
+.ed-launcher-queue .sq-list { box-sizing: border-box; height: auto; max-height: 204px; overflow-y: auto; scroll-snap-type: y proximity; scroll-padding: 3px 0; }
+.ed-launcher-queue .sq-row { height: auto; min-height: 64px; flex: none; justify-content: center; scroll-snap-align: start; padding: 8px 12px; box-sizing: border-box; }
 .ed-launcher-queue .sq-title { -webkit-line-clamp: 1; }
 
 /* ---- Story Desk, second pass ------------------------------------------------------------------------------------------
@@ -1371,12 +1373,12 @@ label.switch:active i { filter: brightness(.94); }
 .ed-launcher-wrap { --row-bg: linear-gradient(180deg, color-mix(in srgb, var(--text) 2.5%, var(--card)), color-mix(in srgb, var(--text) 5.5%, var(--card))); --row-bg-hover: linear-gradient(180deg, color-mix(in srgb, var(--text) 4%, var(--card)), color-mix(in srgb, var(--text) 8%, var(--card))); --row-line: color-mix(in srgb, var(--text) 11%, transparent); --row-line-hover: color-mix(in srgb, var(--text) 22%, transparent); --row-hi: rgba(255, 255, 255, .7); }
 :root[data-theme=dark] .ed-launcher-wrap { --row-hi: rgba(255, 255, 255, .06); }
 .ed-launcher-queue .sq-list, .ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list { padding: 0; scroll-padding: 0; }
-.ed-launcher-queue .sq-list { height: 200px; }  /* 3 x 64 + 2 x 4 */
+.ed-launcher-queue .sq-list { height: auto; max-height: 204px; }  /* max 3 x 64 + gaps */
 .ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list { flex: none; height: 204px; }  /* 3 x 64 + 2 x 6 */
 .ed-launcher-queue .sq-row, .ed-launcher-wrap .ed-feed-item { background: var(--row-bg); border: 1px solid var(--row-line); box-shadow: inset 0 1px 0 var(--row-hi); transition: border-color var(--t-2) var(--ease), box-shadow var(--t-2) var(--ease), background var(--t-2) var(--ease); }
 .ed-launcher-queue .sq-row:hover, .ed-launcher-wrap .ed-feed-item:hover { background: var(--row-bg-hover); border-color: var(--row-line-hover); box-shadow: inset 0 1px 0 var(--row-hi), 0 2px 8px rgba(16, 18, 28, .07); }
 .ed-launcher-queue .sq-row.on { border-color: var(--ink); box-shadow: inset 0 1px 0 var(--row-hi); }
-.ed-launcher-queue .sq-row { padding: 0 6px 0 4px; }
+.ed-launcher-queue .sq-row { padding: 8px 12px; }
 .ed-launcher-wrap .ed-feed-item { padding: 0 12px 0 14px; }
 .ed-feed-text span { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ed-feed-cat { font-style: normal; font: 600 10.5px/16px var(--ui); letter-spacing: .02em; padding: 0 7px; color: var(--text-2); background: color-mix(in srgb, var(--text) 7%, transparent); border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
