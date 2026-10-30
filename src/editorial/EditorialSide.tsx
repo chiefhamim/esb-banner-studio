@@ -111,7 +111,7 @@ export function EditorialSide(p: {
 
         {/* 1 · describe the story */}
         <Panel id="ed-organize" icon="folder" title="Details" defaultOpen={false} persist={false}
-          actions={<span className="es-sum">{p.cat.name.split(' ')[0]} · {p.tagCount} tag{p.tagCount === 1 ? '' : 's'}</span>}>{p.details}</Panel>
+          actions={<span className="es-sum">{p.cat.name} · {p.tagCount} tag{p.tagCount === 1 ? '' : 's'}</span>}>{p.details}</Panel>
 
         {/* 2 · the picture that goes with it */}
         <Panel id="ed-image" icon="image" title="Banner" accordion={false} persist={false}>
