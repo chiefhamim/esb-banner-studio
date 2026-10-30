@@ -29,16 +29,16 @@ describe('email-html: the only HTML a recipient gets', () => {
     expect(blocksToText('## Head\n\n**Bold** [site](https://esbpowerline.com)\n> q')).toBe('Head\n\nBold site (https://esbpowerline.com)\nq')
   })
   it('letterhead: logo by cid, brand stripes, footer; signature and opt-out included in both parts', () => {
-    const { html, text } = renderEmail({ body: 'Hello', signature: 'Desk\nESB PowerLine', optOut: 'Reply unsubscribe', letterhead: true })
+    const { html, text } = renderEmail({ body: 'Hello', signature: 'Desk\nESB Power Line', optOut: 'Reply unsubscribe', letterhead: true })
     expect(html).toContain('src="cid:esb-logo"')
     expect(html).toContain('#1e9b4a')
     expect(html).toContain('esbpowerline.com')
-    expect(text).toBe('Hello\n\nDesk\nESB PowerLine\n\n—\nReply unsubscribe')
+    expect(text).toBe('Hello\n\nDesk\nESB Power Line\n\n—\nReply unsubscribe')
     expect(renderEmail({ body: 'x', lang: 'bn' }).html).toContain('Hind Siliguri')
   })
-  it('the default footer line names ESB PowerLine and links the site — nothing else baked in', () => {
+  it('the default footer line names ESB Power Line and links the site — nothing else baked in', () => {
     const { html } = renderEmail({ body: 'Hello', letterhead: true })
-    expect(html).toContain('ESB PowerLine')
+    expect(html).toContain('ESB Power Line')
     expect(html).toContain('href="https://esbpowerline.com"')
     expect(html).not.toContain('Express Broadcast and Communication Ltd.')
   })

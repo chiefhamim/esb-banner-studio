@@ -185,7 +185,7 @@ describe('Checks and the facts rule', () => {
     const ids = (l: ReturnType<typeof letterChecks>) => l.filter((x) => x.level !== 'ok').map((x) => x.id)
     const bad = letterChecks({ subject: 'FREE OFFER!!', body: 'Dear {nme}, act now. Please find the brochure attached. We reach 90,000 readers. http://example.com', signature: '', attachments: [], sources: [] })
     expect(ids(bad)).toEqual(expect.arrayContaining(['placeholders', 'spam', 'caps', 'bang', 'http', 'attach', 'numbers', 'length']))
-    const good = letterChecks({ subject: 'ESB PowerLine magazine for {organization}', body: Array(12).fill('We would be glad to send {organization} the magazine each month.').join(' '), signature: 'With best regards', attachments: [], sources: [] })
+    const good = letterChecks({ subject: 'ESB Power Line magazine for {organization}', body: Array(12).fill('We would be glad to send {organization} the magazine each month.').join(' '), signature: 'With best regards', attachments: [], sources: [] })
     expect(ids(good)).toEqual([])
   })
 })

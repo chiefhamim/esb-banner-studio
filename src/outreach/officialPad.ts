@@ -1,4 +1,4 @@
-// The "official pad" — ESB PowerLine's printed letterhead (gold sidebar, QR, contact footer) reproduced as the
+// The "official pad" — ESB Power Line's printed letterhead (gold sidebar, QR, contact footer) reproduced as the
 // email's frame when a campaign turns it on. The sidebar graphic is cropped straight from the real letterhead
 // artwork (tools/fixtures has no business owning brand art, so it is not re-derived here); only the QR is generated,
 // because the one printed on paper encodes nothing this app can verify — a fresh one is built from the facts this
@@ -10,7 +10,7 @@
 /** Every fact the pad's QR and footer state — all of it printed on the source letterhead or given by the editor
  *  directly (the Facebook and YouTube links), never invented. */
 export const ESB_CONTACT = {
-  org: 'ESB PowerLine',
+  org: 'ESB Power Line',
   legalName: 'Express Broadcast and Communication Ltd.',
   url: 'https://esbpowerline.com',
   email: 'news@esbpowerline.com',

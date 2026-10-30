@@ -7,7 +7,7 @@ import { join } from 'node:path'
 const require = createRequire(import.meta.url)
 const m = require('../../electron/mailer.cjs')
 
-const settings = { host: 'smtp.gmail.com', port: 587, user: 'desk@example.com', name: 'ESB PowerLine', dailyLimit: 3, minDelaySec: 60, maxDelaySec: 120 }
+const settings = { host: 'smtp.gmail.com', port: 587, user: 'desk@example.com', name: 'ESB Power Line', dailyLimit: 3, minDelaySec: 60, maxDelaySec: 120 }
 const pdf = (name = 'brief.pdf') => ({ name, dataUrl: 'data:application/pdf;base64,' + Buffer.from('%PDF-1.4').toString('base64') })
 
 describe('validateMail: one plain address, plain text, data attachments', () => {
@@ -112,7 +112,7 @@ describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on eve
     const r = await mailer.send({ to: 'md@example.com', subject: 'S', body: 'Dear Sir,\n\nBody', letterhead: true, optOut: 'Reply unsubscribe' })
     expect(r.ok).toBe(true)
     expect((transports[0].auth as { pass: string }).pass).toBe('abcdefghijklmnop')
-    expect(sent[0]).toMatchObject({ from: { name: 'ESB PowerLine', address: 'desk@example.com' }, list: { unsubscribe: 'mailto:desk@example.com?subject=unsubscribe' } })
+    expect(sent[0]).toMatchObject({ from: { name: 'ESB Power Line', address: 'desk@example.com' }, list: { unsubscribe: 'mailto:desk@example.com?subject=unsubscribe' } })
     // the letterhead logo rides inline as cid:esb-logo, read by main from its own copy
     expect((sent[0].attachments as { cid?: string }[]).some((a) => a.cid === 'esb-logo')).toBe(true)
     expect(String(sent[0].html)).toContain('src="cid:esb-logo"')
@@ -126,7 +126,7 @@ describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on eve
     const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
     mailer.saveSettings(settings, 'abcdefghijklmnop')
     await mailer.send({ to: 'a@example.com', subject: 'S', body: 'B', letterhead: true })
-    expect(String(sent[0].html)).toContain('ESB PowerLine')
+    expect(String(sent[0].html)).toContain('ESB Power Line')
     expect(String(sent[0].html)).toContain('esbpowerline.com')
     now += 60e3
     await mailer.send({ to: 'b@example.com', subject: 'S', body: 'B', letterhead: true, footerLine: '' })

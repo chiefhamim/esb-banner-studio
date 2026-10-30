@@ -78,7 +78,7 @@ export function SourcesTab() {
     if (!c) return
     setBusy(src.id); setError(null)
     try {
-      const purpose = OUTREACH_BLUEPRINTS.find((b) => b.id === c.blueprint)?.label ?? 'an ESB PowerLine offer'
+      const purpose = OUTREACH_BLUEPRINTS.find((b) => b.id === c.blueprint)?.label ?? 'an ESB Power Line offer'
       const r = await researchSource(src, purpose)
       s.updateSource(src.id, { points: r.points })
       s.addLog(r.points.length ? 'ok' : 'warn', `${src.title}: ${r.points.length} talking point${r.points.length === 1 ? '' : 's'} (${r.model})${r.dropped ? ` · ${r.dropped} dropped — its quote is not in the source` : ''}`)

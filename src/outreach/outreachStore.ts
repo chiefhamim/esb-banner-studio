@@ -51,8 +51,8 @@ interface Saved {
   bouncedAddrs: Record<string, string>
 }
 
-export const DEFAULT_SIGNATURE: Signature = { id: 'sig-default', name: 'Outreach desk', text: 'With best regards,\n\nOutreach Desk\nESB PowerLine — Express Broadcast and Communication Ltd.\nDhaka, Bangladesh · https://esbpowerline.com' }
-export const DEFAULT_FOOTER_LINE = 'ESB PowerLine · [esbpowerline.com](https://esbpowerline.com)'
+export const DEFAULT_SIGNATURE: Signature = { id: 'sig-default', name: 'Outreach desk', text: 'With best regards,\n\nOutreach Desk\nESB Power Line — Express Broadcast and Communication Ltd.\nDhaka, Bangladesh · https://esbpowerline.com' }
+export const DEFAULT_FOOTER_LINE = 'ESB Power Line · [esbpowerline.com](https://esbpowerline.com)'
 export const DEFAULT_FONT_FAMILY = 'sans'
 
 const template = (id: OutreachBlueprintId, lang: OutreachLang) => {

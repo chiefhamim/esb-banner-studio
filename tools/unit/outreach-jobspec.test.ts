@@ -18,7 +18,7 @@ function mockCampaign(over: Partial<Campaign> = {}): Campaign {
     recipients: [],
     blueprint: 'magazine',
     lang: 'en',
-    subject: 'ESB PowerLine: Energy Sector Report for {organization}',
+    subject: 'ESB Power Line: Energy Sector Report for {organization}',
     body: 'Dear {name},\n\nWe are sharing the latest briefings for {organization}.',
     signatureId: 'sig-default',
     letterhead: true,

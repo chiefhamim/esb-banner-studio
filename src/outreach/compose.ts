@@ -107,7 +107,7 @@ export function fill(text: string, c: Contact, lang: OutreachLang, opener?: stri
 }
 
 export const OPT_OUT_LINE: Record<OutreachLang, string> = {
-  en: 'If you would rather not receive emails from ESB PowerLine, reply with "unsubscribe" and we will not write again.',
+  en: 'If you would rather not receive emails from ESB Power Line, reply with "unsubscribe" and we will not write again.',
   bn: 'ভবিষ্যতে ইএসবি পাওয়ারলাইনের ইমেইল পেতে না চাইলে "unsubscribe" লিখে উত্তর দিন; আমরা আর লিখব না।',
 }
 

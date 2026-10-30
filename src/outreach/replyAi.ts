@@ -85,7 +85,7 @@ export async function classifyReply(
   }
 
   const system = [
-    'You are a confidential, privacy-preserving email reply classifier for ESB PowerLine.',
+    'You are a confidential, privacy-preserving email reply classifier for ESB Power Line.',
     'Classify the recipient message strictly into exactly ONE of the following category labels:',
     '- interested (wants more info, meeting, quote, collaboration)',
     '- question (asks a specific query or clarification)',

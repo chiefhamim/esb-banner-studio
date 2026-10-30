@@ -66,7 +66,7 @@ export function SubjectVersionsDialog({ onClose }: SubjectVersionsDialogProps) {
     setBusy(true)
     const ai = aiFor('outreach')!
     try {
-      const system = `You write engaging, professional B2B email subject lines for ESB PowerLine.
+      const system = `You write engaging, professional B2B email subject lines for ESB Power Line.
 Generate 3 distinct alternative subject lines for the email below, one per line.
 Rules:
 - Keep length under 70 characters.

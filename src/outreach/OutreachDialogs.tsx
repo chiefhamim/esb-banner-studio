@@ -144,7 +144,7 @@ export function HeaderDialog() {
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
   const close = () => ui.set({ sheet: null })
   const html = useMemo(() => renderEmail({
-    body: 'Dear Sir/Madam,\n\nWe are pleased to introduce ESB PowerLine…', letterhead: true, logoSrc: logo,
+    body: 'Dear Sir/Madam,\n\nWe are pleased to introduce ESB Power Line…', letterhead: true, logoSrc: logo,
     footerLine: s.footerLine, headerBg: useBg ? hex : '', footerBg: s.footerBg, fontFamily: fontId, stripeColors: stripesCsv,
   }).html, [logo, s.footerLine, s.footerBg, useBg, hex, fontId, stripesCsv])
   const save = () => {
@@ -202,7 +202,7 @@ export function HousePromptDialog() {
       <button type="button" className="btn primary" onClick={() => { s.setHousePrompt(text.trim()); s.addLog('info', text.trim() ? 'House prompt saved' : 'House prompt cleared'); close() }}>Save</button>
     </>}>
       <div className="stack" style={{ gap: 10 }}>
-        <p className="hint">How ESB PowerLine writes to people. Every AI job on this desk reads it — writing and rewriting the letter, finding talking points, reviewing — so set it once: tone, words to avoid, what to always offer, how to sign. It cannot override the facts rule: the AI still writes only what the sources and the letter's offer say.</p>
+        <p className="hint">How ESB Power Line writes to people. Every AI job on this desk reads it — writing and rewriting the letter, finding talking points, reviewing — so set it once: tone, words to avoid, what to always offer, how to sign. It cannot override the facts rule: the AI still writes only what the sources and the letter's offer say.</p>
         <textarea className="input or-prompt" rows={10} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Address senior officials as “Honourable” only when their designation is Minister or State Minister.\nAlways offer the digital edition as well as print.\nNo more than three paragraphs before the ask.'} />
         <p className="hint">{text.trim().length} characters · saved on this computer</p>
       </div>

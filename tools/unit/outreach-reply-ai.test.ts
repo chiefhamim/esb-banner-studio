@@ -45,7 +45,7 @@ describe('Reply Classification AI (replyAi.ts)', () => {
       const res = await classifyReply(
         'client@example.com',
         'We would love to discuss this further. Are you available Tuesday?',
-        'Re: ESB PowerLine Services'
+        'Re: ESB Power Line Services'
       )
 
       expect(res.email).toBe('client@example.com')

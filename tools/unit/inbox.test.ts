@@ -14,7 +14,7 @@ describe('inbox rules', () => {
     expect(ib.imapHostFor('smtp.example.com', 'mail.example.com')).toBe('mail.example.com')
   })
   it('reads "unsubscribe" in their own words only, never in our quoted letter', () => {
-    const quoted = 'Thank you, we would like copies.\n\nOn Tue, 28 Oct 2026, ESB PowerLine wrote:\n> If you would rather not receive emails, reply with "unsubscribe".'
+    const quoted = 'Thank you, we would like copies.\n\nOn Tue, 28 Oct 2026, ESB Power Line wrote:\n> If you would rather not receive emails, reply with "unsubscribe".'
     expect(ib.asksToUnsubscribe('Re: Magazine', quoted)).toBe(false)
     expect(ib.asksToUnsubscribe('Re: Magazine', 'Please unsubscribe me.\n\n> Dear Sir')).toBe(true)
     expect(ib.asksToUnsubscribe('unsubscribe', '')).toBe(true)

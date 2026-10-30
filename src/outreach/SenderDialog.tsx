@@ -12,7 +12,7 @@ export function SenderDialog({ onClose }: { onClose: () => void }) {
   const addLog = useOutreachStore((s) => s.addLog)
   const cur = mail?.settings
   const [f, setF] = useState({
-    name: cur?.name ?? 'ESB PowerLine',
+    name: cur?.name ?? 'ESB Power Line',
     user: cur?.user ?? '',
     host: cur?.host ?? 'smtp.gmail.com',
     imapHost: cur?.imapHost ?? '',

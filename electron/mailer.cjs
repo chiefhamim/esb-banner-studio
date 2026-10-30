@@ -65,7 +65,7 @@ function validateSmtpSettings(s) {
   if (imapHost && (!HOST_RE.test(imapHost) || imapHost === 'localhost')) throw new Error('Inbox (IMAP) server must be a host name such as imap.gmail.com')
   return {
     host, port, secure: port === 465, user, imapHost,
-    name: oneLine(o.name, 80).replace(/["<>]/g, '') || 'ESB PowerLine',
+    name: oneLine(o.name, 80).replace(/["<>]/g, '') || 'ESB Power Line',
     dailyLimit, minDelaySec: Math.round(minDelaySec), maxDelaySec: Math.round(maxDelaySec),
   }
 }
@@ -151,12 +151,12 @@ const LOGO = path.join(__dirname, 'assets', 'esb-logo.png')
 const PAD_SIDEBAR = path.join(__dirname, 'assets', 'esb-pad-sidebar.png')
 // duplicated from email-html.mjs's own export (that module is ESM, loaded only async below; this sanitize step runs
 // synchronously) — keep the two in step if the default ever changes
-const DEFAULT_FOOTER_LINE = 'ESB PowerLine · [esbpowerline.com](https://esbpowerline.com)'
+const DEFAULT_FOOTER_LINE = 'ESB Power Line · [esbpowerline.com](https://esbpowerline.com)'
 // the vCard text is duplicated from officialPad.ts (that file is TS, read only by the renderer bundle) — see the
 // comment there; the QR is generated fresh per process start, never read from the printed pad.
 const PAD_VCARD = [
-  'BEGIN:VCARD', 'VERSION:3.0', 'N:;ESB PowerLine;;;', 'FN:ESB PowerLine',
-  'ORG:ESB PowerLine;Express Broadcast and Communication Ltd.',
+  'BEGIN:VCARD', 'VERSION:3.0', 'N:;ESB Power Line;;;', 'FN:ESB Power Line',
+  'ORG:ESB Power Line;Express Broadcast and Communication Ltd.',
   'TEL;TYPE=WORK,VOICE:+88 01711 378733', 'EMAIL;TYPE=WORK:news@esbpowerline.com',
   'URL:https://esbpowerline.com',
   'ADR;TYPE=WORK:;;House#36/1, Avenue#01, Block#A, Section#10, Mirpur, Pallabi, Dhaka-1216;;;;Bangladesh',

@@ -16,7 +16,7 @@ const BRAND = { green: '#1e9b4a', red: '#e52d2d', orange: '#ec8e3c', ink: '#1f29
 // for the one this mirrors; edit both if a contact detail changes.
 const PAD = { gold: '#ffe4a6', cream: '#fffef2' }
 const PAD_CONTACT = {
-  org: 'ESB PowerLine',
+  org: 'ESB Power Line',
   tagline: 'Safe Energy Safe Nation',
   url: 'https://esbpowerline.com',
   urlLabel: 'esbpowerline.com',
@@ -84,7 +84,7 @@ export function blocksToText(text) {
  * alignment — works in every client, unlike flexbox), logo + tagline header, the pad's own contact footer.
  * `sidebarSrc`/`qrSrc` are cid: addresses when sending, data URLs in the preview — same pattern as `logoSrc`.
  */
-function padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc }) {
+function padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc, optOut = '' }) {
   const c = PAD_CONTACT
   const header = `<div style="padding:22px 26px 6px">`
     + `<img src="${escapeHtml(logoSrc)}" width="140" alt="${escapeHtml(c.org)}" style="display:block;width:140px;height:auto;border:0">`
@@ -97,6 +97,7 @@ function padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc }) {
     + `${escapeHtml(c.addressLine)}<br>`
     + `<a href="${c.facebook}" style="color:${BRAND.muted};text-decoration:none">Facebook</a>`
     + ` &nbsp;·&nbsp; <a href="${c.youtube}" style="color:${BRAND.muted};text-decoration:none">YouTube</a>`
+    + (optOut ? `<div style="margin-top:8px;font-size:10.5px;color:${BRAND.muted};opacity:0.85">${escapeHtml(optOut)}</div>` : '')
     + `</div>`
   const rail = `<td width="72" valign="bottom" style="background:${PAD.gold};padding:0;font-size:0;line-height:0">`
     + `<img src="${escapeHtml(sidebarSrc)}" width="72" alt="" style="display:block;width:72px;height:auto;border:0">`
@@ -123,7 +124,7 @@ function padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc }) {
 // The plain letterhead's default footer line, in the letter's own marks ([text](https://link)) — the editor's own
 // text once they open Letter → Footer text, never hardcoded again after the first version had to be asked each
 // time a word in it needed to change.
-export const DEFAULT_FOOTER_LINE = 'ESB PowerLine · [esbpowerline.com](https://esbpowerline.com)'
+export const DEFAULT_FOOTER_LINE = 'ESB Power Line · [esbpowerline.com](https://esbpowerline.com)'
 
 // Latin font choices, picked for one reason: these are the handful that render as themselves (not a silent fallback)
 // across Outlook desktop, Gmail, Apple Mail and the rest — not "whatever is installed on the editor's PC", which has
@@ -171,16 +172,17 @@ export function renderEmail({
   const stripes = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>${bars.map((c) => `<td style="height:4px;background:${c};font-size:0;line-height:0">&nbsp;</td>`).join('')}</tr></table>`
   const chrome = letterhead && !officialPad
   const head = chrome
-    ? `${stripes}<div style="padding:20px 28px 8px${headBg ? `;background:${headBg}` : ''}"><img src="${escapeHtml(logoSrc)}" width="150" alt="ESB PowerLine" style="display:block;width:150px;height:auto;border:0"></div>`
+    ? `${stripes}<div style="padding:20px 28px 8px${headBg ? `;background:${headBg}` : ''}"><img src="${escapeHtml(logoSrc)}" width="150" alt="ESB Power Line" style="display:block;width:150px;height:auto;border:0"></div>`
     : ''
-  const foot = chrome && foundation
-    ? `<div style="padding:14px 28px 22px;color:${footInk};font-size:12px;line-height:1.5;border-top:1px solid ${BRAND.line}${footBg ? `;background:${footBg}` : ''}">${inline(escapeHtml(foundation))}</div>${stripes}`
+  const optOutLine = optOut ? `<div style="margin-top:8px;font-size:11px;color:${footInk};opacity:0.85">${escapeHtml(optOut)}</div>` : ''
+  const foot = chrome && (foundation || optOut)
+    ? `<div style="padding:14px 28px 20px;color:${footInk};font-size:12px;line-height:1.5;border-top:1px solid ${BRAND.line}${footBg ? `;background:${footBg}` : ''}">${foundation ? inline(escapeHtml(foundation)) : ''}${optOutLine}</div>${stripes}`
     : chrome ? stripes : ''
   const inner = `${blocksToHtml(body, font)}`
     + (sig ? `<div style="margin:18px 0 0;color:#374151">${blocksToHtml(sig, font)}</div>` : '')
-    + (optOut ? `<p style="margin:22px 0 0;color:${BRAND.muted};font-size:12px;line-height:1.5">${escapeHtml(optOut)}</p>` : '')
+    + (!chrome && !officialPad && optOut ? `<p style="margin:22px 0 0;color:${BRAND.muted};font-size:12px;line-height:1.5">${escapeHtml(optOut)}</p>` : '')
   const body_ = officialPad
-    ? padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc })
+    ? padFrame({ inner, font, lang, logoSrc, sidebarSrc, qrSrc, optOut })
     : `<div style="max-width:640px;margin:0 auto;background:#ffffff;font-family:${font};font-size:15px;line-height:1.6;color:${BRAND.ink}">${head}<div style="padding:${chrome ? '12px 28px 8px' : '4px 0'}">${inner}</div>${foot}</div>`
   const html = `<!doctype html><html lang="${lang === 'bn' ? 'bn' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>`
     + `<body style="margin:0;padding:0;background:${officialPad ? PAD.cream : '#ffffff'};font-family:${font};font-size:15px;line-height:1.6;color:${BRAND.ink}">`

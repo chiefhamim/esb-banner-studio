@@ -397,7 +397,7 @@ export interface ReviewNote { level: 'bad' | 'warn' | 'ok'; text: string; quote:
 /** The Review job reads the letter as a cautious senior editor would before it goes to officials. Advice only. */
 export async function reviewLetter(current: { subject: string; body: string; signature: string }, ctx: LetterContext): Promise<{ notes: ReviewNote[]; model: string }> {
   const ai = need('review', 'the Review job')
-  const system = `You are a senior editor at ESB PowerLine checking an outreach email before it goes to government officials and energy-sector executives in Bangladesh. {name}, {designation}, {organization} and {sector} are placeholders filled per recipient — do not flag them.
+  const system = `You are a senior editor at ESB Power Line checking an outreach email before it goes to government officials and energy-sector executives in Bangladesh. {name}, {designation}, {organization} and {sector} are placeholders filled per recipient — do not flag them.
 
 Report at most 8 notes, most important first: claims or figures that are not supported by the talking points, anything that could embarrass the publisher or offend an official, an unclear ask, tone, length, subject line quality, and likely spam-filter problems. Each note: "level" bad (must fix), warn (should fix) or ok (a strength worth keeping), "text" one sentence of advice, "quote" the exact words of the letter it is about ('' if general). Do not rewrite the letter.`
   const schema: AiSchema = { type: 'object', properties: { notes: { type: 'string', description: 'JSON array of {"level": "bad"|"warn"|"ok", "text": string, "quote": string}' } }, required: ['notes'] }
