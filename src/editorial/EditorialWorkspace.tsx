@@ -1112,7 +1112,7 @@ export function EditorialWorkspace() {
 
       {launcherTab === 'live_feed' && (
         <div className="ed-intake-body">
-          <div className="ed-intake-url">
+          <div className="ed-intake-url ed-feed-filter-row">
             <input type="text" className="input ed-url-input" placeholder="Filter stories by keyword…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             <button type="button" className="btn" onClick={handleSyncFeed} disabled={syncing}>
               <Icon name="refresh" size={13} />
@@ -1124,7 +1124,7 @@ export function EditorialWorkspace() {
               <p className="hint ed-feed-empty">{liveArticles.length ? 'No published stories match that filter.' : 'No stories loaded from esbpowerline.com yet. Sync to fetch the latest.'}</p>
             ) : (
               filteredLiveArticles.slice(0, 50).map((art) => {
-                const cat = CATEGORIES.find((c) => c.name.toLowerCase() === art.category.trim().toLowerCase())
+                const cat = CATEGORIES.find((c) => c.name.toLowerCase() === art.category.trim().toLowerCase() || c.chip.toLowerCase() === art.category.trim().toLowerCase() || c.id === art.category.trim())
                 return (
                 <div key={art.slug} className="ed-feed-item" style={cat ? ({ '--cat-accent': cat.accent, '--cat-band': cat.band, '--cat-ink': cat.footer } as CSSProperties) : undefined}>
                   <div className="ed-feed-text">

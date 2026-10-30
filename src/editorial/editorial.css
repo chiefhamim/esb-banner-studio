@@ -55,11 +55,12 @@
 .ed-feed-text b { overflow: hidden; font-size: 13px; line-height: 18px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .ed-feed-text span { font-size: 11px; line-height: 16px; color: var(--text-3); }
 .ed-feed-empty { padding: 16px 4px; text-align: center; }
-.ed-intake.compact .ed-intake-url { flex-direction: column; }
-.ed-intake.compact .ed-intake-url .btn, .ed-intake.compact .ed-intake-foot .btn { justify-content: center; }
-.ed-intake.compact .ed-intake-url .btn { width: 100%; }
-.ed-intake.compact .ed-feed-list { max-height: none; }
-.ed-intake.compact .ed-feed-item { flex-direction: column; align-items: stretch; }
+.ed-feed-filter-row { display: flex !important; flex-direction: row !important; gap: 8px !important; align-items: center !important; }
+.ed-feed-filter-row .input { flex: 1 1 auto !important; min-width: 0 !important; width: auto !important; }
+.ed-feed-filter-row .btn { flex: none !important; width: auto !important; white-space: nowrap !important; padding: 0 12px !important; }
+.ed-intake.compact .ed-feed-list { max-height: 480px; overflow-y: auto; }
+.ed-intake.compact .ed-feed-item { display: flex; flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ed-intake.compact .ed-feed-item .btn { flex: none; align-self: flex-start; margin-top: 2px; }
 .ed-intake-tabs button { min-width: 0; }
 
 /* ---------------------------------------------------------------- the desk */
