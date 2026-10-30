@@ -16,7 +16,7 @@
 
 /* ---------------------------------------------------------------- header */
 .or-head { gap: 10px; }
-.or-camp-chip { gap: 8px; margin-right: 4px; }
+.or-camp-chip { gap: 8px; margin-right: 14px; }
 .or-camp-name { white-space: nowrap; font-weight: 600; }
 .or-camp-chip .dpc-tag { flex: none; font-variant-numeric: tabular-nums; }
 .or-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
@@ -222,8 +222,9 @@
 /* the email is white in every mail client, so its frame is white in both appearances */
 .or-frame { flex: 1 1 auto; width: 100%; min-height: 360px; background: #fff; border: 0; border-radius: var(--r-2); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent); }
 
-.or-files { display: flex; flex-direction: column; gap: 8px; padding: 7px 14px; min-height: 42px; background: var(--card); border: 1px solid var(--card-line); border-radius: var(--r-3); box-shadow: var(--card-shadow); }
+.or-files { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; min-height: 48px; background: var(--card); border: 1px solid var(--card-line); border-radius: var(--r-3); box-shadow: var(--card-shadow); }
 .or-files-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.or-files-head .btn.sm { height: 30px; padding: 0 12px; gap: 6px; font-size: 12.5px; }
 .or-files-head > svg { color: var(--text-3); }
 .or-files-head b { font-size: 13px; }
 .or-files-head .spacer { flex: 1 1 0; }
@@ -476,7 +477,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.or-autopilot-actions .btn.xs {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  gap: 5px;
 }
 .or-autopilot-actions .or-right-link {
   margin-left: auto;

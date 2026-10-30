@@ -198,8 +198,16 @@
 .source-reader-title-input, .source-reader-title-input:hover, .source-reader-title-input:focus { background: transparent !important; box-shadow: none !important; }
 
 /* secondary buttons: raised chips */
-.btn:not(.primary):not(.ghost) { background: var(--raised); border: 0; box-shadow: var(--raised-shadow); }
-.btn:not(.primary):not(.ghost):hover:not(:disabled) { background: color-mix(in srgb, var(--fill) 50%, var(--raised)); box-shadow: var(--raised-shadow); }
+.btn:not(.primary):not(.ghost) {
+  background: var(--raised);
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.btn:not(.primary):not(.ghost):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ink) 24%, transparent);
+  background: color-mix(in srgb, var(--fill) 50%, var(--raised));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
 .btn.ghost { background: transparent; border: 0; box-shadow: none; }
 .btn.ghost:hover:not(:disabled) { background: var(--fill-hover); }
 .btn { border-radius: var(--r-2); transition: background var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring), transform 120ms var(--spring); }

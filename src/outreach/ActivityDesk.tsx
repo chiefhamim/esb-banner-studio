@@ -120,6 +120,8 @@ export function ActivityDesk() {
             title="Filter by campaign"
           />
 
+          <div className="oa-sep" aria-hidden />
+
           <Seg<ActivityRange>
             value={store.range}
             onChange={(r) => store.setRange(r)}

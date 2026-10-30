@@ -44,17 +44,19 @@ export function AutopilotCard() {
         <div className="or-autopilot-actions">
           <button
             type="button"
-            className="or-link-btn"
+            className="btn xs"
             onClick={() => ui.set({ sheet: 'assistant' })}
           >
-            Ask the assistant
+            <Icon name="sparkle" size={12} />
+            <span>Ask the assistant</span>
           </button>
           <button
             type="button"
-            className="or-link-btn"
+            className="btn xs"
             onClick={() => ui.set({ sheet: 'autopilot' })}
           >
-            Autopilot settings
+            <Icon name="sliders" size={12} />
+            <span>Autopilot settings</span>
           </button>
         </div>
       </section>
@@ -127,18 +129,19 @@ export function AutopilotCard() {
 
         <button
           type="button"
-          className="or-link-btn"
+          className="btn xs"
           onClick={() => ui.set({ sheet: 'assistant' })}
         >
-          Ask the assistant
+          <Icon name="sparkle" size={12} />
+          <span>Ask the assistant</span>
         </button>
 
         <button
           type="button"
-          className="or-link-btn or-right-link"
+          className="btn xs or-right-link"
           onClick={() => ui.set({ desk: 'activity' })}
         >
-          Activity →
+          <span>Activity →</span>
         </button>
       </div>
     </section>
