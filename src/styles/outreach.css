@@ -15,8 +15,8 @@
 :root[data-theme=dark] .outreach-workspace { --or-sent: #8fb3ff; --or-sent-soft: rgba(143, 179, 255, .14); --or-reply: #5eead4; --or-reply-soft: rgba(94, 234, 212, .13); }
 
 /* ---------------------------------------------------------------- header */
-.or-head { gap: 8px; }
-.or-camp-chip { gap: 8px; }
+.or-head { gap: 10px; }
+.or-camp-chip { gap: 8px; margin-right: 4px; }
 .or-camp-name { white-space: nowrap; font-weight: 600; }
 .or-camp-chip .dpc-tag { flex: none; font-variant-numeric: tabular-nums; }
 .or-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
@@ -518,6 +518,13 @@
 }
 .or-desk-seg {
   flex: none;
+}
+.or-desk-seg button {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 6px;
 }
 .or-ap-short-text {
   display: none;

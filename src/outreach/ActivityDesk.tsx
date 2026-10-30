@@ -6,7 +6,7 @@ import { useActivityStore, type ActivityRange, type ActivityTab } from './activi
 import { ActivityOverview } from './ActivityOverview'
 import { ActivityLog } from './ActivityLog'
 import { ActivityReports, buildDayCsv, buildRunCsv, safeCsvCell } from './ActivityReports'
-import { Tabs, Seg, Switch, Select, MenuButton } from '../ui/controls'
+import { Seg, Switch, Select, MenuButton } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import { useOutreachStore } from './outreachStore'
 import { downloadText } from './campaign'
@@ -99,14 +99,14 @@ export function ActivityDesk() {
       {/* 40px Toolbar */}
       <header className="oa-toolbar">
         <div className="oa-toolbar-left">
-          <Tabs<ActivityTab>
+          <Seg<ActivityTab>
             value={store.tab}
             onChange={(t) => store.setTab(t)}
             className="oa-desk-tabs"
             options={[
-              { value: 'overview', label: 'Overview', icon: 'chart' },
-              { value: 'log', label: 'Log', icon: 'listBullet' },
-              { value: 'reports', label: 'Reports', icon: 'edit' },
+              { value: 'overview', label: 'Overview', icon: 'chart', tip: 'Overview — KPI stats & charts' },
+              { value: 'log', label: 'Log', icon: 'listBullet', tip: 'Activity log — full transaction history' },
+              { value: 'reports', label: 'Reports', icon: 'edit', tip: 'Reports — day summaries & run exports' },
             ]}
           />
 

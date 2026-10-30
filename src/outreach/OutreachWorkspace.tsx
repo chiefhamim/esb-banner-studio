@@ -31,7 +31,7 @@ import { useEditorialStore } from '../editorial/editorialStore'
 import { aiFor, providerMeta } from '../editorial/aiProviders'
 import { useStore } from '../store'
 import { Icon } from '../ui/Icon'
-import { MenuBar, Tabs, type MenuDef } from '../ui/controls'
+import { MenuBar, Tabs, Seg, type MenuDef } from '../ui/controls'
 
 export function OutreachWorkspace() {
   const s = useOutreachStore()
@@ -159,26 +159,15 @@ export function OutreachWorkspace() {
             <span className="dpc-tag">{c.kind === 'direct' ? `${audience.length} to` : `${ready} ready`}</span>
           </button>
         )}
-        <div className="seg or-desk-seg">
-          <button
-            type="button"
-            className={'btn xs' + (ui.desk === 'compose' ? ' on' : '')}
-            onClick={() => ui.set({ desk: 'compose' })}
-            data-tip="Compose desk — contacts, letters and sending"
-          >
-            <Icon name="edit" size={13} />
-            <span className="or-desk-lbl">Compose</span>
-          </button>
-          <button
-            type="button"
-            className={'btn xs' + (ui.desk === 'activity' ? ' on' : '')}
-            onClick={() => ui.set({ desk: 'activity' })}
-            data-tip="Activity desk — overview, charts, logs and reports"
-          >
-            <Icon name="activity" size={13} />
-            <span className="or-desk-lbl">Activity</span>
-          </button>
-        </div>
+        <Seg<'compose' | 'activity'>
+          value={ui.desk}
+          onChange={(desk) => ui.set({ desk })}
+          className="or-desk-seg"
+          options={[
+            { value: 'compose', label: 'Compose', icon: 'edit', tip: 'Compose desk — contacts, letters and sending' },
+            { value: 'activity', label: 'Activity', icon: 'activity', tip: 'Activity desk — overview, charts, logs and reports' },
+          ]}
+        />
         <div className="spacer" />
         <OutreachActivity />
         <button type="button" className={'ed-ai-chip' + (letterAi ? ' on' : '') + (ai.paused ? ' paused' : '')} data-provider={letterAi?.provider} onClick={() => ui.set({ sheet: 'ai' })} aria-label="AI keys and roles"
