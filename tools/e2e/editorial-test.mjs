@@ -487,7 +487,18 @@ try {
     await page.waitForSelector('.ql .ql-start, .ql .ql-bar')
   }
   const lib = () => page.evaluate(() => { const s = window.__quoteLibrary.getState(); return { entries: s.entries, speakers: s.speakers } })
+  // Integration (DECISIONS D9): the browser-preview publish in step 10 dispatches `esb:story-published` (W2's publish
+  // log), and the library harvests that story at once, slug included. Assert the end-to-end contract, then start the
+  // on-demand checks below from an empty library, as they were written.
+  // (the harvest is asynchronous and persisted in IndexedDB; the reload in step 11 dropped the in-memory copy, so read
+  // it once the panel has mounted and loaded — the harvest button is enabled only then)
   await openLibrary()
+  await page.waitForSelector('.ql-harvest:not([disabled])')
+  const viaPublish = await page.evaluate(() => window.__quoteLibrary.getState().entries.map((e) => ({ kind: e.kind, slug: e.slug ?? null, url: e.url ?? null })))
+  check('Publishing fires esb:story-published and the library harvests the story with its slug (D9 end-to-end)', viaPublish.length > 0 && viaPublish.every((e) => !!e.slug), JSON.stringify(viaPublish.slice(0, 3)))
+  await page.evaluate(async () => { const s = window.__quoteLibrary.getState(); for (const e of [...s.entries]) await s.remove(e.id) })
+  await page.waitForFunction(() => window.__quoteLibrary.getState().entries.length === 0)
+  await page.waitForSelector('.ql .ql-start')
   const libStart = await page.evaluate(() => ({ on: document.querySelector('.ed-src .side-tabs button.on')?.textContent, empty: document.querySelector('.ql-start .ql-empty-title')?.textContent, btn: !!document.querySelector('.ql-start .ql-harvest') }))
   check('Library tab opens on an honest empty state with "Harvest from this story"', libStart.on === 'Library' && libStart.empty === 'Nothing harvested yet' && libStart.btn, JSON.stringify(libStart))
 

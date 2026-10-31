@@ -93,4 +93,12 @@ here **before** the change.
   legitimate `=======` and I committed before checking). `eee9a5c` removes the markers, keeping both the W1
   and W2 blocks; the CSS builds. The after-W2 regression table runs on `eee9a5c`; nothing was pushed in between.
   Lesson applied: the regression run is the gate, not the merge commit.
+- **D19 — Integration finding after the W2 merge (test adjusted, no product change).** With W1 and W2 together,
+  the Editorial suite's browser-preview publish (step 10) now dispatches `esb:story-published` and W1's listener
+  harvests the story asynchronously into IndexedDB — so W1's "opens on an honest empty state" checks found a
+  populated library (with the slug from the event, and the headline as edited in step 11, which shows the harvest
+  ran after the publish). This is the D9 contract working end to end; it could not be seen on either branch
+  alone. `tools/e2e/editorial-test.mjs` gains one check ("Publishing fires esb:story-published and the library
+  harvests the story with its slug (D9 end-to-end)", read after the panel has loaded) and then clears the
+  library so W1's on-demand checks run as written. No assertion was removed or weakened: 75/75.
 
