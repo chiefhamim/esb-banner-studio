@@ -64,3 +64,10 @@ here **before** the change.
   its crash-recovery e2e. If budget runs short the cut order is unchanged: W5, then W3, then W4. Four builders
   share one machine; each worktree has its own ports and cache (D3).
 - **D7 — W6 is woven into W2's builder** (directive §5): same agent, same worktree, separate commits (`W6:`).
+- **D15 — Rate-limit stop: resume P1 builders only.** At ~02:50 all four Opus builders were terminated by the
+  account's 5-hour usage limit (reset 03:10). Four parallel Opus agents consumed the window in about half an
+  hour, so resuming all four would spend the next window before any QA could run. Resumed: W1 and W2(+W6).
+  Held: W3 (engine edits + `distribution.test.ts`, uncommitted) and W5 (spike committed `1fe0e71`, UI
+  uncommitted) — their work stays on their worktree branches; they are resumed only if budget remains after
+  W1/W2 are QA'd and merged, otherwise reported as not merged (cut order unchanged: W5, W3, W4).
+
