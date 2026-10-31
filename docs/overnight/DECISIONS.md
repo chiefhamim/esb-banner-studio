@@ -70,4 +70,12 @@ here **before** the change.
   Held: W3 (engine edits + `distribution.test.ts`, uncommitted) and W5 (spike committed `1fe0e71`, UI
   uncommitted) — their work stays on their worktree branches; they are resumed only if budget remains after
   W1/W2 are QA'd and merged, otherwise reported as not merged (cut order unchanged: W5, W3, W4).
+- **D16 — W1 accepted with three recorded limitations (qa/W1.md, cycle 1).** (a) `src/outreach/idb.ts` swallows a
+  real IndexedDB write failure and keeps a memory copy, so the library can say "N added" when nothing reached
+  disk; the next launch's verify-on-read drops the lost rows. Fixing it is a change to a shared Outreach helper
+  and is deferred to the morning (known defect in the final report). (b) A plural possessive inside a
+  single-quoted statement (`‘… generators’ contracts …’`) cuts the quote short — unattributed, verbatim, narrow
+  exposure; listed as a known defect with QA's suggested fix. (c) W1's reading of D9: a publish event for a
+  queued story that is not the active one harvests that story's own saved copy (correct provenance), not the
+  active desk. The library lives in the `esb-outreach` IndexedDB database (clearing Outreach data clears it).
 
