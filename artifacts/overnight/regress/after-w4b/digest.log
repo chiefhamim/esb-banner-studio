@@ -1,0 +1,49 @@
+
+> esb-banner-studio@1.6.9 test:digest
+> node tools/e2e/digest-test.mjs
+
+PASS New menu has "Campaign from this week's stories" 
+PASS Cancel closes the sheet and creates nothing 
+PASS Esc closes the sheet and creates nothing 
+PASS the site list was read once for three openings of the sheet (kept 5 minutes), through the mocked route feed requests: 1
+PASS range starts on "Last 7 days" 
+PASS lists the 2 stories of the last 7 days, newest first (dry run and older ones left out) ["Grid operator finishes a synthetic substation upgrade & tests it","Synthetic solar tender draws <b>nine</b> bids"]
+PASS decks: the queue copy for one, the site list for the other ["Queue deck: the synthetic upgrade adds two test transformers.","Site deck: nine synthetic bidders answered the test tender."]
+PASS the headline with <b> shows as text in the list 
+PASS subject names the range 
+PASS Create is enabled with stories ticked 
+PASS Create is disabled when nothing is ticked 
+PASS re-ticking enables Create again 
+PASS "This week" (from Sunday, Dhaka) lists the stories since Sunday expected 1, got 1
+PASS "Last 30 days" adds the older story and the queue-only one ["Grid operator finishes a synthetic substation upgrade & tests it","Synthetic solar tender draws <b>nine</b> bids","An older synthetic story outside the week","A synthetic story known only to the story queue"]
+PASS the queue-only story is marked as such 
+PASS custom "from" day: the Seg shows no preset and only today's stories are listed expected 1, got 1
+PASS a backwards range says so and cannot be created 
+PASS first row cannot move up, last row cannot move down 
+PASS reordered: solar, grid, queue-only, old ["Synthetic solar tender draws <b>nine</b> bids","Grid operator finishes a synthetic substation upgrade & tests it","A synthetic story known only to the story queue","An older synthetic story outside the week"]
+PASS Move down then Move up returns the row to its place 
+PASS the unticked row stays unticked after moving 
+PASS preview carries the bundled logo (the email as sent, letterhead on) 
+PASS the displayed preview shows the logo, the intro and the three links in order {"logo":582,"links":5}
+PASS preview has the intro and the three links in the chosen order 
+PASS preview leaves the unticked story out 
+PASS preview escapes the headline: <b> and & arrive as text 
+PASS preview has no picture (letters have no picture mark) 
+PASS a failed Create shows its error and keeps the sheet open Create did not finish (synthetic failure). Check the Campaigns list before trying again.
+PASS the sheet keeps the order and the intro after a failed Create 
+PASS one new campaign, and it is the open one 
+PASS it is a draft with no schedule draft null
+PASS name and subject: "This week at ESB PowerLine — <range>" This week at ESB PowerLine — 3 Oct – 1 Nov 2026
+PASS kind list, blank blueprint, English, letterhead on 
+PASS body: intro, then the stories in the chosen order with their decks and links "Synthetic intro written by the digest test.\n\n## Synthetic solar tender draws <b>nine</b> bids\n\nSite deck: nine synthetic bidders answered the test tender.\n[Read"
+PASS body is marks, not HTML: the <b> is the headline's own text 
+PASS nothing was sent: no results on the campaign 
+PASS the Send footer still needs the desktop app (no bridge here) Sending needs the ESB Studio desktop app
+PASS the open letter is the digest 
+PASS no request left the page except the mocked site list []
+PASS no page errors 
+PASS empty week: says no stories were published, with the dates No published stories No stories were published from this app between 26 Oct and 1 Nov 2026.
+PASS empty week: Create is disabled 
+PASS empty week: no request left the page except the site list []
+ALL PASS
+exit=0

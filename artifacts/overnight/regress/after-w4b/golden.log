@@ -1,0 +1,7 @@
+
+> esb-banner-studio@1.6.9 test:golden
+> node tools/e2e/golden-test.mjs
+
+social-01: 292 px differ (0.013 %)
+web-01: 988 px differ (0.048 %)
+exit=0
