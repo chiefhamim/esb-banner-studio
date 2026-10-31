@@ -65,6 +65,8 @@ export const DEFAULT_INTERVAL = 30
 export const BACKOFF_CAP_MS = 6 * 60 * 60 * 1000
 export const INBOX_CAP = 300
 export const DISMISSED_CAP = 2000
+/** Links (per source) already offered once, so items the inbox cap pushed out are not offered as new again. */
+export const SEEN_CAP = 2000
 export const MAX_ITEMS_PER_FEED = 200
 export const MAX_SOURCES = 40
 export const CHECK_EVERY_MS = 60 * 1000
@@ -362,14 +364,17 @@ export function loadSources(): WireSource[] {
   return Array.isArray(raw) ? raw.map(sanitizeSource).filter((s): s is WireSource => !!s).slice(0, MAX_SOURCES) : []
 }
 
-export function loadInbox(): { items: WireItem[]; dismissed: string[] } {
-  const raw = readJson<{ items?: unknown; dismissed?: unknown }>(INBOX_KEY, {})
+export interface InboxState { items: WireItem[]; dismissed: string[]; seen: string[]; dismissedTitles: string[] }
+
+const strList = (v: unknown, cap: number) => (Array.isArray(v) ? v.filter((d): d is string => typeof d === 'string').slice(-cap) : [])
+
+export function loadInbox(): InboxState {
+  const raw = readJson<{ items?: unknown; dismissed?: unknown; seen?: unknown; dismissedTitles?: unknown }>(INBOX_KEY, {})
   const items = Array.isArray(raw.items)
     ? raw.items.filter((i): i is WireItem => !!i && typeof i === 'object' && typeof (i as WireItem).title === 'string' && typeof (i as WireItem).link === 'string' && !!absoluteLink((i as WireItem).link, 'https://invalid.example/'))
         .map((i) => ({ id: i.link, title: i.title, link: i.link, date: typeof i.date === 'string' ? i.date : null, source: String(i.source ?? ''), sourceId: String(i.sourceId ?? ''), fetchedAt: typeof i.fetchedAt === 'number' ? i.fetchedAt : 0 }))
     : []
-  const dismissed = Array.isArray(raw.dismissed) ? raw.dismissed.filter((d): d is string => typeof d === 'string').slice(-DISMISSED_CAP) : []
-  return { items: capInbox(items), dismissed }
+  return { items: capInbox(items), dismissed: strList(raw.dismissed, DISMISSED_CAP), seen: strList(raw.seen, SEEN_CAP), dismissedTitles: strList(raw.dismissedTitles, DISMISSED_CAP) }
 }
 
 // ---------------------------------------------------------------- polling
@@ -393,6 +398,8 @@ export async function pollSource(source: WireSource, fetchFn: FetchFn, now: numb
   }
   if (!res || !res.ok) {
     const error = { code: String(res?.code ?? 'error'), message: String(res?.error ?? 'The feed could not be fetched.') }
+    // no desktop bridge is not the feed's fault: say so, but do not count it or push the next check out
+    if (error.code === 'no_bridge') return { source: { ...source, lastError: error }, items: [] }
     return { source: afterPoll(source, now, error), items: [] }
   }
   const body = res.html ?? res.body ?? ''
@@ -411,6 +418,9 @@ export interface PollReport {
   polled: number
   ok: number
   failed: number
+  /** Sources skipped because there is no desktop bridge (plain browser). */
+  noBridge: number
+  /** New items that are in the inbox after the poll (items the 300 cap pushed straight out are not counted). */
   added: number
   /** When the earliest enabled source is next due, if any. */
   nextAt: number | null
@@ -420,30 +430,40 @@ export interface PollReport {
  * Poll every enabled source whose `nextAt ≤ now`, one at a time, and merge new items into the inbox. Pure apart
  * from `fetchFn`: returns the next state for the caller to keep.
  */
+export const seenKey = (sourceId: string, link: string) => sourceId + '|' + link
+
 export async function pollSources(
-  state: { sources: WireSource[]; items: WireItem[]; dismissed: string[] },
+  state: { sources: WireSource[]; items: WireItem[]; dismissed: string[]; seen?: string[]; dismissedTitles?: string[] },
   now: number,
   fetchFn: FetchFn,
   onProgress?: (sources: WireSource[]) => void,
-): Promise<{ sources: WireSource[]; items: WireItem[]; report: PollReport }> {
+): Promise<{ sources: WireSource[]; items: WireItem[]; seen: string[]; report: PollReport }> {
   let sources = state.sources
   let items = state.items
   const dismissed = new Set(state.dismissed)
-  const report: PollReport = { polled: 0, ok: 0, failed: 0, added: 0, nextAt: null }
+  const seenList = [...(state.seen ?? [])]
+  const seen = new Set(seenList)
+  // a dismissed story stays dismissed when another feed carries it under a different link
+  const gone = (state.dismissedTitles ?? []).map((title) => ({ title, link: '' }))
+  const freshIds = new Set<string>()
+  const report: PollReport = { polled: 0, ok: 0, failed: 0, noBridge: 0, added: 0, nextAt: null }
   for (const s of state.sources) {
     if (!isDue(s, now)) continue
     const r = await pollSource(s, fetchFn, now)
     report.polled++
-    if (r.source.lastError) report.failed++; else report.ok++
-    const fresh = dedupe(r.items.filter((i) => !dismissed.has(i.id)), items)
-    report.added += fresh.length
+    if (r.source.lastError?.code === 'no_bridge') report.noBridge++
+    else if (r.source.lastError) report.failed++
+    else report.ok++
+    const fresh = dedupe(r.items.filter((i) => !dismissed.has(i.id) && !seen.has(seenKey(s.id, i.id))), [...items, ...gone])
+    for (const f of fresh) { freshIds.add(f.id); const k = seenKey(s.id, f.id); seen.add(k); seenList.push(k) }
     items = capInbox([...fresh, ...items])
     sources = sources.map((x) => (x.id === s.id ? r.source : x))
     onProgress?.(sources)
   }
+  report.added = items.filter((i) => freshIds.has(i.id)).length
   const due = sources.filter((s) => s.enabled).map((s) => s.nextAt)
   report.nextAt = due.length ? Math.min(...due) : null
-  return { sources, items, report }
+  return { sources, items, seen: seenList.slice(-SEEN_CAP), report }
 }
 
 // ---------------------------------------------------------------- store
@@ -454,6 +474,8 @@ interface WireState {
   sources: WireSource[]
   items: WireItem[]
   dismissed: string[]
+  seen: string[]
+  dismissedTitles: string[]
   polling: boolean
   lastReport: (PollReport & { at: number }) | null
   addSource: (input: { url: string; name?: string; kind?: WireKind; intervalMin?: number }) => { ok: true; id: string } | { ok: false; error: string }
@@ -467,15 +489,20 @@ interface WireState {
 
 export const useWire = create<WireState>((set, get) => {
   const saveSources = (sources: WireSource[]) => { writeJson(SOURCES_KEY, sources); set({ sources }) }
-  const saveInbox = (items: WireItem[], dismissed: string[]) => { writeJson(INBOX_KEY, { items, dismissed }); set({ items, dismissed }) }
+  const saveInbox = (items: WireItem[], dismissed: string[], seen = get().seen, dismissedTitles = get().dismissedTitles) => {
+    writeJson(INBOX_KEY, { items, dismissed, seen, dismissedTitles })
+    set({ items, dismissed, seen, dismissedTitles })
+  }
   const inbox = loadInbox()
   return {
     sources: loadSources(),
     items: inbox.items,
     dismissed: inbox.dismissed,
+    seen: inbox.seen,
+    dismissedTitles: inbox.dismissedTitles,
     polling: false,
     lastReport: null,
-    reload: () => { const ib = loadInbox(); set({ sources: loadSources(), items: ib.items, dismissed: ib.dismissed }) },
+    reload: () => { const ib = loadInbox(); set({ sources: loadSources(), ...ib }) },
     addSource: ({ url, name = '', kind = 'auto', intervalMin = DEFAULT_INTERVAL }) => {
       const chk = checkSourceUrl(url)
       if ('error' in chk) return { ok: false, error: chk.error }
@@ -507,18 +534,21 @@ export const useWire = create<WireState>((set, get) => {
     },
     removeSource: (id) => {
       saveSources(get().sources.filter((s) => s.id !== id))
-      saveInbox(get().items.filter((i) => i.sourceId !== id), get().dismissed)
+      // a source added again later starts fresh: forget which of its links were offered
+      saveInbox(get().items.filter((i) => i.sourceId !== id), get().dismissed, get().seen.filter((k) => !k.startsWith(id + '|')))
     },
     dismiss: (id) => {
       const d = get().dismissed.includes(id) ? get().dismissed : [...get().dismissed, id].slice(-DISMISSED_CAP)
-      saveInbox(get().items.filter((i) => i.id !== id), d)
+      const title = normalizeTitle(get().items.find((i) => i.id === id)?.title ?? '')
+      const t = !title || get().dismissedTitles.includes(title) ? get().dismissedTitles : [...get().dismissedTitles, title].slice(-DISMISSED_CAP)
+      saveInbox(get().items.filter((i) => i.id !== id), d, get().seen, t)
     },
     pollDue: async (now = Date.now(), fetchFn = bridgeFetch) => {
       if (get().polling) return null
       set({ polling: true })
       try {
-        const { sources, items, report } = await pollSources(
-          { sources: get().sources, items: get().items, dismissed: get().dismissed },
+        const { sources, items, seen, report } = await pollSources(
+          { sources: get().sources, items: get().items, dismissed: get().dismissed, seen: get().seen, dismissedTitles: get().dismissedTitles },
           now,
           fetchFn,
           (progress) => set({ sources: mergeEdits(get().sources, progress) }),
@@ -526,7 +556,7 @@ export const useWire = create<WireState>((set, get) => {
         // sources edited or removed while the poll ran keep the editor's change; only poll results are merged in
         saveSources(mergeEdits(get().sources, sources))
         const live = new Set(get().sources.map((s) => s.id))
-        saveInbox(capInbox(items.filter((i) => live.has(i.sourceId) && !get().dismissed.includes(i.id))), get().dismissed)
+        saveInbox(capInbox(items.filter((i) => live.has(i.sourceId) && !get().dismissed.includes(i.id))), get().dismissed, seen.filter((k) => live.has(k.slice(0, k.indexOf('|')))))
         set({ lastReport: { ...report, at: now } })
         return report
       } finally {
@@ -560,6 +590,7 @@ export function relTime(t: number, now: number): string {
 /** One line about a source's state, read from its own fields. */
 export function sourceStatus(s: WireSource, now: number): { tone: 'ok' | 'warn' | 'idle'; text: string } {
   if (!s.enabled) return { tone: 'idle', text: 'Paused' }
+  if (s.lastError?.code === 'no_bridge') return { tone: 'warn', text: s.lastError.message }
   if (s.failures > 0 && s.lastError) return { tone: 'warn', text: `Retrying ${relTime(Math.max(s.nextAt, now), now)} · ${s.lastError.message}` }
   if (!s.lastFetchedAt) return { tone: 'idle', text: 'Not checked yet' }
   return { tone: 'ok', text: `Checked ${relTime(s.lastFetchedAt, now)} · next ${s.nextAt <= now ? 'now' : relTime(s.nextAt, now)}` }

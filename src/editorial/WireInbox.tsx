@@ -17,9 +17,11 @@ function useNow(): number {
 }
 
 function reportText(r: PollReport, now: number): string {
+  if (r.polled && r.noBridge === r.polled) return 'Feeds are fetched by the desktop app. Open ESB AI Studio to check sources.'
   if (!r.polled) return r.nextAt == null ? 'No source is switched on.' : `Nothing due — next check ${r.nextAt <= now ? 'now' : relTime(r.nextAt, now)}.`
   const parts = [`Checked ${r.polled} ${r.polled === 1 ? 'source' : 'sources'}`, `${r.added} new`]
   if (r.failed) parts.push(`${r.failed} failed`)
+  if (r.noBridge) parts.push(`${r.noBridge} need the desktop app`)
   return parts.join(' · ') + '.'
 }
 
@@ -118,6 +120,17 @@ export function WireInbox({ onUse }: { onUse: (url: string) => void }) {
       </div>
       {note && <p className="ed-wire-note" role="status">{note}</p>}
 
+      <details className="ed-wire-sources" open={sourcesOpen} onToggle={(e) => setSourcesOpen((e.target as HTMLDetailsElement).open)}>
+        <summary className="ed-wire-head">
+          <Icon name="chevRight" size={13} className="ed-wire-chev" />
+          <b>Sources</b>
+          <span>{sources.filter((s) => s.enabled).length} of {sources.length} on</span>
+          {retrying > 0 && <span className="ed-wire-head-warn">{retrying} retrying</span>}
+        </summary>
+        <ul className="ed-wire-src-list">{sources.map((s) => <SourceRow key={`${s.id}|${s.url}|${s.name}`} s={s} now={now} />)}</ul>
+        <AddSource first={false} />
+      </details>
+
       <div className="ed-feed-list ed-wire-list">
         {shown.length === 0 ? (
           <p className="hint ed-feed-empty">{items.length ? 'No stories match that filter.' : 'No stories yet. Check now polls every source that is due.'}</p>
@@ -135,16 +148,6 @@ export function WireInbox({ onUse }: { onUse: (url: string) => void }) {
         ))}
       </div>
 
-      <details className="ed-wire-sources" open={sourcesOpen} onToggle={(e) => setSourcesOpen((e.target as HTMLDetailsElement).open)}>
-        <summary className="ed-wire-head">
-          <Icon name="chevRight" size={13} className="ed-wire-chev" />
-          <b>Sources</b>
-          <span>{sources.filter((s) => s.enabled).length} of {sources.length} on</span>
-          {retrying > 0 && <span className="ed-wire-head-warn">{retrying} retrying</span>}
-        </summary>
-        <ul className="ed-wire-src-list">{sources.map((s) => <SourceRow key={`${s.id}|${s.url}|${s.name}`} s={s} now={now} />)}</ul>
-        <AddSource first={false} />
-      </details>
     </div>
   )
 }

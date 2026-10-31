@@ -254,7 +254,7 @@ describe('Wire — inbox and polling', () => {
     expect(useWire.getState().items).toEqual([])
     localStorage.setItem(SOURCES_KEY, '{nope'); localStorage.setItem(INBOX_KEY, '[1,2')
     expect(loadSources()).toEqual([])
-    expect(loadInbox()).toEqual({ items: [], dismissed: [] })
+    expect(loadInbox()).toEqual({ items: [], dismissed: [], seen: [], dismissedTitles: [] })
     localStorage.setItem(SOURCES_KEY, JSON.stringify([{ id: 'x', url: 'javascript:alert(1)' }, { id: 'y', url: 'https://ok.example.com/f', intervalMin: 2 }]))
     expect(loadSources().map((s) => [s.id, s.intervalMin])).toEqual([['y', 15]])
   })
@@ -289,5 +289,66 @@ describe('Wire — wording', () => {
     expect(filterItems(items, '2026')).toHaveLength(1)
     expect(filterItems(items, 'example desk')).toHaveLength(5)
     expect(filterItems(items, '  ')).toHaveLength(5)
+  })
+})
+
+describe('Wire — polish (QA findings)', () => {
+  beforeEach(() => { localStorage.clear(); useWire.getState().reload() })
+  const now = 1_800_000_000_000
+  const bigFeed = (host: string, n: number) => `<rss><channel><title>${host}</title>${Array.from({ length: n }, (_, k) =>
+    `<item><title>${host} story number ${k} about topic ${host}${k}</title><link>https://${host}.example.com/s/${k}</link><pubDate>${new Date(now - (k + 1) * MIN).toUTCString()}</pubDate></item>`).join('')}</channel></rss>`
+
+  it('"new" counts only items that survive the 300 cap; a second poll of the same data adds 0', async () => {
+    const feeds: Record<string, string> = { 'https://a.example.com/rss': bigFeed('a', 200), 'https://b.example.com/rss': bigFeed('b', 200), 'https://c.example.com/rss': bigFeed('c', 200) }
+    const fetchFn: FetchFn = async (url) => ({ ok: true, html: feeds[url], url })
+    for (const url of Object.keys(feeds)) useWire.getState().addSource({ url })
+    const first = await useWire.getState().pollDue(now, fetchFn)
+    expect(useWire.getState().items).toHaveLength(300)
+    expect(first?.added).toBe(300)
+    useWire.getState().reload()
+    const second = await useWire.getState().pollDue(now + 31 * MIN, fetchFn)
+    expect(second?.polled).toBe(3)
+    expect(second?.added).toBe(0)
+    expect(useWire.getState().items).toHaveLength(300)
+    expect(loadInbox().seen.length).toBe(600)
+  })
+
+  it('removing a source forgets which of its links were offered', async () => {
+    const fetchFn: FetchFn = async (url) => ({ ok: true, html: RSS, url })
+    useWire.getState().addSource({ url: 'https://news.example.com/feed.xml' })
+    await useWire.getState().pollDue(now, fetchFn)
+    useWire.getState().removeSource(useWire.getState().sources[0].id)
+    expect(loadInbox().seen).toEqual([])
+    useWire.getState().addSource({ url: 'https://news.example.com/feed.xml' })
+    const r = await useWire.getState().pollDue(now + MIN, fetchFn)
+    expect(r?.added).toBe(5)
+  })
+
+  it('no desktop bridge: honest message, but no failure count and no backoff', async () => {
+    useWire.getState().addSource({ url: 'https://a.example.com/rss' })
+    for (let k = 0; k < 3; k++) {
+      const r = await useWire.getState().pollDue(now + k)
+      expect(r).toMatchObject({ polled: 1, noBridge: 1, failed: 0, added: 0 })
+    }
+    const s = useWire.getState().sources[0]
+    expect(s.failures).toBe(0)
+    expect(s.nextAt).toBe(0)
+    expect(s.lastError?.code).toBe('no_bridge')
+    expect(sourceStatus(s, now)).toEqual({ tone: 'warn', text: s.lastError!.message })
+    // once the bridge answers, the note clears
+    await useWire.getState().pollDue(now + MIN, async (url) => ({ ok: true, html: RSS, url }))
+    expect(useWire.getState().sources[0].lastError).toBeNull()
+  })
+
+  it('a dismissed story stays dismissed when another feed carries it under a different link', async () => {
+    useWire.getState().addSource({ url: 'https://news.example.com/feed.xml' })
+    await useWire.getState().pollDue(now, async (url) => ({ ok: true, html: RSS, url }))
+    const port = useWire.getState().items.find((i) => i.title.startsWith('Port authority'))!
+    useWire.getState().dismiss(port.id)
+    useWire.getState().addSource({ url: 'https://wire.example.com/feed.atom' })
+    await useWire.getState().pollDue(now + MIN, async (url) => ({ ok: true, html: ATOM, url }))
+    expect(useWire.getState().items.some((i) => /port authority/i.test(i.title))).toBe(false)
+    useWire.getState().reload()
+    expect(loadInbox().dismissedTitles).toContain('port authority opens second container terminal')
   })
 })
