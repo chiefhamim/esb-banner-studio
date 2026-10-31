@@ -3,15 +3,23 @@
 // every other request that would leave the machine is aborted and counted, and the suite fails if any was made.
 // Seeds a synthetic publish log (three stories, one outside the last 7 days) and story queue; nothing is sent —
 // the dialog only creates a draft campaign, and the Send footer still says the desktop app is needed.
-import { chromium } from 'playwright-core'
+//
+// `node tools/e2e/digest-test.mjs --electron` (after `npm run build`) runs the dry-run proof instead: the built app in
+// Electron with an isolated profile and ESB_OUTREACH_DRYRUN=1, the main process's URL fetcher replaced by a stub (so
+// the site list is the fixture and nothing reaches the network), a digest draft made through the real menu and sheet,
+// then `window.esb.outreachStatus()` must still report sent24h === 0.
+import { chromium, _electron as electron } from 'playwright-core'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
+import fs from 'node:fs'
+import os from 'node:os'
 import { launchBrowser } from '../launch-browser.mjs'
 import { portOffset } from '../port-offset.mjs'
 
 const PORT = 5212 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
-const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
+const ELECTRON = process.argv.includes('--electron')
+const vite = ELECTRON ? { kill() {} } : spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
 
 const waitUp = async () => {
   for (let i = 0; i < 80; i++) {
@@ -98,9 +106,67 @@ const heads = (page) => page.locator(`${DIALOG} .or-dg-row .check > span`).evalu
 const campaigns = (page) => page.evaluate(() => window.__outreachStore.getState().campaigns)
 const srcdoc = (page) => page.locator(`${DIALOG} iframe[title="Digest preview"]`).getAttribute('srcdoc')
 
+async function electronProof() {
+  const exe = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron')
+  if (!fs.existsSync(path.join(root, 'dist', 'index.html'))) { check('dist/ is built (run npm run build first)', false); return }
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'esb-digest-'))
+  const app = await electron.launch({
+    executablePath: exe, args: [...(process.platform === 'win32' ? [] : ['--no-sandbox']), root, '--user-data-dir=' + profile],
+    env: { ...process.env, ESB_NO_SYNC: '1', ESB_OUTREACH_DRYRUN: '1' },
+  })
+  try {
+    // every renderer fetch goes through this one main-process handler: answer the site list, refuse the rest
+    await app.evaluate(({ ipcMain }, feed) => {
+      globalThis.__digestFetches = []
+      ipcMain.removeHandler('esb:fetch-url')
+      ipcMain.handle('esb:fetch-url', (_e, u) => {
+        globalThis.__digestFetches.push(String(u))
+        return u === 'https://esbpowerline.com/feed.xml' ? { ok: true, html: feed } : { ok: false, error: 'refused by the digest test' }
+      })
+    }, FEED)
+    const page = await app.firstWindow()
+    page.setDefaultTimeout(15000)
+    const errors = []
+    page.on('pageerror', (e) => errors.push(String(e)))
+    await page.waitForSelector('.home-shell, .topbar')
+    const s0 = await page.evaluate(() => window.esb.outreachStatus())
+    check('[electron] dry run: the bridge reports nothing sent before', s0.sent24h === 0, `sent24h ${s0.sent24h}`)
+    await page.evaluate(([log, q]) => { localStorage.setItem('esb-banner-studio/publish-log/v1', JSON.stringify(log)); localStorage.setItem('esb-banner-studio/editorial/queue/v1', JSON.stringify(q)) }, [LOG, QUEUE])
+    await page.reload(); await page.waitForSelector('.home-shell, .topbar')
+    await page.click('.launch-tile:has-text("Outreach")')
+    await page.waitForSelector('.or-body')
+    await page.click('.side-tabs button[aria-label="Campaigns"]')
+    await openDigest(page)
+    await page.waitForFunction(() => !document.querySelector('.or-dg .hint')?.textContent?.startsWith('Reading'))
+    const h = await heads(page)
+    check('[electron] the sheet lists the 2 stories of the last 7 days', h.length === 2 && h[0] === S.grid.headline, JSON.stringify(h))
+    const decks = await page.locator(`${DIALOG} .or-dg-deck`).allInnerTexts()
+    check('[electron] the site list came through the stubbed bridge (deck from the fixture)', decks[1] === S.solar.deck, JSON.stringify(decks))
+    await page.locator(`${DIALOG} .or-dg-create`).click()
+    await page.waitForSelector(DIALOG, { state: 'detached' })
+    await page.waitForTimeout(1500)
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/outreach/v2') ?? '{}'))
+    const c = (saved.campaigns ?? []).find((x) => x.id === saved.activeId)
+    check('[electron] the draft is saved and open', !!c && c.status === 'draft' && c.scheduledAt === null && c.body.includes(url(S.grid)), c ? c.name : 'none')
+    const s1 = await page.evaluate(() => window.esb.outreachStatus())
+    check('[electron] dry run: still nothing sent after the draft was made', s1.sent24h === 0 && !s1.sentTo.length, `sent24h ${s1.sent24h}`)
+    check('[electron] the draft has no send results', !Object.keys(c?.sent ?? {}).length && !Object.keys(c?.failed ?? {}).length)
+    const note = await page.locator('.or-foot-note').innerText()
+    check('[electron] the Send footer still asks for a sender before anything can go', note.includes('sender account'), note)
+    const fetched = await app.evaluate(() => globalThis.__digestFetches)
+    check('[electron] the only URL the renderer asked for was the site list', fetched.length > 0 && fetched.every((u) => u === 'https://esbpowerline.com/feed.xml'), JSON.stringify(fetched.slice(0, 5)))
+    check('[electron] no page errors', errors.length === 0, errors.slice(0, 2).join(' | '))
+  } finally {
+    await app.close().catch(() => {})
+    fs.rmSync(profile, { recursive: true, force: true })
+  }
+}
+
 try {
+  if (ELECTRON) { await electronProof(); throw null } // the browser suite is skipped in this mode
   await waitUp()
   const browser = await launchBrowser(chromium)
+
   try {
     const { ctx, page, net } = await newPage(browser, { 'esb-banner-studio/publish-log/v1': LOG, 'esb-banner-studio/editorial/queue/v1': QUEUE })
     const errors = []
@@ -227,8 +293,7 @@ try {
     await browser.close()
   }
 } catch (err) {
-  console.log('FAIL suite crashed', String(err).split('\n')[0])
-  failed++
+  if (err !== null) { console.log('FAIL suite crashed', String(err).split('\n')[0]); failed++ }
 } finally {
   vite.kill()
 }
