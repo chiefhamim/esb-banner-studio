@@ -443,8 +443,9 @@ export async function pollSources(
   const dismissed = new Set(state.dismissed)
   const seenList = [...(state.seen ?? [])]
   const seen = new Set(seenList)
-  // a dismissed story stays dismissed when another feed carries it under a different link
-  const gone = (state.dismissedTitles ?? []).map((title) => ({ title, link: '' }))
+  // a dismissed story stays dismissed when another feed carries it under a different link. Exact title only (after
+  // normalizeTitle): near-duplicate matching would also hide tomorrow's "… schedule for 4 November" after today's.
+  const gone = new Set(state.dismissedTitles ?? [])
   const freshIds = new Set<string>()
   const report: PollReport = { polled: 0, ok: 0, failed: 0, noBridge: 0, added: 0, nextAt: null }
   for (const s of state.sources) {
@@ -454,7 +455,7 @@ export async function pollSources(
     if (r.source.lastError?.code === 'no_bridge') report.noBridge++
     else if (r.source.lastError) report.failed++
     else report.ok++
-    const fresh = dedupe(r.items.filter((i) => !dismissed.has(i.id) && !seen.has(seenKey(s.id, i.id))), [...items, ...gone])
+    const fresh = dedupe(r.items.filter((i) => !dismissed.has(i.id) && !seen.has(seenKey(s.id, i.id)) && !gone.has(normalizeTitle(i.title))), items)
     for (const f of fresh) { freshIds.add(f.id); const k = seenKey(s.id, f.id); seen.add(k); seenList.push(k) }
     items = capInbox([...fresh, ...items])
     sources = sources.map((x) => (x.id === s.id ? r.source : x))
