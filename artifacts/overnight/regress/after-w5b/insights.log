@@ -1,0 +1,69 @@
+
+> esb-banner-studio@1.6.9 test:insights
+> node tools/e2e/insights-test.mjs
+
+PASS Header Desk · Insights switch opens the Insights desk 
+PASS Opening Insights reads the page and each post on Facebook once insights requests 5
+PASS Five KPI tiles render 
+PASS Published (28 days) counts the log, not samples PUBLISHED
+4
+3 on Facebook
+PASS Impressions (28 days) is the sum of the fixture figures 4,690
+PASS Reactions and clicks are summed 
+PASS AI cost tile is honest with no priced call 
+PASS Impressions chart draws one bar per post with figures 3
+PASS Weekly tables list every story in range 4
+PASS A site-only story says so instead of showing zeros 
+PASS Page totals are shown with their age Page, last 28 days: 2,000 impressions · 120 post engagements · read just now
+PASS Cache age shows in the toolbar Figures from just now
+PASS 7 days range narrows KPIs, bars and rows 3/2/3
+PASS 90 days range includes the older story 5/4/5
+PASS Refresh is enabled while not rate-limited 
+PASS Refresh inside 15 minutes serves the cache (no new Graph request) 5 -> 5
+PASS Export CSV downloads a file named for the range esb-insights-28d-2026-10-31.csv
+PASS Export CSV has the header and one row per story in range 5 lines
+PASS Export CSV rows carry the fixture figures and blanks for site-only 
+PASS Summarise week renders when the Review AI has a provider 
+PASS Summarise week shows the AI draft, labelled as one 
+PASS The summary request carries only the table (no token, no story text) 
+PASS Engine panel lists cost rows with prompt, cache, output and an estimate column STORY
+PROMPT
+CACHE
+OUTPUT
+COST estimate
+Checks and other desks
+2.4k
+17%
+120
+— · 2 unpriced
+
+Estimate from Claude list prices; other companies' calls are counted, not priced.
+PASS Unpriced (Gemini) calls show a dash for cost, never a guessed price Checks and other desks
+2.4k
+17%
+120
+— · 2 unpriced
+PASS Escalation switch is off by default and turns on (saved in AI settings) false -> true
+PASS Escalation switch turns off again 
+PASS AI cost tile counts unpriced calls honestly estimate · this session · 2 unpriced
+PASS Desk switch returns to the story desk 
+PASS Every Graph request was answered by the fixture route (zero live calls) seen 5, routed 5
+PASS The token never appears in a Graph URL, and every call sends it as Bearer inUrl 0, badAuth 0
+PASS No token: the unconfigured card renders 
+PASS No token: Facebook figures are dashes, the log still counts 
+PASS No token: Refresh is disabled 
+PASS No token: no Graph request at all seen 0
+PASS Connect a Page opens the Facebook dialog 
+PASS Empty log: "Nothing published from this app yet" and no KPI tiles 
+PASS Empty log: Export CSV is disabled 
+PASS Empty log: no insights request 
+PASS 190: the honest expired-token state renders 
+PASS 190: one request, then it stops (no retry of the other posts) insights 1
+PASS 190: Refresh is disabled 
+PASS 190: a second Refresh makes no new request insights 1
+PASS 190: reopening the desk does not try the token again insights 1
+PASS 190: the cache never stores the token 
+PASS 190: "Paste a new token" opens the Facebook dialog 
+PASS 190: every Graph request was intercepted seen 1, routed 1
+ALL PASS
+exit=0

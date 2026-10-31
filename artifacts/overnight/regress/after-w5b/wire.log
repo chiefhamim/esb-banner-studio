@@ -1,0 +1,55 @@
+
+> esb-banner-studio@1.6.9 test:wire
+> node tools/e2e/wire-test.mjs
+
+PASS Wire tab sits in the intake Seg and selects 
+PASS Empty state reads "No sources yet" with the add row 
+PASS Add source is disabled with no address 
+PASS Non-http address refused with a message 
+PASS Sources list starts folded so the inbox has the room 
+PASS Sources summary unfolds the source rows 
+PASS Add source stores the registry entry (sources/v1) {"id":"src-mvwy4qkl-q1zffq","url":"https://feed.example.com/rss.xml","name":"Example Desk","kind":"auto","intervalMin":30,"enabled":true,"lastFetchedAt":null,"l
+PASS Adding a source does not fetch by itself 
+PASS New source reads "Not checked yet" 
+PASS Check now fetches once through window.esb.fetchUrl 
+PASS Bridge is asked with no allowedTypes override (net-guard defaults carry XML) and a timeout ≤ 30 s {"timeoutMs":15000}
+PASS Inbox lists the 5 fixture items 
+PASS Check now reports what it did 
+PASS Rows show title, source and relative time Port authority opens second container terminal | Example Desk
+13 h ago
+PASS CDATA title rendered as plain text 
+PASS Relative link resolved to an absolute URL 
+PASS Item without a date says when it was found Example Desk
+found just now
+PASS Source status says when it was checked 
+PASS Filter narrows the inbox 
+PASS Filter matches Bengali digits 
+PASS Filter with no match says so 
+PASS Clearing the filter restores the list 
+PASS Use this link switches the Seg to Link 
+PASS Use this link fills the Link field with the item URL https://news.example.com/economy/garment-exports-rise
+PASS Use this link does not fetch (the item URL never reaches the bridge) other bridge calls (the app's own site probe): https://esbpowerline.com/feed.xml?_=1793484107735 https://esbpowerline.com/feed.xml https://esbpowerline.com/feed.xml?_=1793484107736
+PASS Dismiss removes the row 
+PASS Dismissed item stays hidden after reload 
+PASS Dismissed id kept in inbox/v1 
+PASS Second Check now within the interval makes no fetch calls=1
+PASS …and says nothing was due 
+PASS Interval Scrub stores the new interval 
+PASS Interval is held to the 15-minute floor 
+PASS Source name edit is stored 
+PASS Enable switch turns a source off 
+PASS Enable switch turns it back on 
+PASS net-guard error shown as "Retrying in …" with its message Retrying in 1 h · Host intranet.example.com resolved to private/restricted IP: 10.0.0.5
+PASS Failed source backs off: failures 1, nextAt ≥ 2 × interval out nextAt in 60 min
+PASS The healthy source was not re-fetched (not due) 
+PASS Source in backoff is not retried before nextAt 
+PASS Sources summary counts the retrying source 
+PASS Remove deletes the source 
+PASS Compact intake (New link tab) shows the Wire inbox 
+PASS Compact: Use this link fills the link field and shows Link https://news.example.com/economy/garment-exports-rise
+PASS No browser request to any feed host 
+PASS No request left localhost except the app's own site probes (all aborted) aborted hosts: none
+PASS No page errors 
+
+ALL PASS
+exit=0
