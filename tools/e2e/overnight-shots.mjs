@@ -142,6 +142,7 @@ try {
     const errors = []
     p.on('pageerror', (e) => errors.push(String(e)))
     await p.addInitScript(([t, q]) => {
+      if (window.top !== window) return // sandboxed preview frames (the email preview) have no storage
       localStorage.setItem('esb-banner-studio/theme', t)
       localStorage.setItem('esb-banner-studio/editorial/queue/v1', JSON.stringify({ stories: q, activeId: null }))
     }, [theme, stories])
