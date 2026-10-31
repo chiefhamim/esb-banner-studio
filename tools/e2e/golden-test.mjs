@@ -7,7 +7,8 @@ import { PNG } from 'pngjs'
 import pixelmatch from 'pixelmatch'
 import { launchBrowser } from '../launch-browser.mjs'
 
-const PORT = 5199
+import { portOffset } from '../port-offset.mjs'
+const PORT = 5199 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
 const outDir = path.join(root, 'tools', 'out')
 fs.mkdirSync(outDir, { recursive: true })

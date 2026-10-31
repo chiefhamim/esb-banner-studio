@@ -4,7 +4,8 @@ import { launchBrowser } from '../launch-browser.mjs'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 
-const PORT = 5191
+import { portOffset } from '../port-offset.mjs'
+const PORT = 5191 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
 const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
 

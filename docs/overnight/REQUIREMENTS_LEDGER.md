@@ -1,0 +1,42 @@
+# Requirements ledger
+
+One row per task. Status: `todo` · `in-progress` · `built` (builder claims) · `qa` · `accepted` · `failed` ·
+`blocked` · `cut`. Nobody accepts their own row. Evidence = command output, decoded export, screenshot pair,
+or a reproducible ledger pointer; never a claim.
+
+| ID | WS | Pri | Task | Files | Owner | Accept command / check | Status | Reviewer | Evidence |
+|---|---|---|---|---|---|---|---|---|---|
+| W7-1 | W7 | P0 | Full-history secret scan, redacted log | `artifacts/overnight/secret-scan.log` | orchestrator | log exists; every hit explained | in-progress | — | 245 commits scanned; 2 hits: anon-key JWT (by design), base64 PNG (false positive) |
+| W7-2 | W7 | P0 | `.gitignore` covers `release-*/`, `tools/out/`, `dist/`, `node_modules/` (+ artifacts policy D4) | `.gitignore` | orchestrator | `git check-ignore` on each path | in-progress | — | |
+| W7-3 | W7 | P0 | `SECURITY.md` incl. anon-key / RLS `NOT VERIFIED` statement; machine paths scrubbed from docs | `SECURITY.md`, `docs/` | orchestrator | file committed; `grep` for `C:\Users\hamim` in docs = 0 | in-progress | — | docs grep: 0 files before any edit |
+| P0-1 | P0 | P0 | Baseline table (§3) with actual numbers | `docs/overnight/BASELINE.md`, `artifacts/overnight/baseline/*.log` | orchestrator | each log ends `exit=0` or the failure is recorded | in-progress | — | running in background |
+| P0-2 | P0 | P0 | Baseline screenshots: Home, Editorial (launcher + desk), Graphics, Video, Outreach, Activity; light/dark; 1366×768, 1920×1080 | `artifacts/overnight/screenshots/baseline/` | orchestrator | 28 PNGs, inspected | todo | — | |
+| T0-1 | T0 | P0 | `tools/port-offset.mjs` + runner edits + `VITE_CACHE_DIR` | `tools/*.mjs`, `vite.config.ts`, `.gitignore` | orchestrator | `node tools/e2e/ui-test.mjs` unchanged with no offset file; with offset file the port moves | todo | QA | |
+| T0-2 | T0 | P0 | `tools/e2e/overnight-shots.mjs`, `tools/e2e/shot-diff.mjs` | same | orchestrator | runs, exits non-zero on a missing screen / mismatched pair | todo | QA | |
+| W1-1 | W1 | P1 | `quoteLibrary.ts`: harvest quotes (speaker) + stats (figure, unit) from a story via `facts.ts`; provenance (url, slug, time) | `src/editorial/quoteLibrary.ts` | builder W1 | `vitest tools/unit/quote-library.test.ts` | todo | QA | |
+| W1-2 | W1 | P1 | Per-key IndexedDB persistence, dedupe, cap with oldest-first eviction | same | builder W1 | unit: round-trip, dedupe, eviction | todo | QA | |
+| W1-3 | W1 | P1 | Speaker registry seeded from `newsroom.ts` TAGS orgs; editable name/title/org | same + panel | builder W1 | unit + e2e | todo | QA | |
+| W1-4 | W1 | P1 | Library panel: search by text/speaker/org; "Use as quote banner" / "Use as stat banner" → Graphics with the right cardType | new panel component, `bannerLink`-style hand-off | builder W1 | `npm run test:editorial` (new checks) | todo | QA | |
+| W1-5 | W1 | P1 | Harvest on publish (dry-run) and on demand | wiring in Editorial | builder W1 | e2e: publish dry-run → quote appears → use-as-banner verbatim | todo | QA | |
+| W1-6 | W1 | P1 | Golden unchanged; CSS census clean; screenshot pair + diff | — | builder W1 → QA | `npm run test:golden`; `npm run census -- --strict` | todo | QA | |
+| W2-1 | W2 | P1 | `insights.ts`: Graph insights fetch (Authorization header, v26.0, GET only) → metrics; error/expired-token shapes | `src/editorial/insights.ts` | builder W2 | `vitest tools/unit/insights.test.ts` | todo | QA | |
+| W2-2 | W2 | P1 | Local publish log join (slug, format, category, time) + `useAiUsage` cost; cache with fetch timestamps | same | builder W2 | unit | todo | QA | |
+| W2-3 | W2 | P1 | Insights view: SVG charts (charts.tsx patterns), weekly table, CSV export, honest unconfigured state | new view | builder W2 | e2e with `window.esb`/fetch mock; CSV rows correct; unconfigured screenshot | todo | QA | |
+| W2-4 | W2 | P1 | Opt-in "Write the weekly summary" via `review` role, aggregate table only, delimiter pattern | same | builder W2 | unit: prompt contains only the table; AI mocked | todo | QA | |
+| W2-5 | W2 | P1 | Zero live Graph calls in tests; nothing logged with the token | — | QA | grep tests/logs | todo | QA | |
+| W6-1 | W6 | P1 | Escalation decision function (flags → escalate; clean → don't), opt-in per role, logged to job log | `aiProviders.ts` (approved shared file, D7) | builder W2 | unit | todo | QA | |
+| W6-2 | W6 | P1 | Per-story cost in the Engine panel from `useAiUsage` | `EngineStatus.tsx` | builder W2 | e2e: totals rendered | todo | QA | |
+| W6-3 | W6 | P1 | Anthropic cache breakpoints unchanged (system prompt + source) | — | builder W2 → QA | existing AI-path tests untouched and green | todo | QA | |
+| W4-1 | W4 | P1 | `digest.ts`: selection by date range, ordering, intro, empty week | `src/editorial/digest.ts` | builder W4 | `vitest tools/unit/digest.test.ts` | todo | QA | |
+| W4-2 | W4 | P1 | Letter HTML through `electron/email-html` patterns (thumbnail, headline, deck, link) | same | builder W4 | unit renders expected HTML | todo | QA | |
+| W4-3 | W4 | P1 | "New campaign from this week's stories" in the Outreach composer → draft campaign, never auto-send | Outreach entry point | builder W4 | e2e: draft exists with correct letter; dry-run; zero SMTP | todo | QA | |
+| W3-1 | W3 | P2 | Distribution queue on the existing engine: job model for publish-site / post-facebook, approval gate, idempotency key (story, destination) | `electron/outreach-*`, `campaign.ts` (reuse) | builder W3 | unit: schedule math (Dhaka tz, window edges), idempotency, recovery | todo | QA | |
+| W3-2 | W3 | P2 | Queue view: scheduled/running/done/failed, cancel | new view | builder W3 | e2e | todo | QA | |
+| W3-3 | W3 | P2 | Tray keeps the engine alive; force-kill → relaunch → exactly once | — | builder W3 | e2e with mocked site/Graph, isolated profile | todo | QA (double-fire attempt) | |
+| W3-4 | W3 | P2 | Telegram/X/LinkedIn: documented integration boundary only | ledger | builder W3 | text | todo | QA | |
+| W5-0 | W5 | P2 | 90-minute spike: parse two saved fixture feeds offline through net-guard | `tools/fixtures/feeds/` | builder W5 | spike log | todo | orchestrator | gate |
+| W5-1 | W5 | P2 | Source registry, polling via net-guard with per-source interval + failure backoff | `src/editorial/wire.ts` | builder W5 | unit: RSS2, Atom, malformed; dedupe | todo | QA | |
+| W5-2 | W5 | P2 | Inbox view → one click into URL intake | new view | builder W5 | e2e with mocked fetch; no live fetches | todo | QA | |
+| F-1 | FINAL | P0 | Adversarial QA on the mission branch (§8 probes) | — | QA | verdict file | todo | — | |
+| F-2 | FINAL | P0 | `FINAL_REPORT.md` (CLAUDE.md §12), baseline-vs-final table, screenshot index | `docs/overnight/FINAL_REPORT.md` | orchestrator | file | todo | — | |
+| F-3 | FINAL | P0 | Push branches (+ `main` per D6), Desktop screenshot folder, shutdown | — | orchestrator | `git ls-remote` shows the branches | todo | — | |

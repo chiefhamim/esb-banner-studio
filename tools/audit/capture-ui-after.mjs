@@ -5,7 +5,8 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 
-const PORT = 5194
+import { portOffset } from '../port-offset.mjs'
+const PORT = 5194 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
 const outDir = path.join(root, 'tools', 'out', 'ui-after')
 fs.mkdirSync(outDir, { recursive: true })

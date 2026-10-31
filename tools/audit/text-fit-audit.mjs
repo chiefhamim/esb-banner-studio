@@ -16,7 +16,8 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 
-const PORT = 5196
+import { portOffset } from '../port-offset.mjs'
+const PORT = 5196 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
 const widths = process.env.W ? process.env.W.split(',').map(Number) : [1280, 1366, 1600, 1920]
 const shots = process.env.SHOTS

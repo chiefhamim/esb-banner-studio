@@ -6,7 +6,8 @@ import path from 'node:path'
 import { PNG } from 'pngjs'
 import { launchBrowser } from '../launch-browser.mjs'
 
-const PORT = 5198
+import { portOffset } from '../port-offset.mjs'
+const PORT = 5198 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
 const out = path.join(root, 'tools', 'out')
 fs.mkdirSync(out, { recursive: true })

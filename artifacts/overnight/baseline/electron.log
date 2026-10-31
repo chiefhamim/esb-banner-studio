@@ -1,0 +1,19 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.waitForSelector: Timeout 15000ms exceeded.
+Call log:
+[2m  - waiting for locator('.topbar') to be visible[22m
+[2m    31 × locator resolved to hidden <header class="topbar home-topbar">…</header>[22m
+
+    at C:\Users\hamim\esb-banner-studio\tools\e2e\electron-test.mjs:18:14 {
+  log: [
+    "  - waiting for locator('.topbar') to be visible",
+    '    31 × locator resolved to hidden <header class="topbar home-topbar">…</header>'
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v26.3.1
+exit=1

@@ -8,7 +8,8 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 
-const PORT = 5202
+import { portOffset } from '../port-offset.mjs'
+const PORT = 5202 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
 const outDir = path.join(root, 'docs', 'outreach-autopilot', 'shots', 'phase3')
 const desktopDir = path.join('C:\\Users\\hamim\\Desktop', 'outreach-autopilot', 'phase3')

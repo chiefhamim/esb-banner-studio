@@ -38,6 +38,8 @@ function devProxyPlugin(): Plugin {
 
 // base './' so the built app also loads from file:// inside Electron
 export default defineConfig({
+  // a second checkout (git worktree) running a dev server at the same time gets its own dependency cache
+  cacheDir: process.env.VITE_CACHE_DIR || 'node_modules/.vite',
   base: './',
   plugins: [react(), devProxyPlugin()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },

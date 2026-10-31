@@ -36,3 +36,14 @@ tools/sync.log
 tools/*.log
 tools/*.pid
 tools/.sync.pid
+
+# Overnight build artifacts: bulky binaries stay out of the repo (small text logs are committed as evidence)
+artifacts/**/*.png
+artifacts/**/*.jpg
+artifacts/**/*.webp
+artifacts/**/*.zip
+artifacts/**/*.mp4
+# Per-checkout test ports and Vite cache (git worktrees running suites side by side)
+.esb-port-offset
+.vite-cache/
+!artifacts/**/*.log

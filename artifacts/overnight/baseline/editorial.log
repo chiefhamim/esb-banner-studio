@@ -1,0 +1,35 @@
+
+> esb-banner-studio@1.6.9 test:editorial
+> node tools/e2e/editorial-test.mjs
+
+PASS Editorial Desk workspace opened 
+PASS Live site connection telemetry pill displayed 
+PASS Unreachable link shows a specific intake error blocked.invalid could not be reached
+Proxy HTTP 502
+Try again
+Paste the text ins
+PASS "Paste the text instead" switches to the paste tab 
+PASS Link intake: extraction report shows method, language and counts Page markup · Bengali · 4 paragraphs · 2 photos
+PASS Link intake: source pane holds the Bengali headline from the page 
+PASS Link intake: fact chips are deduplicated 
+PASS Only the Banner and "Before you publish" start open in the sidebar, only the story in the source column {"right":["ed-image","ed-side-publish"],"left":["ed-src-body"]}
+PASS Left column preserves original Bengali headline 
+PASS Draft headline populated in English (no Bengali overwrite) 
+PASS Extraction report shows method, language and counts 
+PASS Draft body populated in English 
+PASS Centre is the CMS editor: Headline & deck panel, then a standalone Story panel {"head":true,"story":true,"nested":false,"breaker":0,"details":0}
+PASS Banner line-break strip is gone from the editor 
+PASS Header carries the workspace switcher; no rail, no logo {"sw":1,"rail":0,"logo":0,"on":"editorial"}
+FAIL Opening a section closes the other one in that column ed-image,ed-side-publish
+Test error: page.waitForSelector: Timeout 8000ms exceeded.
+Call log:
+[2m  - waiting for locator('[data-panel="ed-organize"].open > .pnl-body') to be visible[22m
+
+    at openPanel (C:\Users\hamim\esb-banner-studio\tools\e2e\editorial-test.mjs:37:14)
+    at async file:///C:/Users/hamim/esb-banner-studio/tools/e2e/editorial-test.mjs:161:3 {
+  log: [
+    `  - waiting for locator('[data-panel="ed-organize"].open > .pnl-body') to be visible`
+  ],
+  name: 'TimeoutError'
+}
+exit=1

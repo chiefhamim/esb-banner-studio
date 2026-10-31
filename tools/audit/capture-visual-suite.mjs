@@ -5,7 +5,8 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 const target = process.argv[2] || 'before'
-const PORT = 5193
+import { portOffset } from '../port-offset.mjs'
+const PORT = 5193 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
 const desktopDir = path.join('C:\\Users\\hamim\\Desktop\\visual-excellence-suite', target)
 fs.mkdirSync(desktopDir, { recursive: true })
