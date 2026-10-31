@@ -1,0 +1,30 @@
+
+> esb-banner-studio@1.6.9 test:video
+> node tools/e2e/video-test.mjs
+
+PAGE LOG: debug [vite] connecting...
+PAGE LOG: debug [vite] connected.
+PAGE LOG: info %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+PASS Video Studio workspace mounted 
+PASS Video canvas monitor rendered 
+PASS Timecode readout initialized got: 00:00:00:00
+PASS Playback transport started 
+PASS Playback transport paused 
+PASS Timeline initialised with multi-track clips found 6 clips
+PASS Added broadcast lower-third overlay clip 
+PASS Split clip at playhead 
+PASS Trim handles rendered on timeline clips 
+PASS Media library dropzone rendered 
+PASS Editable project title updated 
+PASS Export is MP4 / H.264 mov,mp4,m4a,3gp,3g2,mj2 h264
+PASS Export runs the whole timeline at true speed (not the old 3 s cap) duration 30.000000s of 30s, 900 frames
+PASS Result reports the file as written Video exported esb-breaking-news-2026-16x9.mp4 File MP4 · 1.8 MB Length 0:30.0 Codecs H.264 · no sound Done
+PASS Sound from A1 is in the file aac 3.008000s
+PASS Frame-exact at the cut: frame 29 is still red, frame 30 is green {"f29":[253,0,0],"f30":[0,254,0]}
+PASS Footage frame at 0.5 s is the red second, at 1.5 s the green one {"red":[253,0,0],"green":[0,254,0]}
+PASS The tone starts where its clip starts: silent before 1 s, audible after before -91 dB, during -23 dB
+PASS Story tab previews the cut from the draft 5
+PASS Build story video replaces the timeline with the cut {"n":8,"stills":3,"d":26.4}
+PASS The banner still is in the exported frames (not the empty-footage placeholder) [253,250,224]
+PASS Switched back to Graphics workspace 
+exit=0
