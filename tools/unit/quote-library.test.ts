@@ -46,9 +46,9 @@ describe('harvest', () => {
 
   it('finds each quote verbatim with the speaker the sentence names, and none it does not', () => {
     expect(quotes.map((q) => q.text)).toEqual([
-      'We will add 1,320 MW to the national grid before the summer peak,',
+      'We will add 1,320 MW to the national grid before the summer peak',
       'Tariffs will be set only after a public hearing.',
-      "It's a good start for the season,",
+      "It's a good start for the season",
     ])
     expect(quotes[0]).toMatchObject({ speaker: 'Karim Hossain', speakerTitle: 'chairman of BPDB', org: 'BPDB', from: 'draft' })
     expect(quotes[1]).toMatchObject({ speaker: 'Nasrin Akter', speakerTitle: 'BERC Chairman', org: 'BERC' })
@@ -219,6 +219,8 @@ describe('banner hand-off', () => {
     const tk = got.find((e) => e.text === 'Tk 592 crore')!
     expect(statBannerPatch(tk)).toEqual({ cardType: 'stat', statNumber: 'Tk 592 crore', statLabel: 'Project will cost', statDelta: '', statNote: `Source: ${HEADLINE}` })
     expect(statLabelFrom('Gas supply will rise by 30 MMCFD from the Sylhet field.', '30 MMCFD')).toBe('Sylhet field')
+    // a Bengali case ending glued to the figure is not the start of the label
+    expect(statLabelFrom('প্রকল্পে ৫৯২ কোটি টাকায় দুটি নতুন কূপ খনন হবে।', '৫৯২ কোটি টাকা')).toBe('দুটি নতুন কূপ খনন হবে')
   })
 })
 

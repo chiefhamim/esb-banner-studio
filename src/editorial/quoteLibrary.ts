@@ -255,7 +255,9 @@ export function statLabelFrom(sentence: string, figure: string): string {
     while (words.length && STOP.has(words[words.length - 1].toLowerCase())) words.pop()
     return words
   }
-  const tail = sentence.slice(at + figure.length).split(/[,;:()—–]|\s[-–]\s|\d/)[0].replace(/[.!?।"”]+\s*$/, '').trim().split(/\s+/).filter(Boolean)
+  // a suffix glued to the figure ("৫৯২ কোটি টাকায়" matched as "৫৯২ কোটি টাকা") belongs to it, not to the label
+  const rest = sentence.slice(at + figure.length).replace(/^[\p{L}\p{M}]+/u, '')
+  const tail = rest.split(/[,;:()—–]|\s[-–]\s|\d/)[0].replace(/[.!?।"”]+\s*$/, '').trim().split(/\s+/).filter(Boolean)
   const cut = tail.findIndex((w) => CONJ.test(w))
   let label = clip(trim(cut >= 0 ? tail.slice(0, cut) : tail))
   if (label.split(' ').length < 2) {
@@ -291,7 +293,8 @@ export function harvestStory(input: HarvestInput, speakers: Speaker[] = []): Lib
       if (at < 0) continue
       if (f.kind === 'quote') {
         if (!isRealQuote(text, at, f.raw)) continue
-        const quote = f.normalized.trim()
+        // the words exactly as printed; only the comma English puts before "said" is dropped ("…peak," said X)
+        const quote = f.normalized.trim().replace(/,$/, '')
         const key = normQuote(quote)
         const id = 'q' + hash(`${input.storyId}|quote|${key}`)
         if (!key || seen.has(id)) continue
@@ -596,6 +599,9 @@ export const useQuoteLibrary = create<LibraryState>((set, get) => ({
 
   search: (query, filters = {}) => searchEntries(get().entries, query, filters, get().speakers),
 }))
+
+// dev server only, for the Editorial e2e (same pattern as __editorialStore)
+if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') Object.assign(window, { __quoteLibrary: useQuoteLibrary })
 
 let installed = false
 /**
