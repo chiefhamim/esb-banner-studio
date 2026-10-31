@@ -2,6 +2,10 @@ import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { defineConfig, type Plugin } from 'vite'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
 
@@ -39,7 +43,8 @@ function devProxyPlugin(): Plugin {
 // base './' so the built app also loads from file:// inside Electron
 export default defineConfig({
   // a second checkout (git worktree) running a dev server at the same time gets its own dependency cache
-  cacheDir: process.env.VITE_CACHE_DIR || 'node_modules/.vite',
+  // (a worktree marks itself with .esb-port-offset — see tools/port-offset.mjs — and then caches in its own tree)
+  cacheDir: process.env.VITE_CACHE_DIR || (existsSync(resolve(__dirname, '.esb-port-offset')) ? '.vite-cache' : 'node_modules/.vite'),
   base: './',
   plugins: [react(), devProxyPlugin()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },

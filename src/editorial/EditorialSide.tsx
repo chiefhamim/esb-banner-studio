@@ -110,8 +110,10 @@ export function EditorialSide(p: {
         </section>
 
         {/* 1 · describe the story */}
+        {/* the summary is the panel's subtitle, not an action: as an action it sat in the click-stopping actions slot
+            (most of the header did nothing when clicked) and squeezed the title to "De" */}
         <Panel id="ed-organize" icon="folder" title="Details" defaultOpen={false} persist={false}
-          actions={<span className="es-sum">{p.cat.name} · {p.tagCount} tag{p.tagCount === 1 ? '' : 's'}</span>}>{p.details}</Panel>
+          sub={`${p.cat.name} · ${p.tagCount} tag${p.tagCount === 1 ? '' : 's'}`}>{p.details}</Panel>
 
         {/* 2 · the picture that goes with it */}
         <Panel id="ed-image" icon="image" title="Banner" accordion={false} persist={false}>

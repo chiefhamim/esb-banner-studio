@@ -27,4 +27,14 @@ here **before** the change.
 - **D6 — `main` merge policy.** The user's launcher auto-pulls `main`. `main` is fast-forwarded to the mission
   branch at the end only if the final adversarial QA verdict is PASS or PASS WITH NON-BLOCKING FINDINGS and the
   full baseline table is no worse than baseline. Otherwise only the branches are pushed and the report says why.
+- **D8 — Two baseline failures were fixed because they block workstreams, by fixing the cause, not the test.**
+  (a) `tools/e2e/electron-test.mjs` waited for `.topbar` to be visible at launch; since the Home redesign the Home
+  header is the floating corner group, so the wait timed out and the whole suite (35 checks) reported 0 — W3
+  and the final packaged-app gate need it. The wait is now `.home-shell, .topbar` (the app has rendered); every
+  assertion is unchanged: 35/35. (b) `tools/e2e/editorial-test.mjs` aborted at check 16 of 60 — the Details
+  panel's summary ("<category> · N tags") was passed as header `actions`, which stop click propagation so action
+  *buttons* don't toggle a panel; the summary is wide, so most of the header was dead to clicks (users too, not
+  just the test) and it truncated the title to "De" (visible in the baseline screenshot). The summary is now the
+  panel's `sub`; the test's expectation is untouched. W1 extends this suite, so it had to run past check 16.
+  The one remaining baseline failure (`ui-test` "UI chrome is neutral grey") blocks nothing and stays recorded.
 - **D7 — W6 is woven into W2's builder** (directive §5): same agent, same worktree, separate commits (`W6:`).

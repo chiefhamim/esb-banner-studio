@@ -15,7 +15,8 @@ const errors = []
 page.on('pageerror', (e) => errors.push(e.message))
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 try {
-  await page.waitForSelector('.topbar', { timeout: 15000 })
+  // the app opens on Home, whose header is the floating corner group (no visible .topbar since the Home redesign)
+  await page.waitForSelector('.home-shell, .topbar', { timeout: 15000 })
   await page.waitForTimeout(800)
   const hasBridge = await page.evaluate(() => typeof window.esb?.saveImage === 'function' && typeof window.esb?.pickFolder === 'function')
   console.log(hasBridge ? 'PASS' : 'FAIL', 'preload bridge exposed')
