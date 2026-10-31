@@ -290,8 +290,80 @@ function planSchedule({ count, now, settings = {}, sentLast24h = 0, sendDays = 1
   }
 }
 
+// ---------------------------------------------------------------- W3 — distribution (pure)
+// A distribution job publishes one story to one destination at a wall time in Dhaka. These helpers turn that wall
+// time into an instant and decide which job is due; the engine owns state, ledger and the push.
+
+const DIST_TZ = 'Asia/Dhaka'
+const DIST_GRACE_MS = 2 * 3600 * 1000 // the app was not running at fireAt: fire on the next launch only within 2 h
+const DIST_ACTIONS = ['publish-site', 'post-facebook']
+
+/**
+ * A wall time in a zone → epoch ms. Strict `YYYY-MM-DD` and `HH:MM` or `HH:MM:SS`; null for anything else, for a
+ * date that does not exist (31 Feb) and for a time the zone skips. Uses the same `zonedParts` as the send window.
+ */
+function wallTimeToEpoch(date, time, tz = DIST_TZ) {
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof date === 'string' ? date : '')
+  const tm = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(typeof time === 'string' ? time : '')
+  if (!dm || !tm) return null
+  const y = Number(dm[1]), mo = Number(dm[2]), d = Number(dm[3])
+  const h = Number(tm[1]), mi = Number(tm[2]), s = tm[3] ? Number(tm[3]) : 0
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59 || s > 59) return null
+  const wall = Date.UTC(y, mo - 1, d, h, mi, s)
+  const chk = new Date(wall)
+  if (chk.getUTCFullYear() !== y || chk.getUTCMonth() !== mo - 1 || chk.getUTCDate() !== d) return null
+  let t = wall
+  try {
+    for (let i = 0; i < 3; i++) {
+      const zp = zonedParts(t, tz)
+      const shown = Date.UTC(zp.year, zp.month - 1, zp.day, zp.hour, zp.minute, zp.second)
+      if (shown === wall) return t
+      t -= shown - wall
+    }
+  } catch {
+    return null // unknown time zone
+  }
+  return null
+}
+
+/** Epoch ms → the wall date and time in a zone (`YYYY-MM-DD`, `HH:MM`). */
+function epochToWallTime(ts, tz = DIST_TZ) {
+  const zp = zonedParts(ts, tz)
+  const p = (n) => String(n).padStart(2, '0')
+  return { date: `${zp.year}-${p(zp.month)}-${p(zp.day)}`, time: `${p(zp.hour)}:${p(zp.minute)}` }
+}
+
+/**
+ * Which distribution job fires now. Only `queued` distribute jobs are considered; an unapproved job is never chosen.
+ * A queued job more than `graceMs` past its time is `missed` (approved or not). Equal times publish the site before
+ * Facebook, so the post's link comment points at a page that exists. `nextAt` is the next instant worth waking for.
+ */
+function planDistribution(list, now, { graceMs = DIST_GRACE_MS } = {}) {
+  const missed = []
+  const due = []
+  let nextAt = null
+  const wake = (t) => { if (t > now && (nextAt === null || t < nextAt)) nextAt = t }
+  for (const j of Array.isArray(list) ? list : []) {
+    if (!j || j.kind !== 'distribute' || j.status !== 'queued' || typeof j.fireAt !== 'number') continue
+    if (now > j.fireAt + graceMs) { missed.push(j); continue }
+    wake(j.fireAt + graceMs + 1)
+    if (j.approved !== true) continue
+    if (j.fireAt <= now) due.push(j)
+    else wake(j.fireAt)
+  }
+  const rank = (j) => DIST_ACTIONS.indexOf(j.action)
+  due.sort((a, b) => a.fireAt - b.fireAt || rank(a) - rank(b) || (a.createdAt || 0) - (b.createdAt || 0))
+  return { fire: due[0] || null, missed, nextAt }
+}
+
 module.exports = {
   PUBLIC_WEBMAILS,
+  DIST_TZ,
+  DIST_GRACE_MS,
+  DIST_ACTIONS,
+  wallTimeToEpoch,
+  epochToWallTime,
+  planDistribution,
   zonedParts,
   windowState,
   secondsLeftInWindow,

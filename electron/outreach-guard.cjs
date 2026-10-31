@@ -37,6 +37,11 @@ function validateJobSpec(rawSpec) {
     return { ok: false, error: 'Job spec contains disallowed properties' }
   }
 
+  // W3 — a scheduled story (one destination) has its own shape
+  if (rawSpec.kind === 'distribute') {
+    return validateDistributeSpec(rawSpec)
+  }
+
   // Messages array check
   if (!Array.isArray(rawSpec.messages) || rawSpec.messages.length === 0) {
     return { ok: false, error: 'Job spec must include a non-empty messages array' }
@@ -164,6 +169,73 @@ function validateJobSpec(rawSpec) {
     },
     rejected,
   }
+}
+
+// ---------------------------------------------------------------- W3 — distribution
+const DIST_ACTIONS = ['publish-site', 'post-facebook']
+const DIST_KEY_RE = /^dist:[a-zA-Z0-9_-]{1,100}:(publish-site|post-facebook)$/
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,199}$/
+
+/**
+ * Validates a distribution spec: { kind: 'distribute', action, storyId, slug, headline, date: 'YYYY-MM-DD',
+ * time: 'HH:MM' | 'HH:MM:SS' } (Asia/Dhaka wall time). Only these fields are kept: whatever else the renderer sends
+ * (approved, status, fireAt, key, dry, attempt, result) is dropped — a new job is always unapproved, its key and its
+ * instant are computed by the engine.
+ */
+function validateDistributeSpec(raw) {
+  if (typeof raw.action !== 'string' || !DIST_ACTIONS.includes(raw.action)) {
+    return { ok: false, error: 'action must be publish-site or post-facebook' }
+  }
+  if (typeof raw.storyId !== 'string' || !raw.storyId || raw.storyId.length > 100 || !SAFE_ID_RE.test(raw.storyId)) {
+    return { ok: false, error: 'Invalid storyId' }
+  }
+  const slug = typeof raw.slug === 'string' ? raw.slug.trim() : ''
+  if (slug && !SLUG_RE.test(slug)) {
+    return { ok: false, error: 'Invalid slug' }
+  }
+  if (raw.action === 'publish-site' && !slug) {
+    return { ok: false, error: 'A story needs its web address (slug) before it can be scheduled for the site' }
+  }
+  const headline = stripControl(typeof raw.headline === 'string' ? raw.headline : '').replace(/\s+/g, ' ').trim().slice(0, 300)
+  if (!headline) {
+    return { ok: false, error: 'A headline is required' }
+  }
+  if (typeof raw.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw.date)) {
+    return { ok: false, error: 'date must be YYYY-MM-DD' }
+  }
+  if (typeof raw.time !== 'string' || !/^\d{2}:\d{2}(:\d{2})?$/.test(raw.time)) {
+    return { ok: false, error: 'time must be HH:MM' }
+  }
+  return {
+    ok: true,
+    cleaned: { kind: 'distribute', action: raw.action, storyId: raw.storyId, slug, headline, date: raw.date, time: raw.time },
+    rejected: [],
+  }
+}
+
+/**
+ * Validates esb:outreach-distribute-result. Either the window's one report for a fired job
+ * { jobId, key, ok: boolean, detail?: string } or its readiness { ready: true }. The engine then checks that this job is
+ * the one in flight with this key; this only checks the shape.
+ */
+function validateDistributeResult(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || hasHostileKeys(raw)) {
+    return { ok: false, error: 'Result must be an object' }
+  }
+  if (raw.ready === true && raw.jobId === undefined) {
+    return { ok: true, ready: true }
+  }
+  if (typeof raw.jobId !== 'string' || !raw.jobId || raw.jobId.length > 100 || !SAFE_ID_RE.test(raw.jobId)) {
+    return { ok: false, error: 'Invalid jobId' }
+  }
+  if (typeof raw.key !== 'string' || !DIST_KEY_RE.test(raw.key)) {
+    return { ok: false, error: 'Invalid key' }
+  }
+  if (typeof raw.ok !== 'boolean') {
+    return { ok: false, error: 'ok must be true or false' }
+  }
+  const detail = stripControl(typeof raw.detail === 'string' ? raw.detail : '').slice(0, 500)
+  return { ok: true, result: { jobId: raw.jobId, key: raw.key, ok: raw.ok, detail } }
 }
 
 /**
@@ -427,5 +499,7 @@ module.exports = {
   validatePlanQuery,
   validateDomains,
   validateLogEvent,
+  validateDistributeSpec,
+  validateDistributeResult,
   validateSettingsInput: validateSettings,
 }

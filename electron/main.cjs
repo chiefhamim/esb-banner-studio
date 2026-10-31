@@ -128,6 +128,12 @@ function createWindow() {
     return permission === 'media' && wc === win.webContents
   })
 
+  // W3 — a reload or a crashed renderer cannot finish a scheduled story it was executing: the engine fails that job
+  const lostExecutor = () => { if (outreachEngineInstance) outreachEngineInstance.setDistExecutor(false) }
+  win.webContents.on('did-start-loading', lostExecutor)
+  win.webContents.on('render-process-gone', lostExecutor)
+  win.on('closed', lostExecutor)
+
   win.on('close', (e) => {
     if (isQuitting) return
     const cfg = outreachSettings ? outreachSettings.get() : {}
@@ -450,7 +456,15 @@ ipcMain.handle('esb:outreach-pause-all', (_e, on) => {
   return outreachEngineInstance.pauseAll(on === true)
 })
 ipcMain.handle('esb:outreach-jobs', () => {
-  return outreachEngineInstance.snapshot()
+  return [...outreachEngineInstance.snapshot(), ...outreachEngineInstance.distSnapshot()]
+})
+// W3 — the editor window's one report for a scheduled story it was told to publish (or that it is ready to execute)
+ipcMain.handle('esb:outreach-distribute-result', (e, raw) => {
+  if (!win || win.isDestroyed() || e.sender !== win.webContents) return { ok: false, error: 'Only the editor window reports results' }
+  const g = outreachGuard.validateDistributeResult(raw)
+  if (!g.ok) return g
+  if (g.ready) return outreachEngineInstance.setDistExecutor(true)
+  return outreachEngineInstance.distributeResult(g.result)
 })
 ipcMain.handle('esb:outreach-events', (_e, rawQ) => {
   const g = outreachGuard.validateEventsQuery(rawQ)

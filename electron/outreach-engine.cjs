@@ -10,10 +10,21 @@ const {
   isWebmail,
   pickNext,
   planSchedule,
+  wallTimeToEpoch,
+  planDistribution,
+  DIST_TZ,
+  DIST_GRACE_MS,
 } = require('./outreach-schedule.cjs')
 const { classifySendError } = require('./outreach-errors.cjs')
 
 const DAY_MS = 24 * 3600 * 1000
+
+// W3 — distribution: the words a failed job carries (the Queue shows them as written)
+const DIST_INTERRUPTED = 'interrupted — check the site before scheduling again'
+const DIST_MISSED = 'missed — the app was not running within 2 hours of the scheduled time'
+const DIST_NO_ANSWER = 'no answer from the window — check the site before scheduling again'
+const DIST_REFUSED = 'refused — the ledger shows this story already went there, or is scheduled there'
+const DIST_MAX_AHEAD_MS = 60 * DAY_MS
 
 function createEngine(deps = {}) {
   const clock = deps.clock || (() => Date.now())
@@ -33,6 +44,14 @@ function createEngine(deps = {}) {
   const speed = Number(env.ESB_OUTREACH_SPEED) || 1
   const noWindow = env.ESB_OUTREACH_NO_WINDOW === '1'
   const failRate = Number(env.ESB_OUTREACH_FAIL) || 0
+  // W3 — distribution. In dry-run the renderer is told to call nothing remote. ESB_DIST_MOCKED=1 (honoured only with
+  // DRYRUN) is the e2e harness saying it intercepts every renderer request: the renderer then runs its real publish and
+  // post requests against those mocks, and still never uses a main-process network bridge.
+  const distMocked = dryRun && env.ESB_DIST_MOCKED === '1'
+  const distResultTimeoutMs = Number(deps.distResultTimeoutMs) || 10 * 60 * 1000
+  let distTimer = null
+  let distInFlight = null // { jobId, key, watchdog }
+  let distExecutorReady = false
 
   let activeTimer = null
   let inboxTimer = null
@@ -183,7 +202,7 @@ function createEngine(deps = {}) {
     // 1. Pick oldest active job
     const activeJobs = jobs
       .list()
-      .filter((j) => j.status === 'queued' || j.status === 'running' || j.status === 'waiting')
+      .filter((j) => j.kind !== 'distribute' && (j.status === 'queued' || j.status === 'running' || j.status === 'waiting'))
       .sort((a, b) => a.createdAt - b.createdAt)
 
     if (activeJobs.length === 0) {
@@ -631,6 +650,235 @@ function createEngine(deps = {}) {
     } catch {}
   }
 
+  // ---------------------------------------------------------------- W3 — distribution
+  // A distribution job publishes one story to one destination once. The engine decides "fire now", writes
+  // `distribute.fire` to the ledger BEFORE it tells the window, and accepts exactly one result for exactly that job and
+  // key. The engine never fires anything twice: a job found running after a crash becomes failed (interrupted), and a
+  // key with any live ledger entry (created, fired, done, failed — anything but cancelled) refuses another job.
+
+  const isDist = (j) => !!j && j.kind === 'distribute'
+
+  function distSnap(j) {
+    return {
+      jobId: j.id,
+      kind: 'distribute',
+      action: j.action,
+      storyId: j.storyId,
+      slug: j.slug || '',
+      headline: j.headline || '',
+      fireAt: j.fireAt,
+      approved: j.approved === true,
+      key: j.key,
+      status: j.status,
+      attempt: j.attempt || 0,
+      result: j.result || null,
+      dry: !!j.dry,
+      createdAt: j.createdAt,
+      firedAt: j.firedAt || null,
+      endedAt: j.endedAt || null,
+    }
+  }
+
+  function pushDist(j) {
+    emit('distribute', { job: distSnap(j) })
+  }
+
+  function distLedger(type, j, extra = {}) {
+    return events.append({ type, jobId: j.id, key: j.key, action: j.action, storyId: j.storyId, name: j.headline, dry: !!j.dry, ...extra })
+  }
+
+  /** Ledger entries other jobs hold on a key (dry-run entries count only in dry-run). */
+  function keyHolders(key, exceptJobId) {
+    const list = events && typeof events.distKeyState === 'function' ? events.distKeyState(key) : []
+    return list.filter((e) => e.type !== 'distribute.cancelled' && e.jobId !== exceptJobId && (dryRun || !e.dry))
+  }
+
+  function ownLedger(j) {
+    const list = events && typeof events.distKeyState === 'function' ? events.distKeyState(j.key) : []
+    return list.find((e) => e.jobId === j.id) || null
+  }
+
+  function distEnd(j, ok, reason, detail) {
+    const now = clock()
+    j.status = ok ? 'done' : 'failed'
+    j.result = { ok, reason: reason || null, detail: detail || '', at: now }
+    j.endedAt = now
+    jobs.saveState(j, { force: true })
+    pushDist(j)
+  }
+
+  function distFail(j, reason, detail) {
+    distLedger('distribute.failed', j, { reason, detail })
+    distEnd(j, false, reason, detail)
+  }
+
+  function scheduleDistTick(ms) {
+    if (!isRunning) return
+    if (distTimer) clearTimer(distTimer)
+    distTimer = setTimer(distTick, Math.max(50, Math.round(ms)))
+  }
+
+  function clearInFlight() {
+    if (distInFlight && distInFlight.watchdog) clearTimer(distInFlight.watchdog)
+    distInFlight = null
+  }
+
+  function distTick() {
+    distTimer = null
+    if (!isRunning) return
+    const now = clock()
+    const planned = planDistribution(jobs.list(), now, { graceMs: DIST_GRACE_MS })
+    for (const j of planned.missed) distFail(j, 'missed', DIST_MISSED)
+    if (distInFlight) return // the result (or the watchdog) ticks again
+    if (planned.fire && distExecutorReady) {
+      fireDist(planned.fire)
+      return
+    }
+    // wall-clock waits (never divided by ESB_OUTREACH_SPEED), re-checked at least every minute against clock jumps
+    if (planned.nextAt !== null) scheduleDistTick(Math.min(planned.nextAt - now, 60 * 1000))
+  }
+
+  function fireDist(j) {
+    const now = clock()
+    const own = ownLedger(j)
+    const others = keyHolders(j.key, j.id)
+    if (others.length > 0 || !own || own.type !== 'distribute.created') {
+      distLedger('distribute.skip', j, { reason: others.length ? `key held by ${others[0].jobId} (${others[0].type})` : `ledger shows ${own ? own.type : 'nothing'} for this job` })
+      distFail(j, 'refused', DIST_REFUSED)
+      scheduleDistTick(50)
+      return
+    }
+    j.status = 'running'
+    j.attempt = (j.attempt || 0) + 1
+    j.firedAt = now
+    if (!j.startedAt) j.startedAt = now
+    // the ledger line is written (synchronously) before anything leaves the main process
+    distLedger('distribute.fire', j, { attempt: j.attempt, fireAt: j.fireAt })
+    jobs.saveState(j, { force: true })
+    distInFlight = { jobId: j.id, key: j.key, watchdog: setTimer(() => onDistWatchdog(j.id), distResultTimeoutMs) }
+    pushDist(j)
+    emit('distribute.fire', {
+      jobId: j.id,
+      key: j.key,
+      action: j.action,
+      storyId: j.storyId,
+      dry: dryRun && !distMocked,
+      ...(distMocked ? { mocked: true } : {}),
+    })
+  }
+
+  function onDistWatchdog(jobId) {
+    if (!distInFlight || distInFlight.jobId !== jobId) return
+    distInFlight = null
+    const j = jobs.get(jobId)
+    if (isDist(j) && j.status === 'running') distFail(j, 'no-answer', DIST_NO_ANSWER)
+    scheduleDistTick(50)
+  }
+
+  /** The window says it can (or no longer can) execute: firing waits for it; losing it mid-job fails that job. */
+  function setDistExecutor(ready) {
+    distExecutorReady = ready === true
+    if (!distExecutorReady && distInFlight) {
+      const j = jobs.get(distInFlight.jobId)
+      clearInFlight()
+      if (isDist(j) && j.status === 'running') distFail(j, 'interrupted', DIST_INTERRUPTED)
+    }
+    if (distExecutorReady) scheduleDistTick(50)
+    return { ok: true }
+  }
+
+  /** The window's one report for the job it was told to fire. Anything else is refused and changes nothing. */
+  function distributeResult(r) {
+    const j = r && jobs.get(r.jobId)
+    if (!isDist(j)) return { ok: false, error: 'Job not found' }
+    if (j.status !== 'running' || !distInFlight || distInFlight.jobId !== j.id) return { ok: false, error: 'This job is not waiting for a result' }
+    if (r.key !== j.key || r.key !== distInFlight.key) return { ok: false, error: 'The key does not match the job that was fired' }
+    clearInFlight()
+    const detail = typeof r.detail === 'string' ? r.detail : ''
+    distLedger(r.ok === true ? 'distribute.done' : 'distribute.failed', j, { detail, ...(r.ok === true ? {} : { reason: 'error' }) })
+    distEnd(j, r.ok === true, r.ok === true ? null : 'error', detail)
+    scheduleDistTick(50)
+    return { ok: true }
+  }
+
+  function submitDistribute(spec) {
+    const now = clock()
+    const fireAt = wallTimeToEpoch(spec.date, spec.time, DIST_TZ)
+    if (fireAt === null) return { ok: false, error: 'That date or time is not valid.' }
+    if (fireAt <= now) return { ok: false, error: 'That time has already passed in Dhaka. Pick a later time.' }
+    if (fireAt > now + DIST_MAX_AHEAD_MS) return { ok: false, error: 'Schedule at most 60 days ahead.' }
+    const key = `dist:${spec.storyId}:${spec.action}`
+    const existing = jobs.list().find((j) => isDist(j) && j.key === key && j.status !== 'cancelled')
+    if (existing) {
+      const why = existing.status === 'done'
+        ? 'This story already went there.'
+        : existing.status === 'failed'
+          ? 'The last attempt for this story there failed. Check the site, then cancel it in the Queue before scheduling again.'
+          : 'This story is already scheduled there.'
+      return { ok: false, error: why, jobId: existing.id }
+    }
+    if (keyHolders(key, null).length > 0) return { ok: false, error: 'The ledger shows this story already went there, or is scheduled there.' }
+    const j = jobs.createDistribute({ ...spec, key, fireAt }, { dry: dryRun })
+    distLedger('distribute.created', j, { fireAt })
+    pushDist(j)
+    scheduleDistTick(50)
+    return { ok: true, jobId: j.id, rejected: [] }
+  }
+
+  function controlDist(j, action) {
+    if (action === 'release' || action === 'hold') {
+      if (j.status !== 'queued') return { ok: false, error: j.status === 'running' ? 'It is going out now.' : 'Only a scheduled job can be approved or held.' }
+      const approve = action === 'release'
+      if (j.approved !== approve) {
+        j.approved = approve
+        jobs.saveState(j, { force: true })
+        distLedger(approve ? 'distribute.approved' : 'distribute.held', j, { by: 'user' })
+        pushDist(j)
+      }
+      scheduleDistTick(50)
+      return { ok: true }
+    }
+    if (action === 'stop') {
+      if (j.status !== 'queued' && j.status !== 'failed') {
+        return { ok: false, error: j.status === 'running' ? 'It is going out now — wait for the result.' : j.status === 'done' ? 'It already went out.' : 'Already cancelled.' }
+      }
+      distLedger('distribute.cancelled', j, { by: 'user', was: j.status })
+      j.status = 'cancelled'
+      j.endedAt = clock()
+      jobs.saveState(j, { force: true })
+      pushDist(j)
+      scheduleDistTick(50)
+      return { ok: true }
+    }
+    return { ok: false, error: 'A scheduled story is approved, held or cancelled — not paused or resumed.' }
+  }
+
+  /** Relaunch: the ledger wins over a state file; nothing that may have gone out is fired again. */
+  function recoverDistribution() {
+    const now = clock()
+    for (const j of jobs.list()) {
+      if (!isDist(j)) continue
+      const own = ownLedger(j)
+      if (own && own.type === 'distribute.cancelled' && j.status !== 'cancelled') {
+        j.status = 'cancelled'
+        jobs.saveState(j, { force: true })
+        continue
+      }
+      const firedOnDisk = own && (own.type === 'distribute.fire' || own.type === 'distribute.done' || own.type === 'distribute.failed')
+      if (j.status === 'running' || (j.status === 'queued' && firedOnDisk)) {
+        if (own && own.type === 'distribute.done') distEnd(j, true, null, 'recorded in the ledger before the restart')
+        else if (own && own.type === 'distribute.failed') distEnd(j, false, 'error', 'recorded in the ledger before the restart')
+        else distFail(j, 'interrupted', DIST_INTERRUPTED)
+        continue
+      }
+      if (j.status === 'queued' && typeof j.fireAt === 'number' && now > j.fireAt + DIST_GRACE_MS) distFail(j, 'missed', DIST_MISSED)
+    }
+  }
+
+  function distSnapshot() {
+    return jobs.list().filter(isDist).sort((a, b) => a.fireAt - b.fireAt).map(distSnap)
+  }
+
   function start() {
     if (isRunning) return
     isRunning = true
@@ -640,6 +888,7 @@ function createEngine(deps = {}) {
     jobs.load()
     const activeList = jobs.list()
     for (const j of activeList) {
+      if (j.kind === 'distribute') continue // W3: recovered by recoverDistribution(), never auto-resumed
       // Reconcile job sent/failed state from events
       if (events && typeof events.read === 'function') {
         const evRes = events.read({ jobId: j.id, limit: 100000, includeDry: true })
@@ -689,8 +938,11 @@ function createEngine(deps = {}) {
       }
     }
 
+    recoverDistribution()
+
     // Start tick and inbox timer
     activeTimer = setTimer(tick, 1000)
+    distTimer = setTimer(distTick, 1000)
     inboxTimer = setTimer(async function runInbox() {
       await pollInbox()
       if (isRunning) {
@@ -700,6 +952,7 @@ function createEngine(deps = {}) {
   }
 
   function submit(spec) {
+    if (spec && spec.kind === 'distribute') return submitDistribute(spec)
     if (!spec || !Array.isArray(spec.messages) || spec.messages.length === 0) {
       return { ok: false, error: 'Empty or invalid job spec' }
     }
@@ -729,6 +982,7 @@ function createEngine(deps = {}) {
   function control(jobId, action, arg) {
     const job = jobs.get(jobId)
     if (!job) return { ok: false, error: 'Job not found' }
+    if (isDist(job)) return controlDist(job, action)
 
     if (action === 'pause') {
       job.status = 'paused'
@@ -806,6 +1060,7 @@ function createEngine(deps = {}) {
 
   function pauseAll(on = true, by = 'user') {
     for (const job of jobs.list()) {
+      if (isDist(job)) continue // a scheduled story is held per job (Queue → Hold), not by Pause all
       if (on) {
         if (job.status === 'running' || job.status === 'queued' || job.status === 'waiting') {
           job.status = 'paused'
@@ -835,7 +1090,7 @@ function createEngine(deps = {}) {
   }
 
   function snapshot() {
-    return jobs.list().map((j) => ({
+    return jobs.list().filter((j) => !isDist(j)).map((j) => ({
       jobId: j.id,
       campaignId: j.campaignId,
       name: j.campaignName,
@@ -858,7 +1113,10 @@ function createEngine(deps = {}) {
   }
 
   function isActive() {
-    return jobs.list().some((j) => j.status === 'running' || j.status === 'queued' || j.status === 'waiting')
+    return jobs.list().some((j) =>
+      isDist(j)
+        ? j.approved === true && (j.status === 'queued' || j.status === 'running') // W3: the window must stay alive to execute it
+        : j.status === 'running' || j.status === 'queued' || j.status === 'waiting')
   }
 
   function plan(count) {
@@ -882,8 +1140,15 @@ function createEngine(deps = {}) {
       clearTimer(inboxTimer)
       inboxTimer = null
     }
+    if (distTimer) {
+      clearTimer(distTimer)
+      distTimer = null
+    }
+    // a distribution job running at quit stays "running" on disk: the next launch marks it interrupted
+    clearInFlight()
 
     for (const job of jobs.list()) {
+      if (isDist(job)) continue
       if (job.status === 'running' || job.status === 'queued' || job.status === 'waiting') {
         job.status = 'paused'
         job.reason = 'quit'
@@ -906,6 +1171,10 @@ function createEngine(deps = {}) {
     plan,
     shutdown,
     tick,
+    distributeResult,
+    setDistExecutor,
+    distSnapshot,
+    distTick,
   }
 }
 

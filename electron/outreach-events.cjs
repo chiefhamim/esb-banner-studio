@@ -62,6 +62,25 @@ function createEventLog(options = {}) {
     }
   }
 
+  // W3 — distribution key ledger: key -> Map(jobId -> latest { type, dry, t }). A key is blocked while any job's latest
+  // entry for it is created / fire / done / failed; only an explicit cancel clears that job's entry (never another's).
+  const DIST_KEY_TYPES = new Set(['distribute.created', 'distribute.fire', 'distribute.done', 'distribute.failed', 'distribute.cancelled'])
+  const distKeys = new Map()
+
+  function applyDistKey(ev) {
+    if (!ev || !DIST_KEY_TYPES.has(ev.type) || typeof ev.key !== 'string' || typeof ev.jobId !== 'string') return
+    let m = distKeys.get(ev.key)
+    if (!m) { m = new Map(); distKeys.set(ev.key, m) }
+    m.set(ev.jobId, { type: ev.type, dry: ev.dry === true, t: ev.t || 0 })
+  }
+
+  /** Every job's latest ledger entry for a distribution key: [{ jobId, type, dry, t }]. */
+  function distKeyState(key) {
+    const m = distKeys.get(key)
+    if (!m) return []
+    return [...m.entries()].map(([jobId, v]) => ({ jobId, ...v }))
+  }
+
   function isSuppressed(email) {
     const e = normalizeEmail(email)
     if (!e) return false
@@ -154,6 +173,7 @@ function createEventLog(options = {}) {
     const fileEvents = readLinesFromFile(mf.file)
     for (const ev of fileEvents) {
       applySuppression(ev)
+      applyDistKey(ev)
       if (ev.t && now - ev.t <= NINETY_DAYS_MS) {
         recentEvents.push(ev)
       }
@@ -175,6 +195,7 @@ function createEventLog(options = {}) {
     fs.appendFileSync(filePath, line, 'utf8')
 
     applySuppression(ev)
+    applyDistKey(ev)
     recentEvents.push(ev)
 
     // Trim recentEvents if it exceeds 90 days from the latest clock
@@ -301,6 +322,7 @@ function createEventLog(options = {}) {
     append,
     read,
     suppression,
+    distKeyState,
     count,
     recent,
     stats,

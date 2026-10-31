@@ -57,6 +57,21 @@ function createJobStore(options = {}) {
       createdAt: job.createdAt,
       startedAt: job.startedAt || null,
       endedAt: job.endedAt || null,
+      // W3 — a distribution job carries what it publishes, when, whether it is approved, and its idempotency key
+      ...(job.kind === 'distribute'
+        ? {
+            action: job.action,
+            storyId: job.storyId,
+            slug: job.slug || '',
+            headline: job.headline || '',
+            fireAt: job.fireAt,
+            approved: job.approved === true,
+            key: job.key,
+            attempt: job.attempt || 0,
+            firedAt: job.firedAt || null,
+            result: job.result || null,
+          }
+        : {}),
       state: {
         sent: Array.isArray(job.state.sent) ? job.state.sent : [...(job.state.sent || [])],
         failed: job.state.failed || {},
@@ -142,6 +157,45 @@ function createJobStore(options = {}) {
     }
 
     jobs.set(id, job)
+    writeAtomicState(job)
+    return job
+  }
+
+  // W3 — a distribution job: no messages file, one action, unapproved until the editor approves it.
+  function createDistribute(spec, { dry = false } = {}) {
+    ensureDir()
+    const now = clock()
+    const job = {
+      id: uid('dist'),
+      kind: 'distribute',
+      campaignName: spec.headline || 'Scheduled story',
+      action: spec.action,
+      storyId: spec.storyId,
+      slug: spec.slug || '',
+      headline: spec.headline || '',
+      fireAt: spec.fireAt,
+      approved: false,
+      key: spec.key,
+      attempt: 0,
+      firedAt: null,
+      result: null,
+      status: 'queued',
+      why: null,
+      until: null,
+      reason: null,
+      dry: !!dry,
+      total: 1,
+      shared: {},
+      attachments: [],
+      startAt: null,
+      autoResume: false,
+      createdAt: now,
+      startedAt: null,
+      endedAt: null,
+      state: { sent: [], failed: {}, skipped: {}, held: [], counters: { sent: 0, failed: 0, skipped: 0 }, savedAt: now },
+      messages: [],
+    }
+    jobs.set(job.id, job)
     writeAtomicState(job)
     return job
   }
@@ -237,6 +291,7 @@ function createJobStore(options = {}) {
 
   return {
     create,
+    createDistribute,
     load,
     get,
     list,
