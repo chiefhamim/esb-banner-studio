@@ -12,9 +12,6 @@ import { ImageOptions } from './ImageOptions'
 import type { Assets } from '../core/render'
 import type { HeroMode } from './heroMode'
 import type { EditorialDraft } from './editorialStore'
-import { noteOutcome, trackPublish } from './insights'
-import { useStoryQueue } from './storyQueue'
-import { useStore } from '../store'
 
 export interface PublishOutcome { ok: boolean; msg: string; url?: string; fbUrl?: string; existingSlug?: string }
 
@@ -50,9 +47,6 @@ export function PublishDialog(p: {
   const { draft } = p
   const blocked = p.busy || !draft.headline.trim()
   const verb = p.updating ? 'Update' : 'Publish'
-  // Insights (D9): a finished PUBLISHED save is appended to the publish log and announced as `esb:story-published`
-  const publish = trackPublish(p.onPublish)
-  useEffect(() => { noteOutcome(p.result, draft, { storyId: useStoryQueue.getState().activeId, categoryId: useStore.getState().doc.content.categoryId }) }, [p.result, draft])
   const budget = (n: number, max: number) => <b className={n > max ? 'over' : ''}>{n}/{max}{n > max ? ' · over' : ''}</b>
   return (
     <Dialog
@@ -65,10 +59,10 @@ export function PublishDialog(p: {
           <IconButton icon={p.copied ? 'check' : 'copy'} tip={p.copied ? 'Copied' : 'Copy the CMS JSON'} tipPos="top" onClick={p.onCopyJson} />
           <IconButton icon="externalLink" tip="Open the site's CMS editor" tipPos="top" onClick={p.onOpenCms} />
           <div className="spacer" />
-          <button type="button" className="btn" onClick={() => publish('DRAFT')} disabled={blocked} title="Keep it hidden from readers; visible in the CMS">
+          <button type="button" className="btn" onClick={() => p.onPublish('DRAFT')} disabled={blocked} title="Keep it hidden from readers; visible in the CMS">
             <Icon name="check" size={14} /><span>{p.updating ? 'Save as draft' : 'Save draft'}</span>
           </button>
-          <button type="button" className="btn primary" onClick={() => publish('PUBLISHED')} disabled={blocked}
+          <button type="button" className="btn primary" onClick={() => p.onPublish('PUBLISHED')} disabled={blocked}
             title={p.updating ? 'Change the article that is live now' : 'Publish live to esbpowerline.com'}>
             <Icon name="upload" size={14} /><span>{p.busy ? (p.updating ? 'Updating…' : 'Publishing…') : verb + (p.fbOn && p.fbPage ? ' + Facebook' : '')}</span>
           </button>

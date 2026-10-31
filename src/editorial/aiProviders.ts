@@ -219,7 +219,6 @@ export const AI_OFF_MESSAGE = 'AI is OFF. Turn it ON in the Engine panel or your
 /** True while the master switch is off. Read from storage so every caller sees a change at once. */
 export const aiPaused = () => loadAiSettings().paused
 
-/** The provider, key and model a job should call: the one chosen for it when it has a key, else nothing — no substitute. Nothing at all while AI is switched off. */
 const ROLE_IDS: AiRole[] = ['main', 'seo', 'social', 'outreach', 'research', 'review']
 
 // A one-call model override for escalation: set only while `fn` runs synchronously, so it reaches exactly the aiFor()
@@ -231,6 +230,7 @@ export function runWithModel<T>(role: AiRole, model: string, fn: () => T): T {
   try { return fn() } finally { modelOverride = prev }
 }
 
+/** The provider, key and model a job should call: the one chosen for it when it has a key, else nothing — no substitute. Nothing at all while AI is switched off. */
 export function aiFor(role: AiRole = 'main', s: AiSettings = loadAiSettings()): { provider: AiProviderId; key: string; model: string } | null {
   if (s.paused) return null
   if (modelOverride?.role === role) {
