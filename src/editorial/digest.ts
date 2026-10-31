@@ -4,12 +4,16 @@
 //
 // - Which stories: the publish log first (insights.ts, written when a publish reached the site); a queue item marked
 //   published with no log row is included by its last edit time and flagged `source: 'queue'`. Test-run (dry-run)
-//   publishes are not published stories and are left out. One entry per slug — the latest record wins.
+//   publishes are not published stories and are left out. One entry per slug: the headline and link of its latest
+//   record, the date of its earliest — an Update (a typo fix) does not move a story out of the week it was published.
 // - Days are newsroom days, Asia/Dhaka (UTC+6, no daylight saving), whatever zone the PC is set to: a range of
 //   "1 Nov – 7 Nov" means 1 Nov 00:00 to 7 Nov 23:59:59.999 in Dhaka, both ends included.
 // - Headlines and decks are data. They are written into the letter as plain text (whitespace collapsed to one line
 //   so a stray newline cannot turn a deck into a heading or a list); the composer escapes every character before it
 //   reads a mark, so a `<b>` or `&` in a headline reaches a recipient as text, never as markup.
+// - Braces: the composer mail-merges `{name}`-style placeholders (compose.ts PLACEHOLDER_RE) and has no escape for
+//   them, so `{` and `}` in a headline, deck or the intro become their full-width forms ｛ ｝ (U+FF5B / U+FF5D). They
+//   read as braces, and a `{designation}` in a headline can no longer drop contacts or a `{name}` be merged.
 // - Pictures: the letter's mark set has no image mark, so no picture line is ever written — an image URL the site
 //   list knows is kept on the item (`imageUrl`) and nothing more. When the composer gains an image mark, flip
 //   IMAGE_MARK and the line is added only for stories whose picture URL is known.
@@ -106,12 +110,18 @@ export function rangeLabel(r: DayRange): string {
 /** One line of plain text: newlines and runs of spaces collapse, so data can never start a new block. */
 export const oneLine = (s: string | undefined) => String(s ?? '').replace(/\s+/g, ' ').trim()
 
-const httpsUrl = (u: string | undefined) => (/^https:\/\/[^\s"'<>]+$/i.test(u ?? '') ? u! : '')
+/** Braces as full-width forms, so the composer's placeholder fill never sees one in data. */
+export const noPlaceholders = (s: string) => s.replace(/\{/g, '｛').replace(/\}/g, '｝')
+
+// no braces in a link either: one inside a URL would be mail-merged too
+const httpsUrl = (u: string | undefined) => (/^https:\/\/[^\s"'<>{}]+$/i.test(u ?? '') ? u! : '')
 const slugOf = (url: string | undefined) => /\/articles\/([^/?#]+)/.exec(url ?? '')?.[1] ?? ''
 
 /**
- * The published stories in a range, newest first, one per slug (the latest record wins). Decks come from the queue's
- * own copy of the story, else the site's list; pictures from the site's list only.
+ * The published stories in a range, newest first, one per slug: headline and link from its latest record, date from
+ * its earliest (so it stays in the week it was first published, whether the log holds one merged record per slug or
+ * one per Update). Decks come from the queue's own copy of the story, else the site's list; pictures from the site's
+ * list only.
  */
 export function storiesInRange(log: PublishRecord[], queue: QueueLike[], range: DayRange, site: SiteLike[] = []): DigestItem[] {
   const b = rangeBounds(range)
@@ -129,8 +139,8 @@ export function storiesInRange(log: PublishRecord[], queue: QueueLike[], range: 
     return img ? { ...it, imageUrl: img } : it
   }
 
-  // every candidate, newest record first; the first one met for a slug is the one kept
-  const all: DigestItem[] = []
+  // one entry per slug: the latest record's headline and link (`latest`), the earliest record's date (`publishedAt`)
+  const bySlug = new Map<string, DigestItem & { latest: number }>()
   const logged = new Set<string>()
   const loggedIds = new Set<string>()
   for (const r of log) {
@@ -138,26 +148,26 @@ export function storiesInRange(log: PublishRecord[], queue: QueueLike[], range: 
     logged.add(r.slug)
     if (r.storyId) loggedIds.add(r.storyId)
     const url = httpsUrl(r.url)
-    if (!url) continue
-    all.push({ slug: r.slug, url, headline: oneLine(r.headline), deck: deckFor(r.storyId, r.slug), publishedAt: r.publishedAt, source: 'log', ...(r.storyId ? { storyId: r.storyId } : {}) })
+    const t = Date.parse(r.publishedAt)
+    if (!url || !Number.isFinite(t)) continue
+    const cur = bySlug.get(r.slug)
+    const first = cur && Date.parse(cur.publishedAt) <= t ? cur.publishedAt : r.publishedAt
+    if (!cur || t > cur.latest) {
+      bySlug.set(r.slug, { slug: r.slug, url, headline: oneLine(r.headline), deck: deckFor(r.storyId, r.slug), publishedAt: first, source: 'log', ...(r.storyId ? { storyId: r.storyId } : {}), latest: t })
+    } else cur.publishedAt = first
   }
+  const all: DigestItem[] = [...bySlug.values()].map(({ latest: _latest, ...it }) => it)
   for (const q of queue) {
     if (q.status !== 'published') continue
     const url = httpsUrl(q.publishedUrl)
     const slug = queueSlug(q)
-    if (!url || !slug || logged.has(slug) || loggedIds.has(q.id)) continue
+    if (!url || !slug || logged.has(slug) || loggedIds.has(q.id) || all.some((x) => x.slug === slug)) continue
     all.push({ slug, url, headline: oneLine(q.snapshot?.draft?.headline), deck: deckFor(q.id, slug), publishedAt: new Date(q.updatedAt).toISOString(), source: 'queue', storyId: q.id })
   }
-  all.sort((a, z) => Date.parse(z.publishedAt) - Date.parse(a.publishedAt))
-  const seen = new Set<string>()
-  const out: DigestItem[] = []
-  for (const it of all) {
-    if (seen.has(it.slug)) continue
-    seen.add(it.slug) // latest record for the slug, even when that one falls outside the range
-    if (!it.headline || !inRange(Date.parse(it.publishedAt))) continue
-    out.push(withSite(it))
-  }
-  return out
+  return all
+    .filter((it) => it.headline && inRange(Date.parse(it.publishedAt)))
+    .sort((a, z) => Date.parse(z.publishedAt) - Date.parse(a.publishedAt))
+    .map(withSite)
 }
 
 /** The list with the item at `index` moved by `delta` places (clamped); the same list when it cannot move. */
@@ -184,19 +194,19 @@ export function defaultIntro(r: DayRange): string {
 export function assembleDigest(items: DigestItem[], opts: { intro: string; title: string; lang?: 'en' | 'bn' }): { subject: string; body: string } {
   const read = READ_LABEL[opts.lang === 'bn' ? 'bn' : 'en']
   const blocks: string[] = []
-  const intro = String(opts.intro ?? '').replace(/\r\n?/g, '\n').trim()
+  const intro = noPlaceholders(String(opts.intro ?? '').replace(/\r\n?/g, '\n').trim())
   if (intro) blocks.push(intro)
   for (const it of items) {
     const url = httpsUrl(it.url)
-    const headline = oneLine(it.headline)
+    const headline = noPlaceholders(oneLine(it.headline))
     if (!url || !headline) continue
     blocks.push(`## ${headline}`)
     const img = IMAGE_MARK ? httpsUrl(it.imageUrl) : ''
     if (img) blocks.push(`![${headline}](${img})`)
-    const deck = oneLine(it.deck)
+    const deck = noPlaceholders(oneLine(it.deck))
     blocks.push([deck, `[${read}](${url})`].filter(Boolean).join('\n'))
   }
-  return { subject: oneLine(opts.title), body: blocks.join('\n\n') }
+  return { subject: noPlaceholders(oneLine(opts.title)), body: blocks.join('\n\n') }
 }
 
 /** What the dialog says when the range has no published stories. */

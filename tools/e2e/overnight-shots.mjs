@@ -114,7 +114,11 @@ const SETUP = {
     // the sheet's email preview is a sandboxed srcdoc frame with no storage; the shared init script above reads
     // localStorage in every frame, so give that one frame an inert stand-in (it runs no scripts of its own)
     await p.context().addInitScript(() => { if (window.top !== window && window.origin === 'null') Object.defineProperty(window, 'localStorage', { value: { getItem: () => null, setItem() {}, removeItem() {} } }) })
-    await p.route('https://esbpowerline.com/feed.xml', (r) => r.fulfill({ status: 200, contentType: 'application/rss+xml', headers: { 'access-control-allow-origin': '*' }, body: '<rss><channel></channel></rss>' }))
+    // the site's list with decks for two of the three stories (synthetic, example.com links), so the shot shows the
+    // populated sheet and one honest "No deck kept" row
+    const item = (n, deck) => `<item><title>Synthetic ${n}</title><link>https://news.example.com/articles/shot-story-${n}</link><description>${deck}</description><category>Power</category><enclosure url="https://cdn.example.com/shot-${n}.jpg" type="image/jpeg"/></item>`
+    const feed = `<rss><channel>${item(0, 'Synthetic deck: the grid operator added peak capacity for the evening hours.')}${item(1, 'Synthetic deck: the second cargo of the month was held offshore by the weather.')}</channel></rss>`
+    await p.route('https://esbpowerline.com/feed.xml', (r) => r.fulfill({ status: 200, contentType: 'application/rss+xml', headers: { 'access-control-allow-origin': '*' }, body: feed }))
     await p.evaluate((log) => localStorage.setItem('esb-banner-studio/publish-log/v1', JSON.stringify(log)), INS_LOG.map((r, i) => ({ ...r, publishedAt: new Date(now - [2e6, 9e7, 2.6e8, 10 * D, 12 * D][i]).toISOString() })))
     await p.reload({ waitUntil: 'load' }); await p.waitForTimeout(900)
     await tile(p, 'Outreach')

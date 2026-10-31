@@ -9,6 +9,8 @@ import {
 } from '../../src/editorial/digest'
 import type { DigestItem, QueueLike } from '../../src/editorial/digest'
 import type { PublishRecord } from '../../src/editorial/insights'
+import { missingFields, usedPlaceholders } from '../../src/outreach/compose'
+import type { Contact } from '../../src/outreach/types'
 
 const URL = (slug: string) => `https://news.example.com/articles/${slug}`
 const rec = (slug: string, publishedAt: string, over: Partial<PublishRecord> = {}): PublishRecord => ({
@@ -62,11 +64,25 @@ describe('digest: which stories', () => {
     const log = [rec('b', '2026-10-28T10:00:00Z'), rec('c', '2026-10-30T10:00:00Z'), rec('a', '2026-10-27T10:00:00Z')]
     expect(storiesInRange(log, [], WEEK).map((x) => x.slug)).toEqual(['c', 'b', 'a'])
   })
-  it('one entry per slug: the latest record wins', () => {
-    const log = [rec('same', '2026-10-30T10:00:00Z', { headline: 'Updated headline' }), rec('same', '2026-10-27T10:00:00Z', { headline: 'First headline' })]
-    const out = storiesInRange(log, [], WEEK)
-    expect(out).toHaveLength(1)
-    expect(out[0].headline).toBe('Updated headline')
+  it('one entry per slug: the latest record\'s headline and link, the earliest record\'s date', () => {
+    const log = [rec('same', '2026-10-30T10:00:00Z', { headline: 'Updated headline', url: URL('same') + '?v=2' }), rec('same', '2026-10-27T10:00:00Z', { headline: 'First headline' })]
+    for (const l of [log, [...log].reverse()]) {
+      const out = storiesInRange(l, [], WEEK)
+      expect(out).toHaveLength(1)
+      expect(out[0].headline).toBe('Updated headline')
+      expect(out[0].url).toBe(URL('same') + '?v=2')
+      expect(out[0].publishedAt).toBe('2026-10-27T10:00:00Z')
+    }
+  })
+  it('an Update in a later week keeps the story in the week it was published, not the week of the update', () => {
+    // one record per Update (the shape before W2's polish) …
+    const perUpdate = [rec('a', '2026-11-03T09:00:00Z', { headline: 'Story A (typo fixed)' }), rec('a', '2026-10-29T09:00:00Z', { headline: 'Story A' }), rec('b', '2026-10-28T09:00:00Z')]
+    expect(storiesInRange(perUpdate, [], WEEK).map((x) => [x.slug, x.headline, x.publishedAt])).toEqual([['a', 'Story A (typo fixed)', '2026-10-29T09:00:00Z'], ['b', 'Headline b', '2026-10-28T09:00:00Z']])
+    expect(storiesInRange(perUpdate, [], { from: '2026-11-02', to: '2026-11-08' })).toEqual([])
+    // … and one merged record per slug that keeps the first publishedAt (W2's polish, 803cb1e): the same answer
+    const merged = [rec('a', '2026-10-29T09:00:00Z', { headline: 'Story A (typo fixed)' }), rec('b', '2026-10-28T09:00:00Z')]
+    expect(storiesInRange(merged, [], WEEK).map((x) => [x.slug, x.headline, x.publishedAt])).toEqual([['a', 'Story A (typo fixed)', '2026-10-29T09:00:00Z'], ['b', 'Headline b', '2026-10-28T09:00:00Z']])
+    expect(storiesInRange(merged, [], { from: '2026-11-02', to: '2026-11-08' })).toEqual([])
   })
   it('test-run publishes are not published stories', () => {
     expect(storiesInRange([rec('dry', '2026-10-30T10:00:00Z', { dryRun: true })], [], WEEK)).toEqual([])
@@ -147,6 +163,23 @@ describe('digest: the letter', () => {
     expect(body).toBe(`## Headline x\n\n[Read the story](${URL('x')})\n\n## Headline y\n\nDeck y\n[Read the story](${URL('y')})`)
     expect(body).not.toContain('![')
     expect(body).not.toContain('cdn.example.com')
+  })
+  it('placeholder braces in a headline, deck or intro reach the letter as full-width braces, never as a placeholder', () => {
+    const { subject, body } = assembleDigest([item('x', { headline: 'Dear {name}, meet the {designation}', deck: 'Deck with {organization|fallback}' })], { intro: 'Hello {name}.', title: 'Digest {sector}' })
+    expect(body).toContain('## Dear ｛name｝, meet the ｛designation｝')
+    expect(body).toContain('Deck with ｛organization|fallback｝')
+    expect(body.startsWith('Hello ｛name｝.')).toBe(true)
+    expect(subject).toBe('Digest ｛sector｝')
+    expect(body).not.toMatch(/[{}]/)
+    expect(usedPlaceholders(subject, body)).toEqual([])
+    const nobody = { personName: '', designation: '', organization: '', sectorGroup: '', fields: {} } as unknown as Contact
+    expect(missingFields(nobody, subject, body)).toEqual([]) // a {designation} headline would have dropped this contact
+    const html = blocksToHtml(body, 'Arial') as string
+    expect(html).toContain('Dear ｛name｝, meet the ｛designation｝')
+  })
+  it('a link with braces in it is refused (it would be mail-merged too)', () => {
+    expect(storiesInRange([rec('x', '2026-10-30T10:00:00Z', { url: 'https://news.example.com/articles/{name}' })], [], WEEK)).toEqual([])
+    expect(assembleDigest([item('x', { url: 'https://news.example.com/{name}' })], { intro: '', title: 't' }).body).toBe('')
   })
   it('Bengali letters get a Bengali link label; the default intro names the range', () => {
     expect(assembleDigest([item('x')], { intro: '', title: 't', lang: 'bn' }).body).toContain('[পুরো খবর পড়ুন](')
