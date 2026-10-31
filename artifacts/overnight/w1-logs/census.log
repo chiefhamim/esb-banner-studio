@@ -1,0 +1,181 @@
+
+> esb-banner-studio@1.6.9 census
+> node tools/audit/css-census.mjs --strict
+
+
+== (a) custom properties defined in more than one file (same theme scope): 0 ==
+
+== (b) var() names used but never defined in CSS: 0 ==
+
+== (c) off-scale border-radius: 87 ==
+  src/styles/primitives.css:424 .menu .menu-item → 6px
+  src/styles/primitives.css:537 .seg-ctl button → 6px
+  src/styles/primitives.css:560 .pill-slide → 6px
+  src/styles/primitives.css:596 .side-tabs button → 6px
+  src/App.css:120 .splitter.vert:hover::after, .splitter.vert.drag:: → 2px
+  src/App.css:121 .splitter.horz:hover::after, .splitter.horz.drag:: → 2px
+  src/App.css:199 .meter → 2px
+  src/App.css:200 .meter i → 2px
+  src/App.css:203 .chip-note → 999px
+  src/App.css:234 .seg-ctl button → 6px
+  src/App.css:244 .switch i, .tgl → 999px
+  src/App.css:284 .slider::-webkit-slider-runnable-track → 2px
+  src/App.css:292 .cf-swatch → 6px
+  src/App.css:297 .hsv-hue → 999px
+  src/App.css:300 .cp-hex i → 6px
+  src/App.css:303 .cp-sw → 6px
+  src/App.css:330 .side-tabs button → 6px
+  src/App.css:361 .lp → 999px
+  src/App.css:378 .thumb-actions button → 6px
+  src/App.css:416 .dock-tabs > button.on::after → 2px 2px 0 0
+  src/App.css:417 .dock-tabs .badge → 999px
+  src/App.css:445 .layer.drop-above::before, .layer.drop-below::afte → 2px
+  src/App.css:452 .layer .tag → 999px
+  src/App.css:453 .icon-btn → 6px
+  src/App.css:791 .opt-badge → 999px
+  src/App.css:958 .handle → 2px
+  src/App.css:976 .crop-guide span → 999px
+  src/App.css:981 .tooltip → 6px
+  src/App.css:1017 .ex-title .count → 999px
+  src/App.css:1031 .fthumb i → 2px
+  src/App.css:1063 .progress .bar → 999px
+  src/App.css:1064 .progress .bar i → 999px
+  src/App.css:1085 .ratio-glyph → 6px
+  src/App.css:1087 .ratio-glyph i → 2px
+  src/App.css:1100 .fm-text em, .fcard em → 999px
+  src/App.css:1136 .fb-phone → 56px
+  src/App.css:1137 .fb-screen → 44px
+  src/App.css:1142 .fb-island → 20px
+  src/App.css:1151 .fbp-tabs span.on::after → 3px 3px 0 0
+  src/App.css:1154 .fb-peek span → 6px
+  src/App.css:1155 .fb-home → 3px
+  src/App.css:1156 .fb-desktop → 14px
+  src/App.css:1161 .fbd-search → 20px
+  src/App.css:1165 .fbd-tabs span.on::after → 3px 3px 0 0
+  src/App.css:1299 .popover → 10px
+  src/App.css:1300 .menu .menu-item → 6px
+  src/App.css:1305 .tooltip → 6px
+  src/App.css:1308 .dialog → 14px
+  src/App.css:1310 .pvw → 14px
+  src/App.css:1327 .pill-slide → 6px
+  src/App.css:1363 .el-tag → 5px
+  src/App.css:1364 .handle → 2px
+  src/App.css:1365 .handle.edge-h → 3px
+  src/App.css:1366 .handle.edge-v → 3px
+  src/App.css:1369 .size-badge → 5px
+  src/App.css:1375 .qbar → 10px
+  src/App.css:1377 .qb-i, .qb-text → 6px
+  src/App.css:1385 .qb-step → 6px
+  src/App.css:1387 .qb-step button → 6px
+  src/App.css:1396 .qb-hl-split, .qb-reset-grp → 6px
+  src/App.css:1400 .qb-reset-grp .qb-reset-btn → 6px 0 0 6px
+  src/App.css:1401 .qb-reset-grp .qb-reset-caret → 0 6px 6px 0
+  src/App.css:1403 .cp-reset → 0 0 6px 6px
+  src/App.css:1406 .canvas-hl-bar → 10px
+  src/App.css:1408 .chl-btn → 6px
+  src/App.css:1420 .hl-word → 6px
+  src/App.css:1435 .ruler-cursor::after → 3px
+  src/App.css:1437 .ruler-cursor.y::after → 3px
+  src/App.css:1493 .asp-tag → 999px
+  src/App.css:1830 .fact-pill → 999px
+  src/App.css:1908 .discrepancy-badge → 999px
+  src/App.css:1985 .ebc-badge → 999px
+  src/App.css:2505 .fb-og-cat-pill → 999px
+  src/App.css:2524 .fb-og-fallback-bar → 2px
+  src/App.css:2625 .fb-action-btn → 6px
+  src/App.css:3755 .hb-break-point → 3px
+  src/App.css:3971 .ed-site-pill → 999px
+  src/App.css:4015 .ed-intake-tabs > button → 6px
+  src/App.css:4051 .ed-rail-flag → 999px
+  src/App.css:4058 .ed-link-pill → 999px
+  src/App.css:4091 .ed-launcher-card → var(--r-3, 12px)
+  src/App.css:4166 .source-reader-p → var(--r-2, 6px)
+  src/App.css:4205 .fact-verified → 3px
+  src/App.css:4219 .fact-unverified → 3px
+  src/App.css:4257 .topbar .fmtpick .ratio-glyph → 6px
+  src/App.css:4263 .topbar .pillbar .ibtn, .vw-header .pillbar .ibtn → 6px
+  src/App.css:4265 .topbar .drag-post-chip → 6px
+
+== (d) off-scale font-size in UI chrome (px not in 11/12/13/15/18/24, mocks excluded): 34 ==
+  src/App.css:1435 .ruler-cursor::after → 9px
+  src/App.css:1495 .asp-close → 16px
+  src/App.css:1505 .asp-thumb-lbl → 8px
+  src/App.css:1742 .status-badge → 10px
+  src/App.css:1763 .ed-tag → 9px
+  src/App.css:1875 .img-btn-banner → 10px
+  src/App.css:1894 .img-cap → 9px
+  src/App.css:1973 .ebc-dim → 10px
+  src/App.css:1981 .ebc-badge → 10px
+  src/App.css:2020 .ebc-thumb-placeholder → 9px
+  src/App.css:2049 .ebc-hl-pill → 10px
+  src/App.css:2059 .ebc-hl-label → 10px
+  src/App.css:2151 .cms-badge → 9px
+  src/App.css:2171 .g-preview-label → 10px
+  src/App.css:2199 .g-favicon → 9px
+  src/App.css:2236 .social-tab → 10px
+  src/App.css:2751 .welcome-hero-text h3 → 14px
+  src/App.css:2914 .wri-path → 10px
+  src/App.css:2978 .vw-timecode → 14px
+  src/App.css:3069 .vw-tag → 10px
+  src/App.css:3325 .vw-th-btn → 10px
+  src/App.css:3357 .vw-ruler-mark → 10px
+  src/App.css:3428 .vw-clip-duration → 10px
+  src/App.css:3483 .vw-export-success h4 → 16px
+  src/App.css:3555 .vw-dropzone span → 10px
+  src/App.css:3579 .vw-media-thumb → 10px
+  src/App.css:3598 .vw-media-meta → 10px
+  src/App.css:4051 .ed-rail-flag → 10px
+  src/App.css:4057 .ed-link-pill → 10.5px
+  src/App.css:4067 .ed-intake-tabs button → 11.5px
+  src/App.css:4106 .ed-launcher-hero h2 → 22px
+  src/App.css:4131 .source-reader-title-input → 19px
+  src/App.css:4150 .source-reader-deck → 14px
+  src/App.css:4159 .source-reader-p → 14.5px
+
+== (e) colour literals per file (tokens.css custom-property values excluded) ==
+  src/styles/tokens.css: 0
+  src/styles/base.css: 1
+  src/styles/primitives.css: 3
+  src/App.css: 330
+  App.css by family: .ed- 7, .vw- 30, .fb- 57, other 236
+
+== (f) font-weight ≥ 700 in chrome: 36 ==
+  src/styles/primitives.css:925 .dialog h2 → 700
+  src/App.css:48 .kicker → 700
+  src/App.css:228 .menu-head → 700
+  src/App.css:306 .cp-title → 700
+  src/App.css:315 .cal-dow span → 700
+  src/App.css:424 .el-group span → 700
+  src/App.css:781 .opt-space-hero b → 700
+  src/App.css:997 .keys-groups h4 → 700
+  src/App.css:1006 .about-avatar → 700
+  src/App.css:1015 .ex-title → 700
+  src/App.css:1100 .fm-text em, .fcard em → 700
+  src/App.css:1119 .pvw-title span → 700
+  src/App.css:1145 .fbp-word → 800
+  src/App.css:1160 .fbd-logo → 800
+  src/App.css:1379 .qb-i b → 800
+  src/App.css:1455 .ct-tab.on → 700
+  src/App.css:1493 .asp-tag → 700
+  src/App.css:1567 .home-title → 700
+  src/App.css:1764 .ed-tag → 700
+  src/App.css:1931 .discrepancy-alert-box h4 → 700
+  src/App.css:1960 .ebc-title → 700
+  src/App.css:1982 .ebc-badge → 700
+  src/App.css:2050 .ebc-hl-pill → 700
+  src/App.css:2122 .char-count.over → 700
+  src/App.css:2145 .cms-title h4 → 700
+  src/App.css:2152 .cms-badge → 700
+  src/App.css:2172 .g-preview-label → 700
+  src/App.css:2270 .verification-checklist h4 → 700
+  src/App.css:3326 .vw-th-btn → 700
+  src/App.css:3484 .vw-export-success h4 → 700
+  src/App.css:3615 .vw-recording-badge → 700
+  src/App.css:3770 .hb-break-point.active → 700
+  src/App.css:3804 .cms-preview-modal__toolbar-label → 700
+  src/App.css:4107 .ed-launcher-hero h2 → 700
+  src/App.css:4132 .source-reader-title-input → 700
+  src/App.css:4182 .ed-budget-counter.over → 700
+
+== (g) distinct z-index values: 17 ==
+  0(3) 1(3) 2(3) 3(3) 4(1) 5(3) 6(2) 7(1) 8(1) 10(2) 20(2) 25(1) 32(1) 900(1) 1000(2) 2000(3) 3000(2)
