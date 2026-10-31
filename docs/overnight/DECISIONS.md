@@ -37,4 +37,22 @@ here **before** the change.
   just the test) and it truncated the title to "De" (visible in the baseline screenshot). The summary is now the
   panel's `sub`; the test's expectation is untouched. W1 extends this suite, so it had to run past check 16.
   The one remaining baseline failure (`ui-test` "UI chrome is neutral grey") blocks nothing and stays recorded.
+- **D9 — Publish event contract (W1 consumes, W2 emits).** After a publish completes, the publish flow
+  (`src/editorial/PublishDialog.tsx`, owned by W2 tonight) dispatches
+  `window.dispatchEvent(new CustomEvent('esb:story-published', { detail }))` with
+  `detail = { storyId, slug, url, headline, categoryId, format: 'web'|'fb45', publishedAt: ISO string,
+  facebookPostId?: string, dryRun: boolean }`. W2 also appends the same record to its local publish log.
+  W1 listens for the event to harvest the active story's quotes and stats. Each side tests its half by
+  dispatching the event itself, so neither depends on the other's merge.
+- **D10 — File ownership tonight.** W1: `src/editorial/quoteLibrary.ts`, `src/editorial/QuoteLibrary*.tsx`,
+  `tools/unit/quote-library.test.ts`, the left-column tabs region of `src/editorial/EditorialWorkspace.tsx`
+  (one tab entry + one render branch + imports), `src/editorial/editorial.css` additions under a `/* W1 */`
+  banner, new checks appended to `tools/e2e/editorial-test.mjs`. W2: `src/editorial/insights.ts`,
+  `src/editorial/Insights*.tsx`, `src/editorial/PublishDialog.tsx` (event + log line only),
+  `src/editorial/EngineStatus.tsx` (cost rows), `src/editorial/aiProviders.ts` (escalation + usage only — the
+  one pre-approved shared file), the header desk switch region of `EditorialWorkspace.tsx` (one `Seg` + one
+  body branch + imports), `tools/unit/insights.test.ts`, `tools/unit/ai-escalation.test.ts`,
+  `tools/e2e/insights-test.mjs`, one `test:insights` script line in `package.json`. Both may append one
+  screen id to `tools/e2e/overnight-shots.mjs`. Anything else shared (`store.ts`, `shellStore.ts`, `src/ui/*`,
+  `esb.d.ts`, `electron/*`) is off limits without a new entry here.
 - **D7 — W6 is woven into W2's builder** (directive §5): same agent, same worktree, separate commits (`W6:`).
