@@ -481,6 +481,127 @@ try {
   const after = { head: await page.inputValue('#draft-headline'), n: await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/editorial/queue/v1')).stories.length) }
   check('The queue and the edit survive a reload', after.head === firstHead + ' (edited)' && after.n === 2, JSON.stringify(after))
 
+  // 12. W1 — Quote & Stat Library (QuoteLibraryPanel.tsx / quoteLibrary.ts). Synthetic names only; no network.
+  const openLibrary = async () => {
+    await page.click('.ed-src .side-tabs button:has-text("Library")')
+    await page.waitForSelector('.ql .ql-start, .ql .ql-bar')
+  }
+  const lib = () => page.evaluate(() => { const s = window.__quoteLibrary.getState(); return { entries: s.entries, speakers: s.speakers } })
+  await openLibrary()
+  const libStart = await page.evaluate(() => ({ on: document.querySelector('.ed-src .side-tabs button.on')?.textContent, empty: document.querySelector('.ql-start .ql-empty-title')?.textContent, btn: !!document.querySelector('.ql-start .ql-harvest') }))
+  check('Library tab opens on an honest empty state with "Harvest from this story"', libStart.on === 'Library' && libStart.empty === 'Nothing harvested yet' && libStart.btn, JSON.stringify(libStart))
+
+  const deskHead = await page.inputValue('#draft-headline')
+  await page.click('.ql-harvest')
+  await page.waitForSelector('.ql-row')
+  const harvested = await page.evaluate(() => ({ stats: window.__quoteLibrary.getState().entries.filter((e) => e.kind === 'stat').map((e) => [e.text, e.value, e.unit]), rows: document.querySelectorAll('.ql-row').length, prov: [...document.querySelectorAll('.ql-row .ql-prov')].map((p) => p.textContent), note: document.querySelector('.ql-note')?.textContent }))
+  check('Harvest from this story: the fixture story\'s figures are added, each row with its provenance', harvested.stats.some(([, v, u]) => v === 5.92e9 && u === 'BDT') && harvested.stats.some(([, v, u]) => v === 30 && u === 'MMCFD') && harvested.prov.length === harvested.rows && harvested.prov.every((p) => p.startsWith('from ' + deskHead)) && /added/.test(harvested.note), JSON.stringify(harvested))
+  const n1 = (await lib()).entries.length
+  await page.click('.ql-harvest')
+  await page.waitForFunction(() => /Nothing new/.test(document.querySelector('.ql-note')?.textContent || ''))
+  check('Harvesting the same story again adds nothing', (await lib()).entries.length === n1, String(n1))
+
+  // the publish event (DECISIONS D9): a dry run records nothing; a real publish harvests with the slug and URL
+  const W1_QUOTE = 'We will finish the two wells before the winter demand peak'
+  await page.evaluate((q) => { const s = window.__editorialStore.getState(); s.setDraftField('body', s.draft.body + `\n\n"${q}," said Test Speaker, managing director of BAPEX.`) }, W1_QUOTE)
+  await page.waitForTimeout(800)
+  const storyId = await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/editorial/queue/v1')).activeId)
+  const publishEvent = (dryRun) => page.evaluate(([id, head, dry]) => window.dispatchEvent(new CustomEvent('esb:story-published', { detail: { storyId: id, slug: 'w1-test-wells', url: 'https://esbpowerline.com/articles/w1-test-wells', headline: head, categoryId: '03', format: 'web', publishedAt: new Date().toISOString(), dryRun: dry } })), [storyId, deskHead, dryRun])
+  await publishEvent(true)
+  await page.waitForTimeout(700)
+  check('A dry-run publish event harvests nothing', !(await lib()).entries.some((e) => e.text === W1_QUOTE))
+  await publishEvent(false)
+  await page.waitForFunction((q) => window.__quoteLibrary.getState().entries.some((e) => e.text === q), W1_QUOTE)
+  const pubQ = await page.evaluate((q) => { const all = window.__quoteLibrary.getState().entries; const e = all.find((x) => x.text === q); return { slug: e.slug, url: e.url, speaker: e.speaker, title: e.speakerTitle, storyId: e.storyId, cat: e.categoryId, statsSlugged: all.filter((x) => x.kind === 'stat').every((x) => x.slug === 'w1-test-wells'), note: document.querySelector('.ql-note')?.textContent, prov: document.querySelector(`.ql-row[data-entry="${e.id}"] .ql-prov`)?.textContent } }, W1_QUOTE)
+  check('esb:story-published harvests the story with its slug and URL; the quote keeps its named speaker', pubQ.slug === 'w1-test-wells' && pubQ.url === 'https://esbpowerline.com/articles/w1-test-wells' && pubQ.speaker === 'Test Speaker' && /managing director of BAPEX/.test(pubQ.title) && pubQ.storyId === storyId && pubQ.cat === '03' && pubQ.statsSlugged && /Published story harvested/.test(pubQ.note) && /\/articles\/w1-test-wells/.test(pubQ.prov), JSON.stringify(pubQ))
+
+  // search, kind filter, speaker/org filter
+  const allRows = await page.locator('.ql-row').count()
+  await page.fill('.ql-search input', 'winter demand')
+  await page.waitForFunction(() => document.querySelectorAll('.ql-row').length === 1)
+  const one = await page.locator('.ql-row .ql-text').innerText()
+  // ASCII digits find a figure written in Bengali digits (the fixture source says ৫৯২ কোটি টাকা)
+  await page.fill('.ql-search input', '592')
+  await page.waitForFunction(() => document.querySelectorAll('.ql-row').length >= 1 && [...document.querySelectorAll('.ql-row')].every((r) => /592/.test(r.textContent.replace(/[০-৯]/g, (d) => String('০১২৩৪৫৬৭৮৯'.indexOf(d))))))
+  const bnRows = await page.locator('.ql-row').count()
+  await page.fill('.ql-search input', '')
+  await page.waitForFunction((n) => document.querySelectorAll('.ql-row').length === n, allRows)
+  check('Search narrows the list (text, then Bengali digits) and clearing it restores all', allRows > 1 && one.includes(W1_QUOTE) && bnRows >= 1 && bnRows < allRows, JSON.stringify({ allRows, bnRows }))
+  await page.click('.ql-kind button:has-text("Quotes")')
+  const kq = await page.evaluate(() => [...document.querySelectorAll('.ql-row')].map((r) => r.dataset.kind))
+  await page.click('.ql-kind button:has-text("Stats")')
+  const ks = await page.evaluate(() => [...document.querySelectorAll('.ql-row')].map((r) => r.dataset.kind))
+  await page.click('.ql-kind button:has-text("All")')
+  check('All · Quotes · Stats filters by kind', kq.length >= 1 && kq.every((k) => k === 'quote') && ks.length >= 1 && ks.every((k) => k === 'stat') && kq.length + ks.length === allRows, JSON.stringify({ kq, ks }))
+  await page.click('.select.ql-who-filter')
+  await page.locator('.popover .menu-item').filter({ has: page.locator('.mi-label', { hasText: /^BAPEX$/ }) }).click()
+  const byOrg = await page.evaluate(() => [...document.querySelectorAll('.ql-row')].map((r) => r.querySelector('.ql-text, .ql-num')?.textContent))
+  await page.click('.select.ql-who-filter')
+  await page.locator('.popover .menu-item:has-text("All speakers & orgs")').click()
+  check('The speaker/org filter narrows to that organisation', byOrg.length === 1 && byOrg[0].includes(W1_QUOTE) && (await page.locator('.ql-row').count()) === allRows, JSON.stringify(byOrg))
+
+  // hand-off to Graphics
+  await page.locator(`.ql-row:has-text("${W1_QUOTE}") .ql-use`).click()
+  await page.waitForSelector('.stage-canvas')
+  const qc = await page.evaluate(() => { const c = window.__store.getState().doc.content; return { cardType: c.cardType, quoteText: c.quoteText, speakerName: c.speakerName, speakerTitle: c.speakerTitle, ws: document.querySelector('.ws-btn.on')?.dataset.ws } })
+  check('"Use as quote banner" fills a Quote card verbatim with the speaker and switches to Graphics', qc.cardType === 'quote' && qc.quoteText === W1_QUOTE && qc.speakerName === 'Test Speaker' && /managing director of BAPEX/.test(qc.speakerTitle) && qc.ws === 'graphics', JSON.stringify(qc))
+  await page.click('.back-to-desk')
+  await page.waitForSelector('.editorial-workspace #draft-headline')
+  await openLibrary()
+  const statEntry = await page.evaluate(() => window.__quoteLibrary.getState().entries.find((e) => e.kind === 'stat' && e.value === 5.92e9))
+  await page.locator(`.ql-row[data-entry="${statEntry.id}"] .ql-use`).click()
+  await page.waitForSelector('.stage-canvas')
+  const sc = await page.evaluate(() => { const c = window.__store.getState().doc.content; return { cardType: c.cardType, statNumber: c.statNumber, statLabel: c.statLabel, statNote: c.statNote, statDelta: c.statDelta, ws: document.querySelector('.ws-btn.on')?.dataset.ws } })
+  check('"Use as stat banner" fills a Stats card with the figure as written, a label from its sentence and the story as source', sc.cardType === 'stat' && sc.statNumber === statEntry.text && sc.statLabel.length > 2 && (' ' + statEntry.sentence.toLowerCase()).includes(' ' + sc.statLabel.toLowerCase()) && sc.statNote === `Source: ${statEntry.headline}` && sc.statDelta === '' && sc.ws === 'graphics', JSON.stringify(sc))
+  await page.click('.back-to-desk')
+  await page.waitForSelector('.editorial-workspace #draft-headline')
+  await openLibrary()
+
+  // remove an entry (two-step, like the story queue)
+  const nBefore = (await lib()).entries.length
+  await page.locator(`.ql-row[data-entry="${statEntry.id}"] .ql-del`).click({ force: true })
+  await page.locator(`.ql-row[data-entry="${statEntry.id}"] .ql-confirm`).click()
+  await page.waitForFunction((id) => !document.querySelector(`.ql-row[data-entry="${id}"]`), statEntry.id)
+  check('Remove (then confirm) takes an entry out of the library', (await lib()).entries.length === nBefore - 1)
+
+  // speaker registry: edit a seeded org, add / edit / remove a speaker; edits survive a reload
+  await page.click('[data-panel="ql-speakers"] > header')
+  await page.waitForSelector('[data-panel="ql-speakers"].open .ql-sp-row')
+  const seeded = (await lib()).speakers.map((s) => s.name)
+  const bercTitle = '.ql-sp-row[data-speaker="org-berc"] input[aria-label="Speaker title"]'
+  await page.fill(bercTitle, 'Energy regulator')
+  await page.press(bercTitle, 'Enter')
+  await page.waitForFunction(() => window.__quoteLibrary.getState().speakers.find((s) => s.id === 'org-berc')?.title === 'Energy regulator')
+  await page.fill('.ql-sp-add input[aria-label="New speaker name"]', 'Synthetic Spokesperson')
+  await page.fill('.ql-sp-add input[aria-label="New speaker title"]', 'Spokesperson')
+  await page.fill('.ql-sp-add input[aria-label="New speaker organisation"]', 'PGCB')
+  await page.click('.ql-sp-addbtn')
+  await page.waitForFunction(() => window.__quoteLibrary.getState().speakers.some((s) => s.name === 'Synthetic Spokesperson'))
+  const added = (await lib()).speakers.find((s) => s.name === 'Synthetic Spokesperson')
+  const addedOrg = `.ql-sp-row[data-speaker="${added.id}"] input[aria-label="Speaker organisation"]`
+  await page.fill(addedOrg, 'BPDB')
+  await page.press(addedOrg, 'Enter')
+  const addedName = `.ql-sp-row[data-speaker="${added.id}"] input[aria-label="Speaker name"]`
+  await page.fill(addedName, 'Synthetic Spokesperson Two')
+  await page.press(addedName, 'Enter')
+  await page.waitForFunction((id) => { const s = window.__quoteLibrary.getState().speakers.find((x) => x.id === id); return s?.org === 'BPDB' && s?.name === 'Synthetic Spokesperson Two' }, added.id)
+  check('Speaker registry: seeded from the desk orgs; title, name and org edit; Add speaker adds', ['BERC', 'BPDB', 'Petrobangla', 'Titas Gas', 'PGCB'].every((o) => seeded.includes(o)) && seeded.includes('Test Speaker') && added.title === 'Spokesperson', JSON.stringify(seeded))
+  const nLib = (await lib()).entries.length
+  await page.reload()
+  await page.waitForSelector('.studio-shell')
+  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]')).catch(() => {})
+  await page.waitForSelector('#draft-headline')
+  await openLibrary()
+  await page.waitForSelector('.ql-row')
+  await page.click('[data-panel="ql-speakers"] > header')
+  await page.waitForSelector('[data-panel="ql-speakers"].open .ql-sp-row')
+  const kept = { title: await page.inputValue(bercTitle), name: await page.inputValue(addedName), org: await page.inputValue(addedOrg), n: (await lib()).entries.length }
+  check('Speaker edits and the library survive a reload', kept.title === 'Energy regulator' && kept.name === 'Synthetic Spokesperson Two' && kept.org === 'BPDB' && kept.n === nLib, JSON.stringify(kept))
+  await page.locator(`.ql-sp-row[data-speaker="${added.id}"] .ql-del`).click({ force: true })
+  await page.locator(`.ql-sp-row[data-speaker="${added.id}"] .ql-confirm`).click()
+  await page.waitForFunction((id) => !window.__quoteLibrary.getState().speakers.some((s) => s.id === id), added.id)
+  check('Removing a speaker takes it out of the registry', (await page.locator(`.ql-sp-row[data-speaker="${added.id}"]`).count()) === 0)
+
   await browser.close()
 } catch (err) {
   console.error('Test error:', err)

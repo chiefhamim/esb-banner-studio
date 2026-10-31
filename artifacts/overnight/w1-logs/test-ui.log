@@ -1,0 +1,172 @@
+
+> esb-banner-studio@1.6.9 test:ui
+> node tools/e2e/ui-test.mjs && node tools/e2e/date-test.mjs
+
+PASS fresh launch: only Category is open, header has the workspace switcher and no logo {"open":["Category"],"logo":0,"sw":1}
+PASS default format is Facebook 4:5 (1080 x 1350) 
+PASS canvas fits the window (rulers present) 618x772
+PASS drag moves element dx=-107.5 dy=71.0
+PASS Ctrl+Z restores position 
+PASS corner handle scales text 
+PASS clicking bare canvas leaves nothing selected 
+PASS a selected background moves by its tag (no unlocking) x 0 -> 78.4
+PASS background lock is off by default 
+PASS custom dropdown changes weight 
+PASS dragging a label scrubs the value 23.7 -> 43.7
+PASS Delete hides template element 
+PASS R adds a rectangle layer 
+PASS Shift + corner keeps proportions ratio 2.004 vs 2.000
+PASS Alt + corner resizes from the centre centre 540.0,675.0 -> 540.0,674.5
+PASS Shift + Alt + corner: proportional and from the centre ratio 2.003
+PASS T adds a text layer 
+PASS align centres layer on canvas x=401.0 expected 401.0
+PASS double-click edits text in place 
+PASS Ctrl+C then Ctrl+V pastes a copy of the layer 
+PASS Ctrl+D duplicates a layer 
+PASS Ctrl+X cuts the layer 
+PASS send to back moves layer to the bottom bottom is "Text copy"
+PASS Ctrl+drag marquee selects several layers 8 layers
+PASS Alt+click selects the layer underneath Month + year -> Header background
+PASS dragging from a ruler creates a guide 
+PASS double-click removes the guide 
+PASS wheel zooms photo Zoom · 1.82×
+PASS drag pans photo panX -0.25
+PASS a photo can zoom out below 1x zoom 0.19
+PASS 2nd photo switches to a 2-slot collage 
+PASS Edit menu shows Undo with its shortcut 
+PASS View menu lists zoom shortcuts 
+PASS Ctrl+S saves a .esb project file ESB 04-renewables 2026-11-19.esb
+PASS project embeds the photos 2 image(s)
+PASS opening a project restores it 
+PASS title shows the project name 
+PASS format Square switches 
+PASS format Facebook Classic switches 
+PASS format Web Hero switches 
+PASS format YouTube Thumbnail switches 
+PASS format Facebook Feed switches 
+PASS layer size changed 
+PASS per-layer reset button in the Layers list restores the template 58
+PASS Inspector reset restores the template too 
+PASS Suggest picks the figure to highlight 
+PASS photo credit becomes a layer 
+PASS caption is generated from the headline and category Midnight Power Demand Hits 3,0
+PASS crop guides overlay shows the other ratios 2 guides
+PASS Ctrl+2 zooms to the selection 64%
+PASS Next story keeps the layout but clears headline and credit 
+PASS export preflight flags the empty headline 
+PASS tooltip is rendered above every card (not clipped by it) {"parentIsBody":true,"visible":true,"cardOverflow":"visible"}
+PASS the headline icon has its own Icon panel 
+PASS dragging an icon corner resizes the icon 525 -> 745
+PASS blur slider changes the icon blur 14 -> 24
+PASS font family can be changed per text layer 
+PASS credit pill layer appears when switched on 
+PASS credit font can be chosen 
+PASS headline icon is selected from the Layers panel 
+PASS clicking empty canvas inside the band clears the selection 
+PASS the name tag drags the selected icon 702 -> 597
+PASS Breaking pill adds shape, icon and text layers 
+PASS Featured pill uses the website label text 
+PASS pill text can be customised (uppercased) 
+PASS None removes the pill 
+PASS the Photo library panel can be collapsed 
+PASS the Add button opens the file chooser and adds the photo 2 -> 3
+PASS adding a photo reopens a collapsed library and shows a count 
+PASS header-centre pill has equal top and bottom gaps in all 5 formats {"fb45":0,"sq":0,"social":0,"web":0,"yt":0}
+PASS Preview button sits next to the format selector 
+PASS preview is realistic size (banner ~390 px wide on the phone) 388x485
+PASS the preview banner is actually painted 229,45,45,255
+PASS the preview updates live while you edit 
+PASS link-post view crops to 1.91 : 1 with the headline 
+PASS desktop view renders a navbar and feed 
+PASS Facebook dark mode toggles 
+PASS preview can be made bigger 
+PASS the preview window can be dragged anywhere -140,50
+PASS P hides the preview, P shows it again 
+PASS P shows it again 
+PASS close button hides the preview 
+PASS dark theme toggles 
+PASS no logo in the header (it lives in About only) 
+PASS no product text beside the menu bar 
+PASS ? opens shortcuts 
+PASS Ctrl+E opens the export dialog 
+PASS Retina preset plans 4 files (2 banners x 2 sizes) listed 4
+PASS multi-resolution export writes 4 files incl. @2x ESB_04-renewables-and-nuclear_2026-11-01_Facebook.png, ESB_04-renewables-and-nuclear_2026-11-01_Facebook@2x.png, ESB_04-renewables-and-nuclear_2026-11-01_Web.png, ESB_04-renewables-and-nuclear_2026-11-01_Web@2x.png
+PASS exported pixel sizes are exact (1x and 2x) {"ESB_04-renewables-and-nuclear_2026-11-01_Facebook.png":"1080x1350","ESB_04-renewables-and-nuclear_2026-11-01_Facebook@2x.png":"2160x2700","ESB_04-renewables-and-nuclear_2026-11-01_Web.png":"1920x1080","ESB_04-renewables-and-nuclear_2026-11-01_Web@2x.png":"3840x2160"}
+PASS ZIP preset produces exactly one .zip ESB_04-renewables-and-nuclear_2026-11-01.zip
+PASS file-name template + WebP applied banner-Facebook-1080x1350.webp
+PASS UI type uses only the 11 / 12 / 13 / 15 / 18 px scale 13px 12px 11px
+PASS one UI typeface (plus mono for hex / numbers) "ESB Sans"
+PASS control heights sit on 28 / 32 / 36 {"28":2,"32":7}
+PASS radii come from the 4 / 8 / 12 / 16 / pill set 8px 6px 4px 12px 999px
+FAIL UI chrome is neutral grey (no coloured fills or text) pnl:rgba(15, 23, 42, 0.08) | pnl:rgba(15, 23, 42, 0.08) | pnl open:rgba(15, 23, 42, 0.08) | pnl:rgba(15, 23, 42, 0.08) | pnl:rgba(15, 23, 42, 0.08) | pnl:rgba(15, 23, 42, 0.08)
+PASS category cards do not move or scale on hover none [{"x":130.5,"y":0,"w":124.5,"h":52},{"x":130.5,"y":0,"w":124.5,"h":52}]
+PASS the tab thumb glides (several in-between positions), not a jump 14 distinct positions
+PASS and lands exactly under the active tab {"thumb":[198,138],"tab":[197.5,137.5]}
+PASS format picker shows platform icons, not a placeholder box 
+PASS Elements lists Header, Photo, Headline and Footer groups 
+PASS one Date switch hides all four date layers [false,false,false,false]
+PASS the row shows as off and the dock counts it 
+PASS and one Undo brings them all back 
+PASS switching back on shows them again 
+PASS a group switch hides the whole footer group 
+PASS Show all restores every hidden element 
+PASS unused elements (label, credit) are disabled, not hidden Label pill,Photo credit,News-link pill
+PASS clicking a row selects that element on the banner 
+PASS a custom text layer appears under "Custom" in Elements 
+PASS its switch hides it 
+PASS a mid-drag frame matches a full render of the same state (glyph anti-aliasing aside: < 0.5 % of pixels differ) {"max":69,"bad":733,"total":384090}
+PASS dragging the left handle widens the left panel 312 -> 376
+PASS the canvas gives up exactly that space 
+PASS the left panel stops at its 264 px minimum 264
+PASS double-click resets it to 312 312
+PASS arrow keys nudge a focused handle by 16 px 344
+PASS dragging the right handle left widens the right panel 312 -> 360
+PASS dragging the dock handle up makes the Elements list taller 336 -> 392
+PASS sizes are remembered between launches {"lw":312,"rw":360,"dock":392}
+PASS and applied again after a reload 
+PASS every handle resets by double-click 
+PASS preview window resizes from its corner 446 -> 526
+PASS preview window drags by its title bar -100,40
+PASS selecting a layer shows its floating toolbar on the banner 
+PASS the toolbar size stepper changes the type size 58 -> 59
+PASS and the size can be typed in directly 
+PASS alignment buttons work from the toolbar 
+PASS selection is a 1 px ring with a white halo (box-shadow), not a thick outline rgb(79, 70, 229) 0px 0px 0px 1px, rgba(255, 255, 255, 0.92) 0px 0px 0px 2px
+PASS corner and edge handles are different shapes 
+PASS a live W × H badge shows while resizing 1459 × 101
+PASS the toolbar steps out of the way during a drag 
+PASS badge and toolbar settle after release 
+PASS double-click edits the headline in place (no jump to the side panel) 
+PASS double-click the date: pick a day on a calendar over the banner 
+PASS double-click the category chip: switch desk from a menu over the banner 
+PASS the panel being edited is marked with a soft desk-colour tint {"bar":"1","tint":"rgb(255, 255, 255)"}
+PASS and the banner highlights the element that panel edits 
+PASS rulers are a clean 24 px, with no stretched canvas {"h":24,"w":24}
+PASS a cursor tag follows the pointer along the ruler {"x":"350","o":"1"}
+PASS top template dropdown is center-aligned with a nice gap {"centerDiff":0.289093017578125,"gap":12}
+PASS headline words can be selected and highlighted directly on the canvas 
+PASS modified stepper on canvas shows its inline reset button 
+PASS granular reset menu on canvas resets size back to default 
+PASS About dialog displays Hamim Ruwayfi 
+PASS link to news translates headline into natural English Drilling two new wells for Tk 592 crore, 30 MMCFD Gas to National Grid
+PASS link to news detects Fossil Fuels & Commodities category (03) 03
+PASS article studio tray displays original headline Original: ৫৯২ কোটি টাকায় নতুন দুটি কূপ খনন, গ্রিডে দৈনিক ৩০ মিলিয়ন ঘনফুট গ্যাস
+PASS article studio tray provides suggested sector photos 
+PASS photos panel displays optimal body image space (1080 × 719 px for Facebook) 1080 × 719 px3:2 (1.50 : 1)After deducting the header and footer/headline elements from the 1080×1350 template, the body photo space is exactly 1080 × 719 px.1080×1350 − 220px (header) − 411px (footer/band)
+PASS canvas empty slot shows corner-to-corner dimension (1080 × 719 px) Insert Photo1080 × 719 pxChoose Photoor drop image file hereCorner-to-corner fit·1080×1350 canvas − Header (220px) − Footer & Band (411px) = 1080×719 px
+PASS canvas shows header/footer deduction math for Facebook Insert Photo1080 × 719 pxChoose Photoor drop image file hereCorner-to-corner fit·1080×1350 canvas − Header (220px) − Footer & Band (411px) = 1080×719 px
+PASS Square template updates canvas body dimension to 1080 × 519 px Insert Photo1080 × 519 pxChoose Photoor drop image file hereCorner-to-corner fit·1080×1080 canvas − Header (208px) − Footer & Band (353px) = 1080×519 px
+PASS Web Hero template updates canvas body dimension to 1280 × 800 px Insert Photo1280 × 800 pxChoose Photoor drop image file hereCorner-to-corner fit·1920×1080 canvas − Side Panel (640px) − Header & Footer (280px) = 1280×800 px
+PASS element dimensions overlay is hidden by default 
+PASS pressing D reveals element dimensions blueprint overlay 
+PASS dimension overlay shows accurate canvas size (1080 × 1350 px) Canvas · 1080 × 1350 px (4:5)
+PASS layout zones show Header and Photo dimensions ["Header·1080 × 220 px","Photo Body·1080 × 719 px","Headline Band·1080 × 350 px","Footer·1080 × 61 px"]
+PASS pressing D again hides element dimensions overlay cleanly 
+PASS no page errors 
+SOME FAILED
+PASS month list opens and the calendar stays open 
+PASS picking a month applies March
+PASS picking a year applies 2021
+PASS choosing a day closes the calendar and sets the date Mon, 15 Mar 2021
+PASS Escape closes only the dropdown first 
+PASS clicking outside closes the calendar 

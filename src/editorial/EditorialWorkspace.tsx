@@ -26,6 +26,7 @@ import { useHeroMode } from './heroMode'
 import { SeoPanel } from './SeoPanel'
 import { SignInSheet } from './SignInSheet'
 import { StoryQueueList } from './StoryQueueList'
+import { QuoteLibraryPanel } from './QuoteLibraryPanel'
 import { useStoryQueue } from './storyQueue'
 import { canUploadToSite, refreshSite, uploadBannerToSite, uploadBodyImage } from './siteConnect'
 import { renderBanner } from '../export'
@@ -207,7 +208,7 @@ export function EditorialWorkspace() {
   const [activeFactId, setActiveFactId] = useState<string | null>(null)
   const [activeSocialTab, setActiveSocialTab] = useState<'facebook' | 'x' | 'linkedin' | 'telegram'>('facebook')
   const [storyTab, setStoryTab] = useState<StoryTab>('body')
-  const [leftTab, setLeftTab] = useState<'source' | 'intake' | 'stories'>('source')
+  const [leftTab, setLeftTab] = useState<'source' | 'intake' | 'stories' | 'library'>('source')
   const storyCount = useStoryQueue((s) => s.stories.length)
   const [tagInput, setTagInput] = useState('')
   // A translation problem worth more than a 3-second toast: shown on the Headline & deck panel until dismissed.
@@ -1298,16 +1299,18 @@ export function EditorialWorkspace() {
         <div ref={deskRef} className="ed-desk" style={{ ['--ed-src-px' as string]: cols.src + 'px', ['--ed-side-px' as string]: cols.side + 'px' } as CSSProperties}>
           {/* LEFT — the original article, untouched, beside the copy made from it */}
           <aside className="left ed-src" aria-label="Original source">
-            <Tabs<'source' | 'intake' | 'stories'>
+            <Tabs<'source' | 'intake' | 'stories' | 'library'>
               value={leftTab}
               onChange={setLeftTab}
-              options={[{ value: 'source', icon: 'newspaper', label: 'Source' }, { value: 'stories', icon: 'layers', label: storyCount > 1 ? `Stories · ${storyCount}` : 'Stories' }, { value: 'intake', icon: 'link', label: 'New link' }]}
+              options={[{ value: 'source', icon: 'newspaper', label: 'Source' }, { value: 'stories', icon: 'layers', label: storyCount > 1 ? `Stories · ${storyCount}` : 'Stories' }, { value: 'library', icon: 'quote', label: 'Library' }, { value: 'intake', icon: 'link', label: 'New link' }]}
             />
             <div className="scroll ed-src-scroll">
               {leftTab === 'intake' ? (
                 <div className="ed-src-intake">{intakeForm(true)}</div>
               ) : leftTab === 'stories' ? (
                 <div className="ed-src-intake"><StoryQueueList /></div>
+              ) : leftTab === 'library' ? (
+                <div className="ed-src-intake"><QuoteLibraryPanel /></div>
               ) : (
                 <>
                   <Panel id="ed-src-link" icon="link" defaultOpen={false} title="Original link" sub={sourceHost} persist={false} actions={

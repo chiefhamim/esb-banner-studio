@@ -23,7 +23,7 @@ const tag = args.tag || 'shot'
 if (!out) { console.error('usage: --out <dir> --tag <before|after|...> [--screens a,b] [--sizes WxH,...] [--themes light,dark]'); process.exit(2) }
 const sizes = (args.sizes || '1366x768,1920x1080').split(',').map((s) => s.split('x').map(Number))
 const themes = (args.themes || 'light,dark').split(',')
-const ALL = ['home', 'editorial-launcher', 'editorial-desk', 'graphics', 'graphics-quote', 'video', 'outreach', 'outreach-activity']
+const ALL = ['home', 'editorial-launcher', 'editorial-desk', 'editorial-library', 'graphics', 'graphics-quote', 'video', 'outreach', 'outreach-activity']
 const screens = (args.screens ? args.screens.split(',') : ALL).filter((s) => { if (!ALL.includes(s)) console.error('unknown screen', s); return ALL.includes(s) })
 fs.mkdirSync(out, { recursive: true })
 
@@ -47,6 +47,20 @@ const SETUP = {
     await tile(p, 'Editorial')
     await p.evaluate((d) => { const s = window.__editorialStore.getState(); s.setDraftField('headline', d.headline); s.setDraftField('body', d.body) }, DRAFT)
     await p.waitForSelector('.ed-desk'); await p.waitForTimeout(900)
+  },
+  // W1: the Library tab after a real harvest of a synthetic story (two quotes, figures with units; invented names)
+  'editorial-library': async (p) => {
+    const LIB_BODY = [
+      '"We will add 400 MW of evening peak capacity before the summer," said Rafiq Islam, chief engineer of PGCB.',
+      'The upgrade will cost Tk 120 crore, the regulator said.',
+      'BERC Chairman Nasrin Akter said: "Tariffs will be set only after a public hearing."',
+    ].join('\n\n')
+    await SETUP['editorial-desk'](p)
+    await p.evaluate((b) => window.__editorialStore.getState().setDraftField('body', b), LIB_BODY)
+    await p.waitForTimeout(700)
+    await p.locator('.ed-src .side-tabs button:has-text("Library")').click()
+    await p.locator('.ql-harvest').click()
+    await p.waitForSelector('.ql-row'); await p.waitForTimeout(500)
   },
   'graphics': async (p) => { await tile(p, 'Graphics'); await p.waitForSelector('canvas') },
   'graphics-quote': async (p) => {
