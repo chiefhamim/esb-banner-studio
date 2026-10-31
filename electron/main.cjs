@@ -1,6 +1,6 @@
 const { spawn } = require('node:child_process')
 // ESB Studio — desktop shell. Everything runs locally; no network access is needed.
-const { app, BrowserWindow, Menu, ipcMain, dialog, shell, Tray, nativeImage } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell, Tray, nativeImage, clipboard } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const { FsScope } = require('./fs-scope.cjs')
@@ -216,6 +216,15 @@ ipcMain.handle('esb:site-sign-out', async () => {
   await session.fromPartition(SITE_PARTITION).clearStorageData({ origin: SITE_ORIGIN }).catch(() => {})
   if (siteWin && !siteWin.isDestroyed()) siteWin.close()
   return true
+})
+
+// Read text from OS clipboard safely
+ipcMain.handle('esb:read-clipboard', () => {
+  try {
+    return clipboard.readText() || ''
+  } catch {
+    return ''
+  }
 })
 
 // Save one rendered banner. With `dir` (batch export) it is written straight there; otherwise ask where.

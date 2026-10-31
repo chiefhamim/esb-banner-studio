@@ -169,7 +169,7 @@ export function OutreachComposer() {
             ...(c.blueprint === 'template' && !s.templates.some((t) => t.subject === c.subject && t.body === c.body) ? [{ value: 'template', label: 'From a template (edited)', hint: '' }] : []),
             { value: 'blank', label: 'Blank letter', hint: '' },
           ]} />
-        <Seg<OutreachLang> value={c.lang} onChange={s.setLang} options={[{ value: 'en', label: 'EN', tip: 'English' }, { value: 'bn', label: 'বাংলা', tip: 'Bangla' }]} />
+        <Seg<OutreachLang> className="or-lang-seg" value={c.lang} onChange={s.setLang} options={[{ value: 'en', label: 'EN', tip: 'English' }, { value: 'bn', label: 'বাংলা', tip: 'Bangla' }]} />
         <div className="spacer" />
         <button type="button" className="btn ai-btn" data-provider={ai?.provider} disabled={aiOff || !!busy} onClick={() => void run('Draft', () => writeOutreachWithAi(ctx))}
           data-tip={aiTip || `${aiName} writes the template from the letter's offer${c.sources.some((x) => x.points.some((p) => p.use)) ? ' and your ticked talking points' : ''}, with placeholders. Replaces the subject and body (undoable)`}>
@@ -179,7 +179,7 @@ export function OutreachComposer() {
           items={[...REWRITES.map((r) => ({ label: r.label, hint: r.hint, disabled: aiOff || !!busy || !c.body.trim(), onClick: () => void run(r.label, () => rewriteLetter(r.id, c, ctx)) })),
             { divider: true },
             { label: 'Your own instruction', icon: 'sparkle' as const, disabled: aiOff || !!busy || !c.body.trim(), onClick: async () => { const t = await ask({ title: 'Rewrite with your instruction', body: 'The same facts rule applies: nothing is added that the letter or your ticked talking points do not say.', input: { label: 'How should the letter change?', placeholder: 'e.g. Lead with the free digital edition; keep it under 120 words', multiline: true }, ok: 'Rewrite' }); if (typeof t === 'string' && t.trim()) void run('Rewrite', () => rewriteLetter('custom' as RewriteAction, c, ctx, t)) } }]} />
-        <Seg<'edit' | 'preview'> value={ui.view} onChange={(v) => ui.set({ view: v })} options={[{ value: 'edit', label: 'Edit' }, { value: 'preview', label: 'Preview', tip: active ? `As ${active.personName || active.email} will receive it` : 'As a recipient will receive it' }]} />
+        <Seg<'edit' | 'preview'> className="or-view-seg" value={ui.view} onChange={(v) => ui.set({ view: v })} options={[{ value: 'edit', label: 'Edit' }, { value: 'preview', label: 'Preview', tip: active ? `As ${active.personName || active.email} will receive it` : 'As a recipient will receive it' }]} />
       </div>
 
       {ui.view === 'edit' ? (

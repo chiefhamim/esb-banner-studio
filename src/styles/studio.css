@@ -1371,16 +1371,16 @@ label.switch:active i { filter: brightness(.94); }
 /* Editorial Story Desk: centred in the window with nothing to scroll; the story list shows three rows and scrolls for the rest;
    the paste box starts at half height and grows to fit what is pasted (up to 44 % of the window, then it scrolls) */
 .ed-launcher-wrap { justify-content: safe center; align-items: center; padding: 20px 24px; gap: 14px; }
-.ed-launcher-wrap > .ed-launcher-card { padding: 24px 28px; gap: 16px; }
+.ed-launcher-wrap > .ed-launcher-card { padding: 24px 28px; gap: 16px; min-height: 444px; height: 444px; max-height: 444px; box-sizing: border-box; }
 .ed-launcher-wrap > .ed-launcher-queue { padding: 18px 20px 14px !important; gap: 10px !important; }
 
 /* Story Desk: the card never changes size. The intake block has one fixed height; link, paste and site tabs fill it and scroll
    inside it when they have more. The story list is exactly three rows tall (rows are a fixed 64 px, one line of title). */
-.ed-launcher-wrap .ed-intake:not(.compact) { height: auto; min-height: 304px; display: flex; flex-direction: column; }
-.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.ed-launcher-wrap .ed-intake:not(.compact) { height: 304px !important; min-height: 304px !important; max-height: 304px !important; display: flex; flex-direction: column; box-sizing: border-box; }
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body { flex: 1 1 auto; min-height: 0; height: 258px; max-height: 258px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; }
 .ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body:has(> .ed-intake-url + p.hint) { justify-content: center; }
-.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap { flex: 1 1 auto; min-height: 160px; height: auto; }
-.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area { flex: 1 1 auto; min-height: 160px; height: 160px; max-height: 280px; resize: vertical; overflow-y: auto; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap { flex: 1 1 auto; min-height: 0; height: auto; position: relative; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area { flex: 1 1 auto; min-height: 0; height: 100%; box-sizing: border-box; resize: none; overflow-y: auto; }
 .ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list { flex: 1 1 auto; min-height: 0; max-height: none; box-sizing: border-box; gap: 6px; padding: 2px; scroll-snap-type: y proximity; scroll-padding: 2px 0; }
 .ed-launcher-wrap .ed-intake-foot { flex: none; display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
 .ed-launcher-wrap .ed-feed-item { height: 64px; flex: none; box-sizing: border-box; scroll-snap-align: start; background: var(--fill); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent); border-radius: var(--r-3); }
@@ -1462,6 +1462,58 @@ label.switch:active i { filter: brightness(.94); }
 .ed-link-field .ed-link-input::placeholder { color: var(--text-3); font-weight: 400; }
 .ed-link-row .btn { flex: none; height: 44px; padding: 0 18px; border-radius: 10px; }
 .ed-link-hint { margin: 0; font: 400 12px/16px var(--ui); color: var(--text-3); }
+
+/* Outreach contacts search input container selection override */
+.or-search input,
+.or-search input:hover,
+.or-search input:focus,
+.or-search input:focus-visible {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Outreach composer equal button widths for EN / বাংলা and Edit / Preview */
+.or-body .or-toolbar .or-lang-seg button {
+  width: 52px !important;
+  min-width: 52px !important;
+  max-width: 52px !important;
+  height: 28px !important;
+  padding: 0 4px !important;
+  justify-content: center !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
+.or-body .or-toolbar .or-view-seg button {
+  width: 72px !important;
+  min-width: 72px !important;
+  max-width: 72px !important;
+  height: 28px !important;
+  padding: 0 8px !important;
+  justify-content: center !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
+/* Outreach campaign row menu button: perfectly square 28x28 around the three dots */
+.or-camp-menu,
+.btn.or-camp-menu {
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  padding: 0 !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  box-sizing: border-box !important;
+}
 
 
 /* story lists: a quiet scrollbar with room on both sides. The browser's own thin bar (with its end arrows) is replaced by a 6 px

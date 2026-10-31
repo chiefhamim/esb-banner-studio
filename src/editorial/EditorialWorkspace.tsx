@@ -88,6 +88,23 @@ if (typeof window !== 'undefined') {
   ;(window as unknown as { __esbParseArticle?: typeof parseArticleDocument }).__esbParseArticle = parseArticleDocument
 }
 
+async function readClipboardText(): Promise<string> {
+  try {
+    const esb = (window as unknown as { esb?: { readClipboard?: () => Promise<string> | string } })?.esb
+    if (esb?.readClipboard) {
+      const text = await esb.readClipboard()
+      if (typeof text === 'string' && text) return text
+    }
+  } catch {}
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+      const text = await navigator.clipboard.readText()
+      if (text) return text
+    }
+  } catch {}
+  return ''
+}
+
 interface FactSpan {
   text: string
   isFact: boolean
@@ -972,10 +989,9 @@ export function EditorialWorkspace() {
                     className="ed-link-quick-paste"
                     title="Paste URL from clipboard"
                     onClick={async () => {
-                      try {
-                        const text = await navigator.clipboard.readText()
-                        if (text) setUrlInput(text.trim())
-                      } catch {}
+                      const text = await readClipboardText()
+                      if (text) setUrlInput(text.trim())
+                      else document.getElementById('ed-link-input')?.focus()
                     }}
                   >
                     <Icon name="link" size={12} />
@@ -1019,10 +1035,9 @@ export function EditorialWorkspace() {
                   className="ed-quick-paste-btn"
                   title="Paste link from clipboard"
                   onClick={async () => {
-                    try {
-                      const text = await navigator.clipboard.readText()
-                      if (text) setUrlInput(text.trim())
-                    } catch {}
+                    const text = await readClipboardText()
+                    if (text) setUrlInput(text.trim())
+                    else document.getElementById('ed-link-input')?.focus()
                   }}
                 >
                   <Icon name="link" size={12} />
@@ -1081,10 +1096,9 @@ export function EditorialWorkspace() {
                 className="ed-quick-paste-banner"
                 title="Click to paste story from clipboard"
                 onClick={async () => {
-                  try {
-                    const text = await navigator.clipboard.readText()
-                    if (text) setRawBengaliInput(text)
-                  } catch {}
+                  const text = await readClipboardText()
+                  if (text) setRawBengaliInput(text)
+                  else document.querySelector<HTMLTextAreaElement>('.ed-paste-area')?.focus()
                 }}
               >
                 <Icon name="copy" size={12} />

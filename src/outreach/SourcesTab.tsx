@@ -101,7 +101,7 @@ export function SourcesTab() {
             <div className="or-source-input-wrap">
               <input className="or-input" type="url" placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void addLink() }} aria-label="Source link" title="Source URL (or press Ctrl+V)" />
               {!url && (
-                <button type="button" className="btn xs ghost or-source-paste-btn" onClick={async () => { try { const t = await navigator.clipboard.readText(); if (t) setUrl(t.trim()) } catch {} }} title="Paste URL from clipboard"><Icon name="link" size={12} /><span>Paste</span></button>
+                <button type="button" className="btn xs ghost or-source-paste-btn" onClick={async () => { try { const esb = (window as unknown as { esb?: { readClipboard?: () => Promise<string> } })?.esb; const t = esb?.readClipboard ? await esb.readClipboard() : await navigator.clipboard?.readText(); if (t) setUrl(t.trim()) } catch {} }} title="Paste URL from clipboard"><Icon name="link" size={12} /><span>Paste</span></button>
               )}
             </div>
             <button type="button" className="btn sm" onClick={() => void addLink()} disabled={!desktop || busy === 'link' || !url.trim()} data-tip={desktop ? 'Read the page and add its text' : 'Reading web pages needs the desktop app — paste the text instead'}><Icon name={busy === 'link' ? 'refresh' : 'plus'} size={13} className={busy === 'link' ? 'spin' : ''} /><span>Add</span></button>

@@ -95,10 +95,10 @@
 .or-file-text b { font-size: 13px; line-height: 18px; }
 .or-file-text span { font-size: 11px; line-height: 16px; color: var(--text-3); }
 .or-file .btn { flex: none; }
-.or-search { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; color: var(--text-3); background: var(--field); border: 1px solid transparent; border-radius: var(--r-2); box-sizing: border-box; transition: background var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring); }
+.or-search { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; color: var(--text-3); background: var(--field); border: 1px solid transparent; border-radius: var(--r-2); box-sizing: border-box; transition: background var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring); cursor: text; }
 .or-search:hover { background: var(--field-hover); border-color: transparent; }
 .or-search:focus-within { background: var(--card) !important; border-color: color-mix(in srgb, var(--accent, #3b82f6) 65%, transparent) !important; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent, #3b82f6) 24%, transparent) !important; color: var(--text) !important; }
-.or-search input, .or-search input:focus, .or-search input:focus-visible { border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent !important; }
+.or-search input, .or-search input:hover, .or-search input:focus, .or-search input:focus-visible { flex: 1 1 auto; min-width: 0; height: 100%; border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent !important; }
 .or-filter { display: flex; width: 100%; }
 .or-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
 .or-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -135,8 +135,26 @@
 .or-camp-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .or-camp-top b { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .or-row-main .or-camp-n { color: var(--text-3); font-variant-numeric: tabular-nums; }
-/* the actions appear on the row being pointed at, or the open one — not as a box inside every card */
-.or-camp-menu { flex: none; align-self: flex-start; width: 28px; height: 28px; margin: 6px 6px 0 0; padding: 0; opacity: 0; transition: opacity var(--t-1) var(--ease); }
+/* the actions appear on the row being pointed at, or the open one — perfectly square 28x28 around the three dots */
+.or-camp-menu,
+.btn.or-camp-menu {
+  flex: none;
+  align-self: flex-start;
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  margin: 6px 6px 0 0;
+  padding: 0 !important;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--r-2);
+  box-sizing: border-box;
+  opacity: 0;
+  transition: opacity var(--t-1) var(--ease);
+}
 .or-camp:hover .or-camp-menu, .or-camp.on .or-camp-menu, .or-camp-menu:focus-visible, .or-camp-menu.open { opacity: 1; }
 .or-camp-menu .chev { display: none; }
 
@@ -354,6 +372,26 @@
    edge; on this desk it gets 4 px all round, and the options a 2 px gap between them. */
 /* the letter toolbar's language and Edit/Preview switches sit at the toolbar's 32 px (the 4 px well is now in studio.css for every desk) */
 .or-body .or-toolbar .seg-ctl { height: 32px; box-sizing: border-box; align-items: center; }
+.or-body .or-toolbar .or-lang-seg button {
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
+  height: 28px;
+  padding: 0 4px;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+}
+.or-body .or-toolbar .or-view-seg button {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  height: 28px;
+  padding: 0 8px;
+  justify-content: center;
+  text-align: center;
+  box-sizing: border-box;
+}
 .or-tabs.side-tabs { margin: 10px 10px 4px; }
 .or-left-head { padding: 8px 12px 12px; }
 .or-list { padding: 10px 8px 12px 12px; gap: 6px; }
