@@ -23,7 +23,7 @@ const tag = args.tag || 'shot'
 if (!out) { console.error('usage: --out <dir> --tag <before|after|...> [--screens a,b] [--sizes WxH,...] [--themes light,dark]'); process.exit(2) }
 const sizes = (args.sizes || '1366x768,1920x1080').split(',').map((s) => s.split('x').map(Number))
 const themes = (args.themes || 'light,dark').split(',')
-const ALL = ['home', 'editorial-launcher', 'editorial-desk', 'editorial-library', 'editorial-insights', 'graphics', 'graphics-quote', 'video', 'outreach', 'outreach-activity']
+const ALL = ['home', 'editorial-launcher', 'editorial-desk', 'editorial-library', 'editorial-insights', 'graphics', 'graphics-quote', 'video', 'outreach', 'outreach-activity', 'outreach-digest']
 const screens = (args.screens ? args.screens.split(',') : ALL).filter((s) => { if (!ALL.includes(s)) console.error('unknown screen', s); return ALL.includes(s) })
 fs.mkdirSync(out, { recursive: true })
 
@@ -107,6 +107,22 @@ const SETUP = {
   'outreach': async (p) => {
     await tile(p, 'Outreach')
     await p.evaluate(() => window.__outreachStore?.getState().createCampaign?.({ name: 'Overnight shot campaign' }))
+    await p.waitForTimeout(900)
+  },
+  // W4: Campaigns → New → "Campaign from this week's stories" with a synthetic publish log; the site's list is routed
+  'outreach-digest': async (p) => {
+    // the sheet's email preview is a sandboxed srcdoc frame with no storage; the shared init script above reads
+    // localStorage in every frame, so give that one frame an inert stand-in (it runs no scripts of its own)
+    await p.context().addInitScript(() => { if (window.top !== window && window.origin === 'null') Object.defineProperty(window, 'localStorage', { value: { getItem: () => null, setItem() {}, removeItem() {} } }) })
+    await p.route('https://esbpowerline.com/feed.xml', (r) => r.fulfill({ status: 200, contentType: 'application/rss+xml', headers: { 'access-control-allow-origin': '*' }, body: '<rss><channel></channel></rss>' }))
+    await p.evaluate((log) => localStorage.setItem('esb-banner-studio/publish-log/v1', JSON.stringify(log)), INS_LOG.map((r, i) => ({ ...r, publishedAt: new Date(now - [2e6, 9e7, 2.6e8, 10 * D, 12 * D][i]).toISOString() })))
+    await p.reload({ waitUntil: 'load' }); await p.waitForTimeout(900)
+    await tile(p, 'Outreach')
+    await p.locator('.side-tabs button[aria-label="Campaigns"]').click()
+    await p.locator('.or-new .btn').click()
+    await p.locator('.menu .menu-item:has-text("Campaign from this week\'s stories")').click()
+    await p.waitForSelector('.or-dg-row')
+    await p.waitForFunction(() => document.querySelector('iframe[title="Digest preview"]')?.getAttribute('srcdoc')?.includes('src="data:image/png'))
     await p.waitForTimeout(900)
   },
   'outreach-activity': async (p) => {

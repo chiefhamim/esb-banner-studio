@@ -13,6 +13,7 @@
     "test:ui": "node tools/e2e/ui-test.mjs && node tools/e2e/date-test.mjs",
     "test:editorial": "node tools/e2e/editorial-test.mjs",
     "test:insights": "node tools/e2e/insights-test.mjs",
+    "test:digest": "node tools/e2e/digest-test.mjs",
     "test:video": "node tools/e2e/video-test.mjs",
     "test:unit": "vitest run",
     "preapp": "node tools/ensure-deps.mjs",

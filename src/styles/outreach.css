@@ -900,3 +900,28 @@
    Sources swapped with a hard cut, which is what made them feel rougher than Compose · Activity. */
 .or-right-scroll > *, .or-left > :not(.side-tabs) { animation: paneIn 140ms ease-out both; }
 @media (prefers-reduced-motion: reduce) { .or-right-scroll > *, .or-left > :not(.side-tabs) { animation: none; } }
+
+/* W4 — digest: Campaigns → New → "Campaign from this week's stories" (DigestDialog.tsx). Story picker on the left,
+   the email itself on the right (the same renderEmail preview frame as the composer). Tokens only. */
+.or-dg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; min-height: 480px; }
+.or-dg-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.or-dg-range { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.or-dg-dates { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; width: 100%; min-width: 0; }
+.or-dg-dates > span { font-size: 12px; line-height: 16px; color: var(--text-2); }
+.or-dg-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; padding: 2px; overflow-y: auto; }
+.or-dg-row { flex: none; display: flex; align-items: flex-start; gap: 8px; padding: 8px 8px 8px 12px; background: var(--card); border-radius: var(--r-2); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent); }
+.or-dg-row .check { flex: 1 1 auto; min-width: 0; padding-top: 4px; }
+.or-dg-row .check > span { min-width: 0; font-size: 13px; line-height: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.or-dg-row .check small { font-weight: 400; }
+.or-dg-row.off .check > span { color: var(--text-3); }
+.or-dg-deck { display: block; margin-top: 2px; color: var(--text-2); }
+.or-dg-deck.none { color: var(--text-3); font-style: italic; }
+.or-dg-move { flex: none; display: flex; gap: 4px; }
+.or-dg-empty { flex: 1 1 auto; justify-content: center; }
+.or-dg-intro { resize: vertical; min-height: 72px; font: 400 13px/1.5 var(--font-ui); }
+.or-dg-preview .or-frame { min-height: 400px; }
+.or-dg-subject { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12px; line-height: 16px; }
+.or-dg-subject > span { flex: none; color: var(--text-3); }
+.or-dg-subject > b { min-width: 0; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.or-dg-count { font-size: 12px; line-height: 16px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+@media (max-width: 1000px) { .or-dg { grid-template-columns: minmax(0, 1fr); } }
