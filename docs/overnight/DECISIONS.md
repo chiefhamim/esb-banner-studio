@@ -55,4 +55,12 @@ here **before** the change.
   `tools/e2e/insights-test.mjs`, one `test:insights` script line in `package.json`. Both may append one
   screen id to `tools/e2e/overnight-shots.mjs`. Anything else shared (`store.ts`, `shellStore.ts`, `src/ui/*`,
   `esb.d.ts`, `electron/*`) is off limits without a new entry here.
+- **D11 / D12 / D13 — File ownership for W4, W3, W5** is the "Ownership" section at the end of each brief
+  (`docs/overnight/briefs/W4.md`, `W3.md`, `W5.md`). W3 is the only one with pre-approved `electron/*` and
+  `esb.d.ts` edits (the engine is being extended, per the directive); W5's gate is precisely that it needs none.
+- **D14 — W3 and W5 start in parallel with W1/W2, not after W4.** The ladder orders them later, but their only
+  stated dependency rule is "start as their dependencies integrate" and neither depends on W1/W2/W4 (W4 does
+  depend on W2's publish log). W3 is the longest workstream; giving it the night is the only way it can reach
+  its crash-recovery e2e. If budget runs short the cut order is unchanged: W5, then W3, then W4. Four builders
+  share one machine; each worktree has its own ports and cache (D3).
 - **D7 — W6 is woven into W2's builder** (directive §5): same agent, same worktree, separate commits (`W6:`).
