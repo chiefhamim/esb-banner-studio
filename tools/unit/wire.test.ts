@@ -340,6 +340,23 @@ describe('Wire — polish (QA findings)', () => {
     expect(useWire.getState().sources[0].lastError).toBeNull()
   })
 
+  it('dismissed titles match exactly: the next day\'s near-identical title still comes in', async () => {
+    const feed = (host: string, titles: string[]) => `<rss><channel><title>${host}</title>${titles.map((t, k) => `<item><title>${t}</title><link>https://${host}.example.com/${k}</link></item>`).join('')}</channel></rss>`
+    const day3 = 'Power Division load-shedding schedule for Dhaka on 3 November 2026'
+    const day4 = 'Power Division load-shedding schedule for Dhaka on 4 November 2026'
+    expect(similar(day3, day4)).toBe(true) // near-duplicate for dedupe, but not for dismissal
+    const feeds: Record<string, string> = { 'https://a.example.com/rss': feed('a', [day3]) }
+    const fetchFn: FetchFn = async (url) => ({ ok: true, html: feeds[url], url })
+    useWire.getState().addSource({ url: 'https://a.example.com/rss' })
+    await useWire.getState().pollDue(now, fetchFn)
+    useWire.getState().dismiss(useWire.getState().items[0].id)
+    feeds['https://b.example.com/rss'] = feed('b', [`${day3}!`, day4])
+    useWire.getState().addSource({ url: 'https://b.example.com/rss' })
+    const r = await useWire.getState().pollDue(now + MIN, fetchFn)
+    expect(useWire.getState().items.map((i) => i.title)).toEqual([day4])
+    expect(r?.added).toBe(1)
+  })
+
   it('a dismissed story stays dismissed when another feed carries it under a different link', async () => {
     useWire.getState().addSource({ url: 'https://news.example.com/feed.xml' })
     await useWire.getState().pollDue(now, async (url) => ({ ok: true, html: RSS, url }))
