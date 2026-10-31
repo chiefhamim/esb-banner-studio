@@ -101,4 +101,12 @@ here **before** the change.
   alone. `tools/e2e/editorial-test.mjs` gains one check ("Publishing fires esb:story-published and the library
   harvests the story with its slug (D9 end-to-end)", read after the panel has loaded) and then clears the
   library so W1's on-demand checks run as written. No assertion was removed or weakened: 75/75.
+- **D20 — W3 is cut (not merged).** At 06:50 the sequence still ahead was: W4 (building), W5 polish, QA for W4,
+  two merges with regression runs, the final adversarial pass, the report, push and shutdown. W3 — the largest
+  workstream (engine extension, renderer executor, two views, a crash-recovery Electron e2e) — had no accept
+  check run before the rate-limit stop and would need roughly three hours plus QA; it cannot reach "green and
+  verified" tonight. Per §6 cut order after W5 is W3. Its partial engine work is committed on
+  `overnight/w3-scheduler` as a WIP commit marked NOT merged / NOT verified, so it is pushed and resumable.
+  The Telegram/X/LinkedIn boundary and the W3 design (renderer executes, engine schedules/ledgers/gates,
+  exactly-once by key) are in `docs/overnight/briefs/W3.md` for the next session.
 
