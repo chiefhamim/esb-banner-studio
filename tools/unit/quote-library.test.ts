@@ -245,6 +245,58 @@ describe('store', () => {
     const id = useQuoteLibrary.getState().entries[0].id
     await st.remove(id)
     expect(useQuoteLibrary.getState().entries.some((e) => e.id === id)).toBe(false)
+    expect(useQuoteLibrary.getState().last).toBeNull() // the "N added" note no longer describes the list
+  })
+
+  it('a remove the storage refuses is reported and the entry stays', async () => {
+    const before = useQuoteLibrary.getState().entries
+    setLibraryStorage(memStore((k) => k === INDEX_KEY))
+    await useQuoteLibrary.getState().remove(before[0].id)
+    expect(useQuoteLibrary.getState().entries).toEqual(before)
+    expect(useQuoteLibrary.getState().problem).toMatch(/Could not remove/)
+  })
+
+  it('a publish event for a story this desk does not know files nothing', async () => {
+    setLibraryStorage(memStore())
+    const n = useQuoteLibrary.getState().entries.length
+    const r = await useQuoteLibrary.getState().harvestActive({ storyId: 'someone-elses-story', slug: 'x' }, 'published')
+    expect(r).toEqual({ found: 0, added: 0, updated: 0, merged: 0, failed: 0 })
+    expect(useQuoteLibrary.getState().entries.length).toBe(n)
+    expect(useQuoteLibrary.getState().entries.some((e) => e.storyId === 'someone-elses-story')).toBe(false)
+  })
+})
+
+describe('quotation marks (QA cases): no narration is ever taken for a quote', () => {
+  const quotes = (t: string) => harvestStory(story({ draftText: t, sourceText: '' }), seedSpeakers()).filter((e) => e.kind === 'quote').map((e) => ({ text: e.text, speaker: e.speaker, title: e.speakerTitle }))
+
+  it('an apostrophe inside a double-quoted statement does not end it', () => {
+    const t = `"We need Bangladesh's gas fields to deliver more," said Karim Hossain, chairman of BPDB. Later the minister added: "Tariffs will stay where they are for now."`
+    expect(quotes(t)).toEqual([
+      { text: "We need Bangladesh's gas fields to deliver more", speaker: 'Karim Hossain', title: 'chairman of BPDB' },
+      { text: 'Tariffs will stay where they are for now.', speaker: undefined, title: undefined },
+    ])
+  })
+
+  it('an unclosed quote does not run across paragraphs or swallow the next quote', () => {
+    const t = `The chairman said "the grid is stable and we are ready\n\nIn other news, "Load-shedding will end soon," said Rafiq Islam.`
+    expect(quotes(t)).toEqual([{ text: 'Load-shedding will end soon', speaker: 'Rafiq Islam', title: '' }])
+    // the same, inside one paragraph
+    expect(quotes(t.replace('\n\n', ' ')).map((q) => q.text)).toEqual(['Load-shedding will end soon'])
+  })
+
+  it('curly double quotes keep an apostrophe inside', () => {
+    const t = `“Petrobangla’s new wells will add gas by winter,” said Nasrin Akter, a director at Petrobangla.`
+    expect(quotes(t)).toEqual([{ text: 'Petrobangla’s new wells will add gas by winter', speaker: 'Nasrin Akter', title: 'a director at Petrobangla' }])
+  })
+
+  it('curly single quotes keep an apostrophe inside; possessives alone are not quotes', () => {
+    const t = `‘We won’t raise the gas price this year,’ said Rafiq Islam. The ministry’s plan and the plant’s output stayed the same.`
+    expect(quotes(t).map((q) => q.text)).toEqual(['We won’t raise the gas price this year'])
+  })
+
+  it('keeps the 8–160 character limits', () => {
+    expect(quotes('He said "too few" and left.')).toEqual([])
+    expect(quotes(`"${'a'.repeat(170)}," said Rafiq Islam.`)).toEqual([])
   })
 })
 

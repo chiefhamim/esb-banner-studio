@@ -5,42 +5,42 @@
 
  RUN  v5.0.5 C:/Users/hamim/esb-overnight/w1
 
-(node:21892) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:2352) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:11252) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:6916) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:12440) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:27572) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:12860) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:4804) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:8436) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:3196) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:19584) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:15072) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:1452) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:18188) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:5292) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:27840) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:10156) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:20176) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:14804) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:23480) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:24068) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:12084) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:25824) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:22316) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:26836) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:19616) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:7648) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:15816) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:192) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(node:4276) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
 
- Test Files  62 passed (62)
-      Tests  575 passed (575)
-   Start at  03:12:18
-   Duration  3.53s (tests 36%, import 27%, environment 25%, transform 12%, worker 1%)
+ Test Files  63 passed (63)
+      Tests  588 passed (588)
+   Start at  03:26:53
+   Duration  3.36s (tests 41%, import 29%, environment 26%, transform 3%, worker 2%)
 
-    Isolate  62 workers spawned · ~215ms startup each (spawn + environment, per file)
-             at least ~996ms faster with isolate: false — reuses workers across files instead of one per file
+    Isolate  63 workers spawned · ~207ms startup each (spawn + environment, per file)
+             at least ~978ms faster with isolate: false — reuses workers across files instead of one per file
 

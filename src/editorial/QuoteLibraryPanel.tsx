@@ -129,6 +129,7 @@ export function QuoteLibraryPanel() {
   const entries = useQuoteLibrary((s) => s.entries)
   const speakers = useQuoteLibrary((s) => s.speakers)
   const last = useQuoteLibrary((s) => s.last)
+  const problem = useQuoteLibrary((s) => s.problem)
   const load = useQuoteLibrary((s) => s.load)
   const harvestActive = useQuoteLibrary((s) => s.harvestActive)
   const [query, setQuery] = useState('')
@@ -159,7 +160,7 @@ export function QuoteLibraryPanel() {
     setError(null)
     try { await harvestActive() } catch (err) { setError(err instanceof Error ? err.message : 'The harvest did not finish.') }
   }
-  const message = error ?? resultText(last)
+  const message = error ?? problem ?? resultText(last)
   const harvestBtn = (
     <button type="button" className="btn sm ql-harvest" onClick={() => void harvest()} disabled={busy || !loaded}>
       <Icon name="plus" size={14} /><span>{busy ? 'Harvesting' : 'Harvest from this story'}</span>
@@ -182,7 +183,7 @@ export function QuoteLibraryPanel() {
           <span className="ql-count">{entries.length} saved</span>
         </div>
       )}
-      {message && <p className={'ql-note' + (error || last?.failed ? ' bad' : '')} role="status">{message}</p>}
+      {message && <p className={'ql-note' + (error || problem || last?.failed ? ' bad' : '')} role="status">{message}</p>}
 
       {entries.length > 0 && (
         <>

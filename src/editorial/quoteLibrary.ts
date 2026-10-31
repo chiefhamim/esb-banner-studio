@@ -133,7 +133,8 @@ const BEFORE = new RegExp(String.raw`(${NAME})(?:\s*,\s*([^,"“”]{2,90}?)\s*,
 
 function cleanTitle(t: string | undefined): string {
   if (!t) return ''
-  return t.split(/\s+(?:on|at|in a|in an|while|during|when|after|before|told|said|yesterday|today)\b/)[0].replace(/^[\s,–—-]+|[\s,.;:–—-]+$/g, '').slice(0, 90)
+  // "at a press conference" ends the title; "a director at Petrobangla" does not
+  return t.split(/\s+(?:on|at an?|in a|in an|while|during|when|after|before|told|said|yesterday|today)\b/)[0].replace(/^[\s,–—-]+|[\s,.;:–—-]+$/g, '').slice(0, 90)
 }
 
 /** Split "BERC Chairman Jalal Ahmed" into a title and a name; a name with no role words is all name. */
@@ -224,18 +225,55 @@ export interface HarvestInput {
   now?: number
 }
 
-const PAIRS: Record<string, string> = { '"': '"”', '“': '”"', '‘': '’', "'": "'" }
-/** The fact table matches any quotation mark against any other; keep only real pairs, and a straight ' only at a word edge (not an apostrophe). */
-function isRealQuote(text: string, offset: number, raw: string): boolean {
-  const open = raw[0], close = raw[raw.length - 1]
-  if (!PAIRS[open]?.includes(close)) return false
-  if (open === "'" || open === '‘') {
-    const prev = text[offset - 1]
-    if (prev && /[\p{L}\p{N}]/u.test(prev)) return false
+// Quotations are found here, not taken from the fact table: its pattern pairs any quotation mark with any other, so an
+// apostrophe inside a quote ("Bangladesh's") ended it early and the narration between two quotes was read as a quote.
+const isWordChar = (c: string | undefined) => !!c && /[\p{L}\p{N}\p{M}]/u.test(c)
+const DOUBLE_OPEN = '“"', SINGLE_OPEN = "‘'"
+
+/** An opening mark: “ anywhere; ‘ not inside a word; a straight mark only at the start of a word. */
+function opensAt(p: string, i: number): boolean {
+  const c = p[i], prev = p[i - 1], next = p[i + 1]
+  if (c === '“') return true
+  if (c === '‘') return !isWordChar(prev)
+  if (c === '"' || c === "'") return !isWordChar(prev) && !!next && !/\s/.test(next)
+  return false
+}
+
+/** A closing mark for `open`: ” or " after a double mark, ’ or ' after a single one — never an apostrophe between letters. */
+function closesAt(p: string, i: number, open: string): boolean {
+  const c = p[i], prev = p[i - 1], next = p[i + 1]
+  if (DOUBLE_OPEN.includes(open) ? c !== '”' && c !== '"' : c !== '’' && c !== "'") return false
+  if (isWordChar(prev) && isWordChar(next)) return false // Bangladesh's, won’t
+  if (!prev || /\s/.test(prev)) return false // a closing mark ends a word
+  return !isWordChar(next)
+}
+
+/**
+ * Quoted statements, one paragraph (line) at a time: “ pairs with ” (or "), a straight " with the next " or ”, ‘ with ’.
+ * An opening mark followed by another opening mark of the same kind before any close was never closed and is skipped,
+ * so one unclosed quote cannot swallow the narration up to the next one. The inside is 8–160 characters.
+ */
+export function findQuotes(text: string): { offset: number; raw: string; inner: string }[] {
+  const out: { offset: number; raw: string; inner: string }[] = []
+  for (const m of text.matchAll(/[^\n]+/g)) {
+    const p = m[0], base = m.index ?? 0
+    let i = 0
+    while (i < p.length) {
+      if (!(DOUBLE_OPEN + SINGLE_OPEN).includes(p[i]) || !opensAt(p, i)) { i++; continue }
+      const open = p[i]
+      const family = DOUBLE_OPEN.includes(open) ? DOUBLE_OPEN : SINGLE_OPEN
+      let close = -1, restart = -1
+      for (let j = i + 1; j < p.length; j++) {
+        if (closesAt(p, j, open)) { close = j; break }
+        if (family.includes(p[j]) && opensAt(p, j)) { restart = j; break }
+      }
+      if (close < 0) { i = restart >= 0 ? restart : i + 1; continue }
+      const inner = p.slice(i + 1, close).trim()
+      if (inner.length >= 8 && inner.length <= 160) out.push({ offset: base + i, raw: p.slice(i, close + 1), inner })
+      i = close + 1
+    }
   }
-  const after = text[offset + raw.length]
-  if ((close === "'" || close === '’') && after && /[\p{L}]/u.test(after)) return false
-  return true
+  return out
 }
 
 const STOP = new Set(['of', 'a', 'an', 'the', 'to', 'for', 'by', 'at', 'in', 'on', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'with', 'from', 'as', 'than', 'about', 'some', 'total', 'nearly', 'around', 'over', 'almost', 'up', 'will', 'would', 'has', 'have', 'had', 'its', 'their', 'per'])
@@ -288,23 +326,24 @@ export function harvestStory(input: HarvestInput, speakers: Speaker[] = []): Lib
 
   for (const { from, text } of texts) {
     if (!text?.trim()) continue
+    for (const q of findQuotes(text)) {
+      const at = q.offset
+      // the words exactly as printed; only the comma English puts before "said" is dropped ("…peak," said X)
+      const quote = q.inner.replace(/,$/, '')
+      const key = normQuote(quote)
+      const id = 'q' + hash(`${input.storyId}|quote|${key}`)
+      if (!key || seen.has(id)) continue
+      seen.add(id)
+      const s = sentenceAround(text, at, at + q.raw.length)
+      const who = attribute(text.slice(s.from, at), text.slice(at + q.raw.length, s.to))
+      const org = (who && (findOrg(who.name, speakers) === who.name ? who.name : findOrg(who.title, speakers))) || undefined
+      const speakerId = linkSpeaker(who?.name, speakers)
+      out.push({ id, kind: 'quote', text: quote, ...(who ? { speaker: who.name, speakerTitle: who.title } : {}), ...(speakerId ? { speakerId } : {}), ...(org ? { org } : {}), sentence: s.text, from, ...base })
+    }
     for (const f of extractFactTable(text)) {
       const at = f.sourceOffset ?? text.indexOf(f.raw)
       if (at < 0) continue
-      if (f.kind === 'quote') {
-        if (!isRealQuote(text, at, f.raw)) continue
-        // the words exactly as printed; only the comma English puts before "said" is dropped ("…peak," said X)
-        const quote = f.normalized.trim().replace(/,$/, '')
-        const key = normQuote(quote)
-        const id = 'q' + hash(`${input.storyId}|quote|${key}`)
-        if (!key || seen.has(id)) continue
-        seen.add(id)
-        const s = sentenceAround(text, at, at + f.raw.length)
-        const who = attribute(text.slice(s.from, at), text.slice(at + f.raw.length, s.to))
-        const org = (who && (findOrg(who.name, speakers) === who.name ? who.name : findOrg(who.title, speakers))) || undefined
-        const speakerId = linkSpeaker(who?.name, speakers)
-        out.push({ id, kind: 'quote', text: quote, ...(who ? { speaker: who.name, speakerTitle: who.title } : {}), ...(speakerId ? { speakerId } : {}), ...(org ? { org } : {}), sentence: s.text, from, ...base })
-      } else if (f.kind === 'number' || f.kind === 'currency') {
+      if (f.kind === 'number' || f.kind === 'currency') {
         // the unit pattern runs over ASCII digits; a Bengali digit is one character too, so the offsets hold
         const written = text.slice(at, at + f.raw.length).trim()
         let value: number, unit: string
@@ -477,6 +516,8 @@ interface LibraryState {
   speakers: Speaker[]
   /** The outcome of the last harvest, shown once it has been written. */
   last: (HarvestResult & { at: number; trigger: 'manual' | 'published' }) | null
+  /** A change that could not be stored (shown in place of the last harvest's note). */
+  problem: string | null
   load: () => Promise<void>
   harvest: (input: HarvestInput, trigger?: 'manual' | 'published') => Promise<HarvestResult>
   /** Harvest the story on the desk; `extra` carries what a publish knows (story id, slug, URL). */
@@ -516,6 +557,7 @@ export const useQuoteLibrary = create<LibraryState>((set, get) => ({
   entries: [],
   speakers: [],
   last: null,
+  problem: null,
 
   load: () => (loading ??= (async () => {
     const [lib, speakers] = await Promise.all([loadLibrary(), loadSpeakers()])
@@ -534,7 +576,7 @@ export const useQuoteLibrary = create<LibraryState>((set, get) => ({
       const nextSpeakers = withNewSpeakers(speakers, m.changed.filter((e) => !failed.includes(e.id)))
       if (nextSpeakers !== speakers && (await saveSpeakers(nextSpeakers))) set({ speakers: nextSpeakers })
       const res: HarvestResult = { found: found.length, added: m.added.filter((id) => !failed.includes(id)).length, updated: m.updated, merged: m.merged, failed: failed.length }
-      set({ entries, last: { ...res, at: Date.now(), trigger } })
+      set({ entries, last: { ...res, at: Date.now(), trigger }, problem: null })
       return res
     } finally {
       set({ busy: false })
@@ -547,6 +589,8 @@ export const useQuoteLibrary = create<LibraryState>((set, get) => ({
     const { activeId, stories } = useStoryQueue.getState()
     const storyId = str(extra.storyId, 80) ?? activeId ?? 'desk'
     const item = stories.find((s) => s.id === storyId)
+    // an event naming a story this desk does not know: filing the desk's text under that id would mislabel it
+    if (extra.storyId && storyId !== activeId && !item) return Promise.resolve({ found: 0, added: 0, updated: 0, merged: 0, failed: 0 })
     // a publish event for a story that is no longer on the desk harvests that story's own saved copy
     const snap = item && storyId !== activeId ? item.snapshot : (() => { const e = useEditorialStore.getState(); return { draft: e.draft, source: e.source } })()
     const d = snap.draft
@@ -568,9 +612,13 @@ export const useQuoteLibrary = create<LibraryState>((set, get) => ({
     const entries = prev.filter((e) => e.id !== id)
     try {
       await storage.set(INDEX_KEY, { v: 1, rows: entries.map(indexRow) } satisfies IndexRecord)
-    } catch { return }
+    } catch {
+      set({ last: null, problem: 'Could not remove it: this computer did not accept the change.' })
+      return
+    }
     await storage.del(entryKey(id)).catch(() => {})
-    set({ entries })
+    // the last harvest's "N added" no longer describes the list
+    set({ entries, last: null, problem: null })
   }),
 
   editSpeaker: (id, patch) => serial(async () => {
