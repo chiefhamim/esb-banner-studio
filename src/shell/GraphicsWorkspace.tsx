@@ -491,23 +491,23 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
 
       <svg className="corner-join" viewBox="0 0 15 15" aria-hidden focusable="false"><path d="M14.5 .5A14 14 0 0 0 .5 14.5" /></svg>
       <nav className="toolbar">
-        <IconButton icon="select" tip="Select (V)" tipPos="right" size={18} active={tool === 'select'} onClick={() => st().setTool('select')} />
-        <IconButton icon="hand" tip="Hand — pan (H / Space)" tipPos="right" size={18} active={tool === 'hand'} onClick={() => st().setTool('hand')} />
+        <IconButton icon="select" tip="Select (V)" tipPos="right" size={16} active={tool === 'select'} onClick={() => st().setTool('select')} />
+        <IconButton icon="hand" tip="Hand — pan (H / Space)" tipPos="right" size={16} active={tool === 'hand'} onClick={() => st().setTool('hand')} />
         <hr />
-        <IconButton icon="text" tip="Add text (T)" tipPos="right" size={18} onClick={() => st().addText()} />
-        <IconButton icon="square" tip="Add rectangle (R)" tipPos="right" size={18} onClick={() => st().addRect()} />
-        <IconButton icon="image" tip="Add image layer" tipPos="right" size={18} onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setImgMenu({ x: r.right + 8, y: r.top }) }} />
+        <IconButton icon="text" tip="Add text (T)" tipPos="right" size={16} onClick={() => st().addText()} />
+        <IconButton icon="square" tip="Add rectangle (R)" tipPos="right" size={16} onClick={() => st().addRect()} />
+        <IconButton icon="image" tip="Add image layer" tipPos="right" size={16} onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setImgMenu({ x: r.right + 8, y: r.top }) }} />
         <div className="grow" />
-        <IconButton icon="ruler" tip="Rulers & guides" tipPos="right" size={18} className="toggle" active={rulers} onClick={() => st().setRulers(!rulers)} />
-        <IconButton icon="magnet" tip="Snap to edges, centres & guides" tipPos="right" size={18} className="toggle" active={snap} onClick={() => st().setSnap(!snap)} />
-        <IconButton icon="crop" tip="Crop guides — see how Facebook trims this banner" tipPos="right" size={18} className="toggle" active={cropGuides} onClick={() => st().setCropGuides(!cropGuides)} />
-        <IconButton icon="dimension" tip="Element dimensions — toggle accurate size badges (D)" tipPos="right" size={18} className="toggle" active={showDimensions} onClick={() => {
+        <IconButton icon="ruler" tip="Rulers & guides" tipPos="right" size={16} className="toggle" active={rulers} onClick={() => st().setRulers(!rulers)} />
+        <IconButton icon="magnet" tip="Snap to edges, centres & guides" tipPos="right" size={16} className="toggle" active={snap} onClick={() => st().setSnap(!snap)} />
+        <IconButton icon="crop" tip="Crop guides — see how Facebook trims this banner" tipPos="right" size={16} className="toggle" active={cropGuides} onClick={() => st().setCropGuides(!cropGuides)} />
+        <IconButton icon="dimension" tip="Element dimensions — toggle accurate size badges (D)" tipPos="right" size={16} className="toggle" active={showDimensions} onClick={() => {
           const next = !showDimensions
           st().setShowDimensions(next)
           st().setNotice(next ? 'Element dimensions: Visible' : 'Element dimensions: Hidden')
         }} />
-        <IconButton icon={theme === 'dark' ? 'sun' : 'moon'} tip={theme === 'dark' ? 'Light theme' : 'Dark theme'} tipPos="right" size={18} onClick={() => st().setTheme(theme === 'dark' ? 'light' : 'dark')} />
-        <IconButton icon="keyboard" tip="Keyboard shortcuts (?)" tipPos="right" size={18} onClick={() => setShowKeys(true)} />
+        <IconButton icon={theme === 'dark' ? 'sun' : 'moon'} tip={theme === 'dark' ? 'Light theme' : 'Dark theme'} tipPos="right" size={16} onClick={() => st().setTheme(theme === 'dark' ? 'light' : 'dark')} />
+        <IconButton icon="keyboard" tip="Keyboard shortcuts (?)" tipPos="right" size={16} onClick={() => setShowKeys(true)} />
       </nav>
       {imgMenu && (
         <ContextMenu x={imgMenu.x} y={imgMenu.y} onClose={() => setImgMenu(null)} items={[

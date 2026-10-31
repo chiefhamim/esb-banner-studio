@@ -743,7 +743,14 @@ export function Panel({ title, sub, icon, actions, children, defaultOpen = true,
   return (
     <section ref={ref} className={'pnl' + (open ? ' open' : '')} data-panel={id ?? title}
       // tells the banner which element this panel edits, so it can show where you are
-      onFocus={focusKey ? () => window.dispatchEvent(new CustomEvent('esb:panel-focus', { detail: focusKey })) : undefined}
+      // — only while typing in one of its fields or moving through it by keyboard: a mouse click on a button (picking a
+      // category, shuffling them) focuses that button too, and framed the banner's chip as if it were selected
+      onFocus={focusKey ? (e) => {
+        const t = e.target as HTMLElement
+        const typing = t.matches('input, textarea, select, [contenteditable="true"]')
+        if (typing || t.matches(':focus-visible')) window.dispatchEvent(new CustomEvent('esb:panel-focus', { detail: focusKey }))
+        else window.dispatchEvent(new CustomEvent('esb:panel-focus', { detail: null }))
+      } : undefined}
       onBlur={focusKey ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) window.dispatchEvent(new CustomEvent('esb:panel-focus', { detail: null })) } : undefined}>
       <header onClick={() => (open ? setOpen(false) : reveal())} role="button" aria-expanded={open} tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (open) setOpen(false); else reveal() } }}>

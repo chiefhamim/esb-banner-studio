@@ -1,4 +1,5 @@
 import { getCollage } from './collage'
+import { drawVignette, processedPhoto, slotAdjust } from './photoEdit'
 import { figmaGradient, rgba } from './gradient'
 import { drawText, layoutText } from './text'
 import type { Backdrop, El, IconEl, PhotoSlot, PhotosEl, RectEl, Scene, WatermarkEl } from './types'
@@ -139,32 +140,13 @@ export function drawSlotImage(ctx: Ctx, img: Assets[string], slot: PhotoSlot, r:
   }
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
-  const br = 1 + (slot.brightness ?? 0) / 100
-  const ct = 1 + (slot.contrast ?? 0) / 100
-  const sat = 1 + (slot.saturation ?? 0) / 100
-  const wm = slot.warmth ?? 0
-  const filters: string[] = []
-  if (br !== 1) filters.push(`brightness(${br})`)
-  if (ct !== 1) filters.push(`contrast(${ct})`)
-  if (sat !== 1) filters.push(`saturate(${sat})`)
-  if (wm !== 0) {
-    if (wm > 0) filters.push(`sepia(${Math.round(wm * 0.35)}%) hue-rotate(-${Math.round(wm * 0.15)}deg)`)
-    else filters.push(`hue-rotate(${Math.round(wm * 0.25)}deg)`)
-  }
-  if (filters.length) ctx.filter = filters.join(' ')
-  ctx.drawImage(img, dx, dy, dw, dh)
+  // the photo editor's pixel work is done once on a cached copy (photoEdit.ts); blur and vignette belong to the slot
+  const a = slotAdjust(slot)
+  const pic = processedPhoto(img, a)
+  if (a.blur) ctx.filter = `blur(${(a.blur * Math.max(r.w, r.h) / 1080).toFixed(2)}px)`
+  ctx.drawImage(pic, dx, dy, dw, dh)
   ctx.filter = 'none'
-
-  if (slot.vignette && slot.vignette > 0) {
-    const vig = ctx.createRadialGradient(
-      r.x + r.w / 2, r.y + r.h / 2, Math.min(r.w, r.h) * 0.3,
-      r.x + r.w / 2, r.y + r.h / 2, Math.max(r.w, r.h) * 0.75
-    )
-    vig.addColorStop(0, 'rgba(0,0,0,0)')
-    vig.addColorStop(1, `rgba(0,0,0,${((slot.vignette / 100) * 0.8).toFixed(2)})`)
-    ctx.fillStyle = vig
-    ctx.fillRect(r.x, r.y, r.w, r.h)
-  }
+  drawVignette(ctx, r, a.vignette ?? 0)
 }
 
 function drawPhotos(ctx: Ctx, el: PhotosEl, assets: Assets) {

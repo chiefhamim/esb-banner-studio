@@ -15,6 +15,9 @@ import type { MenuEntry } from '../ui/controls'
 import { Icon, KIND_ICON } from '../ui/Icon'
 import { Quickbar } from './Quickbar'
 
+/** The words of a Quote / Stats card: they move and re-wrap with its text box ('card-box'). */
+const CARD_TEXT_IDS = new Set(['headline', 'speaker-name', 'speaker-title', 'quote-mark', 'quote-rule', 'stat-label', 'stat-delta', 'stat-note', 'stat-rule', 'card-bar', 'card-frame'])
+
 type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 type Box = { x: number; y: number; w: number; h: number }
 type Pt = { x: number; y: number }
@@ -196,6 +199,7 @@ export function Stage({ base }: { base: Assets }) {
   const [avail, setAvail] = useState({ w: 800, h: 600 })
   const [snapLines, setSnapLines] = useState<SnapLine[]>([])
   const [hover, setHover] = useState<string | null>(null)
+  const photoOriginal = useStore((s) => s.photoOriginal)
   const [marquee, setMarquee] = useState<Box | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuEntry[] } | null>(null)
   const [editing, setEditing] = useState<{ id: string; value: string; content?: 'headline' | 'credit' } | null>(null)
@@ -300,9 +304,11 @@ export function Stage({ base }: { base: Assets }) {
       return
     }
     frozen.current = null
-    const liveScene = editing ? { ...scene, elements: scene.elements.map((e) => (e.id === editing.id ? { ...e, visible: false } : e)) } : scene
+    let liveScene = editing ? { ...scene, elements: scene.elements.map((e) => (e.id === editing.id ? { ...e, visible: false } : e)) } : scene
+    // photo editor's "hold to see the original": the same scene with every photo's edit left out
+    if (photoOriginal) liveScene = { ...liveScene, elements: liveScene.elements.map((e) => (e.kind === 'photos' ? { ...e, slots: e.slots.map((sl) => ({ ...sl, adjust: undefined, brightness: 0, contrast: 0, saturation: 0, warmth: 0, vignette: 0 })) } : e)) }
     renderScene(ctx, liveScene, assets)
-  }, [scene, scale, W, H, base, images, editing])
+  }, [scene, scale, W, H, base, images, editing, photoOriginal])
 
   // keep the design point under the cursor fixed while zooming with Ctrl+wheel
   useLayoutEffect(() => {
@@ -319,10 +325,34 @@ export function Stage({ base }: { base: Assets }) {
     return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale }
   }, [scale])
 
-  const photos = scene.elements.find((e): e is PhotosEl => e.kind === 'photos')
+  const photos = scene.elements.find((e): e is PhotosEl => e.kind === 'photos' && e.visible)
   const slotBoxes = useMemo(() => (photos ? slotRects(photos) : []), [photos])
   const selEls = selectedIds.map((id) => scene.elements.find((e) => e.id === id)).filter((e): e is El => !!e)
   const single = selEls.length === 1 ? selEls[0] : null
+
+  /** On Quote and Stats cards the header and footer are bands that move as one: the band's background plus every
+   *  visible element lying inside it (logo, date, category chip, stripes, handles…). Null for anything else. */
+  const bandBlock = (el: El): El[] | null => {
+    for (const bgId of ['header-bg', 'footer-bg']) {
+      const bg = scene.elements.find((x) => x.id === bgId && x.visible)
+      if (!bg) continue
+      const within = (x: El) => x.x >= bg.x - 1 && x.y >= bg.y - 1 && x.x + x.w <= bg.x + bg.w + 1 && x.y + x.h <= bg.y + bg.h + 1
+      if (el.id === bgId || within(el)) return scene.elements.filter((x) => x.visible && x.kind !== 'photos' && x.kind !== 'watermark' && (x.id === bgId || within(x)))
+    }
+    return null
+  }
+
+  /** The empty-photo placeholder is a page overlay above the canvas; on Quote / Stats cards a header or footer the editor
+   *  dragged over the photo is drawn above the photo, so the placeholder stops at the band's edge instead of hiding it. */
+  const clearOfBands = (b: { x: number; y: number; w: number; h: number }) => {
+    if ((content.cardType ?? 'standard') === 'standard') return b
+    let top = b.y, bottom = b.y + b.h
+    const hb = scene.elements.find((x) => x.id === 'header-bg' && x.visible)
+    if (hb && hb.y + hb.h > top && hb.y < top + 1) top = Math.min(bottom, hb.y + hb.h)
+    const fb = scene.elements.find((x) => x.id === 'footer-bg' && x.visible)
+    if (fb && fb.y < bottom && fb.y + fb.h > bottom - 1) bottom = Math.max(top, fb.y)
+    return { x: b.x, y: top, w: b.w, h: bottom - top }
+  }
 
   /** Topmost element under the point. Backdrops (panels, the headline icon's big clip area) only count when asked for (double-click, Alt+click, context menu). */
   const hitTest = (p: Pt, includeLocked = false, includeBackdrops = false): El | null => {
@@ -404,7 +434,25 @@ export function Stage({ base }: { base: Assets }) {
       hint.set('Release to select everything inside the box')
       return
     }
-    const hit = hitTest(p)
+    const card = content.cardType ?? 'standard'
+    // Quote and Stats cards: the header and footer bands are blocks — a click on their background picks them up too
+    let hit = hitTest(p)
+    // …and so is the band behind the words: a click on it (anywhere but on the words themselves, which belong to the
+    // text box) picks the band up, so it can be dragged or pulled taller from its top edge like any layer
+    const bandAt = () => scene.elements.find((x) => (x.id === 'band' || x.id === 'panel') && x.visible && !x.locked && inside(p, x)) ?? null
+    if (card !== 'standard' && !e.altKey) {
+      if (!hit) {
+        const bg = hitTest(p, false, true)
+        if (bg && (bg.id === 'header-bg' || bg.id === 'footer-bg')) hit = bg
+        else hit = bandAt() ?? hit
+      } else if (hit.id === 'card-box' && !selectedIds.includes('card-box')) hit = bandAt() ?? hit
+    }
+    // …and the words of the card belong to its text box: a click on any of them picks the box up, so one drag moves
+    // the whole block and its handles resize it (the text re-wraps). Double-click still edits a line; Alt+click picks it.
+    if (hit && card !== 'standard' && !e.altKey && CARD_TEXT_IDS.has(hit.id) && !selectedIds.includes(hit.id)) {
+      const box = scene.elements.find((x) => x.id === 'card-box' && x.visible && !x.locked)
+      if (box) hit = box
+    }
     altClick.current = e.altKey ? p : null
 
     // inside a photo: drag pans the picture (Alt + drag moves the whole photo block)
@@ -438,6 +486,17 @@ export function Stage({ base }: { base: Assets }) {
       const o = useStore.getState().doc.overrides[`${format}:${hit.id}`]
       drag.current = { kind: 'icon', id: hit.id, p0: p, dx0: o?.iconDx ?? 0, dy0: o?.iconDy ?? 0, started: false }
       hint.set('Dragging moves the icon · corners resize it · Shift locks the axis')
+      return
+    }
+    // …and everything in that band moves with it: one drag moves the whole header or footer. A double-click selects
+    // one element inside it (the date, a handle) and Alt+click the single layer under the pointer, as anywhere else.
+    const block = card !== 'standard' && !e.altKey && !selectedIds.includes(hit.id) ? bandBlock(hit) : null
+    if (block) {
+      const ids = block.map((x) => x.id)
+      selectMany(ids)
+      const starts = block.filter((x) => !x.locked).map((x) => ({ id: x.id, box: { x: x.x, y: x.y, w: x.w, h: x.h } }))
+      drag.current = { kind: 'move', p0: p, starts, union: unionOf(starts.map((s) => s.box)), started: false }
+      hint.set(`Moving the whole ${hit.id === 'footer-bg' || block.some((x) => x.id === 'footer-bg') ? 'footer' : 'header'} · double-click to pick one element · Alt+click for a single layer`)
       return
     }
     const ids = selectedIds.includes(hit.id) ? selectedIds : [hit.id]
@@ -1002,8 +1061,8 @@ export function Stage({ base }: { base: Assets }) {
                 : opt.deduction
 
               return (
-                <div key={i} className={'slot-box' + (active ? ' active' : '') + (active && i === selectedSlot ? ' current' : '') + (empty ? ' empty' : '')}
-                  style={{ left: px(b.x), top: px(b.y), width: px(b.w), height: px(b.h) }}>
+                <div key={i} className={'slot-box' + (active ? ' active' : '') + (active && i === selectedSlot ? ' current' : '') + (empty ? ' empty' : '') + (empty && (content.cardType ?? 'standard') !== 'standard' ? ' see-through' : '')}
+                  style={(() => { const v = empty ? clearOfBands(b) : b; return { left: px(v.x), top: px(v.y), width: px(v.w), height: Math.max(0, px(v.h)) } })()}>
                   {!empty && active && i === selectedSlot && dragKind === 'pan' && (
                     <div className="thirds-grid" aria-hidden="true">
                       <div className="tg-line tg-v1" />

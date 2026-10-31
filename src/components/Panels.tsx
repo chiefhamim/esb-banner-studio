@@ -3,10 +3,10 @@ import type { ReactNode } from 'react'
 import { COLLAGES } from '../core/collage'
 import { FONTS } from '../core/fonts'
 import type { FontId } from '../core/fonts'
-import { dateParts, headlineSize } from '../core/templates'
+import { QUOTE_PRESETS, STAT_PRESETS, cardDesign, dateParts, headlineSize } from '../core/templates'
 import { CATEGORIES, getFormat, OPTIMAL_IMAGE_SPACES } from '../core/tokens'
 import type { Category } from '../core/tokens'
-import type { Backdrop, CardType, El, Override, PhotosEl, Shadow, Stroke, TextEl } from '../core/types'
+import type { Backdrop, CardDesign, CardType, El, Override, PhotosEl, Shadow, Stroke, TextEl } from '../core/types'
 import { LABEL_PRESETS, suggestHighlight, generatePlatformCaption, SECTOR_IMAGE_SUGGESTIONS } from '../core/newsroom'
 import type { LabelPresetId, SocialPlatform, ParsedArticle } from '../core/newsroom'
 import { balanceHeadlineBreaks } from '../editorial/translator'
@@ -18,6 +18,7 @@ import { imageAssets, useStore } from '../store'
 import { ColorField, DatePicker, Field, IconButton, Panel, Scrub, Select, Seg, Slider, Switch, Toggle } from '../ui/controls'
 import { ELEMENT_DEFS, ELEMENT_SECTIONS } from '../core/elements'
 import { Icon, KIND_ICON } from '../ui/Icon'
+import { PhotoEditor } from './PhotoEditor'
 
 const CONTENT_DRIVEN = new Set(['headline', 'date-num', 'date-month', 'date-weekday', 'speaker-name', 'speaker-title', 'stat-label', 'stat-delta', 'stat-note'])
 const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -32,6 +33,145 @@ function CatIcon({ cat }: { cat: Category }) {
 }
 
 // ================================================================== Story
+/** Quote / Stats card design. Presets are starting combinations; the rows under them are independent choices that mix
+ *  freely (picture × background × typeface × alignment × accent × order × colour × size), so any look can be built. */
+function CardArt({ kind, d }: { kind: 'quote' | 'stat'; d: CardDesign }) {
+  return (
+    <span className={`card-look-art bg-${d.bg} al-${d.align} mk-${d.mark} od-${d.order} ${d.photo ? 'ph' : 'noph'}`} aria-hidden>
+      {d.photo && <i className="a-photo" />}
+      <span className="a-block">
+        {kind === 'quote' ? <>
+          {d.mark === 'mark' && <i className="a-mark">“</i>}
+          {d.order === 'alt' && <i className="a-name" />}
+          <i className="a-l1" /><i className="a-l2" />
+          {d.mark === 'rule' && <i className="a-rule" />}
+          {d.order !== 'alt' && <i className="a-name" />}
+        </> : d.order === 'split' ? <span className="a-split"><b className="a-num">42</b><i className="a-div" /><span><i className="a-l1" /><i className="a-l2" /></span></span> : <>
+          {d.order !== 'alt' && <i className="a-label" />}
+          <b className={'a-num' + (d.order === 'alt' ? ' big' : '')}>42</b>
+          {d.order === 'alt' && <i className="a-label" />}
+          {d.mark === 'rule' && <i className="a-rule" />}
+          <i className="a-trend" />
+        </>}
+      </span>
+    </span>
+  )
+}
+
+const BG_SWATCHES: { id: CardDesign['bg']; name: string }[] = [
+  { id: 'tint', name: 'Desk tint' }, { id: 'paper', name: 'Paper' }, { id: 'ink', name: 'Ink (dark)' }, { id: 'accent', name: 'Desk colour' }, { id: 'gradient', name: 'Gradient' },
+]
+
+function CardStylePanel({ kind }: { kind: 'quote' | 'stat' }) {
+  const content = useStore((s) => s.doc.content)
+  const setContent = useStore((s) => s.setContent)
+  const presets = kind === 'quote' ? QUOTE_PRESETS : STAT_PRESETS
+  const presetId = (kind === 'quote' ? content.quoteStyle : content.statStyle) ?? 'classic'
+  const own = (kind === 'quote' ? content.quoteDesign : content.statDesign) ?? {}
+  const d = cardDesign(content, kind)
+  const base = (presets.find((p) => p.id === presetId) ?? presets[0]).d
+  const custom = (Object.keys(own) as (keyof CardDesign)[]).some((k) => own[k] !== base[k])
+  const scale = content.cardScale ?? 1
+  const set = <K extends keyof CardDesign>(key: K, v: CardDesign[K] | undefined) => {
+    const next: Partial<CardDesign> = { ...own, [key]: v }
+    if (v === undefined || next[key] === base[key]) delete next[key]
+    setContent(kind === 'quote' ? { quoteDesign: next } : { statDesign: next })
+  }
+  const pick = (id: string) => setContent(kind === 'quote' ? { quoteStyle: id, quoteDesign: {} } : { statStyle: id, statDesign: {} })
+  const presetName = presets.find((p) => p.id === presetId)?.name ?? 'Classic'
+  const cat = CATEGORIES.find((x) => x.id === content.categoryId) ?? CATEGORIES[0]
+  const defaultBg = { tint: cat.band, paper: '#f7f5ef', ink: '#0e1420', accent: cat.accent, gradient: cat.accent }[d.bg]
+  // the text colour actually in use: white on a dark background (a picked one or Ink / Gradient), ink otherwise
+  const darkBg = d.bgColor ? (() => { const n = parseInt(d.bgColor.replace('#', '').slice(0, 6), 16); const l = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; return l < 0.55 })() : d.bg === 'ink' || d.bg === 'gradient'
+  const defaultInk = darkBg ? '#ffffff' : '#0b0f19'
+  const format = useStore((s) => s.format)
+  const boxOv = useStore((s) => s.doc.overrides[`${format}:card-box`]) ?? {}
+  const setOverride = useStore((s) => s.setOverride)
+  const clearOverrideFields = useStore((s) => s.clearOverrideFields)
+
+  return (
+    <Panel title={kind === 'quote' ? 'Quote design' : 'Stats design'} sub={custom ? `${presetName} · custom` : presetName} icon="palette">
+      <div className="card-looks" role="radiogroup" aria-label="Start from a preset">
+        {presets.map((p) => (
+          <button key={p.id} type="button" role="radio" aria-checked={presetId === p.id} className={'card-look ' + kind + (presetId === p.id ? ' on' : '') + (presetId === p.id && custom ? ' edited' : '')} onClick={() => pick(p.id)} data-tip={presetId === p.id && custom ? 'Click to drop your changes and go back to this preset' : undefined}>
+            <CardArt kind={kind} d={p.d} />
+            <b>{p.name}</b>
+            <small>{p.note}</small>
+          </button>
+        ))}
+      </div>
+
+      <div className="card-design">
+        <Field label="Picture">
+          <Seg<'on' | 'off'> className="block" value={d.photo ? 'on' : 'off'} onChange={(v) => set('photo', v === 'on')}
+            options={[{ value: 'on', icon: 'image', label: 'With photo' }, { value: 'off', icon: 'text', label: 'Text only' }]} />
+        </Field>
+        <Field label="Background">
+          <div className="card-swatches" role="radiogroup" aria-label="Background">
+            {BG_SWATCHES.map((b) => (
+              <button key={b.id} type="button" role="radio" aria-checked={d.bg === b.id} aria-label={b.name} data-tip={b.name} className={'card-swatch sw-' + b.id + (d.bg === b.id ? ' on' : '')} onClick={() => set('bg', b.id)} />
+            ))}
+          </div>
+        </Field>
+        <Field label="Typeface">
+          <Seg<CardDesign['face']> className="block card-faces" value={d.face} onChange={(v) => set('face', v)}
+            options={[{ value: 'serif', label: 'Serif' }, { value: 'sans', label: 'Sans' }, { value: 'condensed', label: 'Narrow' }, { value: 'grotesk', label: 'Grotesk' }]} />
+        </Field>
+        {d.order !== 'split' && (
+          <Field label="Alignment">
+            <Seg<'left' | 'center' | 'right'> className="block" value={d.align} onChange={(v) => set('align', v)}
+              options={[{ value: 'left', icon: 'alignTextLeft', label: 'Left' }, { value: 'center', icon: 'alignTextCenter', label: 'Centre' }, { value: 'right', icon: 'alignTextRight', label: 'Right' }]} />
+          </Field>
+        )}
+        <Field label="Accent">
+          <Seg<CardDesign['mark']> className="block" value={kind === 'stat' && d.mark === 'mark' ? 'none' : d.mark} onChange={(v) => set('mark', v)}
+            options={[{ value: 'none', label: 'None' }, ...(kind === 'quote' ? [{ value: 'mark' as const, label: 'Mark' }] : []), { value: 'rule', label: 'Rule' }, { value: 'bar', label: 'Bar' }, { value: 'frame', label: 'Frame' }]} />
+        </Field>
+        <Field label="Order">
+          {kind === 'quote'
+            ? <Seg<CardDesign['order']> className="block" value={d.order === 'split' ? 'main' : d.order} onChange={(v) => set('order', v)} options={[{ value: 'main', label: 'Quote first' }, { value: 'alt', label: 'Speaker first' }]} />
+            : <Seg<CardDesign['order']> className="block" value={d.order} onChange={(v) => set('order', v)} options={[{ value: 'main', label: 'Label first' }, { value: 'alt', label: 'Number first' }, { value: 'split', label: 'Split' }]} />}
+        </Field>
+        <Field label={kind === 'quote' ? 'Speaker name colour' : 'Number colour'}>
+          <Seg<CardDesign['emph']> className="block" value={d.emph} onChange={(v) => set('emph', v)} options={[{ value: 'accent', label: 'Desk colour' }, { value: 'ink', label: 'Text colour' }]} />
+        </Field>
+        <Field label={`Text size · ${Math.round(scale * 100)} %`}>
+          <Slider value={Math.round(scale * 100)} min={80} max={130} step={5} onChange={(v) => setContent({ cardScale: v / 100 })} />
+        </Field>
+
+        <div className="card-colours">
+          <span className="card-sub">Colours <small>pick any colour; reset returns to the design's own</small></span>
+          <ColorField label="Card background" value={d.bgColor ?? defaultBg} onChange={(v) => set('bgColor', v)} onReset={d.bgColor ? () => set('bgColor', undefined) : undefined} />
+          <ColorField label="Text" value={d.inkColor ?? defaultInk} onChange={(v) => set('inkColor', v)} onReset={d.inkColor ? () => set('inkColor', undefined) : undefined} />
+          <ColorField label={kind === 'quote' ? 'Speaker name' : 'Number'} value={d.hiColor ?? cat.accent} onChange={(v) => set('hiColor', v)} onReset={d.hiColor ? () => set('hiColor', undefined) : undefined} />
+          <ColorField label="Accents (mark, rule, bar, frame)" value={d.accentColor ?? cat.accent} onChange={(v) => set('accentColor', v)} onReset={d.accentColor ? () => set('accentColor', undefined) : undefined} />
+          <ColorField label="Header background" value={d.headerColor ?? '#fdfbdc'} onChange={(v) => set('headerColor', v)} onReset={d.headerColor ? () => set('headerColor', undefined) : undefined} />
+          <ColorField label="Footer background" value={d.footerColor ?? cat.footer} onChange={(v) => set('footerColor', v)} onReset={d.footerColor ? () => set('footerColor', undefined) : undefined} />
+        </div>
+
+        <div className="card-colours">
+          <span className="card-sub">Text box <small>drag the words on the banner to move it, its corners to resize</small></span>
+          <ColorField label="Box fill" value={typeof boxOv.fill === 'string' && boxOv.fill !== 'rgba(0,0,0,0)' ? boxOv.fill : '#ffffff'} onChange={(v) => setOverride('card-box', { fill: v })} onReset={boxOv.fill ? () => clearOverrideFields('card-box', ['fill']) : undefined} />
+          {(boxOv.dx || boxOv.dy || boxOv.w != null || boxOv.h != null) && (
+            <button type="button" className="btn sm" onClick={() => clearOverrideFields('card-box', ['dx', 'dy', 'w', 'h'])}><Icon name="reset" size={14} /><span>Reset size &amp; position</span></button>
+          )}
+        </div>
+        {kind === 'quote' && d.mark !== 'mark' && (
+          <Switch checked={content.quoteMarks !== false} onChange={(v) => setContent({ quoteMarks: v })} label="Quotation marks around the statement" />
+        )}
+        {kind === 'stat' && (
+          <Field label="Trend colour">
+            <Seg<'auto' | 'up' | 'down' | 'none'> className="block" value={content.statTrend ?? 'auto'} onChange={(v) => setContent({ statTrend: v })}
+              options={[{ value: 'auto', label: 'Auto' }, { value: 'up', label: 'Up' }, { value: 'down', label: 'Down' }, { value: 'none', label: 'Plain' }]} />
+          </Field>
+        )}
+        {custom && <button type="button" className="btn sm ghost card-reset" onClick={() => pick(presetId)}><Icon name="reset" size={14} /><span>Back to {presetName}</span></button>}
+      </div>
+      <p className="hint">Drag the header or footer on the banner to move it as one block; double-click to pick a single element inside it.</p>
+    </Panel>
+  )
+}
+
 export function StoryPanel() {
   const content = useStore((s) => s.doc.content)
   const format = useStore((s) => s.format)
@@ -141,17 +281,16 @@ export function StoryPanel() {
 
   return (
     <>
-      <div className="card-type-bar">
-        <button className={'ct-tab' + (cardType === 'standard' ? ' on' : '')} onClick={() => setContent({ cardType: 'standard' })}>
-          <Icon name="newspaper" size={13} /> News Banner
-        </button>
-        <button className={'ct-tab' + (cardType === 'quote' ? ' on' : '')} onClick={() => setContent({ cardType: 'quote' })}>
-          <Icon name="quote" size={13} /> Quote Card
-        </button>
-        <button className={'ct-tab' + (cardType === 'stat' ? ' on' : '')} onClick={() => setContent({ cardType: 'stat' })}>
-          <Icon name="sparkle" size={13} /> Stat Card
-        </button>
-      </div>
+      <Seg<CardType>
+        className="block card-type-seg"
+        value={cardType}
+        onChange={(t) => setContent({ cardType: t })}
+        options={[
+          { value: 'standard', icon: 'newspaper', label: 'News Banner' },
+          { value: 'quote', icon: 'quote', label: 'Quote Card' },
+          { value: 'stat', icon: 'chart', label: 'Stats Card' },
+        ]}
+      />
 
       <div className="url-importer">
         <div className="row" style={{ gap: 6 }}>
@@ -244,6 +383,7 @@ export function StoryPanel() {
         <p className="hint">Banner shows <b>{parts.num}</b> · {parts.monthYear} · {parts.weekday}</p>
       </Panel>
 
+      {cardType === 'quote' && <CardStylePanel kind="quote" />}
       {cardType === 'quote' && (
         <Panel defaultOpen={false} title="Quote Statement" focusKey="headline" sub="Speaker & Quote" icon="quote">
           <Field label="Quote Statement">
@@ -277,8 +417,9 @@ export function StoryPanel() {
         </Panel>
       )}
 
+      {cardType === 'stat' && <CardStylePanel kind="stat" />}
       {cardType === 'stat' && (
-        <Panel defaultOpen={false} title="Data & Stat Callout" focusKey="headline" sub="Metric & Label" icon="sparkle">
+        <Panel defaultOpen={false} title="Stats" focusKey="headline" sub="Number, label, trend & source" icon="chart">
           <Field label="Key Number / Metric">
             <input
               type="text"
@@ -636,105 +777,7 @@ export function PhotosPanel({ addPhotos }: { addPhotos: () => void }) {
             </div>
             <p className="hint">On the banner: drag a photo to pan, scroll to zoom. Framing is saved separately for Facebook and Web.</p>
 
-            <div className="adjustments-section">
-              <div className="adj-header">
-                <span className="adj-title">Adjustments & filters</span>
-                {(cur.brightness || cur.contrast || cur.saturation || cur.warmth || cur.vignette) ? (
-                  <button
-                    type="button"
-                    className="btn-link"
-                    onClick={() => st().setSlot(selectedSlot, { brightness: 0, contrast: 0, saturation: 0, warmth: 0, vignette: 0 })}
-                    title="Reset all adjustments"
-                  >
-                    <Icon name="reset" size={11} /> Reset
-                  </button>
-                ) : null}
-              </div>
-              <div className="grid2">
-                <Scrub
-                  label="Exposure"
-                  value={cur.brightness ?? 0}
-                  min={-100}
-                  max={100}
-                  unit="%"
-                  decimals={0}
-                  onChange={(v) => st().setSlot(selectedSlot, { brightness: v })}
-                />
-                <Scrub
-                  label="Contrast"
-                  value={cur.contrast ?? 0}
-                  min={-100}
-                  max={100}
-                  unit="%"
-                  decimals={0}
-                  onChange={(v) => st().setSlot(selectedSlot, { contrast: v })}
-                />
-              </div>
-              <div className="grid2">
-                <Scrub
-                  label="Saturation"
-                  value={cur.saturation ?? 0}
-                  min={-100}
-                  max={100}
-                  unit="%"
-                  decimals={0}
-                  onChange={(v) => st().setSlot(selectedSlot, { saturation: v })}
-                />
-                <Scrub
-                  label="Warmth"
-                  value={cur.warmth ?? 0}
-                  min={-100}
-                  max={100}
-                  unit="°"
-                  decimals={0}
-                  onChange={(v) => st().setSlot(selectedSlot, { warmth: v })}
-                />
-              </div>
-              <Scrub
-                label="Vignette"
-                value={cur.vignette ?? 0}
-                min={0}
-                max={100}
-                unit="%"
-                decimals={0}
-                onChange={(v) => st().setSlot(selectedSlot, { vignette: v })}
-              />
-
-              <div className="adj-presets">
-                <button
-                  type="button"
-                  className="chip"
-                  onClick={() => st().setSlot(selectedSlot, { brightness: 8, contrast: 15, saturation: 12, warmth: 0, vignette: 10 })}
-                  title="Crisp contrast and vibrant colors"
-                >
-                  Auto-Enhance
-                </button>
-                <button
-                  type="button"
-                  className="chip"
-                  onClick={() => st().setSlot(selectedSlot, { brightness: 0, contrast: 12, saturation: 8, warmth: 25, vignette: 15 })}
-                  title="Warm sunset golden tone"
-                >
-                  Warm Golden
-                </button>
-                <button
-                  type="button"
-                  className="chip"
-                  onClick={() => st().setSlot(selectedSlot, { brightness: 5, contrast: 10, saturation: -5, warmth: -25, vignette: 10 })}
-                  title="Cool journalistic blue tone"
-                >
-                  Cool Tech
-                </button>
-                <button
-                  type="button"
-                  className="chip"
-                  onClick={() => st().setSlot(selectedSlot, { brightness: 5, contrast: 25, saturation: -100, warmth: 0, vignette: 20 })}
-                  title="High-contrast black & white"
-                >
-                  B & W Press
-                </button>
-              </div>
-            </div>
+            <PhotoEditor slot={selectedSlot} />
           </div>
         ) : <p className="hint">Select a slot, then click a photo above to place it.</p>}
       </Panel>

@@ -75,10 +75,10 @@ const P = {
   highlight: 'M9 11l-6 6v3h9l3-3 M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4',
   rule: 'M3 12h4 M10 12h4 M17 12h4',
   heading: 'M6 4v16 M18 4v16 M6 12h12',
-  eraser: 'M7 21h10 M5.5 13.5L13 6l5 5-7.5 7.5a2 2 0 0 1-2.8 0l-2.2-2.2a2 2 0 0 1 0-2.8z',
+  eraser: 'M7.6 19.5h10 M6.1 12L13.6 4.5l5 5-7.5 7.5a2 2 0 0 1-2.8 0l-2.2-2.2a2 2 0 0 1 0-2.8z',
   chart: 'M3 3v18h18 M7 16v-5 M12 16V7 M17 16v-3',
   chip: 'M8 6h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z M10 10h4v4h-4z M9 3v3 M15 3v3 M9 18v3 M15 18v3 M3 9h3 M3 15h3 M18 9h3 M18 15h3',
-  sparkle: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z',
+  sparkle: 'M12 4l2.17 5.83L20 12l-5.83 2.17L12 20l-2.17-5.83L4 12l5.83-2.17z',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 16v-4 M12 8h.01',
   crop: 'M6 2v14a2 2 0 0 0 2 2h14 M18 22V8a2 2 0 0 0-2-2H2',
   flame: 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z',
@@ -107,15 +107,29 @@ const P = {
   checkDouble: 'M18 6L7 17l-5-5 M22 10l-7.5 7.5-1.5-1.5',
   users: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75',
   shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  alert: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 8v4.5 M12 16.2v.01',
   inbox: 'M22 12h-6l-2 3h-4l-2-3H2 M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z',
 } as const
 
 export type IconName = keyof typeof P
 
+// Optical size: most glyphs fill a 20 px box of the 24 px grid; these few reach the edge (22 px) and read a size
+// larger beside their neighbours in a row of buttons or chips, so they are drawn at 20/22 about the centre.
+// (Measured with scratch/icon-bbox.mjs: getBBox of every glyph; chevrons, x, plus, minus are small on purpose.)
+const OPTICAL: Partial<Record<keyof typeof P, string>> = {
+  sliders: 'matrix(.909 0 0 .909 1.09 1.09)',
+  sun: 'matrix(.909 0 0 .909 1.09 1.09)',
+  video: 'matrix(.909 0 0 .909 1.09 1.09)',
+  mic: 'matrix(.909 0 0 .909 1.09 1.09)',
+  users: 'matrix(.909 0 0 .909 1.09 1.09)',
+}
+
 export function Icon({ name, size = 16, className, strokeWidth = 1.8 }: { name: IconName; size?: number; className?: string; strokeWidth?: number }) {
+  const paths = P[name].split(' M').map((d, i) => <path key={i} d={(i ? 'M' : '') + d} />)
+  const t = OPTICAL[name]
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={'icon ' + (className ?? '')} aria-hidden>
-      {P[name].split(' M').map((d, i) => <path key={i} d={(i ? 'M' : '') + d} />)}
+      {t ? <g transform={t} strokeWidth={strokeWidth / 0.909}>{paths}</g> : paths}
     </svg>
   )
 }

@@ -41,6 +41,10 @@ export function ActivityDesk() {
     ['running', 'waiting', 'queued'].includes(j.status)
   )
   const isAnyActive = activeJobs.length > 0
+  const pausedCount = (store.stats?.jobs || []).filter((j) => j.status === 'paused').length
+  // Only offer what can happen: Pause while something sends, Resume while something is paused, nothing otherwise
+  // (it said "Resume sending" in bright green on an idle desk, where it did nothing).
+  const showPauseResume = isAnyActive || pausedCount > 0
 
   const handleTogglePauseAll = async () => {
     if (!window.esb?.outreachPauseAll) return
@@ -147,17 +151,17 @@ export function ActivityDesk() {
         </div>
 
         <div className="oa-toolbar-right">
-          <button
-            className={`btn sm oa-btn-pause-resume ${isAnyActive ? 'oa-btn-pause-all' : 'oa-btn-resume-all'}`}
-            onClick={handleTogglePauseAll}
-            disabled={isPausingAll}
-            title={isAnyActive ? 'Pause all active campaigns' : 'Resume active campaigns'}
-          >
-            <span className="oa-btn-icon-mark" aria-hidden>
-              <Icon name={isAnyActive ? 'pause' : 'play'} size={13} />
-            </span>
-            <span>{isAnyActive ? 'Pause all sending' : 'Resume sending'}</span>
-          </button>
+          {showPauseResume && (
+            <button
+              className={`btn sm oa-btn-pause-resume${isAnyActive ? '' : ' primary'}`}
+              onClick={handleTogglePauseAll}
+              disabled={isPausingAll}
+              data-tip={isAnyActive ? 'Pause every campaign that is sending' : `Resume ${pausedCount} paused ${pausedCount === 1 ? 'run' : 'runs'}`}
+            >
+              <Icon name={isAnyActive ? 'pause' : 'play'} size={14} />
+              <span>{isAnyActive ? 'Pause all' : pausedCount > 1 ? `Resume ${pausedCount}` : 'Resume'}</span>
+            </button>
+          )}
 
           <MenuButton
             label="Export"

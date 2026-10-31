@@ -5,6 +5,28 @@ import type { LabelPresetId } from './newsroom'
 export type { FormatId, IconPathDef, LabelPresetId }
 export type Align = 'left' | 'center' | 'right'
 export type CardType = 'standard' | 'quote' | 'stat'
+/** One Quote / Stats card design: each field is an independent choice, so they combine freely. */
+export interface CardDesign {
+  /** show the photo; without it the text block fills the photo area too */
+  photo: boolean
+  bg: 'tint' | 'paper' | 'ink' | 'accent' | 'gradient'
+  face: 'serif' | 'sans' | 'condensed' | 'grotesk'
+  align: Align
+  /** big quote mark (quotes only), a short rule, a side bar, or a frame */
+  mark: 'none' | 'mark' | 'rule' | 'bar' | 'frame'
+  /** quote: statement first (main) / speaker first (alt); stats: label first (main) / number first (alt) / split */
+  order: 'main' | 'alt' | 'split'
+  /** speaker name / number in the desk colour or in the text colour */
+  emph: 'accent' | 'ink'
+  /** the editor's own colours (hex), each over the choice above: card background, text, name / number, accents */
+  bgColor?: string
+  inkColor?: string
+  hiColor?: string
+  accentColor?: string
+  /** header and footer band colours on this card (every format) */
+  headerColor?: string
+  footerColor?: string
+}
 
 export interface GradientStop { p: number; c: string; a?: number }
 /** Figma-style linear gradient: t = tf[0][0]*xn + tf[0][1]*yn + tf[0][2] where xn,yn are 0..1 inside the box. */
@@ -85,6 +107,34 @@ export interface PhotoSlot {
   warmth?: number
   /** vignette 0..100 */
   vignette?: number
+  /** The photo editor's settings (photoEdit.ts). Shared by every format's copy of this slot: an edit belongs to the
+   *  photo, while zoom and pan stay per format. The five fields above are read as fallbacks for older documents. */
+  adjust?: PhotoAdjust
+}
+export interface PhotoAdjust {
+  /** light, each -100..100 */
+  exposure?: number
+  contrast?: number
+  highlights?: number
+  shadows?: number
+  whites?: number
+  blacks?: number
+  /** colour: temperature cool..warm, tint green..magenta, vibrance and saturation, each -100..100 */
+  temp?: number
+  tint?: number
+  vibrance?: number
+  saturation?: number
+  /** finish, each 0..100 (blur 0..20 px at banner scale) */
+  fade?: number
+  sharpen?: number
+  grain?: number
+  vignette?: number
+  blur?: number
+  mono?: boolean
+  flipX?: boolean
+  flipY?: boolean
+  /** the look last applied (for the panel's highlight); the values above are what render */
+  look?: string
 }
 export interface PhotosEl extends ElBase {
   kind: 'photos'
@@ -162,6 +212,20 @@ export interface Content {
   statLabel?: string
   statDelta?: string
   statNote?: string
+  /** Quote / Stats card: the preset the design starts from (templates.ts QUOTE_PRESETS / STAT_PRESETS) and the
+   *  editor's own choices on top of it — any mix of picture, background, typeface, alignment, accent, order, colour */
+  quoteStyle?: string
+  statStyle?: string
+  quoteDesign?: Partial<CardDesign>
+  statDesign?: Partial<CardDesign>
+  /** text size of the card's block, 0.8–1.3 */
+  cardScale?: number
+  /** curly quotes around the statement (Bold draws its own big mark) */
+  quoteMarks?: boolean
+  /** colour of the trend line: auto reads ▲/▼, +/−, "record", "fall"… */
+  statTrend?: 'auto' | 'up' | 'down' | 'none'
+  /** number in ink instead of the desk colour */
+  statNumberInk?: boolean
   /** Translucent backdrop card behind the headline text so it stays legible anywhere over photos */
   headlineBg?: boolean
   headlineBgColor?: string

@@ -710,7 +710,154 @@
 .ed-quick-paste-banner:hover { color: var(--text); background: var(--fill-hover); border-color: color-mix(in srgb, var(--ink) 24%, transparent); transform: translateY(-1px); }
 
 /* Fixed height discipline so tab switching produces zero layout shift */
-.ed-launcher-wrap .ed-intake:not(.compact) { flex: 1 1 auto; height: 304px; min-height: 304px; max-height: 304px; display: flex; flex-direction: column; box-sizing: border-box; }
-.ed-launcher-wrap .ed-intake:not(.compact) .ed-intake-body { flex: 1 1 auto; min-height: 0; height: 258px; max-height: 258px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; }
 .ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap { flex: 1 1 auto; min-height: 0; height: auto; position: relative; }
 .ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap .ed-paste-area { flex: 1 1 auto; min-height: 0; height: 100%; box-sizing: border-box; resize: none; overflow-y: auto; }
+
+/* ---- Story Desk (Editorial start screen), 2026-11-01 ------------------------------------------------------------------
+   It never overflows the window. The two cards share one row whose height is the window's (capped at 600 px), so they
+   are always the same height and centred; only the lists inside scroll. The main card measures itself (container
+   queries) and gives up optional parts in order when space runs short: pipeline arrows, the pipeline, the subtitle.
+   One height scale: 32 px tabs, 36 px action buttons, a 44 px link field with the Fetch button beside it at 44 px. */
+.ed-launcher-wrap {
+  display: grid; grid-template-columns: minmax(0, 640px); grid-template-rows: min(100%, 560px);
+  justify-content: center; align-content: center; align-items: stretch; justify-items: stretch; gap: clamp(12px, 1.6vw, 20px);
+  padding: clamp(12px, 3vh, 40px) clamp(16px, 3vw, 40px); overflow: hidden; min-height: 0;
+}
+.ed-launcher-wrap.has-queue { grid-template-columns: minmax(0, 640px) minmax(300px, 420px); grid-template-rows: min(100%, 600px); }
+.ed-launcher-wrap > .ed-launcher-card {
+  height: auto; min-height: 0; max-height: none; margin: 0; box-sizing: border-box;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.ed-launcher-wrap > .ed-launcher-main { padding: clamp(18px, 3vh, 28px) clamp(18px, 2.2vw, 28px); gap: clamp(12px, 2vh, 18px); container: ed-main / size; }
+.ed-launcher-wrap > .ed-launcher-queue { padding: clamp(16px, 2.6vh, 24px) clamp(14px, 1.6vw, 20px) !important; gap: 12px !important; }
+
+/* hero */
+.ed-launcher-main .ed-launcher-hero { flex: none; gap: 4px; }
+.ed-launcher-main .ed-launcher-hero h2 { font-size: 20px; line-height: 26px; }
+.ed-launcher-main .ed-launcher-hero p { font-size: 13px; line-height: 19px; max-width: 56ch; }
+
+/* intake fills the rest of the card; each tab's body takes what is left and scrolls only as a last resort */
+.ed-launcher-wrap .ed-intake:not(.compact) { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; display: flex; flex-direction: column; gap: clamp(12px, 2vh, 16px); }
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-tabs { flex: none; }
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-error { flex: none; }
+
+/* Link tab: label, [field | Fetch], hint; the pipeline sits at the foot of the card */
+.ed-launcher-wrap .ed-link { justify-content: space-between; gap: 16px; }
+.ed-launcher-wrap .ed-link > .ed-link-paste { margin-block: auto; }  /* the link group sits in the middle of the space above the pipeline */
+.ed-launcher-wrap .ed-link-paste { gap: 8px; }
+.ed-launcher-wrap .ed-link-row { display: flex; align-items: stretch; gap: 8px; }
+.ed-launcher-wrap .ed-link-field { height: 44px; padding: 0 8px 0 14px; border-radius: 10px; box-sizing: border-box; }
+.ed-launcher-wrap .ed-link-field > svg { color: var(--text-3); }
+.ed-launcher-wrap .ed-link-quick-paste { position: static; flex: none; height: 28px; padding: 0 10px; border-radius: 7px; }
+.ed-launcher-wrap .ed-link-row > .ed-link-go { flex: none; width: auto; height: 44px; padding: 0 18px; gap: 8px; border-radius: 10px; font-size: 13.5px; }
+.ed-launcher-wrap .ed-link-hint { padding-left: 2px; }
+.ed-launcher-wrap .ed-pipe { flex: none; padding: 14px 12px; }
+
+/* Paste tab: file row, the text box takes the height, then one action row of equal buttons */
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-doc { flex: none; min-height: 60px; padding: 10px 12px; border-radius: 10px; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-doc .btn { height: 32px; padding: 0 14px; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap { flex: 1 1 auto; min-height: 72px; display: flex; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap .ed-paste-area { flex: 1 1 auto; min-height: 0; height: auto; padding: 12px 14px; border-radius: 10px; resize: none; }
+.ed-launcher-wrap .ed-intake-foot { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 0; }
+.ed-launcher-wrap .ed-intake-foot .hint { margin-right: auto; font-variant-numeric: tabular-nums; }
+.ed-launcher-wrap .ed-intake-foot .btn { height: 36px; padding: 0 14px; gap: 7px; border-radius: 9px; }
+.ed-intake:not(.compact) .ed-paste-clip:disabled { opacity: .45; }
+
+/* Published tab: filter row, then the list takes the height */
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-filter-row { flex: none; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-filter-row .input,
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-filter-row .btn { height: 36px !important; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; overflow-y: auto; }
+.ed-launcher-wrap .ed-feed-item { height: auto; min-height: 60px; }
+.ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list:has(> .ed-feed-empty) { justify-content: center; }
+.ed-launcher-wrap .ed-feed-empty { max-width: 34ch; margin: 0 auto; padding: 0; text-align: center; color: var(--text-3); }
+
+/* Continue a story: header, then the list fills the card and scrolls */
+.ed-launcher-queue .ed-launcher-qhead { flex: none; }
+.ed-launcher-queue > .sq { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.ed-launcher-queue .sq.compact .sq-list { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; overflow-y: auto; gap: 6px; margin-right: 0; padding-right: 0; scrollbar-gutter: auto; scrollbar-width: thin; }
+.ed-launcher-queue .sq-row { min-height: 60px; height: auto; }
+.ed-launcher-queue .sq-title { -webkit-line-clamp: 2; line-clamp: 2; }
+
+/* the card gives up optional parts as it gets smaller */
+@container ed-main (max-width: 560px) {
+  .ed-pipe { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; column-gap: 12px; }
+  .ed-pipe .pipe-arrow { display: none !important; }
+}
+@container ed-main (max-width: 400px) {
+  .ed-link-row > .ed-link-go span { display: none; }
+  .ed-link-row > .ed-link-go { width: 44px; padding: 0; justify-content: center; }
+}
+@container ed-main (max-width: 520px) {
+  .ed-paste-clip span { display: none; }
+  .ed-intake-foot .ed-paste-clip { width: 36px; padding: 0 !important; justify-content: center; }
+}
+@container ed-main (max-height: 470px) { .ed-launcher-hero p { display: none; } }
+@container ed-main (max-height: 440px) { .ed-pipe { display: none !important; } }
+@container ed-main (max-height: 380px) { .ed-launcher-hero { display: none !important; } }
+
+/* ---- Story Desk, pass 2 (2026-11-01): larger tabs, the link tab is one centred panel --------------------------------
+   The three tabs are the card's main choice, so they get a real tab size (40 px in a 4 px well, 14 px text, icons always).
+   The link tab no longer floats a small form in empty space: the space is a soft panel (also a drop target for a dragged
+   link) with the label, a heading, the hint and the field + Fetch row centred in it; the pipeline sits under it. */
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-tabs { padding: 3px; border-radius: 10px; }
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-tabs button { height: 34px; gap: 7px; font-size: 13px; border-radius: 8px; }  /* toned down from 40 px: sits with the rest of the desk */
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-tabs button svg { display: inline-block !important; width: 15px; height: 15px; flex: none; }
+
+.ed-launcher-wrap .ed-link { gap: 12px; }
+.ed-launcher-wrap .ed-link > .ed-link-stage {
+  flex: 1 1 auto; min-height: 0; margin: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  padding: clamp(16px, 3vh, 32px) clamp(16px, 3cqw, 32px); text-align: center;
+  background: var(--fill); border: 1.5px dashed color-mix(in srgb, var(--text) 16%, transparent); border-radius: 14px;
+  transition: background var(--t-1) var(--ease), border-color var(--t-1) var(--ease);
+}
+.ed-launcher-wrap .ed-link > .ed-link-stage:hover { border-color: color-mix(in srgb, var(--text) 26%, transparent); }
+.ed-launcher-wrap .ed-link > .ed-link-stage.drag { background: color-mix(in srgb, var(--accent) 8%, var(--fill)); border-color: var(--accent); }
+.ed-link-stage-ic { display: grid; place-items: center; flex: none; width: 52px; height: 52px; border-radius: 14px; color: var(--text-2); background: var(--card); box-shadow: 0 0 0 1px var(--card-line), 0 1px 2px rgba(0, 0, 0, .06); }
+.ed-link-stage-text { display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 46ch; }
+.ed-link-stage-text label { font: 700 11px/14px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+.ed-link-stage-text h3 { margin: 2px 0 0; font: 600 17px/24px var(--ui); color: var(--text); }
+.ed-launcher-wrap .ed-link-stage .ed-link-hint { margin: 0; padding: 0; font: 400 13px/19px var(--ui); color: var(--text-2); }
+.ed-launcher-wrap .ed-link-stage .ed-link-row { width: 100%; max-width: 560px; text-align: left; }
+.ed-launcher-wrap .ed-link-stage .ed-link-field { height: 48px; background: var(--card); border-color: var(--card-line); }
+.ed-launcher-wrap .ed-link-stage .ed-link-row > .ed-link-go { height: 48px; padding: 0 20px; font-size: 14px; }
+.ed-launcher-wrap .ed-link-stage .ed-link-quick-paste { height: 32px; padding: 0 12px; gap: 6px; font-size: 12.5px; }
+.ed-launcher-wrap .ed-link-stage .ed-link-input { font-size: 14.5px; }
+
+/* the panel gives up parts first when the card is short, so the field never leaves the screen */
+@container ed-main (max-height: 520px) { .ed-link-stage-ic { display: none; } }
+@container ed-main (max-height: 470px) { .ed-link-stage-text label { display: none; } }
+@container ed-main (max-height: 400px) { .ed-link-stage-text .ed-link-hint { display: none; } }
+@container ed-main (max-width: 400px) { .ed-launcher-wrap .ed-link-stage .ed-link-row > .ed-link-go { width: 48px; padding: 0; } }
+@container ed-main (max-width: 520px) {
+  .ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-tabs button { padding: 0 4px; font-size: 13px; gap: 6px; }
+  .ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-tabs button svg { display: none !important; }
+}
+
+/* ---- Story Desk at small windows (2026-11-01, pass 3) -------------------------------------------------------------
+   The two cards share the width 3 : 2 (the intake is the work, the list is a side column) instead of growing equally,
+   which squeezed the intake to the list's width at 900 px. The steps strip keeps each step's words readable when the
+   card is narrow: icon and title on one line, the caption under them across the whole column. */
+.ed-launcher-wrap.has-queue {
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr);
+  padding-inline: max(clamp(16px, 3vw, 40px), calc((100% - 1100px) / 2));
+}
+@container ed-main (max-width: 560px) {
+  .ed-pipe { padding: 12px 14px !important; column-gap: 16px !important; }
+  .ed-pipe li:not(.pipe-arrow) { grid-template-columns: 26px minmax(0, 1fr) !important; grid-template-rows: auto auto !important; column-gap: 8px !important; row-gap: 6px !important; align-items: center !important; }
+  .ed-pipe .pipe-ic { grid-area: 1 / 1 !important; width: 26px !important; height: 26px !important; border-radius: 8px !important; }
+  .ed-pipe .pipe-ic svg { width: 14px; height: 14px; }
+  .ed-pipe b { grid-area: 1 / 2 !important; align-self: center !important; font-size: 13px !important; }
+  .ed-pipe small { grid-area: 2 / 1 / 3 / 3 !important; align-self: start !important; font-size: 11.5px !important; line-height: 15px !important; }
+}
+/* narrow card: the link field keeps the whole width and Fetch & Process sits under it (side by side squeezed the
+   field to "h.." at the app's smallest window) */
+@container ed-main (max-width: 560px) {
+  .ed-launcher-wrap .ed-link-stage .ed-link-row { flex-wrap: wrap; }
+  .ed-launcher-wrap .ed-link-stage .ed-link-row > .ed-link-field { flex: 1 1 100%; }
+  .ed-launcher-wrap .ed-link-stage .ed-link-row > .ed-link-go { flex: 1 1 100%; width: 100%; height: 44px; justify-content: center; }
+  .ed-launcher-wrap .ed-link-stage .ed-link-row > .ed-link-go span { display: inline; }
+  .ed-launcher-wrap .ed-link > .ed-link-stage { gap: 12px; }
+}

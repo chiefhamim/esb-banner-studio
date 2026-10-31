@@ -3,7 +3,12 @@
 
 import { useState } from 'react'
 import { useActivityStore } from './activityStore'
-import { fmtDuration, fmtClock, reportSummary } from './activityFormat'
+import { fmtDuration, fmtClock, fmtShortDay, reportSummary } from './activityFormat'
+
+/** "2026-10-29" (already a Dhaka calendar day) → "Thu 29 Oct"; anything else is shown as it came. */
+function dayLabel(day: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? fmtShortDay(Date.parse(day + 'T12:00:00Z'), 'UTC') : day
+}
 import { downloadText } from './campaign'
 import { Icon } from '../ui/Icon'
 import { Seg } from '../ui/controls'
@@ -130,7 +135,7 @@ export function ActivityReports() {
                   onClick={() => store.setSelectedDay(d.day)}
                 >
                   <span className="oa-rrow-main">
-                    <b>{d.day}</b>
+                    <b title={d.day}>{dayLabel(d.day)}</b>
                     <span>{d.sent.toLocaleString()} sent{d.replied > 0 ? ` · ${d.replied.toLocaleString()} replied` : ''}</span>
                   </span>
                   {stat('Sent', d.sent, 'sent')}
@@ -179,7 +184,7 @@ export function ActivityReports() {
         <aside className="oa-report-sidebar" aria-label="Report Inspector">
           <header className="oa-card-head">
             <Icon name={selectedType === 'day' ? 'calendar' : 'send'} size={14} />
-            <h3>{selectedType === 'day' ? selectedDay : selectedJobData?.name || 'Run Summary'}</h3>
+            <h3>{selectedType === 'day' ? (selectedDay ? dayLabel(selectedDay) : '') : selectedJobData?.name || 'Run Summary'}</h3>
             <button
               type="button"
               className="ibtn sm"

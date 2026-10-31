@@ -1,8 +1,9 @@
 import { create } from 'zustand'
+import { slotAdjust as slotAdjustOf } from './core/photoEdit'
 import { getCollage } from './core/collage'
 import { buildScene, defaultDoc, perFormat } from './core/templates'
 import { loadImage } from './core/assets'
-import type { Align, Backdrop, Content, Doc, El, FormatId, GuideLine, Override, PhotoSlot, Scene } from './core/types'
+import type { Align, Backdrop, Content, Doc, El, FormatId, GuideLine, Override, PhotoAdjust, PhotoSlot, Scene } from './core/types'
 import { FORMATS, FORMAT_IDS, INK } from './core/tokens'
 
 /** Large background / decoration layers. A plain click on them counts as "empty canvas" (deselects, starts a marquee) so the selection never
@@ -99,6 +100,11 @@ interface State {
   setGapColor: (c: string) => void
   setBackdrop: (b: Backdrop) => void
   setSlot: (i: number, patch: Partial<PhotoSlot>, silent?: boolean) => void
+  /** photo editor: change slot i's edit in every format (an edit belongs to the photo); null clears it */
+  setSlotAdjust: (i: number, patch: Partial<PhotoAdjust> | null, opts?: { replace?: boolean; silent?: boolean }) => void
+  /** photo editor: hold to see the photos without their edits (view only) */
+  photoOriginal: boolean
+  setPhotoOriginal: (on: boolean) => void
   syncSlotFraming: (slot: number) => void
   assignImage: (slot: number, imageId: string | null) => void
   swapSlots: (a: number, b: number) => void
@@ -365,6 +371,23 @@ export const useStore = create<State>((set, get) => {
     setGap: (g) => edit((d) => { d.photos.gap = g }, 'gap'),
     setGapColor: (c) => edit((d) => { d.photos.gapColor = c }, 'gapColor'),
     setBackdrop: (b) => edit((d) => { d.photos.backdrop = b }),
+    photoOriginal: false,
+    setPhotoOriginal: (on) => set({ photoOriginal: on }),
+    setSlotAdjust: (i, patch, opts) => {
+      const apply = (d: Doc) => {
+        for (const f of FORMAT_IDS) {
+          const s = d.photos.slots[f][i]
+          if (!s) continue
+          // the older per-slot fields fold into the edit the first time it changes, so nothing is counted twice
+          const base: PhotoAdjust = opts?.replace || patch === null ? {} : { ...slotAdjustOf(s) }
+          delete s.brightness; delete s.contrast; delete s.saturation; delete s.warmth; delete s.vignette
+          const next: PhotoAdjust = patch === null ? {} : { ...base, ...patch }
+          for (const k of Object.keys(next) as (keyof PhotoAdjust)[]) if (next[k] === 0 || next[k] === false || next[k] === undefined) delete next[k]
+          if (Object.keys(next).length) s.adjust = next; else delete s.adjust
+        }
+      }
+      if (opts?.silent) { const d = clone(get().doc); apply(d); set({ doc: d }) } else edit(apply, `adjust:${i}`)
+    },
     setSlot: (i, patch, silent) => {
       const apply = (d: Doc) => {
         const f = get().format

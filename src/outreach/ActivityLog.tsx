@@ -19,10 +19,10 @@ interface ChipDef {
 const CHIPS: ChipDef[] = [
   { id: 'all', label: 'All', icon: 'listBullet', tone: 'all' },
   { id: 'sent', label: 'Sent', icon: 'send', tone: 'sent' },
-  { id: 'failed', label: 'Failed', icon: 'flame', tone: 'bad' },
+  { id: 'failed', label: 'Failed', icon: 'alert', tone: 'bad' },
   { id: 'replies', label: 'Replies', icon: 'mail', tone: 'reply' },
-  { id: 'bounces', label: 'Bounces', icon: 'refresh', tone: 'bounce' },
-  { id: 'optouts', label: 'Opt-outs', icon: 'user', tone: 'optout' },
+  { id: 'bounces', label: 'Bounces', icon: 'undo', tone: 'bounce' },
+  { id: 'optouts', label: 'Opt-outs', icon: 'hand', tone: 'optout' },
   { id: 'skipped', label: 'Skipped', icon: 'skipForward', tone: 'skip' },
   { id: 'control', label: 'Control', icon: 'sliders', tone: 'control' },
   { id: 'assistant', label: 'Assistant', icon: 'sparkle', tone: 'assistant' },
@@ -57,7 +57,7 @@ export function ActivityLog() {
               aria-pressed={store.activeChip === c.id}
               onClick={() => store.setActiveChip(c.id)}
             >
-              <Icon name={c.icon} size={13} className="oa-chip-ic" />
+              <Icon name={c.icon} size={14} className="oa-chip-ic" />
               <span>{c.label}</span>
             </button>
           ))}
@@ -179,7 +179,7 @@ export function ActivityLog() {
                   aria-expanded={open}
                   onClick={() => toggleExpand(ev.id)}
                 >
-                  <span className="oa-ev-badge" aria-hidden><Icon name={meta.icon} size={15} /></span>
+                  <span className="oa-ev-badge" aria-hidden><Icon name={meta.icon} size={16} /></span>
 
                   <span className="oa-ev-main">
                     <b title={sentence}>{sentence}</b>

@@ -738,3 +738,26 @@
 @media (prefers-reduced-motion: reduce) { .home-shell .recent-actions { transition: none; transform: translate(0, -50%); } }
 .home-shell .recent-main .recent-meta { font-size: 11.5px; font-weight: 500; }
 .home-shell .recent-warn i { margin-left: 3px; }
+
+/* ---- Small windows, down to the app's 884 × 641 minimum (2026-11-01) ----------------------------------------------
+   Home keeps its desktop arrangement and scales it — five launch cells in one row, New graphic (three over two) beside
+   Recent projects — instead of the old ≤1100 px fallback (two-column tiles with Open project alone on a third row, one
+   column for everything, Recent pushed off the bottom). Below 1000 px the secondary parts go first: tile notes, then
+   the format pictures, so names never wrap or collide. */
+@media (max-width: 1100px) {
+  .home-shell .home-launch { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .home-shell .launch-tile:nth-child(n) { border-top: 0; }
+  .home-shell .launch-tile + .launch-tile { border-left-width: 1px; border-left-style: solid; }
+  .home-shell .home-split { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .home-shell .formats-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .home-shell .format-card { grid-column: span 2; }
+  .home-shell .format-card:nth-child(n + 4) { grid-column: span 3; }
+}
+@media (max-width: 1000px) {
+  .home-shell .launch-tile { padding: 0 12px; column-gap: 10px; }
+  .home-shell .launch-note { display: none; }
+  .home-shell .launch-name { grid-row: 1 / span 2; align-self: center; font-size: 14px; white-space: nowrap; }
+  .home-shell .launch-icon { width: 34px; height: 34px; }
+  .home-shell .format-glyph { display: none; }
+  .home-shell .format-card { padding-inline: 14px; }
+}

@@ -1371,13 +1371,10 @@ label.switch:active i { filter: brightness(.94); }
 /* Editorial Story Desk: centred in the window with nothing to scroll; the story list shows three rows and scrolls for the rest;
    the paste box starts at half height and grows to fit what is pasted (up to 44 % of the window, then it scrolls) */
 .ed-launcher-wrap { justify-content: safe center; align-items: center; padding: 20px 24px; gap: 14px; }
-.ed-launcher-wrap > .ed-launcher-card { padding: 24px 28px; gap: 16px; min-height: 444px; height: 444px; max-height: 444px; box-sizing: border-box; }
 .ed-launcher-wrap > .ed-launcher-queue { padding: 18px 20px 14px !important; gap: 10px !important; }
 
 /* Story Desk: the card never changes size. The intake block has one fixed height; link, paste and site tabs fill it and scroll
    inside it when they have more. The story list is exactly three rows tall (rows are a fixed 64 px, one line of title). */
-.ed-launcher-wrap .ed-intake:not(.compact) { height: 304px !important; min-height: 304px !important; max-height: 304px !important; display: flex; flex-direction: column; box-sizing: border-box; }
-.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body { flex: 1 1 auto; min-height: 0; height: 258px; max-height: 258px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; }
 .ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body:has(> .ed-intake-url + p.hint) { justify-content: center; }
 .ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area-wrap { flex: 1 1 auto; min-height: 0; height: auto; position: relative; }
 .ed-launcher-wrap .ed-intake:not(.compact) .ed-paste-area { flex: 1 1 auto; min-height: 0; height: 100%; box-sizing: border-box; resize: none; overflow-y: auto; }
@@ -1386,7 +1383,7 @@ label.switch:active i { filter: brightness(.94); }
 .ed-launcher-wrap .ed-feed-item { height: 64px; flex: none; box-sizing: border-box; scroll-snap-align: start; background: var(--fill); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent); border-radius: var(--r-3); }
 .ed-launcher-wrap .ed-feed-item:hover { background: var(--fill-hover); }
 .ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-error { flex: none; }
-.ed-launcher-queue .sq-list { box-sizing: border-box; height: auto; max-height: 204px; overflow-y: auto; scroll-snap-type: y proximity; scroll-padding: 3px 0; }
+.ed-launcher-queue .sq-list { box-sizing: border-box; overflow-y: auto; scroll-snap-type: y proximity; scroll-padding: 3px 0; }
 .ed-launcher-queue .sq-row { height: auto; min-height: 64px; flex: none; justify-content: center; scroll-snap-align: start; padding: 8px 12px; box-sizing: border-box; }
 .ed-launcher-queue .sq-title { -webkit-line-clamp: 1; }
 
@@ -1397,8 +1394,6 @@ label.switch:active i { filter: brightness(.94); }
 .ed-launcher-wrap { --row-bg: linear-gradient(180deg, color-mix(in srgb, var(--text) 2.5%, var(--card)), color-mix(in srgb, var(--text) 5.5%, var(--card))); --row-bg-hover: linear-gradient(180deg, color-mix(in srgb, var(--text) 4%, var(--card)), color-mix(in srgb, var(--text) 8%, var(--card))); --row-line: color-mix(in srgb, var(--text) 11%, transparent); --row-line-hover: color-mix(in srgb, var(--text) 22%, transparent); --row-hi: rgba(255, 255, 255, .7); }
 :root[data-theme=dark] .ed-launcher-wrap { --row-hi: rgba(255, 255, 255, .06); }
 .ed-launcher-queue .sq-list, .ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list { padding: 0; scroll-padding: 0; }
-.ed-launcher-queue .sq-list { height: auto; max-height: 204px; }  /* max 3 x 64 + gaps */
-.ed-launcher-wrap .ed-intake:not(.compact) .ed-feed-list { flex: none; height: 204px; }  /* 3 x 64 + 2 x 6 */
 .ed-launcher-queue .sq-row, .ed-launcher-wrap .ed-feed-item { background: var(--row-bg); border: 1px solid var(--row-line); box-shadow: inset 0 1px 0 var(--row-hi); transition: border-color var(--t-2) var(--ease), box-shadow var(--t-2) var(--ease), background var(--t-2) var(--ease); }
 .ed-launcher-queue .sq-row:hover, .ed-launcher-wrap .ed-feed-item:hover { background: var(--row-bg-hover); border-color: var(--row-line-hover); box-shadow: inset 0 1px 0 var(--row-hi), 0 2px 8px rgba(16, 18, 28, .07); }
 .ed-launcher-queue .sq-row.on { border-color: var(--ink); box-shadow: inset 0 1px 0 var(--row-hi); }
@@ -1915,3 +1910,141 @@ label.switch:active i { filter: brightness(.94); }
   background: #f8fafc !important;
   border-color: rgba(15, 23, 42, 0.3) !important;
 }
+
+/* ---- Graphics: card switcher + Quote / Stats style picker (2026-11-01) --------------------------------------------
+   The switcher is the shared Seg (gliding chip, same motion as every other segmented control). The style picker shows
+   each look as a tiny drawing of itself; colours come from the desk accent (--cat) and the theme's own surfaces. */
+.pane .card-type-seg { margin: 4px 0 8px; }
+.pane .card-type-seg button { flex: 1 1 0; min-width: 0; justify-content: center; gap: 6px; font-size: 12px; }
+
+.card-looks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 4px; }
+.card-look { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; padding: 6px 6px 8px; text-align: left; color: var(--text-2); background: var(--fill); border: 0; border-radius: 10px; box-shadow: 0 0 0 1px transparent; cursor: pointer; transition: background var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease); }
+.card-look:hover { background: var(--fill-hover); color: var(--text); }
+.card-look.on { color: var(--text); background: var(--card); box-shadow: 0 0 0 1.5px var(--sel), 0 1px 3px rgb(0 0 0 / .08); }
+.card-look b { padding: 0 2px; font: 600 12px/16px var(--ui); color: var(--text); }
+.card-look small { padding: 0 2px; font: 400 11px/14px var(--ui); color: var(--text-3); overflow-wrap: anywhere; }
+.card-look-art { position: relative; height: 58px; margin-bottom: 5px; overflow: hidden; border-radius: 6px; background: color-mix(in srgb, var(--cat, #3b82f6) 9%, #fbfbfc); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .06); }
+:root[data-theme=dark] .card-look-art { background: color-mix(in srgb, var(--cat, #3b82f6) 14%, #2a2b31); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .06); }
+.card-look-art i { position: absolute; display: block; font-style: normal; }
+/* preset thumbnails: drawn from each preset's own design (CardArt in Panels.tsx), so a new preset needs no new art */
+.card-looks { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.card-look { padding: 5px 5px 7px; }
+.card-look small { display: none; }
+.card-look.edited b::after { content: ' · edited'; font-weight: 500; color: var(--text-3); }
+.card-look-art { --a-bg: color-mix(in srgb, var(--cat, #3b82f6) 10%, #fbfbfc); --a-ink: rgb(20 24 32 / .62); --a-hi: var(--cat, #3b82f6);
+  display: flex; flex-direction: column; height: 64px; background: var(--a-bg); }
+.card-look-art.bg-paper { --a-bg: #f7f5ef; }
+.card-look-art.bg-ink { --a-bg: #0e1420; --a-ink: rgb(255 255 255 / .8); --a-hi: color-mix(in srgb, var(--cat, #3b82f6) 62%, #fff); }
+.card-look-art.bg-accent { --a-bg: var(--cat, #3b82f6); --a-ink: rgb(255 255 255 / .9); --a-hi: #fff; }
+.card-look-art.bg-gradient { --a-bg: linear-gradient(180deg, var(--cat, #3b82f6), color-mix(in srgb, var(--cat, #3b82f6) 45%, #000)); --a-ink: rgb(255 255 255 / .9); --a-hi: #fff; }
+.card-look-art .a-photo { position: static; flex: 0 0 44%; background: linear-gradient(135deg, #9aa7b6, #c9d2dc 60%, #aeb9c6); }
+.card-look-art .a-block { position: relative; flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 4px 10px; min-height: 0; }
+.card-look-art.al-left .a-block { align-items: flex-start; }
+.card-look-art.al-center .a-block { align-items: center; }
+.card-look-art.al-right .a-block { align-items: flex-end; }
+.card-look-art .a-block i { position: static; display: block; height: 3px; border-radius: 2px; background: var(--a-ink); }
+.card-look-art .a-l1 { width: 70%; } .card-look-art .a-l2 { width: 48%; }
+.card-look-art .a-name, .card-look-art .a-label { width: 34%; background: var(--a-hi) !important; }
+.card-look-art .a-label { background: var(--a-ink) !important; width: 40%; height: 2px !important; }
+.card-look-art .a-rule { width: 12%; height: 2px !important; background: var(--a-hi) !important; }
+.card-look-art .a-trend { width: 22%; background: #16a34a !important; }
+.card-look-art .a-mark { height: auto !important; background: none !important; font: 700 18px/0.7 Georgia, serif; color: var(--a-hi); }
+.card-look-art .a-num { font: 800 15px/1 var(--ui); letter-spacing: -.03em; color: var(--a-hi); }
+.card-look-art .a-num.big { font-size: 22px; }
+.card-look-art.noph .a-num { font-size: 20px; } .card-look-art.noph .a-num.big { font-size: 26px; }
+.card-look-art.mk-bar.al-left .a-block { border-left: 3px solid var(--a-hi); margin: 8px 0 8px 8px; padding-left: 7px; }
+.card-look-art.mk-bar.al-center .a-block::before { content: ''; width: 14px; height: 3px; border-radius: 2px; background: var(--a-hi); }
+.card-look-art.mk-frame .a-block { margin: 8px; border: 1.5px solid var(--a-hi); border-radius: 4px; }
+.card-look-art .a-split { display: flex; align-items: center; gap: 6px; }
+.card-look-art .a-split > span { display: flex; flex-direction: column; gap: 3px; width: 34px; }
+.card-look-art .a-split .a-l1 { width: 100%; } .card-look-art .a-split .a-l2 { width: 70%; }
+.card-look-art .a-div { width: 2px !important; height: 18px !important; background: var(--a-hi) !important; }
+
+/* design rows: one rhythm, md segments, swatches the same height as the segments */
+.card-design { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.card-design .seg-ctl.block button { font-size: 12px; }
+.card-swatches { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.card-swatch { height: 28px; border: 0; border-radius: 6px; cursor: pointer; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .1); transition: box-shadow var(--t-1) var(--ease), transform 120ms var(--spring); }
+.card-swatch:hover { box-shadow: inset 0 0 0 1px rgb(0 0 0 / .2), 0 0 0 2px color-mix(in srgb, var(--text) 14%, transparent); }
+.card-swatch.on { box-shadow: inset 0 0 0 1px rgb(0 0 0 / .1), 0 0 0 2px var(--card), 0 0 0 3.5px var(--sel); }
+.card-swatch:active { transform: scale(.96); }
+.card-swatch.sw-tint { background: color-mix(in srgb, var(--cat, #3b82f6) 14%, #fbfbfc); }
+.card-swatch.sw-paper { background: #f7f5ef; }
+.card-swatch.sw-ink { background: #0e1420; }
+.card-swatch.sw-accent { background: var(--cat, #3b82f6); }
+.card-swatch.sw-gradient { background: linear-gradient(180deg, var(--cat, #3b82f6), color-mix(in srgb, var(--cat, #3b82f6) 45%, #000)); }
+.card-reset { align-self: flex-start; }
+
+/* ==== Control standard (2026-11-01) =================================================================================
+   One scale for every desk, taken from the Editorial desk (the reference) and checked with scratch/ctl-audit.mjs:
+     xs 24 / r6 / 12 px / icon 13  — inline chips, status pills
+     sm 28 / r6 / 12 px / icon 14  — buttons inside cards and panels, tabs
+     md 32 / r8 / 13 px / icon 15  — headers, toolbars, fields and the buttons beside them
+     lg 36 / r8 / 13 px / icon 16  — the one main action pinned to a column's foot
+   Outreach and the Graphics bars had drifted from it (26 px card buttons with 4 px corners and 11.5 px text, a 30 px
+   attachment row, a 32 px Review & send next to Editorial's 36 px Review & publish, a 28 px chip in a 32 px header,
+   a 4 px-cornered field beside a 28 px button, 13–16 px icons side by side in one header). */
+:root { --ctl-xs: 24px; --ctl-sm: 28px; --ctl-md: 32px; --ctl-lg: 36px; }
+
+/* Outreach: card buttons are sm, never xs */
+.or-right .or-autopilot-actions .btn.xs,
+.or-right .or-card .btn.xs,
+.or-right-scroll .btn.xs { height: var(--ctl-sm); min-height: var(--ctl-sm); padding: 0 10px; gap: 6px; font-size: 12px; border-radius: 6px; }
+.or-right-scroll .btn.xs > svg { width: 14px; height: 14px; }
+/* Outreach: attachment row is sm */
+.or-files .btn.sm { height: var(--ctl-sm); min-height: var(--ctl-sm); padding: 0 10px; gap: 6px; font-size: 12px; border-radius: 6px; }
+.or-files .btn.sm > svg { width: 14px; height: 14px; }
+/* Outreach: the pinned Review & send is lg, like Editorial's Review & publish */
+.or-right .btn.or-send-btn { height: var(--ctl-lg); min-height: var(--ctl-lg); gap: 8px; font-size: 13px; border-radius: 8px; }
+.or-right .btn.or-send-btn > svg { width: 16px; height: 16px; }
+/* Outreach: placeholder tags read at the xs text size */
+.or-tag { font-size: 12px; }
+
+/* Graphics header: every control is md, icons one size */
+.topbar .drag-post-chip { height: var(--ctl-md); border-radius: 8px; padding: 0 10px; }
+.topbar :is(.btn, .ibtn, .pv-btn, .dual-toggle-btn, .drag-post-chip, .fmtpick, .mb-item) > svg:not(.chev) { width: 15px; height: 15px; }
+.ed-head :is(.btn, .ibtn, .pv-btn) > svg:not(.chev) { width: 15px; height: 15px; }
+/* Graphics story column: the link field and its button share one height and the field radius */
+.url-importer .row > input, .url-importer .row > .input { height: var(--ctl-md); border-radius: 8px; font-size: 13px; }
+.url-importer .row > .btn { height: var(--ctl-md); min-height: var(--ctl-md); padding: 0 12px; border-radius: 8px; font-size: 13px; }
+
+/* Status pills (all desks): xs radius */
+.statusbar :is(.sb-cms, .sb-engine-btn) { border-radius: 6px; }
+.card-design .seg-ctl.block button { min-width: 0; padding: 0 4px; }
+.card-colours { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--card-line, var(--border)); }
+.card-sub { display: flex; flex-direction: column; gap: 1px; margin-bottom: 2px; font: 600 12px/16px var(--ui); color: var(--text); }
+.card-sub small { font: 400 11px/14px var(--ui); color: var(--text-3); }
+.card-colours > .btn.sm { align-self: flex-start; }
+/* the card switcher measures itself: below ~330 px the three labels need the room their icons take */
+.pane .card-type-seg { container: card-seg / inline-size; }
+@container card-seg (max-width: 330px) {
+  .card-type-seg button svg { display: none; }
+  .card-type-seg button { padding: 0 4px; }
+}
+/* Quote / Stats cards: the empty-photo placeholder is see-through, so a text box dragged over the photo stays visible */
+.slot-box.empty.see-through, :root[data-theme=dark] .slot-box.empty.see-through { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.slot-box.empty.see-through .slot-empty-card { opacity: .55; }
+.slot-box.empty.see-through .slot-empty-card:hover { opacity: 1; }
+
+/* ---- Photo editor (Graphics → Photos → slot) ----------------------------------------------------------------------- */
+.photo-editor { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--card-line, var(--border)); }
+.pe-head { display: flex; align-items: center; gap: 4px; }
+.pe-title { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; font: 600 13px/18px var(--ui); color: var(--text); }
+.pe-title svg { color: var(--text-3); }
+.pe-looks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.pe-look { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 3px 3px 5px; background: transparent; border: 0; border-radius: 8px; cursor: pointer; color: var(--text-2); font: 500 11px/14px var(--ui); text-align: center; transition: background var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease); }
+.pe-look:hover { background: var(--fill-hover); color: var(--text); }
+.pe-look.on { color: var(--text); background: var(--card); box-shadow: 0 0 0 1.5px var(--sel); }
+.pe-look img, .pe-look-ph { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: var(--fill); }
+.pe-look span:last-child { font-size: 10.5px; overflow-wrap: normal; word-break: keep-all; hyphens: none; }
+.pe-tabs button { font-size: 12px; }
+.pe-sliders { display: flex; flex-direction: column; gap: 8px; }
+.pe-slider { display: flex; flex-direction: column; gap: 2px; }
+.pe-slider .scrub { background: transparent; padding: 0; height: 22px; }
+.pe-slider.changed .scrub { color: var(--text); }
+.pe-range { width: 100%; }
+/* centred sliders fill from the middle, so "no change" reads as the centre */
+.pe-range.centred::-webkit-slider-runnable-track { background: linear-gradient(90deg, var(--bg-4) 0 min(50%, var(--p)), var(--ink) min(50%, var(--p)) max(50%, var(--p)), var(--bg-4) max(50%, var(--p)) 100%); }
+.pe-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pe-row .btn.on { background: color-mix(in srgb, var(--sel) 14%, var(--fill)); color: var(--text); box-shadow: inset 0 0 0 1px var(--sel); }
+.photo-editor .rot90 { transform: rotate(90deg); }

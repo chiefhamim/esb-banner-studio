@@ -894,3 +894,9 @@
 .or-source-input-wrap .or-input { height: 32px; padding-right: 68px; width: 100%; box-sizing: border-box; }
 .or-source-paste-btn { position: absolute; right: 4px; height: 24px; padding: 0 8px; }
 .or-source-link-row .btn.sm { height: 32px; flex: none; }
+
+/* Tab content arrives the way Editorial's and Graphics' panes do (App.css .pane: 140 ms fade): each tab is its own
+   component, so switching mounts a new element and the fade runs — Send · Contact · Review and Contacts · Campaigns ·
+   Sources swapped with a hard cut, which is what made them feel rougher than Compose · Activity. */
+.or-right-scroll > *, .or-left > :not(.side-tabs) { animation: paneIn 140ms ease-out both; }
+@media (prefers-reduced-motion: reduce) { .or-right-scroll > *, .or-left > :not(.side-tabs) { animation: none; } }

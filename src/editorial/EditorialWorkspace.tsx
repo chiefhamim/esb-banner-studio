@@ -201,6 +201,7 @@ export function EditorialWorkspace() {
 
   // Mode & State
   const [launcherTab, setLauncherTab] = useState<'url' | 'paste' | 'live_feed'>('url')
+  const [linkDrag, setLinkDrag] = useState(false)
   const [bodyMode, setBodyMode] = useState<'review' | 'edit'>('review')
   const [sourceEditing, setSourceEditing] = useState(false)
   const [activeFactId, setActiveFactId] = useState<string | null>(null)
@@ -967,8 +968,22 @@ export function EditorialWorkspace() {
 
       {launcherTab === 'url' && !compact && (
         <div className="ed-intake-body ed-link">
-          <div className="ed-link-paste">
-            <label htmlFor="ed-link-input">Article link</label>
+          <div
+            className={'ed-link-paste ed-link-stage' + (linkDrag ? ' drag' : '')}
+            onDragOver={(e) => { if (e.dataTransfer.types.includes('text/uri-list') || e.dataTransfer.types.includes('text/plain')) { e.preventDefault(); setLinkDrag(true) } }}
+            onDragLeave={() => setLinkDrag(false)}
+            onDrop={(e) => {
+              const text = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain')).split(/\s+/).find((t) => /^https?:\/\//i.test(t))
+              setLinkDrag(false)
+              if (text) { e.preventDefault(); e.stopPropagation(); setUrlInput(text.trim()) }
+            }}
+          >
+            <span className="ed-link-stage-ic" aria-hidden><Icon name="newspaper" size={22} /></span>
+            <div className="ed-link-stage-text">
+              <label htmlFor="ed-link-input">Article link</label>
+              <h3>Paste a news story link</h3>
+              <p className="ed-link-hint">Any Bengali or English news site. Paste it here, or drag a link onto this box.</p>
+            </div>
             <div className="ed-link-row">
               <div className="ed-link-field" onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'BUTTON') document.getElementById('ed-link-input')?.focus() }}>
                 <Icon name="link" size={16} />
@@ -994,17 +1009,16 @@ export function EditorialWorkspace() {
                       else document.getElementById('ed-link-input')?.focus()
                     }}
                   >
-                    <Icon name="link" size={12} />
+                    <Icon name="copy" size={13} />
                     <span>Paste</span>
                   </button>
                 )}
               </div>
-            </div>
-            <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
-                {loading ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
+              <button type="button" className="btn primary ed-link-go" aria-label="Fetch & Process" data-tip="Fetch the story and process it" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
+                {loading ? <Icon name="refresh" size={15} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={15} />}
                 <span>{loading ? 'Extracting…' : 'Fetch & Process'}</span>
               </button>
-            <p className="ed-link-hint">Paste the address of a news story, Bengali or English.</p>
+            </div>
           </div>
           <ol className="ed-pipe" aria-label="What happens next">
             <li className="parse"><span className="pipe-top"><span className="pipe-ic"><Icon name="newspaper" size={16} /></span><i>01</i></span><b>Parse</b><small>Text &amp; photos are extracted</small></li>
@@ -1090,24 +1104,24 @@ export function EditorialWorkspace() {
               onChange={(e) => { setRawBengaliInput(e.target.value); if (docInfo) setDocInfo(null) }}
               title="Paste Bengali story text (or press Ctrl+V)"
             />
-            {!rawBengaliInput && (
-              <button
-                type="button"
-                className="ed-quick-paste-banner"
-                title="Click to paste story from clipboard"
-                onClick={async () => {
-                  const text = await readClipboardText()
-                  if (text) setRawBengaliInput(text)
-                  else document.querySelector<HTMLTextAreaElement>('.ed-paste-area')?.focus()
-                }}
-              >
-                <Icon name="copy" size={12} />
-                <span>Paste from clipboard</span>
-              </button>
-            )}
           </div>
           <div className="ed-intake-foot">
-            <span className="mono hint">{rawBengaliInput.trim().length} characters</span>
+            <span className="mono hint">{rawBengaliInput.trim().length.toLocaleString()} characters</span>
+            <button
+              type="button"
+              className="btn ed-paste-clip"
+              aria-label="Paste from clipboard"
+              data-tip={rawBengaliInput ? 'Clear the box first to paste a new story' : 'Paste the story from the clipboard'}
+              disabled={!!rawBengaliInput || translating}
+              onClick={async () => {
+                const text = await readClipboardText()
+                if (text) setRawBengaliInput(text)
+                else document.querySelector<HTMLTextAreaElement>('.ed-paste-area')?.focus()
+              }}
+            >
+              <Icon name="copy" size={14} />
+              <span>Paste from clipboard</span>
+            </button>
             <button type="button" className="btn primary" onClick={() => void handleTranslateRawBengali()} disabled={translating || docBusy || !rawBengaliInput.trim()}>
               {translating ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
               <span>{translating ? 'Processing…' : 'Process Story'}</span>
@@ -1264,8 +1278,8 @@ export function EditorialWorkspace() {
       </header>
 
       {!hasStory ? (
-        <div className="ed-launcher-wrap">
-          <div className="ed-launcher-card">
+        <div className={'ed-launcher-wrap' + (storyCount > 0 ? ' has-queue' : '')}>
+          <div className="ed-launcher-card ed-launcher-main">
             <div className="ed-launcher-hero">
               <h2>Editorial Story Desk</h2>
               <p>Translate Bengali reporting into newsroom English, check every figure against the source, and publish to esbpowerline.com.</p>

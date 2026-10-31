@@ -96,21 +96,10 @@
   box-sizing: border-box;
 }
 
-/* Tab icon accents */
+/* Tab icons follow their label (three different hues per tab read as decoration, and the violet was a raw hex) */
 .oa-desk-tabs button svg {
-  transition: color var(--t-1) var(--ease);
-}
-.oa-desk-tabs button:first-child svg {
-  color: var(--or-sent);
-}
-.oa-desk-tabs button:nth-child(2) svg {
-  color: #8b5cf6;
-}
-:root[data-theme=dark] .oa-desk-tabs button:nth-child(2) svg {
-  color: #a78bfa;
-}
-.oa-desk-tabs button:nth-child(3) svg {
-  color: var(--or-reply);
+  color: currentColor;
+  flex-shrink: 0;
 }
 
 .oa-sep {
@@ -148,7 +137,7 @@
 }
 
 .oa-campaign-select > svg:not(.chev) {
-  color: var(--or-sent);
+  color: var(--text-3);
   flex-shrink: 0;
 }
 
@@ -187,67 +176,23 @@
   user-select: none;
 }
 
-/* Action button variations — solid filled, no glowing outlines */
-.oa-btn-pause-resume {
-  transition: all var(--t-1) var(--ease);
-}
-
-.oa-btn-resume-all {
-  background: var(--success) !important;
-  color: #ffffff !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-.oa-btn-resume-all:hover {
-  background: color-mix(in srgb, var(--success) 85%, black) !important;
-}
-.oa-btn-resume-all .oa-btn-icon-mark {
-  display: grid;
-  place-items: center;
-  color: #ffffff;
-}
-:root[data-theme=dark] .oa-btn-resume-all {
-  background: #22c55e !important;
-  color: #052e16 !important;
-  font-weight: 600;
-}
-:root[data-theme=dark] .oa-btn-resume-all .oa-btn-icon-mark {
-  color: #052e16;
-}
-
-.oa-btn-pause-all {
-  background: var(--warning) !important;
-  color: #ffffff !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-.oa-btn-pause-all:hover {
-  background: color-mix(in srgb, var(--warning) 85%, black) !important;
-}
-.oa-btn-pause-all .oa-btn-icon-mark {
-  display: grid;
-  place-items: center;
-  color: #ffffff;
-}
-:root[data-theme=dark] .oa-btn-pause-all {
-  background: #f59e0b !important;
-  color: #1c1917 !important;
-  font-weight: 600;
-}
-:root[data-theme=dark] .oa-btn-pause-all .oa-btn-icon-mark {
-  color: #1c1917;
-}
-
+/* Pause all / Resume: the app's own buttons. Pause is a quiet fill (it interrupts, it is not a call to action);
+ * Resume is the primary ink button. Both come from tokens, so they follow the theme instead of a fixed green/amber. */
+.oa-btn-pause-resume:not(.primary),
 .oa-btn-export {
   background: var(--fill) !important;
+  color: var(--text) !important;
   border: 0 !important;
   box-shadow: none !important;
 }
-.oa-btn-export:hover {
+.oa-btn-pause-resume:not(.primary):hover:not(:disabled),
+.oa-btn-export:hover,
+.oa-btn-export.open {
   background: var(--fill-hover) !important;
 }
+.oa-btn-pause-resume svg,
 .oa-btn-export > svg:not(.chev) {
-  color: var(--or-sent);
+  flex-shrink: 0;
 }
 
 /* ---------------------------------------------------------------- canvas */
@@ -655,13 +600,15 @@
   align-items: center;
 }
 
-/* Individual filter chip base — clean filled pill, no strokes */
+/* Filter chips: one neutral pill; the selected one is the ink chip (the same "on" as every other filter in the app).
+ * Icons follow the text — nine hues of raw hex made the row read as decoration and were wrong in one theme or the
+ * other; the colour of a state lives on the row's badge and chip below, where it means something. */
 .or-fchip.oa-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 28px;
-  padding: 0 11px;
+  padding: 0 12px 0 10px;
   font-size: 12px;
   font-weight: 500;
   border-radius: var(--r-pill);
@@ -680,150 +627,21 @@
 
 .oa-chip-ic {
   flex-shrink: 0;
+  color: var(--text-3);
   transition: color var(--t-1) var(--ease);
 }
+.or-fchip.oa-chip:hover .oa-chip-ic {
+  color: var(--text-2);
+}
 
-/* Inactive icon colors by role */
-.oa-chip-all .oa-chip-ic       { color: var(--text-3); }
-.oa-chip-sent .oa-chip-ic      { color: var(--or-sent); }
-.oa-chip-bad .oa-chip-ic       { color: var(--danger); }
-.oa-chip-reply .oa-chip-ic     { color: var(--or-reply); }
-.oa-chip-bounce .oa-chip-ic    { color: #e11d48; }
-.oa-chip-optout .oa-chip-ic    { color: #d97706; }
-.oa-chip-skip .oa-chip-ic      { color: #64748b; }
-.oa-chip-control .oa-chip-ic   { color: #8b5cf6; }
-.oa-chip-assistant .oa-chip-ic { color: #f59e0b; }
-
-:root[data-theme=dark] .oa-chip-bounce .oa-chip-ic    { color: #fda4af; }
-:root[data-theme=dark] .oa-chip-optout .oa-chip-ic    { color: #fcd34d; }
-:root[data-theme=dark] .oa-chip-skip .oa-chip-ic      { color: #cbd5e1; }
-:root[data-theme=dark] .oa-chip-control .oa-chip-ic   { color: #c4b5fd; }
-:root[data-theme=dark] .oa-chip-assistant .oa-chip-ic { color: #fef08a; }
-
-/* Active filter chip states: solid filled buttons, no strokes or glowing outlines */
-.or-fchip.oa-chip.on {
+.or-fchip.oa-chip.on,
+.or-fchip.oa-chip.on:hover {
+  background: var(--ink) !important;
+  color: var(--on-ink) !important;
   font-weight: 600;
-  border: 0 !important;
-  box-shadow: none !important;
 }
-
-/* All: bold solid ink fill */
-.or-fchip.oa-chip-all.on {
-  background: var(--text) !important;
-  color: var(--card) !important;
-}
-.or-fchip.oa-chip-all.on .oa-chip-ic {
-  color: var(--card) !important;
-}
-
-/* Sent: solid blue fill */
-.or-fchip.oa-chip-sent.on {
-  background: #1d4ed8 !important;
-  color: #ffffff !important;
-}
-:root[data-theme=dark] .or-fchip.oa-chip-sent.on {
-  background: #2563eb !important;
-  color: #ffffff !important;
-}
-.or-fchip.oa-chip-sent.on .oa-chip-ic {
-  color: #ffffff !important;
-}
-
-/* Failed: solid alert red fill */
-.or-fchip.oa-chip-bad.on {
-  background: #b91c1c !important;
-  color: #ffffff !important;
-}
-:root[data-theme=dark] .or-fchip.oa-chip-bad.on {
-  background: #dc2626 !important;
-  color: #ffffff !important;
-}
-.or-fchip.oa-chip-bad.on .oa-chip-ic {
-  color: #ffffff !important;
-}
-
-/* Replies: solid teal fill */
-.or-fchip.oa-chip-reply.on {
-  background: #0f766e !important;
-  color: #ffffff !important;
-}
-:root[data-theme=dark] .or-fchip.oa-chip-reply.on {
-  background: #0d9488 !important;
-  color: #ffffff !important;
-}
-.or-fchip.oa-chip-reply.on .oa-chip-ic {
-  color: #ffffff !important;
-}
-
-/* Bounces: solid rose/crimson fill */
-.or-fchip.oa-chip-bounce.on {
-  background: #be123c !important;
-  color: #ffffff !important;
-}
-:root[data-theme=dark] .or-fchip.oa-chip-bounce.on {
-  background: #e11d48 !important;
-  color: #ffffff !important;
-}
-.or-fchip.oa-chip-bounce.on .oa-chip-ic {
-  color: #ffffff !important;
-}
-
-/* Opt-outs: solid warm amber fill */
-.or-fchip.oa-chip-optout.on {
-  background: #b45309 !important;
-  color: #ffffff !important;
-}
-:root[data-theme=dark] .or-fchip.oa-chip-optout.on {
-  background: #f59e0b !important;
-  color: #18181b !important;
-}
-.or-fchip.oa-chip-optout.on .oa-chip-ic {
-  color: #ffffff !important;
-}
-:root[data-theme=dark] .or-fchip.oa-chip-optout.on .oa-chip-ic {
-  color: #18181b !important;
-}
-
-/* Skipped: solid slate fill */
-.or-fchip.oa-chip-skip.on {
-  background: #475569 !important;
-  color: #ffffff !important;
-}
-:root[data-theme=dark] .or-fchip.oa-chip-skip.on {
-  background: #475569 !important;
-  color: #ffffff !important;
-}
-.or-fchip.oa-chip-skip.on .oa-chip-ic {
-  color: #ffffff !important;
-}
-
-/* Control: solid violet fill */
-.or-fchip.oa-chip-control.on {
-  background: #6d28d9 !important;
-  color: #ffffff !important;
-}
-:root[data-theme=dark] .or-fchip.oa-chip-control.on {
-  background: #7c3aed !important;
-  color: #ffffff !important;
-}
-.or-fchip.oa-chip-control.on .oa-chip-ic {
-  color: #ffffff !important;
-}
-
-/* Assistant: solid gold fill */
-.or-fchip.oa-chip-assistant.on {
-  background: #b45309 !important;
-  color: #ffffff !important;
-}
-:root[data-theme=dark] .or-fchip.oa-chip-assistant.on {
-  background: #f59e0b !important;
-  color: #18181b !important;
-}
-.or-fchip.oa-chip-assistant.on .oa-chip-ic {
-  color: #ffffff !important;
-}
-:root[data-theme=dark] .or-fchip.oa-chip-assistant.on .oa-chip-ic {
-  color: #18181b !important;
+.or-fchip.oa-chip.on .oa-chip-ic {
+  color: var(--on-ink) !important;
 }
 
 /* Search bar styling — quiet fill, no outline */
@@ -853,7 +671,7 @@
 }
 
 .oa-search-ic {
-  color: var(--or-sent);
+  color: var(--text-3);
   flex-shrink: 0;
 }
 
@@ -1255,9 +1073,10 @@
   box-shadow: none;
 }
 
-.oa-empty-mark.tone-bounce {
-  color: #e11d48;
-  background: rgba(225, 29, 72, 0.1);
+.oa-empty-mark.tone-bounce,
+.oa-empty-mark.tone-bad {
+  color: var(--danger);
+  background: var(--danger-soft);
   box-shadow: none;
 }
 

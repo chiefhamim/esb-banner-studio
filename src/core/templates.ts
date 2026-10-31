@@ -8,7 +8,7 @@ import {
 } from './tokens'
 import type { Category } from './tokens'
 import type {
-  Doc, El, FormatId, GradientFill, IconEl, ImageEl, Override, PhotoSlot, PhotosEl, RectEl, Scene, TextEl, WatermarkEl,
+  CardDesign, Doc, El, FormatId, GradientFill, IconEl, ImageEl, Override, PhotoSlot, PhotosEl, RectEl, Scene, TextEl, WatermarkEl,
 } from './types'
 
 const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER']
@@ -152,6 +152,282 @@ function photosEl(F: Factory, id: string, x: number, y: number, w: number, h: nu
   }
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Quote and Stats cards are built from independent design choices (types.ts CardDesign): picture or none, background,
+// typeface, alignment, accent, order and highlight colour, plus size. A preset is only a starting combination; any
+// choice changed afterwards is kept in content.quoteDesign / statDesign on top of the preset. Every piece is its own
+// element, so it can still be selected, moved and restyled on the banner.
+export interface CardPreset { id: string; name: string; note: string; d: CardDesign }
+export const QUOTE_PRESETS: CardPreset[] = [
+  { id: 'classic', name: 'Classic', note: 'Serif, centred', d: { photo: true, bg: 'tint', face: 'serif', align: 'center', mark: 'none', order: 'main', emph: 'accent' } },
+  { id: 'bold', name: 'Bold', note: 'Big mark, left', d: { photo: true, bg: 'tint', face: 'sans', align: 'left', mark: 'mark', order: 'main', emph: 'accent' } },
+  { id: 'minimal', name: 'Minimal', note: 'Paper, a rule', d: { photo: true, bg: 'paper', face: 'serif', align: 'center', mark: 'rule', order: 'main', emph: 'ink' } },
+  { id: 'spotlight', name: 'Spotlight', note: 'Dark band', d: { photo: true, bg: 'ink', face: 'serif', align: 'center', mark: 'none', order: 'main', emph: 'accent' } },
+  { id: 'poster', name: 'Poster', note: 'No photo, desk colour', d: { photo: false, bg: 'accent', face: 'condensed', align: 'left', mark: 'bar', order: 'main', emph: 'ink' } },
+  { id: 'editorial', name: 'Editorial', note: 'No photo, paper', d: { photo: false, bg: 'paper', face: 'serif', align: 'left', mark: 'mark', order: 'main', emph: 'accent' } },
+]
+export const STAT_PRESETS: CardPreset[] = [
+  { id: 'classic', name: 'Classic', note: 'Label over number', d: { photo: true, bg: 'tint', face: 'grotesk', align: 'center', mark: 'none', order: 'main', emph: 'accent' } },
+  { id: 'hero', name: 'Hero', note: 'One huge number', d: { photo: true, bg: 'tint', face: 'grotesk', align: 'center', mark: 'none', order: 'alt', emph: 'accent' } },
+  { id: 'split', name: 'Split', note: 'Number | words', d: { photo: true, bg: 'tint', face: 'grotesk', align: 'center', mark: 'rule', order: 'split', emph: 'accent' } },
+  { id: 'spotlight', name: 'Spotlight', note: 'Dark band', d: { photo: true, bg: 'ink', face: 'grotesk', align: 'center', mark: 'none', order: 'main', emph: 'accent' } },
+  { id: 'figure', name: 'Big figure', note: 'No photo, gradient', d: { photo: false, bg: 'gradient', face: 'condensed', align: 'left', mark: 'bar', order: 'alt', emph: 'ink' } },
+  { id: 'report', name: 'Report', note: 'No photo, framed', d: { photo: false, bg: 'paper', face: 'grotesk', align: 'center', mark: 'frame', order: 'main', emph: 'accent' } },
+]
+
+/** The design in force: the chosen preset (Classic if none) with the editor's own changes on top. */
+export function cardDesign(c: Doc['content'], kind: 'quote' | 'stat'): CardDesign {
+  const presets = kind === 'quote' ? QUOTE_PRESETS : STAT_PRESETS
+  const id = (kind === 'quote' ? c.quoteStyle : c.statStyle) ?? 'classic'
+  const base = (presets.find((p) => p.id === id) ?? presets[0]).d
+  return { ...base, ...((kind === 'quote' ? c.quoteDesign : c.statDesign) ?? {}) }
+}
+
+const SPOT_BG = '#0e1420'
+const PAPER = '#f7f5ef'
+const SUB = '#4a5568'
+const SPOT_SUB = '#b8c2d1'
+const TREND_UP = '#15803d'
+const TREND_UP_DARK = '#4ade80'
+const TREND_DOWN_DARK = '#f87171'
+
+function mixHex(a: string, b: string, t: number): string {
+  const pa = /^#?([0-9a-f]{6})$/i.exec(a.trim()), pb = /^#?([0-9a-f]{6})$/i.exec(b.trim())
+  if (!pa || !pb) return a
+  const na = parseInt(pa[1], 16), nb = parseInt(pb[1], 16)
+  const ch = (s: number) => Math.round(((na >> s) & 255) + ((((nb >> s) & 255) - ((na >> s) & 255)) * t)).toString(16).padStart(2, '0')
+  return '#' + ch(16) + ch(8) + ch(0)
+}
+/** The desk colour lifted toward white, so a dark accent (indigo, navy) still reads on a dark band. */
+const onDark = (hex: string) => mixHex(hex, '#ffffff', 0.38)
+function luminance(hex: string): number {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim()); if (!m) return 0.5
+  const n = parseInt(m[1], 16)
+  const lin = (v: number) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4 }
+  return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255)
+}
+
+interface CardColours { fill: RectEl['fill']; ink: string; sub: string; hi: string; dark: boolean }
+function cardColours(d: CardDesign, accent: string, band: string): CardColours {
+  const base = cardColoursFor(d, accent, band)
+  if (!d.bgColor && !d.inkColor && !d.hiColor) return base
+  // the editor's own colours: a picked background decides light or dark text unless the text colour is picked too
+  let out = base
+  if (d.bgColor) {
+    const dark = luminance(d.bgColor) < 0.4
+    const ink = dark ? '#ffffff' : INK
+    out = {
+      fill: d.bg === 'gradient' ? { stops: [{ p: 0, c: d.bgColor }, { p: 1, c: mixHex(d.bgColor, '#000000', 0.45) }], tf: GRADIENT_DOWN } : d.bgColor,
+      ink, sub: mixHex(ink, d.bgColor, 0.3), hi: d.emph === 'ink' ? ink : (dark ? onDark(accent) : darkAccent(accent)), dark,
+    }
+  }
+  if (d.inkColor) out = { ...out, ink: d.inkColor, sub: mixHex(d.inkColor, typeof out.fill === 'string' ? out.fill : '#808080', 0.3) }
+  if (d.hiColor) out = { ...out, hi: d.hiColor }
+  return out
+}
+function cardColoursFor(d: CardDesign, accent: string, band: string): CardColours {
+  const hi = (base: string, dark: boolean) => d.emph === 'ink' ? (dark ? '#ffffff' : INK) : base
+  switch (d.bg) {
+    case 'paper': return { fill: PAPER, ink: INK, sub: SUB, hi: hi(darkAccent(accent), false), dark: false }
+    case 'ink': return { fill: SPOT_BG, ink: '#ffffff', sub: SPOT_SUB, hi: hi(onDark(accent), true), dark: true }
+    case 'accent': {
+      const darkText = luminance(accent) > 0.45
+      const ink = darkText ? INK : '#ffffff'
+      return { fill: accent, ink, sub: mixHex(ink, accent, 0.25), hi: ink, dark: !darkText }
+    }
+    case 'gradient':
+      return { fill: { stops: [{ p: 0, c: accent }, { p: 1, c: darkAccent(darkAccent(accent)) }], tf: GRADIENT_DOWN }, ink: '#ffffff', sub: '#e3e7ee', hi: '#ffffff', dark: true }
+    default: return { fill: band, ink: INK, sub: SUB, hi: hi(darkAccent(accent), false), dark: false }
+  }
+}
+
+const FACE: Record<CardDesign['face'], { font: TextEl['font']; weight: 500 | 700 | 800; lh: number; ls: number }> = {
+  serif: { font: 'serif', weight: 700, lh: 124, ls: 0 },
+  sans: { font: 'inter', weight: 800, lh: 116, ls: -0.4 },
+  condensed: { font: 'oswald', weight: 700, lh: 112, ls: 0.2 },
+  grotesk: { font: 'grotesk', weight: 800, lh: 112, ls: -1 },
+}
+
+interface CardBox { x: number; w: number; top: number; h: number }
+
+/** On a Quote / Stats card the band behind the words is a container: when the editor moves or resizes it, the text box
+ *  inside keeps the same side margins and fills the band's new height, so the words follow and re-centre. */
+function boxInBand(box: CardBox, band: { x: number; y: number; w: number; h: number }, o: Override): CardBox {
+  const x = band.x + (o.dx ?? 0), y = band.y + (o.dy ?? 0), w = o.w ?? band.w, h = o.h ?? band.h
+  return { x: x + (box.x - band.x), w: Math.max(120, w - (band.w - box.w)), top: y, h: Math.max(60, h) }
+}
+
+/** The card's text box: a real element ('card-box') the editor drags and resizes on the banner. It is created at the
+ *  template's box (applyOverrides then moves/sizes it like any element) and the text is laid out in the moved, resized
+ *  box — so the words follow the box and re-wrap to its width. Transparent until the editor gives it a fill. */
+function cardTextBox(F: Factory & { ov: (id: string) => Override }, base: CardBox, k: number): { live: CardBox; el: RectEl } {
+  const o = F.ov('card-box')
+  const w = Math.max(160 * k, o.w ?? base.w), h = Math.max(80 * k, o.h ?? base.h)
+  const live = { x: base.x + (o.dx ?? 0), top: base.top + (o.dy ?? 0), w, h }
+  return { live, el: F.rect('card-box', 'Text box', 'Headline', base.x, base.top, base.w, base.h, 'rgba(0,0,0,0)', 16 * k) }
+}
+interface CardBlock { headline: TextEl; extras: El[]; fill: RectEl['fill'] }
+
+/** Stack items vertically, centred in the box, with the given gap before each one; returns the block's top and bottom. */
+function stackIn(box: CardBox, items: { el: El; gap: number }[]): [number, number] {
+  const total = items.reduce((s, it, i) => s + (i ? it.gap : 0) + it.el.h, 0)
+  let y = box.top + (box.h - total) / 2
+  const top = y
+  items.forEach((it, i) => { if (i) y += it.gap; it.el.y = y; y += it.el.h })
+  return [top, y]
+}
+
+/** "▲ +1,240 MW" reads as up, "▼ −3 %" as down; the editor can force either or turn the colour off. */
+export function trendOf(text: string, mode: 'auto' | 'up' | 'down' | 'none' = 'auto'): 'up' | 'down' | 'none' {
+  if (mode !== 'auto') return mode
+  const t = text.trim()
+  if (/^[▲↑⬆+]|\bup\b|rise|record|high/i.test(t)) return 'up'
+  if (/^[▼↓⬇\-−–]|\bdown\b|fall|drop|low/i.test(t)) return 'down'
+  return 'none'
+}
+
+/** Accent pieces around a finished block: a side bar (or a short top bar when centred) or a frame. */
+function ornaments(F: Factory, d: CardDesign, box: CardBox, top: number, bottom: number, textX: number, textW: number, accent: string, k: number): El[] {
+  if (d.mark === 'bar') {
+    if (d.align === 'center') { const w = 56 * k; return [F.rect('card-bar', 'Accent bar', 'Headline', box.x + (box.w - w) / 2, top - 26 * k, w, 6 * k, accent, 3 * k)] }
+    const x = d.align === 'left' ? textX - 26 * k : textX + textW + 20 * k
+    return [F.rect('card-bar', 'Accent bar', 'Headline', x, top, 6 * k, bottom - top, accent, 3 * k)]
+  }
+  if (d.mark === 'frame') {
+    const p = 28 * k
+    const fr = F.rect('card-frame', 'Frame', 'Headline', textX - p, top - p, textW + p * 2, bottom - top + p * 2, 'rgba(0,0,0,0)', 14 * k)
+    fr.stroke = { color: accent, width: 3 * k }
+    return [fr]
+  }
+  return []
+}
+
+function quoteBlock(F: Factory, c: Doc['content'], accent: string, band: string, box: CardBox, k: number, boost: number, r2: (v: number) => number): CardBlock {
+  const d = cardDesign(c, 'quote')
+  const col = cardColours(d, accent, band)
+  const face = FACE[d.face]
+  const sc = (c.cardScale ?? 1) * boost
+  const raw = (c.quoteText || c.headline).trim() || 'Type the statement or quote here'
+  const base = raw.length > 110 ? 36 : raw.length > 70 ? 42 : 48
+  const pad = 24 * k
+  const inset = d.mark === 'bar' && d.align !== 'center' ? 26 * k : d.mark === 'frame' ? 36 * k : 0
+  const x = box.x + pad + (d.align === 'left' ? inset : 0), w = box.w - pad * 2 - inset
+  const accentInk = d.accentColor ?? (col.dark ? onDark(accent) : accent)
+  const items: { el: El; gap: number }[] = []
+  const extras: El[] = []
+
+  const quote = settle(F.text('headline', 'Quote statement', 'Headline', x, 0, {
+    text: c.quoteMarks !== false && d.mark !== 'mark' ? `“${raw}”` : raw,
+    size: r2(base * k * sc * (d.face === 'condensed' ? 1.12 : 1)), weight: face.weight, font: face.font, lh: face.lh, ls: face.ls * k,
+    align: d.align, fit: 'box', w, color: col.ink,
+  }))
+  const nameText = (c.speakerName?.trim() || 'SPEAKER NAME').toUpperCase()
+  const small = Math.min(sc, 1.25)
+  const name = settle(F.text('speaker-name', 'Speaker name', 'Headline', x, 0, {
+    text: d.mark === 'mark' && d.align === 'left' ? `— ${nameText}` : nameText, size: r2(26 * k * small), weight: 800, ls: 1.4 * k,
+    font: d.face === 'condensed' ? 'oswald' : undefined, align: d.align, fit: 'box', w, color: col.hi,
+  }))
+  const title = settle(F.text('speaker-title', 'Speaker title', 'Headline', x, 0, {
+    text: c.speakerTitle?.trim() || 'Speaker Designation / Title', size: r2(21 * k * small), weight: 500, align: d.align, fit: 'box', w, color: col.sub,
+  }))
+  const rw = 64 * k
+  const rule = d.mark === 'rule' ? F.rect('quote-rule', 'Quote rule', 'Headline', d.align === 'center' ? box.x + (box.w - rw) / 2 : d.align === 'right' ? x + w - rw : x, 0, rw, 4 * k, accentInk, 2 * k) : null
+  const mark = d.mark === 'mark' ? settle(F.text('quote-mark', 'Quote mark', 'Headline', x, 0, { text: '“', size: r2(140 * k * small), weight: 800, font: 'serif', lh: 60, color: accentInk, align: d.align, fit: 'box', w })) : null
+
+  if (d.order === 'alt') {
+    items.push({ el: name, gap: 0 }, { el: title, gap: 4 * k })
+    if (rule) items.push({ el: rule, gap: 18 * k })
+    if (mark) items.push({ el: mark, gap: 16 * k })
+    items.push({ el: quote, gap: (rule ? 18 : mark ? 4 : 18) * k })
+  } else {
+    if (mark) items.push({ el: mark, gap: 0 })
+    items.push({ el: quote, gap: mark ? 4 * k : 0 })
+    if (rule) items.push({ el: rule, gap: 22 * k })
+    items.push({ el: name, gap: (rule ? 14 : 16) * k }, { el: title, gap: 4 * k })
+  }
+  const [top, bottom] = stackIn(box, items)
+  extras.push(...ornaments(F, d, box, top, bottom, x, w, accentInk, k))
+  if (mark) extras.push(mark)
+  if (rule) extras.push(rule)
+  extras.push(name, title)
+  return { headline: quote, extras, fill: col.fill }
+}
+
+function statBlock(F: Factory, c: Doc['content'], accent: string, band: string, box: CardBox, k: number, boost: number, r2: (v: number) => number): CardBlock {
+  const d = cardDesign(c, 'stat')
+  const col = cardColours(d, accent, band)
+  const face = FACE[d.face]
+  const sc = (c.cardScale ?? 1) * boost
+  const small = Math.min(sc, 1.25)
+  const numText = c.statNumber?.trim() || '16,470 MW'
+  const labelText = (c.statLabel || c.headline).trim().toUpperCase() || 'PEAK ELECTRICITY GENERATION'
+  const deltaText = c.statDelta?.trim() || ''
+  const noteText = c.statNote?.trim() || ''
+  const trend = trendOf(deltaText, c.statTrend)
+  const trendCol = trend === 'up' ? (col.dark ? TREND_UP_DARK : TREND_UP) : trend === 'down' ? (col.dark ? TREND_DOWN_DARK : WEEKDAY_RED) : col.sub
+  // on the desk colour itself a green or red trend vanishes, so it takes the text colour there (the arrow still says which way)
+  const trendInk = d.bg === 'accent' ? col.ink : trendCol
+  const numCol = c.statNumberInk ? col.ink : col.hi
+  const accentInk = d.accentColor ?? (col.dark ? onDark(accent) : accent)
+  const pad = 24 * k
+  const extras: El[] = []
+  const numFont = { font: face.font, weight: face.weight, ls: face.ls * k }
+
+  const fitNum = (el: TextEl, maxW: number) => {
+    const one = settle(F.text('measure', '', '', 0, 0, { text: el.text, size: el.size, weight: el.weight, font: el.font, ls: el.ls }))
+    if (one.w > maxW) { el.size = r2(el.size * maxW / one.w); settle(el) }
+  }
+
+  if (d.order === 'split') {
+    const gutter = 64 * k
+    const colW = (box.w - pad * 2 - gutter) / 2
+    const leftX = box.x + pad, rightX = leftX + colW + gutter
+    const num = settle(F.text('headline', 'Stat number', 'Headline', leftX, 0, { text: numText, size: r2(84 * k * sc), ...numFont, align: 'right', fit: 'box', w: colW - 14 * k, color: numCol }))
+    fitNum(num, (colW - 14 * k) * 0.96)
+    const label = settle(F.text('stat-label', 'Stat label', 'Headline', rightX, 0, { text: labelText, size: r2(23 * k * small), weight: 800, ls: 1.6 * k, align: 'left', fit: 'box', w: colW, color: col.ink, lh: 120 }))
+    const delta = deltaText ? settle(F.text('stat-delta', 'Stat delta', 'Headline', rightX, 0, { text: deltaText, size: r2(22 * k * small), weight: 700, align: 'left', fit: 'box', w: colW, color: trendInk })) : null
+    const note = noteText ? settle(F.text('stat-note', 'Stat note', 'Headline', rightX, 0, { text: noteText, size: r2(20 * k * small), weight: 500, align: 'left', fit: 'box', w: colW, color: col.sub })) : null
+    const right: { el: El; gap: number }[] = [{ el: label, gap: 0 }]
+    if (delta) right.push({ el: delta, gap: 8 * k })
+    if (note) right.push({ el: note, gap: 6 * k })
+    const [nt, nb] = stackIn(box, [{ el: num, gap: 0 }])
+    const [rt, rb] = stackIn(box, right)
+    const top = Math.min(nt, rt), bottom = Math.max(nb, rb)
+    extras.push(F.rect('stat-rule', 'Stat divider', 'Headline', leftX + colW + gutter / 2 - 2 * k, top, 4 * k, bottom - top, accentInk, 2 * k))
+    if (d.mark === 'frame') extras.push(...ornaments(F, d, box, top, bottom, leftX, box.w - pad * 2, accentInk, k))
+    extras.push(label, ...(delta ? [delta] : []), ...(note ? [note] : []))
+    return { headline: num, extras, fill: col.fill }
+  }
+
+  const big = d.order === 'alt'
+  const inset = d.mark === 'bar' && d.align !== 'center' ? 26 * k : d.mark === 'frame' ? 36 * k : 0
+  const x = box.x + pad + (d.align === 'left' ? inset : 0), w = box.w - pad * 2 - inset
+  const label = settle(F.text('stat-label', 'Stat label', 'Headline', x, 0, { text: labelText, size: r2((big ? 23 : 25) * k * small), weight: 800, ls: 2 * k, align: d.align, fit: 'box', w, color: col.ink }))
+  const num = settle(F.text('headline', 'Stat number', 'Headline', x, 0, { text: numText, size: r2((big ? 122 : 84) * k * sc * (d.face === 'condensed' ? 1.1 : 1)), ...numFont, ls: (big ? 1.6 : 1) * face.ls * k, align: d.align, fit: 'box', w, color: numCol, lh: big ? 100 : null }))
+  fitNum(num, w)
+  const delta = deltaText ? settle(F.text('stat-delta', 'Stat delta', 'Headline', x, 0, { text: deltaText, size: r2(24 * k * small), weight: 700, align: d.align, fit: 'box', w, color: trendInk })) : null
+  if (delta && big && d.align !== 'center') {
+    // a pill hugs its words; a left or right box would stretch it across the card
+    const right = delta.x + delta.w
+    delta.fit = 'hug'; settle(delta)
+    if (d.align === 'right') delta.x = right - delta.w
+  }
+  if (delta && big) delta.bgPill = { color: trend === 'none' || d.bg === 'accent' ? (col.dark ? '#ffffff' : '#64748b') : trendCol, alpha: 0.14, radius: Math.round(20 * k), padX: Math.round(16 * k), padY: Math.round(6 * k) }
+  const note = noteText ? settle(F.text('stat-note', 'Stat note', 'Headline', x, 0, { text: noteText, size: r2(22 * k * small), weight: 500, align: d.align, fit: 'box', w, color: col.sub })) : null
+  const rw = 64 * k
+  const rule = d.mark === 'rule' ? F.rect('stat-rule', 'Stat rule', 'Headline', d.align === 'center' ? box.x + (box.w - rw) / 2 : d.align === 'right' ? x + w - rw : x, 0, rw, 4 * k, accentInk, 2 * k) : null
+
+  const items: { el: El; gap: number }[] = big ? [{ el: num, gap: 0 }, { el: label, gap: 10 * k }] : [{ el: label, gap: 0 }, { el: num, gap: 6 * k }]
+  if (rule) items.push({ el: rule, gap: 16 * k })
+  if (delta) items.push({ el: delta, gap: (rule ? 14 : big ? 18 : 8) * k })
+  if (note) items.push({ el: note, gap: (big && delta ? 14 : 6) * k })
+  const [top, bottom] = stackIn(box, items)
+  extras.push(...ornaments(F, d, box, top, bottom, x, w, accentInk, k))
+  if (rule) extras.push(rule)
+  extras.push(label, ...(delta ? [delta] : []), ...(note ? [note] : []))
+  return { headline: num, extras, fill: col.fill }
+}
+
 const GRADIENT_DOWN: GradientFill['tf'] = [[0, 1, 0], [-1, 0, 1]]
 
 /**
@@ -203,59 +479,24 @@ function buildStack(format: FormatId, doc: Doc, cat: Category): El[] {
   let pillIcon: IconEl | null = null
   let pillLabel: TextEl | null = null
 
-  if (c.cardType === 'quote') {
-    const rawQuote = (c.quoteText || c.headline).trim() || 'Type the statement or quote here'
-    const qLen = rawQuote.length
-    const qSize = r2((qLen > 110 ? 36 : qLen > 70 ? 42 : 48) * kb)
-    const quoteEl = settle(F.text('headline', 'Quote statement', 'Headline', sp.headX + 24 * kb, 0, {
-      text: `“${rawQuote}”`, size: qSize, weight: 700, font: 'serif', lh: 124, align: 'center', fit: 'box', w: sp.headW - 48 * kb, color: INK,
-    }))
-    const sName = c.speakerName?.trim() || 'SPEAKER NAME'
-    const sTitle = c.speakerTitle?.trim() || 'Speaker Designation / Title'
-    const nameEl = settle(F.text('speaker-name', 'Speaker name', 'Headline', sp.headX, 0, {
-      text: sName.toUpperCase(), size: r2(26 * kb), weight: 800, ls: 1.4 * kb, align: 'center', fit: 'box', w: sp.headW, color: darkAccent(accent),
-    }))
-    const titleEl = settle(F.text('speaker-title', 'Speaker title', 'Headline', sp.headX, 0, {
-      text: sTitle, size: r2(21 * kb), weight: 500, align: 'center', fit: 'box', w: sp.headW, color: '#4a5568',
-    }))
-
-    const qGroupH = quoteEl.h + 14 * kb + nameEl.h + 4 * kb + titleEl.h
-    const qTop = bandTop + (sp.bandH - qGroupH) / 2
-    quoteEl.y = qTop
-    nameEl.y = quoteEl.y + quoteEl.h + 14 * kb
-    titleEl.y = nameEl.y + nameEl.h + 4 * kb
-
-    headline = quoteEl
-    extraBandEls.push(nameEl, titleEl)
-  } else if (c.cardType === 'stat') {
-    const numText = c.statNumber?.trim() || '16,470 MW'
-    const labelText = (c.statLabel || c.headline).trim().toUpperCase() || 'PEAK ELECTRICITY GENERATION'
-    const deltaText = c.statDelta?.trim() || ''
-    const noteText = c.statNote?.trim() || ''
-
-    const labelEl = settle(F.text('stat-label', 'Stat label', 'Headline', sp.headX, 0, {
-      text: labelText, size: r2(25 * kb), weight: 800, ls: 2 * kb, align: 'center', fit: 'box', w: sp.headW, color: '#374151',
-    }))
-    const numEl = settle(F.text('headline', 'Stat number', 'Headline', sp.headX, 0, {
-      text: numText, size: r2(84 * kb), weight: 800, font: 'grotesk', ls: -1 * kb, align: 'center', fit: 'box', w: sp.headW, color: darkAccent(accent),
-    }))
-    const deltaEl = deltaText ? settle(F.text('stat-delta', 'Stat delta', 'Headline', sp.headX, 0, {
-      text: deltaText, size: r2(24 * kb), weight: 700, align: 'center', fit: 'box', w: sp.headW, color: WEEKDAY_RED,
-    })) : null
-    const noteEl = noteText ? settle(F.text('stat-note', 'Stat note', 'Headline', sp.headX, 0, {
-      text: noteText, size: r2(22 * kb), weight: 500, align: 'center', fit: 'box', w: sp.headW, color: '#4a5568',
-    })) : null
-
-    const statH = labelEl.h + 6 * kb + numEl.h + (deltaEl ? 8 * kb + deltaEl.h : 0) + (noteEl ? 6 * kb + noteEl.h : 0)
-    const statTop = bandTop + (sp.bandH - statH) / 2
-    labelEl.y = statTop
-    numEl.y = labelEl.y + labelEl.h + 6 * kb
-    let curY = numEl.y + numEl.h
-    if (deltaEl) { deltaEl.y = curY + 8 * kb; curY = deltaEl.y + deltaEl.h }
-    if (noteEl) { noteEl.y = curY + 6 * kb }
-
-    headline = numEl
-    extraBandEls.push(labelEl, ...(deltaEl ? [deltaEl] : []), ...(noteEl ? [noteEl] : []))
+  let cardFill: RectEl['fill'] | undefined
+  let cardBoxEl: RectEl | null = null
+  // a Quote / Stats card without a picture: the text block takes the photo area too, and its type grows with the room
+  const card = c.cardType === 'quote' || c.cardType === 'stat' ? c.cardType : null
+  const cd = card ? cardDesign(c, card) : null
+  // a light footer the editor picked reads with dark text
+  const footInk = cd?.footerColor && luminance(cd.footerColor) > 0.45 ? INK : FOOTER_TEXT
+  const noPhoto = !!card && !cardDesign(c, card).photo
+  if (card) {
+    const bandBase = noPhoto ? { x: 0, y: headerH, w: W, h: footTop - headerH } : { x: 0, y: bandTop, w: W, h: sp.bandH }
+    const box = boxInBand({ x: sp.headX, w: sp.headW, top: bandBase.y, h: bandBase.h }, bandBase, F.ov('band'))
+    const boost = noPhoto ? Math.min(1.6, 1 + ((footTop - headerH) / sp.bandH - 1) * 0.3) : 1
+    const tb = cardTextBox(F, box, kb)
+    cardBoxEl = tb.el
+    const blk = card === 'quote' ? quoteBlock(F, c, accent, cat.band, tb.live, kb, boost, r2) : statBlock(F, c, accent, cat.band, tb.live, kb, boost, r2)
+    headline = blk.headline
+    extraBandEls.push(...blk.extras)
+    cardFill = blk.fill
   } else {
     // Standard headline (size by guideline)
     const hSize = headlineSize(format, c.headline.length)
@@ -317,10 +558,12 @@ function buildStack(format: FormatId, doc: Doc, cat: Category): El[] {
   const chipIcon = F.icon('chip-icon', 'Category icon', 'Category', chipX + 24 * kh, 209.5 * kh, 26 * kh, { vw: 26, vh: 26, paths: cat.icon }, cat.chipText)
 
   const logo: ImageEl = { kind: 'image', id: 'logo', name: 'Logo', group: 'Header', x: 56 * kh, y: 51 * kh, w: 560 * kh, h: 195 * kh, visible: true, locked: false, opacity: 1, src: 'logo', fit: 'contain' }
-  const edge = F.rect('edge-line', 'Edge line', 'Decor', 0, bandTop - 10 * kh, W, 10 * kh, accent)
+  // on a card the accent edge rides on the band's top, wherever the editor moved it
+  const edgeDy = c.cardType === 'quote' || c.cardType === 'stat' ? (F.ov('band').dy ?? 0) : 0
+  const edge = F.rect('edge-line', 'Edge line', 'Decor', 0, bandTop - 10 * kh + edgeDy, W, 10 * kh, accent)
   const footerLine = F.rect('footer-line', 'Footer line', 'Footer', 0, footTop, W, 6 * kf, accent)
   const fy = (v: number) => footTop + (v - 1341) * kf
-  const ft = (id: string, name: string, x: number, t: string) => settle(F.text(id, name, 'Footer', x * kf, fy(1364), { text: t, size: r2(36 * kf), weight: 500, color: FOOTER_TEXT }))
+  const ft = (id: string, name: string, x: number, t: string) => settle(F.text(id, name, 'Footer', x * kf, fy(1364), { text: t, size: r2(36 * kf), weight: 500, color: footInk }))
 
   // faded, blurred category icon behind the headline (hidden by default on the legacy Figma size, which has none)
   const wmArt = Math.round(sp.bandH * 1.5)
@@ -334,23 +577,32 @@ function buildStack(format: FormatId, doc: Doc, cat: Category): El[] {
   const sw = [W / 3 + 1, W / 3 + 1, W / 3 + 1]
   const bandOp = c.bandOpacity ?? 1
   const actualPhotoH = bandOp < 1 ? (footTop - headerH) : photoH
-  const bandRect = F.rect('band', 'Headline band', 'Headline', 0, bandTop, W, sp.bandH, cat.band)
+  const bandRect = noPhoto
+    ? F.rect('band', 'Card background', 'Headline', 0, headerH, W, footTop - headerH, cardFill ?? cat.band)
+    : F.rect('band', 'Headline band', 'Headline', 0, bandTop, W, sp.bandH, cardFill ?? cat.band)
+  if (noPhoto) edge.visible = false  // the band's top line has no band edge to sit on
+  if (noPhoto) { watermark.y = headerH; watermark.h = footTop - headerH; watermark.oy = Math.round((watermark.h - wmArt) / 2) }
+  if (card) watermark.y += F.ov('band').dy ?? 0  // the faded icon stays with the band
+  const photoLayer = photosEl(F, 'photos', 0, headerH, W, actualPhotoH, doc, format, cat.band)
+  if (noPhoto) photoLayer.visible = false
   if (bandOp < 1) {
     bandRect.opacity = bandOp
     edge.opacity = bandOp
   }
   els.push(
-    F.rect('header-bg', 'Header background', 'Header', 0, 0, W, headerH, SOCIAL_BG),
-    photosEl(F, 'photos', 0, headerH, W, actualPhotoH, doc, format, cat.band),
+    F.rect('header-bg', 'Header background', 'Header', 0, 0, W, headerH, cd?.headerColor ?? SOCIAL_BG),
+    photoLayer,
     bandRect,
     watermark,
     ...stripes(F, [0], stripeH, sw, sx, 'stripe-top', 'Decor'),
-    F.rect('footer-bg', 'Footer background', 'Footer', 0, footTop, W, footH, cat.footer),
+    F.rect('footer-bg', 'Footer background', 'Footer', 0, footTop, W, footH, cd?.footerColor ?? cat.footer),
     ...stripes(F, [headerH - stripeH], stripeH, sw, sx, 'stripe-head', 'Decor'),
-    logo, edge, headline, ...extraBandEls, num, month, wk, rule, footerLine,
+    logo, edge, ...(cardBoxEl ? [cardBoxEl] : []), headline, ...extraBandEls, num, month, wk, rule, footerLine,
   )
-  if (c.credit.trim()) els.push(...creditLine(F, c, { x: 0, y: headerH, w: W, h: photoH }))
-  els.push(...labelPill(F, c, { x: 0, y: headerH, w: W, h: photoH }, W, { x: 0, y: stripeH, w: W, h: headerH - stripeH * 2 }))
+  if (!noPhoto) {
+    if (c.credit.trim()) els.push(...creditLine(F, c, { x: 0, y: headerH, w: W, h: photoH }))
+    els.push(...labelPill(F, c, { x: 0, y: headerH, w: W, h: photoH }, W, { x: 0, y: stripeH, w: W, h: headerH - stripeH * 2 }))
+  }
   if (c.showLinkPill && pill && pillIcon && pillLabel) els.push(pill, pillIcon, pillLabel)
   els.push(
     chip,
@@ -384,59 +636,23 @@ function buildWeb(format: FormatId, doc: Doc, cat: Category): El[] {
   const panelW = 552 * k
   const panelX = 1328 * k
 
-  if (c.cardType === 'quote') {
-    const rawQuote = (c.quoteText || c.headline).trim() || 'Type the statement or quote here'
-    const qLen = rawQuote.length
-    const qSize = r2((qLen > 110 ? 32 : qLen > 70 ? 38 : 44) * k)
-    const quoteEl = settle(F.text('headline', 'Quote statement', 'Headline', panelX, 0, {
-      text: `“${rawQuote}”`, size: qSize, weight: 700, font: 'serif', lh: 124, align: 'center', fit: 'box', w: panelW, color: INK,
-    }))
-    const sName = c.speakerName?.trim() || 'SPEAKER NAME'
-    const sTitle = c.speakerTitle?.trim() || 'Speaker Designation / Title'
-    const nameEl = settle(F.text('speaker-name', 'Speaker name', 'Headline', panelX, 0, {
-      text: sName.toUpperCase(), size: r2(24 * k), weight: 800, ls: 1.4 * k, align: 'center', fit: 'box', w: panelW, color: darkAccent(accent),
-    }))
-    const titleEl = settle(F.text('speaker-title', 'Speaker title', 'Headline', panelX, 0, {
-      text: sTitle, size: r2(20 * k), weight: 500, align: 'center', fit: 'box', w: panelW, color: '#4a5568',
-    }))
-
-    const qGroupH = quoteEl.h + 16 * k + nameEl.h + 4 * k + titleEl.h
-    const qTop = 600 * k - qGroupH / 2
-    quoteEl.y = qTop
-    nameEl.y = quoteEl.y + quoteEl.h + 16 * k
-    titleEl.y = nameEl.y + nameEl.h + 4 * k
-
-    headline = quoteEl
-    extraPanelEls.push(nameEl, titleEl)
-  } else if (c.cardType === 'stat') {
-    const numText = c.statNumber?.trim() || '16,470 MW'
-    const labelText = (c.statLabel || c.headline).trim().toUpperCase() || 'PEAK ELECTRICITY GENERATION'
-    const deltaText = c.statDelta?.trim() || ''
-    const noteText = c.statNote?.trim() || ''
-
-    const labelEl = settle(F.text('stat-label', 'Stat label', 'Headline', panelX, 0, {
-      text: labelText, size: r2(24 * k), weight: 800, ls: 2 * k, align: 'center', fit: 'box', w: panelW, color: '#374151',
-    }))
-    const numEl = settle(F.text('headline', 'Stat number', 'Headline', panelX, 0, {
-      text: numText, size: r2(76 * k), weight: 800, font: 'grotesk', ls: -1 * k, align: 'center', fit: 'box', w: panelW, color: darkAccent(accent),
-    }))
-    const deltaEl = deltaText ? settle(F.text('stat-delta', 'Stat delta', 'Headline', panelX, 0, {
-      text: deltaText, size: r2(22 * k), weight: 700, align: 'center', fit: 'box', w: panelW, color: WEEKDAY_RED,
-    })) : null
-    const noteEl = noteText ? settle(F.text('stat-note', 'Stat note', 'Headline', panelX, 0, {
-      text: noteText, size: r2(20 * k), weight: 500, align: 'center', fit: 'box', w: panelW, color: '#4a5568',
-    })) : null
-
-    const statH = labelEl.h + 8 * k + numEl.h + (deltaEl ? 10 * k + deltaEl.h : 0) + (noteEl ? 8 * k + noteEl.h : 0)
-    const statTop = 600 * k - statH / 2
-    labelEl.y = statTop
-    numEl.y = labelEl.y + labelEl.h + 8 * k
-    let curY = numEl.y + numEl.h
-    if (deltaEl) { deltaEl.y = curY + 10 * k; curY = deltaEl.y + deltaEl.h }
-    if (noteEl) { noteEl.y = curY + 8 * k }
-
-    headline = numEl
-    extraPanelEls.push(labelEl, ...(deltaEl ? [deltaEl] : []), ...(noteEl ? [noteEl] : []))
+  let cardFill: RectEl['fill'] | undefined
+  let cardBoxEl: RectEl | null = null
+  const card = c.cardType === 'quote' || c.cardType === 'stat' ? c.cardType : null
+  const cd = card ? cardDesign(c, card) : null
+  // a light footer the editor picked reads with dark text
+  const footInk = cd?.footerColor && luminance(cd.footerColor) > 0.45 ? INK : FOOTER_TEXT
+  const noPhoto = !!card && !cardDesign(c, card).photo
+  if (card) {
+    const panelBase = noPhoto ? { x: 0, y: 200 * k, w: W, h: 800 * k } : { x: 1280 * k, y: 200 * k, w: 640 * k, h: 800 * k }
+    const box = boxInBand(noPhoto ? { x: 200 * k, w: W - 400 * k, top: 200 * k, h: 800 * k } : { x: panelX, w: panelW, top: 200 * k, h: 800 * k }, panelBase, F.ov('panel'))
+    const boost = noPhoto ? 1.4 : 1
+    const tb = cardTextBox(F, box, k)
+    cardBoxEl = tb.el
+    const blk = card === 'quote' ? quoteBlock(F, c, accent, cat.panel[0], tb.live, k * 0.92, boost, r2) : statBlock(F, c, accent, cat.panel[0], tb.live, k * 0.92, boost, r2)
+    headline = blk.headline
+    extraPanelEls.push(...blk.extras)
+    cardFill = blk.fill
   } else {
     const hSize = headlineSize(format, c.headline.length)
     headline = settle(F.text('headline', 'Headline', 'Headline', panelX, 0, {
@@ -483,7 +699,7 @@ function buildWeb(format: FormatId, doc: Doc, cat: Category): El[] {
   const chipIcon = F.icon('chip-icon', 'Category icon', 'Category', chipX + 22 * k, 132.26 * k, 22 * k, { vw: 26, vh: 26, paths: cat.icon }, cat.chipText)
 
   const logo: ImageEl = { kind: 'image', id: 'logo', name: 'Logo', group: 'Header', x: 56 * k, y: 36 * k, w: 368 * k, h: 128 * k, visible: true, locked: false, opacity: 1, src: 'logo', fit: 'contain' }
-  const ft = (id: string, name: string, x: number, t: string) => settle(F.text(id, name, 'Footer', x * k, 1025 * k, { text: t, size: r2(28 * k), weight: 500, color: FOOTER_TEXT }))
+  const ft = (id: string, name: string, x: number, t: string) => settle(F.text(id, name, 'Footer', x * k, 1025 * k, { text: t, size: r2(28 * k), weight: 500, color: footInk }))
 
   const panelFill: GradientFill = { stops: [{ p: 0, c: cat.panel[0] }, { p: 1, c: cat.panel[1] }], tf: GRADIENT_DOWN }
   const mask: GradientFill = {
@@ -499,20 +715,26 @@ function buildWeb(format: FormatId, doc: Doc, cat: Category): El[] {
   const sw = [641 * k, 641 * k, 641 * k]
   const bandOp = c.bandOpacity ?? 1
   const actualPhotoW = bandOp < 1 ? W : 1280 * k
-  const panelRect = F.rect('panel', 'Panel', 'Headline', 1280 * k, 200 * k, 640 * k, 800 * k, panelFill)
+  const panelRect = noPhoto
+    ? F.rect('panel', 'Card background', 'Headline', 0, 200 * k, W, 800 * k, cardFill ?? panelFill)
+    : F.rect('panel', 'Panel', 'Headline', 1280 * k, 200 * k, 640 * k, 800 * k, cardFill ?? panelFill)
   const panelEdgeRect = F.rect('panel-edge', 'Panel edge', 'Decor', 1280 * k, 200 * k, 8 * k, 800 * k, accent)
+  if (noPhoto) panelEdgeRect.visible = false
+  if (card) { const po = F.ov('panel'); panelEdgeRect.x += po.dx ?? 0; panelEdgeRect.y += po.dy ?? 0; if (po.h != null) panelEdgeRect.h = po.h }  // the edge rides on the panel
+  const photoLayer = photosEl(F, 'photos', 0, 200 * k, actualPhotoW, 800 * k, doc, format, cat.panel[0])
+  if (noPhoto) photoLayer.visible = false
   if (bandOp < 1) {
     panelRect.opacity = bandOp
     panelEdgeRect.opacity = bandOp
   }
   els.push(
-    F.rect('header-bg', 'Header background', 'Header', 0, 0, W, 200 * k, WEB_HEADER),
+    F.rect('header-bg', 'Header background', 'Header', 0, 0, W, 200 * k, cd?.headerColor ?? WEB_HEADER),
     ...stripes(F, [0, 186 * k], 14 * k, sw, sx, 'stripe', 'Decor'),
     logo, num, month, wk, rule, chip,
-    photosEl(F, 'photos', 0, 200 * k, actualPhotoW, 800 * k, doc, format, cat.panel[0]),
+    photoLayer,
     panelRect,
     panelEdgeRect,
-    F.rect('footer-bg', 'Footer background', 'Footer', 0, 1000 * k, W, 80 * k, cat.footer),
+    F.rect('footer-bg', 'Footer background', 'Footer', 0, 1000 * k, W, 80 * k, cd?.footerColor ?? cat.footer),
     F.rect('footer-line', 'Footer line', 'Footer', 0, 1000 * k, W, 5 * k, accent),
     ft('fb-text', 'Facebook handle', 118, 'esbpowerlineofficial'),
     ft('web-text', 'Website', 868, 'esbpowerline.com'),
@@ -520,10 +742,12 @@ function buildWeb(format: FormatId, doc: Doc, cat: Category): El[] {
     F.icon('fb-icon', 'Facebook icon', 'Footer', 56 * k, 1018 * k, 48 * k, SOCIAL_ICONS.facebook),
     F.icon('web-icon', 'Website icon', 'Footer', 806 * k, 1018 * k, 48 * k, SOCIAL_ICONS.website),
     F.icon('yt-icon', 'YouTube icon', 'Footer', 1588 * k, 1023 * k, 54 * k, SOCIAL_ICONS.youtube),
-    watermark, headline, ...extraPanelEls, chipIcon, chipText,
+    watermark, ...(cardBoxEl ? [cardBoxEl] : []), headline, ...extraPanelEls, chipIcon, chipText,
   )
-  if (c.credit.trim()) els.push(...creditLine(F, c, { x: 0, y: 200 * k, w: 1280 * k, h: 800 * k }))
-  els.push(...labelPill(F, c, { x: 0, y: 200 * k, w: 1280 * k, h: 800 * k }, W, { x: 0, y: 14 * k, w: W, h: 172 * k }))
+  if (!noPhoto) {
+    if (c.credit.trim()) els.push(...creditLine(F, c, { x: 0, y: 200 * k, w: 1280 * k, h: 800 * k }))
+    els.push(...labelPill(F, c, { x: 0, y: 200 * k, w: 1280 * k, h: 800 * k }, W, { x: 0, y: 14 * k, w: W, h: 172 * k }))
+  }
   return els
 }
 
@@ -758,6 +982,19 @@ function buildEndCard(format: FormatId, doc: Doc, cat: Category): El[] {
   return els
 }
 
+/** Quote / Stats cards: the header and footer are blocks the editor may drag over the photo, so they are drawn above
+ *  it (background first, then what sits inside it, in their own order). Membership is by the template position. */
+function bandsOnTop(els: El[]): El[] {
+  const lifted: El[] = []
+  for (const bgId of ['header-bg', 'footer-bg']) {
+    const bg = els.find((e) => e.id === bgId)
+    if (!bg) continue
+    const inBand = (e: El) => e.id === bgId || (e.kind !== 'photos' && e.kind !== 'watermark' && e.x >= bg.x - 1 && e.y >= bg.y - 1 && e.x + e.w <= bg.x + bg.w + 1 && e.y + e.h <= bg.y + bg.h + 1)
+    lifted.push(...els.filter((e) => !lifted.includes(e) && inBand(e)))
+  }
+  return [...els.filter((e) => !lifted.includes(e)), ...lifted]
+}
+
 export function buildScene(format: FormatId, doc: Doc): Scene {
   const cat = getCategory(doc.content.categoryId)
   const fmt = getFormat(format)
@@ -767,6 +1004,7 @@ export function buildScene(format: FormatId, doc: Doc): Scene {
   else if (format === 'end-card') base = buildEndCard(format, doc, cat)
   else if (fmt.family === 'stack') base = buildStack(format, doc, cat)
   else base = buildWeb(format, doc, cat)
+  if ((doc.content.cardType ?? 'standard') !== 'standard' && fmt.family !== 'card' && format !== 'lower-third') base = bandsOnTop(base)
 
   const extras = (doc.extras?.[format] ?? []).map((e) => structuredClone(e))
   for (const e of extras) if (e.kind === 'text') settleAfterOverride(e)
