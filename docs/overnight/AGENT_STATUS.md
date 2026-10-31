@@ -11,6 +11,6 @@ Updated by the orchestrator whenever an agent is started, reports, or is stopped
 | builder W5 (Opus) | Wire desk (spike gate first) | `esb-overnight/w5` / `overnight/w5-wire` (offset 500) | 02:40 | fully merged (dc4d9d6) | …c630886 |
 | QA-W1 (Opus) | adversarial review of W1 | reads `esb-overnight/w1`; writes `docs/overnight/qa/W1.md` | 03:36 | done 04:55: PASS WITH NON-BLOCKING FINDINGS | qa/W1.md |
 | QA-W2 (Opus) | adversarial review of W2/W6 | reads `esb-overnight/w2`; writes `docs/overnight/qa/W2.md` | 03:52 | cycle 0 PASS w/ findings 05:10; cycle 1 (803cb1e) PASS w/ findings 06:25 | qa/W2.md |
-| builder W4 (Opus) | Newsletter digest | `esb-overnight/w4` / `overnight/w4-digest` (offset 400, from eee9a5c) | 05:27 | merged 08:05 (9d20cc2); polish cycle running | e1e249e, 62afc66, 6786917 |
+| builder W4 (Opus) | Newsletter digest | `esb-overnight/w4` / `overnight/w4-digest` (offset 400, from eee9a5c) | 05:27 | polish delivered 08:20 (c312322); QA re-check running; merge after the regression run | e1e249e, 62afc66, 6786917, c312322 |
 | QA-W5 (Opus) | adversarial review of W5 | reads `esb-overnight/w5`; writes `docs/overnight/qa/W5.md` | 05:52 | cycles 0/1/2 all PASS w/ non-blocking findings (last 07:45) | qa/W5.md |
-| QA-W4 (Opus) | adversarial review of W4 | reads `esb-overnight/w4`; writes `docs/overnight/qa/W4.md` | 07:22 | done 07:55: PASS WITH NON-BLOCKING FINDINGS | qa/W4.md |
+| QA-W4 (Opus) | adversarial review of W4 | reads `esb-overnight/w4`; writes `docs/overnight/qa/W4.md` | 07:22 | cycle 0 PASS w/ findings 07:55; cycle 1 re-check running | qa/W4.md |
