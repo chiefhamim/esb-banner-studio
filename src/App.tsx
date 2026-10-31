@@ -61,16 +61,29 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-  }, [theme])
+    document.documentElement.dataset.workspace = workspace
+  }, [theme, workspace])
 
-  // The story's category colour on the page root, so menus, popovers and dialogs (drawn outside the workspaces) mark
-  // a selection in the same colour as the open panel and the chosen tile
+  // The story's category colour on the page root for Editorial and Graphics, so menus, popovers and dialogs
+  // mark a selection in the same colour as the open panel and the chosen tile.
+  // Outreach is independent and unaffected by story categories, using its own brand colour.
   const categoryId = useStore((s) => s.doc.content.categoryId)
   useEffect(() => {
-    const c = CATEGORIES.find((x) => x.id === categoryId)
     const root = document.documentElement.style
-    if (c) { root.setProperty('--cat', c.accent); root.setProperty('--cat-ink', c.chipText) } else { root.removeProperty('--cat'); root.removeProperty('--cat-ink') }
-  }, [categoryId])
+    if (workspace === 'outreach') {
+      root.setProperty('--cat', theme === 'dark' ? '#3b82f6' : '#2563eb')
+      root.setProperty('--cat-ink', '#ffffff')
+      return
+    }
+    const c = CATEGORIES.find((x) => x.id === categoryId)
+    if (c) {
+      root.setProperty('--cat', c.accent)
+      root.setProperty('--cat-ink', c.chipText)
+    } else {
+      root.removeProperty('--cat')
+      root.removeProperty('--cat-ink')
+    }
+  }, [categoryId, workspace, theme])
 
   // Ctrl+Q quits the desktop app from any workspace, as the Home → Quit button does
   useEffect(() => {
