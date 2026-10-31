@@ -78,4 +78,14 @@ here **before** the change.
   exposure; listed as a known defect with QA's suggested fix. (c) W1's reading of D9: a publish event for a
   queued story that is not the active one harvests that story's own saved copy (correct provenance), not the
   active desk. The library lives in the `esb-outreach` IndexedDB database (clearing Outreach data clears it).
+- **D17 — W2 accepted and merged; one polish cycle granted with an ownership extension.** QA (qa/W2.md) found
+  non-blocking defects in the publish log's home: `PublishDialog` is mounted only while the sheet is open, so a
+  sheet closed mid-publish loses the record, "Update that article instead" bypasses `trackPublish`, and a live
+  update logs a second record for the same slug. Because Insights and the W4 digest both read this log, W2's
+  builder gets a short cycle with D10 extended to **one call in `EditorialWorkspace.handleLivePublishToCms`**
+  (right after `setPublishResult` in the success branch, guarded by PUBLISHED + live URL, with an `updated`
+  flag so an update does not double-count) and the removal of the `PublishDialog` effect; plus the
+  `"""`-delimiter regex (`insights.ts:397`), the CSS grid nits and the misplaced doc comment. The wider
+  escalation wiring (paste / re-translate paths) is deferred: known limitation in the final report. The merge
+  itself had two append-vs-append conflicts (editorial.css, overnight-shots.mjs), resolved by keeping both.
 
