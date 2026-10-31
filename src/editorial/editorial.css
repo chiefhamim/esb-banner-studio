@@ -862,6 +862,7 @@
   .ed-launcher-wrap .ed-link > .ed-link-stage { gap: 12px; }
 }
 
+<<<<<<< HEAD
 /* W1 — quote library ---------------------------------------------------------------------------------------------------
    The Library tab of the source column (QuoteLibraryPanel.tsx): quiet rows like the story queue, the search field in the
    Outreach search look, the speaker registry in a Panel at the foot. Tokens only. */
@@ -908,3 +909,95 @@
 .ql-sp-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--card-line); }
 .ql-sp-add > .ql-sp-name, .ql-sp-add > .ql-sp-addbtn, .ql-sp-add > .ql-note { grid-column: 1 / -1; }
 .ql-sp-addbtn { justify-self: start; margin-top: 4px; }
+=======
+/* W2 — insights desk ------------------------------------------------------------------------------------------------
+   Desk · Insights in the header (mirrors Outreach's Compose · Activity), and a full-body view drawn like the Activity
+   desk: a 46 px toolbar on --card, a quiet --side canvas, --r-3 cards on --card-shadow, KPI figures in tabular Inter.
+   Tokens only; type 11/12/13/15/18. */
+.ed-desk-seg { flex: none; }
+.ed-desk-seg button { height: 28px; padding: 0 12px; font-size: 12px; font-weight: 500; gap: 6px; }
+@container ed (max-width: 1100px) {
+  .ed-desk-seg button { font-size: 0; gap: 0; padding: 0 10px; }
+}
+
+.ed-ins { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--side); color: var(--text); }
+.ed-ins-bar { height: 46px; min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; background: var(--card); border-bottom: 1px solid var(--card-line); box-sizing: border-box; }
+.ed-ins-bar-l, .ed-ins-bar-r { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ed-ins-bar-r { flex: none; }
+.ed-ins-bar-r .btn { height: 32px; padding: 0 12px; gap: 6px; font-size: 13px; }
+.ed-ins-age { font-size: 12px; line-height: 16px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
+.ed-ins-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 16px; display: flex; flex-direction: column; gap: 12px; scrollbar-gutter: stable; }
+.ed-ins-scroll > * { flex: none; width: 100%; max-width: 1180px; margin-inline: auto; box-sizing: border-box; }
+.ed-ins-card { background: var(--card); border: 1px solid var(--card-line); border-radius: var(--r-3); box-shadow: var(--card-shadow); padding: 16px; }
+.ed-ins-mark { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-2); background: var(--fill); color: var(--text-2); }
+.ed-ins-card h3 { margin: 0; font-size: 13px; line-height: 18px; font-weight: 700; color: var(--text); }
+.ed-ins-card p { margin: 0; font-size: 13px; line-height: 20px; color: var(--text-2); }
+.ed-ins-card p b { font-weight: 600; color: var(--text); }
+
+.ed-ins-unconf { display: flex; align-items: center; gap: 12px; }
+.ed-ins-unconf > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ed-ins-unconf .btn { flex: none; height: 32px; }
+.ed-ins-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 40px 24px; }
+.ed-ins-empty h3 { font-size: 15px; line-height: 20px; }
+.ed-ins-empty p { max-width: 420px; }
+.ed-ins-note { align-items: center; }
+.ed-ins-note > span { flex: 1; min-width: 0; }
+.ed-ins-note .btn { flex: none; }
+.ed-ins-none { text-align: center; padding: 8px 0; }
+
+.ed-ins-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.ed-ins-kpi { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 12px 16px; background: var(--card); border: 1px solid var(--card-line); border-radius: var(--r-3); box-shadow: var(--card-shadow); }
+.ed-ins-k { font: 700 11px/16px var(--font-ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+.ed-ins-kpi b { font: 800 18px/24px var(--font-ui); letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--text); }
+.ed-ins-kpi i { font-style: normal; font-size: 11px; line-height: 16px; color: var(--text-3); overflow-wrap: anywhere; }
+
+.ed-ins-chart { display: flex; flex-direction: column; gap: 8px; }
+/* the shared chart scales with its width; on a 1180 px card that doubled its 10 px labels, so the plot keeps a fixed height */
+.ed-ins-chart .oa-svg-chart { height: 200px; }
+.ed-ins-page { font-size: 12px !important; line-height: 16px !important; color: var(--text-3) !important; font-variant-numeric: tabular-nums; }
+
+.ed-ins-summary { display: flex; flex-direction: column; gap: 8px; }
+.ed-ins-summary.bad p { color: var(--danger); }
+.ed-ins-summary i { font-style: normal; font-size: 11px; line-height: 16px; color: var(--text-3); }
+
+.ed-ins-week { padding: 0; overflow: hidden; }
+.ed-ins-week-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.ed-ins-week-h span { font-size: 12px; color: var(--text-3); }
+.ed-ins-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; text-align: left; }
+.ed-ins-table th { padding: 8px 16px; font: 700 11px/16px var(--font-ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); background: var(--fill); }
+.ed-ins-table td { padding: 8px 16px; color: var(--text-2); border-top: 1px solid var(--card-line); vertical-align: top; }
+.ed-ins-table .r { text-align: right; white-space: nowrap; }
+/* one column grid for every week, so the weeks line up under each other */
+.ed-ins-table th:nth-child(1) { width: 28%; } .ed-ins-table th:nth-child(2) { width: 16%; } .ed-ins-table th:nth-child(3) { width: 11%; }
+.ed-ins-table th:nth-child(4) { width: 12%; } .ed-ins-table th:nth-child(n+5) { width: 11%; }
+.ed-ins-table td { overflow-wrap: anywhere; }
+.ed-ins-table td.ed-ins-story { color: var(--text); font-weight: 500; }
+.ed-ins-table td.ed-ins-nofb { color: var(--text-3); }
+
+.ed-ins-usage { display: flex; flex-direction: column; gap: 8px; padding: 0 0 16px; }
+.ed-ins-usage > .hint { padding: 0 16px; }
+.ed-ins-usage-grid { margin: 0; padding: 0 16px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.ed-ins-usage-grid div { display: flex; flex-direction: column; gap: 4px; }
+.ed-ins-usage-grid dt { font: 700 11px/16px var(--font-ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+.ed-ins-usage-grid dd { margin: 0; font: 700 15px/20px var(--font-ui); font-variant-numeric: tabular-nums; color: var(--text); }
+
+@container ed (max-width: 1100px) {
+  .ed-ins-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ed-ins-table { table-layout: auto; }
+  .ed-ins-table th:nth-child(n) { width: auto; }
+  .ed-ins-bar-r .btn span { display: none; }
+  .ed-ins-bar-r .btn { padding: 0 8px; }
+}
+
+/* W6 — Engine panel: per-story cost rows and the escalation switch (the panel itself is styled in studio.css) */
+.eng-cost { margin-top: 8px; display: flex; flex-direction: column; }
+.eng-cost-row { display: grid; grid-template-columns: minmax(0, 1fr) 52px 48px 52px 96px; gap: 8px; align-items: baseline; padding: 4px 8px; font-size: 12px; line-height: 16px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.eng-cost-row > span:not(:first-child) { text-align: right; }
+.eng-cost-row i { font-style: normal; font-size: 11px; color: var(--text-3); }
+.eng-cost-row.head { font: 700 11px/16px var(--font-ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); border-bottom: 1px solid var(--card-line); }
+.eng-cost-row.head i { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.eng-cost-t { color: var(--text); overflow-wrap: anywhere; }
+.eng-cost-note { padding: 4px 8px 0; }
+.eng-esc { margin-top: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; background: var(--fill); border-radius: var(--r-2); }
+>>>>>>> overnight/w2-insights
