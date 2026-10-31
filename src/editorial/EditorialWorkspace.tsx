@@ -59,6 +59,7 @@ import type { PublishOutcome } from './PublishDialog'
 import { FacebookDialog } from './FacebookDialog'
 import { EngineStatus } from './EngineStatus'
 import { InsightsDesk } from './InsightsDesk'
+import { publishRecordFor, recordPublish } from './insights'
 import { ProviderMark } from './ProviderMark'
 import { commentOnPost, getFacebook, postBannerToFacebook, useFacebookPrefs } from './facebook'
 import { fixSeoWithAi } from './seoFix'
@@ -833,6 +834,8 @@ export function EditorialWorkspace() {
           fbNote = fbCfg ? ' Facebook: not posted (the Facebook switch was off).' : ' Facebook: not connected.'
         }
         setPublishResult({ ok: !jobError, msg: `${did} on esbpowerline.com.` + imageNote + fbNote, url: result.liveUrl, fbUrl })
+        // Insights (D9/D17): a PUBLISHED save that reached the site is logged and announced as `esb:story-published`; an update merges into its slug's record
+        if (targetStatus === 'PUBLISHED' && result.liveUrl) recordPublish(publishRecordFor({ storyId: useStoryQueue.getState().activeId, slug: result.slug ?? draft.slug, liveUrl: result.liveUrl, headline: draft.headline, categoryId: catData.id, fbUrl, updated: !!result.updated }))
         setLastPublish({ story: useStoryQueue.getState().activeId, ok: !jobError, at: Date.now(), text: `${did} on the site` + (fbNote.includes('Posted') ? ' · posted to Facebook' : fbNote.includes('failed') ? ' · Facebook failed' : fbNote.includes('not') ? ' · not on Facebook' : '') })
         showToast(targetStatus === 'PUBLISHED' ? `Story ${result.updated ? 'updated' : 'published'} on esbpowerline.com` : 'Draft saved to esbpowerline.com')
         if (targetStatus === 'PUBLISHED') useStoryQueue.getState().markPublished({ url: result.liveUrl, id: result.articleId, slug: result.slug })

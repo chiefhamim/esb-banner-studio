@@ -28,10 +28,12 @@ export interface PublishRecord {
   headline: string
   categoryId: string
   format: 'web' | 'fb45'
-  /** ISO time the publish finished. */
+  /** ISO time the publish finished (for a stored update: when the story FIRST went out). */
   publishedAt: string
   facebookPostId?: string
   dryRun: boolean
+  /** The save updated an article already on the site (not a new story). */
+  updated?: boolean
 }
 
 export const PUBLISH_LOG_KEY = 'esb-banner-studio/publish-log/v1'
@@ -57,6 +59,7 @@ export function cleanRecord(v: unknown): PublishRecord | null {
     publishedAt,
     ...(/^[\d_]+$/.test(post) ? { facebookPostId: post } : {}),
     dryRun: r.dryRun === true,
+    ...(r.updated === true ? { updated: true } : {}),
   }
 }
 
@@ -69,14 +72,30 @@ export function readPublishLog(): PublishRecord[] {
   }
 }
 
-/** Newest first, capped. Returns the stored list. */
+/**
+ * Newest first, capped. Returns the stored list. One story = one record: an UPDATE of a slug already in the log
+ * replaces that record in place instead of adding a second one, keeping the first `publishedAt` (the story still counts
+ * in the week it first went out) and the earlier Facebook post unless the update posted a new one. An update of a
+ * story the log has never seen (published before the log existed, or from the CMS) is appended as it is.
+ */
 export function appendPublishLog(rec: PublishRecord): PublishRecord[] {
-  const list = [rec, ...readPublishLog()].slice(0, PUBLISH_LOG_CAP)
+  const prev = readPublishLog()
+  const at = rec.updated ? prev.findIndex((r) => r.slug === rec.slug && !r.dryRun) : -1
+  let list: PublishRecord[]
+  if (at >= 0) {
+    const old = prev[at]
+    const facebookPostId = rec.facebookPostId ?? old.facebookPostId
+    const merged: PublishRecord = { ...rec, publishedAt: old.publishedAt, format: facebookPostId ? 'fb45' : rec.format, ...(facebookPostId ? { facebookPostId } : {}) }
+    list = prev.map((r, i) => (i === at ? merged : r))
+  } else {
+    list = [rec, ...prev].slice(0, PUBLISH_LOG_CAP)
+  }
   try { localStorage.setItem(PUBLISH_LOG_KEY, JSON.stringify(list)) } catch { /* over quota: the event still goes out */ }
   return list
 }
 
-/** The one call the publish flow makes: append the record and tell listeners (W1's quote library, the Insights desk). */
+/** The one call the publish flow makes: store the record and tell listeners (W1's quote library, the Insights desk).
+ *  The event carries the record as published (with `updated`), even when the log merged it into an earlier one. */
 export function recordPublish(rec: PublishRecord) {
   appendPublishLog(rec)
   try { window.dispatchEvent(new CustomEvent(PUBLISHED_EVENT, { detail: rec })) } catch { /* no window (tests) */ }
@@ -88,34 +107,22 @@ export const postIdFromUrl = (url?: string): string | undefined => /facebook\.co
 /** The site slug inside an article link, else the draft's own. */
 export const slugFromUrl = (url: string | undefined, fallback: string) => /\/articles\/([^/?#]+)/.exec(url ?? '')?.[1] ?? fallback
 
-// What the publish sheet asked for last: Insights logs PUBLISHED saves only (a draft is not a published story).
-let asked: 'PUBLISHED' | 'DRAFT' | null = null
-const seen = new WeakSet<object>()
-/** Wraps the sheet's publish handler so the outcome can be matched to what was asked. */
-export const trackPublish = <S extends 'PUBLISHED' | 'DRAFT'>(fn: (s: S) => void) => (s: S) => { asked = s; fn(s) }
-
-/**
- * Called by the publish sheet with its latest outcome. Logs once per outcome object, only for a PUBLISHED save that
- * reached the site (it has the live link), whether or not the Facebook part worked.
- */
-export function noteOutcome(result: { url?: string; fbUrl?: string } | null, draft: { headline: string; slug: string }, ctx: { storyId: string | null; categoryId: string }) {
-  if (!result || seen.has(result)) return
-  seen.add(result)
-  if (asked !== 'PUBLISHED' || !result.url) return
-  asked = null
-  const facebookPostId = postIdFromUrl(result.fbUrl)
-  recordPublish({
-    storyId: ctx.storyId ?? '',
-    slug: slugFromUrl(result.url, draft.slug),
-    url: result.url,
-    headline: draft.headline,
-    categoryId: ctx.categoryId,
+/** The record for a PUBLISHED save that reached the site; handleLivePublishToCms builds it from its own result. */
+export function publishRecordFor(i: { storyId: string | null; slug: string; liveUrl: string; headline: string; categoryId: string; fbUrl?: string; updated: boolean; now?: number }): PublishRecord {
+  const facebookPostId = postIdFromUrl(i.fbUrl)
+  return {
+    storyId: i.storyId ?? '',
+    slug: slugFromUrl(i.liveUrl, i.slug),
+    url: i.liveUrl,
+    headline: i.headline,
+    categoryId: i.categoryId,
     // the banner people saw on Facebook is the 4:5; a story that only reached the site carries the 16:9 web banner
     format: facebookPostId ? 'fb45' : 'web',
-    publishedAt: new Date().toISOString(),
+    publishedAt: new Date(i.now ?? Date.now()).toISOString(),
     ...(facebookPostId ? { facebookPostId } : {}),
     dryRun: false,
-  })
+    updated: i.updated,
+  }
 }
 
 // ---------------------------------------------------------------- Graph reads
@@ -394,7 +401,9 @@ export function toCsv(rows: WeeklyRow[]): string {
 
 // ---------------------------------------------------------------- AI weekly summary (opt-in)
 
-const cell = (v: string | number | null) => (v == null ? '—' : String(v).replace(/"""/g, '"').replace(/[\r\n|]+/g, ' ').trim())
+// any run of three or more double quotes collapses to one, so no cell can close the """ delimiter (one pass of /"""/g
+// left "" behind from five)
+const cell = (v: string | number | null) => (v == null ? '—' : String(v).replace(/"{3,}/g, '"').replace(/[\r\n|]+/g, ' ').trim())
 
 /** The aggregate table, nothing else: headline, category, banner, day, figures. No story text, no token, no ids. */
 export function summaryTable(rows: WeeklyRow[]): string {
