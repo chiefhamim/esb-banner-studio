@@ -88,4 +88,9 @@ here **before** the change.
   `"""`-delimiter regex (`insights.ts:397`), the CSS grid nits and the misplaced doc comment. The wider
   escalation wiring (paste / re-translate paths) is deferred: known limitation in the final report. The merge
   itself had two append-vs-append conflicts (editorial.css, overnight-shots.mjs), resolved by keeping both.
+- **D18 — Merge-resolution slip, caught and fixed.** The W2 merge commit `19433a7` was created with the three
+  conflict-marker lines still in `src/editorial/editorial.css` (my resolver's sanity assertion tripped on a
+  legitimate `=======` and I committed before checking). `eee9a5c` removes the markers, keeping both the W1
+  and W2 blocks; the CSS builds. The after-W2 regression table runs on `eee9a5c`; nothing was pushed in between.
+  Lesson applied: the regression run is the gate, not the merge commit.
 
