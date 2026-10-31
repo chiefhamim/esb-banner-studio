@@ -8,11 +8,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import { Icon } from '../ui/Icon'
-import { Select } from '../ui/controls'
-import { AI_PROVIDERS, aiFor, modelLabel, providerMeta, roleProvider, testAiKey, useAiUsage, usageTotals } from './aiProviders'
+import { Select, Switch } from '../ui/controls'
+import { AI_PROVIDERS, aiFor, estimateCost, fmtDollars, modelLabel, providerMeta, roleProvider, testAiKey, useAiUsage, usageByStory, usageTotals } from './aiProviders'
 import type { AiProviderId, AiRole, AiSettings } from './aiProviders'
 import { useEditorialStore } from './editorialStore'
-import { fmtDuration } from './jobLog'
+import { fmtDuration, useJobLog } from './jobLog'
+import { storyTitle, useStoryQueue } from './storyQueue'
 
 type Check = { state: 'busy' } | { state: 'ok'; ms: number; model: string } | { state: 'bad'; error: string }
 type Active = { provider: AiProviderId; key: string; model: string }
@@ -45,11 +46,16 @@ export function EngineStatus({ ai, offline, onAddKey, roles = ['main', 'seo', 's
   const byKey = useHealth((s) => s.byKey)
   const usageCalls = useAiUsage((s) => s.calls)
   const usage = usageTotals(usageCalls)
+  const jobs = useJobLog((s) => s.jobs)
+  const stories = useStoryQueue((s) => s.stories)
+  const isEditorial = roles.includes('main')
+  const sessionCost = estimateCost(usageCalls)
   const k = (n: number) => (n >= 10_000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n))
   const [open, setOpen] = useState(false)
   const [at, setAt] = useState<{ bottom: number; left: number } | null>(null)
   const btn = useRef<HTMLButtonElement>(null)
   const pop = useRef<HTMLDivElement>(null)
+  const perStory = useMemo(() => (open && isEditorial ? usageByStory(usageCalls, jobs) : []), [open, usageCalls, jobs, isEditorial])
 
   const roleKey = roles.join(',')
   const rows = useMemo(() => ROLES.filter((r) => roleKey.split(',').includes(r.role)).map((r) => ({ ...r, chosen: roleProvider(ai, r.role), a: aiFor(r.role, ai) })), [ai, roleKey])
@@ -142,6 +148,31 @@ export function EngineStatus({ ai, offline, onAddKey, roles = ['main', 'seo', 's
               <span className="eng-usage-v">{usage.calls} {usage.calls === 1 ? 'call' : 'calls'} · {k(usage.prompt)} in{usage.cacheRead ? ` (${k(usage.cacheRead)} from cache, ${Math.round(usage.hitRate * 100)}%)` : ''} · {k(usage.output)} out</span>
             ) : <span className="eng-usage-v">no calls yet</span>}
           </div>
+          {perStory.length > 0 && (
+            <div className="eng-cost" aria-label="Cost per story this session">
+              <div className="eng-cost-row head" aria-hidden><span>Story</span><span>Prompt</span><span>Cache</span><span>Output</span><span>Cost <i>estimate</i></span></div>
+              {perStory.slice(0, 6).map((r) => {
+                const st = stories.find((x) => x.id === r.story)
+                const title = r.story ? (st ? storyTitle(st.snapshot) : 'A story no longer on the desk') : 'Checks and other desks'
+                return (
+                  <div key={r.story || '_other'} className="eng-cost-row" data-story={r.story || 'other'}>
+                    <span className="eng-cost-t">{title}</span>
+                    <span>{k(r.prompt)}</span>
+                    <span>{r.prompt ? Math.round(r.hitRate * 100) + '%' : '—'}</span>
+                    <span>{k(r.output)}</span>
+                    <span>{r.cost.priced ? fmtDollars(r.cost.dollars) : '—'}{r.cost.unpriced ? <i> · {r.cost.unpriced} unpriced</i> : null}</span>
+                  </div>
+                )
+              })}
+              <p className="hint eng-cost-note">Estimate from Claude list prices{sessionCost.priced ? ` · session ${fmtDollars(sessionCost.dollars)}` : ''}; other companies' calls are counted, not priced.</p>
+            </div>
+          )}
+          {roles.includes('main') && (
+            <div className="eng-esc">
+              <Switch checked={!!ai.escalate?.main} onChange={(v) => setAiSettings({ ...ai, escalate: { ...ai.escalate, main: v } })} label="Re-check a story on a stronger model when its figures do not match the source" />
+              <p className="hint">Off by default. When on, a translation with a figure missing from the source is asked once more on {providerMeta(ai.provider).name}'s strongest model (it costs a second call); the step shows in Activity.</p>
+            </div>
+          )}
           <p className="hint eng-foot">Keys and models are set from the AI button in the header.</p>
         </div>,
         document.body,

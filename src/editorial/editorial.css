@@ -941,3 +941,14 @@
   .ed-ins-bar-r .btn span { display: none; }
   .ed-ins-bar-r .btn { padding: 0 8px; }
 }
+
+/* W6 — Engine panel: per-story cost rows and the escalation switch (the panel itself is styled in studio.css) */
+.eng-cost { margin-top: 8px; display: flex; flex-direction: column; }
+.eng-cost-row { display: grid; grid-template-columns: minmax(0, 1fr) 52px 48px 52px 96px; gap: 8px; align-items: baseline; padding: 4px 8px; font-size: 12px; line-height: 16px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.eng-cost-row > span:not(:first-child) { text-align: right; }
+.eng-cost-row i { font-style: normal; font-size: 11px; color: var(--text-3); }
+.eng-cost-row.head { font: 700 11px/16px var(--font-ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); border-bottom: 1px solid var(--card-line); }
+.eng-cost-row.head i { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.eng-cost-t { color: var(--text); overflow-wrap: anywhere; }
+.eng-cost-note { padding: 4px 8px 0; }
+.eng-esc { margin-top: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; background: var(--fill); border-radius: var(--r-2); }

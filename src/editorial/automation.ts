@@ -10,6 +10,8 @@ import {
   suggestHighlight,
 } from '../core/newsroom'
 import { translateNewsArticle } from './translator'
+import type { EditorialTranslationResult } from './translator'
+import { decideEscalation, listModels, loadAiSettings, modelLabel, runWithModel, strongerModel } from './aiProviders'
 import { storyCaptions } from './aiDesk'
 import { imageAssets, useStore } from '../store'
 import { useEditorialStore } from './editorialStore'
@@ -374,11 +376,11 @@ export async function automateNewsFromUrl(
 
   // 4. Translate & Polish Headline (< 104), Deck (< 200), Slug (< 80), and Full English Body (Fast Parallel Pipeline)
   onProgress?.('Translating story elements in parallel…')
-  const translation = await translateNewsArticle({
+  const translation = await escalateTranslation(await translateNewsArticle({
     title: originalTitle,
     deck: originalDeck,
     paragraphs,
-  }, onProgress)
+  }, onProgress), { title: originalTitle, deck: originalDeck, paragraphs }, onProgress)
 
   const englishHeadline = translation.headline
   const englishDeck = translation.deck
@@ -483,5 +485,43 @@ export async function automateNewsFromUrl(
     factTable,
     discrepancies,
     socialCaptions,
+  }
+}
+
+/**
+ * W6 escalation hook (opt-in, Engine panel): the cheap/auto translation first; when its figures disagree with the source
+ * (`decideEscalation`) ask once more on the provider's stronger model (`strongerModel`) and keep whichever draft has fewer
+ * figure flags (a tie goes to the stronger model). Each decision is a step in the story's Activity job, which the
+ * desk builds from these progress lines: "Escalated to <model>: <why>". Never loops, never runs for the free service.
+ */
+export async function escalateTranslation(
+  first: EditorialTranslationResult,
+  source: { title: string; deck: string; paragraphs: string[] },
+  onProgress?: (status: string) => void,
+): Promise<EditorialTranslationResult> {
+  const settings = loadAiSettings()
+  if (first.provider === 'neural' || first.provider === 'offline' || !settings.escalate?.main || settings.paused) return first
+  const raw = [source.title, source.deck, ...source.paragraphs].filter(Boolean).join('\n\n')
+  const facts = extractFactTable(raw)
+  const flagsOf = (t: EditorialTranslationResult) => verifyDraftAgainstSource(`${t.headline} ${t.deck} ${t.body}`, raw, facts)
+  const decision = decideEscalation(flagsOf(first), { enabled: true })
+  if (!decision.escalate) return first
+  const key = settings.keys[first.provider]?.trim() ?? ''
+  const listed = await listModels(first.provider, key).catch(() => [])
+  const strong = strongerModel(first.provider, first.modelUsed ?? settings.models[first.provider] ?? '', listed)
+  if (!strong) return first
+  onProgress?.(`Escalated to ${modelLabel(strong)}: ${decision.why}`)
+  try {
+    const second = await runWithModel('main', strong, () => translateNewsArticle({ ...source, throwOnAiFailure: true }, onProgress))
+    const after = decideEscalation(flagsOf(second), { enabled: true })
+    if (after.figures <= decision.figures) {
+      onProgress?.(`Kept the ${modelLabel(strong)} translation: ${after.figures} of ${decision.figures} figure flags left`)
+      return second
+    }
+    onProgress?.(`Kept the first translation: ${modelLabel(strong)} left more figures unmatched`)
+    return first
+  } catch (e) {
+    onProgress?.(`Kept the first translation: ${modelLabel(strong)} failed (${(e as Error).message})`)
+    return first
   }
 }

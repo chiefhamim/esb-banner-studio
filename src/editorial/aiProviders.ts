@@ -13,6 +13,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { create } from 'zustand'
+import type { DiscrepancyFlag } from './facts'
 
 /** What the provider reported for each call this session: tokens read (fresh and from cache), written to cache, and produced. */
 export interface AiUsageEntry { at: number; provider: string; model: string; input: number; cacheRead: number; cacheWrite: number; output: number }
@@ -63,6 +64,68 @@ export function estimateCost(calls: AiUsageEntry[]): { dollars: number; priced: 
 /** "$0.0123" under a cent shows four places, otherwise two. */
 export const fmtDollars = (d: number) => '$' + (d < 0.01 ? d.toFixed(4) : d.toFixed(2))
 
+/** Per-story usage: a call belongs to the story whose story/SEO/social job was running when it answered; anything else
+ *  (the launch key check, Outreach) is story ''. Newest story first, '' last. */
+export function usageByStory(calls: AiUsageEntry[], jobs: { story: string; kind: string; start: number; end?: number }[], now = Date.now()) {
+  const work = jobs.filter((j) => j.kind !== 'publish')
+  const rows = new Map<string, { story: string; calls: AiUsageEntry[]; last: number }>()
+  for (const c of calls) {
+    const j = work.find((x) => c.at >= x.start && c.at <= (x.end ?? now))
+    const story = j?.story ?? ''
+    const r = rows.get(story) ?? { story, calls: [], last: 0 }
+    r.calls.push(c)
+    r.last = Math.max(r.last, c.at)
+    rows.set(story, r)
+  }
+  return [...rows.values()]
+    .sort((a, b) => (a.story === '' ? 1 : b.story === '' ? -1 : b.last - a.last))
+    .map((r) => ({ story: r.story, ...usageTotals(r.calls), cost: estimateCost(r.calls) }))
+}
+
+// ------------------------------------------------------------------ escalation (W6)
+
+/**
+ * Name/date flags needed to escalate when no figure is off. Three, because one or two unmatched names are usually a
+ * transliteration the editor fixes in seconds, while three or more mean the draft drifted from the source. Quote flags
+ * never count: a translated quote can never match the Bengali verbatim, so they fire on almost every story.
+ */
+export const ESCALATE_MIN_FLAGS = 3
+
+export interface EscalationDecision { escalate: boolean; why: string; figures: number; others: number }
+
+/** Pure: escalate when any figure/currency in the draft is not in the source, or on ESCALATE_MIN_FLAGS name/date flags. Never when clean or not opted in. */
+export function decideEscalation(flags: DiscrepancyFlag[], opts: { enabled: boolean; minFlags?: number }): EscalationDecision {
+  const figures = flags.filter((f) => f.kind === 'unverified_number' || f.kind === 'unverified_currency').length
+  const others = flags.filter((f) => f.kind === 'unverified_entity' || f.kind === 'unverified_date').length
+  const min = opts.minFlags ?? ESCALATE_MIN_FLAGS
+  if (!opts.enabled) return { escalate: false, why: 'escalation is off', figures, others }
+  if (figures) return { escalate: true, why: `${figures} ${figures === 1 ? 'figure' : 'figures'} not in the source`, figures, others }
+  if (others >= min) return { escalate: true, why: `${others} names or dates not in the source`, figures, others }
+  return { escalate: false, why: flags.length ? 'only quote flags (a translation never matches the source verbatim)' : 'every figure matches the source', figures, others }
+}
+
+/** Claude: Opus over Sonnet over Haiku, then the newer version. */
+function rankClaude(id: string): number {
+  const m = /^claude-(opus|sonnet|haiku)-(\d+)(?:-(\d{1,2}))?/.exec(id)
+  if (!m) return 0
+  return ({ opus: 300, sonnet: 200, haiku: 100 } as Record<string, number>)[m[1]] + Number(m[2]) + Number(m[3] ?? 0) / 10
+}
+/** The Opus asked for when the key's model list is not at hand. */
+export const CLAUDE_STRONG = 'claude-opus-5-5'
+
+/** The provider's strongest model by the desk's own rankings, or null when `current` already is it (or nothing ranks: OpenRouter, an empty list). */
+export function strongerModel(provider: AiProviderId, current: string, listed: AiModelInfo[]): string | null {
+  const ids = listed.map((m) => m.id)
+  if (provider === 'anthropic') {
+    if (/^claude-opus-/.test(current)) return null
+    return ids.filter((id) => /^claude-opus-/.test(id)).sort((a, b) => rankClaude(b) - rankClaude(a))[0] ?? CLAUDE_STRONG
+  }
+  const rank = provider === 'gemini' ? rankGemini : provider === 'openai' ? rankOpenAi : null
+  if (!rank || !ids.length) return null
+  const best = [...ids].sort((a, b) => rank(b) - rank(a))[0]
+  return rank(best) > rank(current) ? best : null
+}
+
 export type AiProviderId = 'gemini' | 'anthropic' | 'openai' | 'openrouter'
 
 export interface AiProviderMeta {
@@ -110,6 +173,9 @@ export interface AiSettings {
   /** The master switch. While true no AI company is contacted for anything: not translation, SEO, captions, PDF reading, the
    *  launch health check, model lists or key tests. The free translation service is used instead. */
   paused: boolean
+  /** Opt-in per job: when the first answer's figures disagree with the source, ask again once on a stronger model
+   *  (`decideEscalation`). Off unless set; only the Story job (translation) is wired today. */
+  escalate?: Partial<Record<AiRole, boolean>>
 }
 
 const SETTINGS_KEY = 'esb-banner-studio/ai-settings'
@@ -134,6 +200,7 @@ export function loadAiSettings(): AiSettings {
         models: { ...base.models, ...(s.models ?? {}) },
         prompt: typeof s.prompt === 'string' ? s.prompt : '',
         paused: s.paused === true,
+        ...(s.escalate && typeof s.escalate === 'object' ? { escalate: Object.fromEntries(Object.entries(s.escalate).filter(([k, v]) => ROLE_IDS.includes(k as AiRole) && typeof v === 'boolean')) as AiSettings['escalate'] } : {}),
       }
     }
   } catch { /* storage blocked: defaults */ }
@@ -153,8 +220,24 @@ export const AI_OFF_MESSAGE = 'AI is OFF. Turn it ON in the Engine panel or your
 export const aiPaused = () => loadAiSettings().paused
 
 /** The provider, key and model a job should call: the one chosen for it when it has a key, else nothing — no substitute. Nothing at all while AI is switched off. */
+const ROLE_IDS: AiRole[] = ['main', 'seo', 'social', 'outreach', 'research', 'review']
+
+// A one-call model override for escalation: set only while `fn` runs synchronously, so it reaches exactly the aiFor()
+// the callee makes before its first await (translateNewsArticle reads aiFor('main') on its first line) and nothing else.
+let modelOverride: { role: AiRole; model: string } | null = null
+export function runWithModel<T>(role: AiRole, model: string, fn: () => T): T {
+  const prev = modelOverride
+  modelOverride = { role, model }
+  try { return fn() } finally { modelOverride = prev }
+}
+
 export function aiFor(role: AiRole = 'main', s: AiSettings = loadAiSettings()): { provider: AiProviderId; key: string; model: string } | null {
   if (s.paused) return null
+  if (modelOverride?.role === role) {
+    const provider = roleProvider(s, role)
+    const key = s.keys[provider]?.trim()
+    return key ? { provider, key, model: modelOverride.model } : null
+  }
   const provider = roleProvider(s, role)
   const key = s.keys[provider]?.trim()
   return key ? { provider, key, model: s.models[provider] || 'auto' } : null
@@ -345,7 +428,10 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
         }),
       })
       if (!res.ok) throw new Error(`${geminiLabel(model)}: ${await errorText(res)}`)
-      const data = await res.json() as { candidates?: { finishReason?: string; content?: { parts?: { text?: string }[] } }[] }
+      const data = await res.json() as { candidates?: { finishReason?: string; content?: { parts?: { text?: string }[] } }[]; usageMetadata?: { promptTokenCount?: number; cachedContentTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number } }
+      const um = data.usageMetadata
+      // Gemini's prompt count includes the cached part; thinking tokens are billed as output
+      if (um) useAiUsage.getState().add({ at: Date.now(), provider: 'gemini', model, input: Math.max(0, (um.promptTokenCount ?? 0) - (um.cachedContentTokenCount ?? 0)), cacheRead: um.cachedContentTokenCount ?? 0, cacheWrite: 0, output: (um.candidatesTokenCount ?? 0) + (um.thoughtsTokenCount ?? 0) })
       const cand = data.candidates?.[0]
       if (cand?.finishReason && cand.finishReason !== 'STOP') throw new Error(`${geminiLabel(model)} stopped early (${cand.finishReason})`)
       return { data: parseJson((cand?.content?.parts ?? []).map((p) => p.text ?? '').join('')) as T, model }
@@ -391,7 +477,10 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
     // some OpenRouter models take JSON mode but not a schema: ask again with the schema written into the prompt
     if (res.status === 400 && provider === 'openrouter') res = await send({ type: 'json_object' })
     if (!res.ok) throw new Error(`${providerMeta(provider).name} (${model}): ${await errorText(res)}`)
-    const data = await res.json() as { model?: string; choices?: { finish_reason?: string; message?: { content?: string; refusal?: string } }[] }
+    const data = await res.json() as { model?: string; choices?: { finish_reason?: string; message?: { content?: string; refusal?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } }
+    const ou = data.usage
+    // prompt_tokens includes the cached part
+    if (ou) useAiUsage.getState().add({ at: Date.now(), provider, model: data.model || model, input: Math.max(0, (ou.prompt_tokens ?? 0) - (ou.prompt_tokens_details?.cached_tokens ?? 0)), cacheRead: ou.prompt_tokens_details?.cached_tokens ?? 0, cacheWrite: 0, output: ou.completion_tokens ?? 0 })
     const choice = data.choices?.[0]
     if (choice?.message?.refusal) throw new Error(`${model} declined: ${choice.message.refusal}`)
     if (choice?.finish_reason && !['stop', 'end_turn'].includes(choice.finish_reason)) throw new Error(`${model} stopped early (${choice.finish_reason})`)

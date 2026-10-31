@@ -87,7 +87,7 @@ async function gemini(page) {
     const isSummary = body.includes('analytics editor')
     if (isSummary) s.summaryBody = body
     const text = isSummary ? JSON.stringify({ summary: 'The grid capacity story led the week with 1,520 impressions and 35 reactions.' }) : JSON.stringify({ ok: 'yes' })
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text }] } }] }) })
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text }] } }], usageMetadata: { promptTokenCount: 1200, cachedContentTokenCount: 200, candidatesTokenCount: 60, thoughtsTokenCount: 0 } }) })
   })
   return s
 }
@@ -174,6 +174,21 @@ try {
     await page.waitForSelector('.ed-ins-summary p:has-text("1,520")')
     check('Summarise week shows the AI draft, labelled as one', /AI draft/i.test(await txt(page, '.ed-ins-summary')) && /1,520 impressions/.test(await txt(page, '.ed-ins-summary p')))
     check('The summary request carries only the table (no token, no story text)', ai.summaryBody.includes('Headline | Category') && !ai.summaryBody.includes(TOKEN) && !ai.summaryBody.includes(PAGE_ID))
+
+    // W6: Engine panel — per-story cost rows (Gemini reports usage now) and the opt-in escalation switch
+    await page.click('.sb-engine-btn')
+    await page.waitForSelector('.eng-pop')
+    check('Engine panel lists cost rows with prompt, cache, output and an estimate column', await page.locator('.eng-cost-row').count() >= 2 && /estimate/i.test(await txt(page, '.eng-cost-row.head')), await txt(page, '.eng-cost'))
+    check('Unpriced (Gemini) calls show a dash for cost, never a guessed price', /—/.test(await txt(page, '.eng-cost-row[data-story="other"]')) && /unpriced/.test(await txt(page, '.eng-cost-row[data-story="other"]')), await txt(page, '.eng-cost-row[data-story="other"]'))
+    if (process.env.INS_SHOT) await page.locator('.eng-pop').screenshot({ path: process.env.INS_SHOT }) // optional: eyeball the panel
+    const escOff = await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/ai-settings')).escalate?.main ?? false)
+    await page.click('.eng-esc .switch')
+    const escOn = await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/ai-settings')).escalate?.main)
+    check('Escalation switch is off by default and turns on (saved in AI settings)', escOff === false && escOn === true, `${escOff} -> ${escOn}`)
+    await page.click('.eng-esc .switch')
+    check('Escalation switch turns off again', (await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/ai-settings')).escalate?.main)) === false)
+    await page.keyboard.press('Escape')
+    check('AI cost tile counts unpriced calls honestly', (await txt(page, '[data-kpi="ai-cost"] b')) === '—' && /unpriced/.test(await txt(page, '[data-kpi="ai-cost"] i')), await txt(page, '[data-kpi="ai-cost"] i'))
 
     // switch back
     await page.click('.ed-desk-seg button:has-text("Desk")')
