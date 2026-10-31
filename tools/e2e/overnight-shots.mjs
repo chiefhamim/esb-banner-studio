@@ -23,7 +23,7 @@ const tag = args.tag || 'shot'
 if (!out) { console.error('usage: --out <dir> --tag <before|after|...> [--screens a,b] [--sizes WxH,...] [--themes light,dark]'); process.exit(2) }
 const sizes = (args.sizes || '1366x768,1920x1080').split(',').map((s) => s.split('x').map(Number))
 const themes = (args.themes || 'light,dark').split(',')
-const ALL = ['home', 'editorial-launcher', 'editorial-desk', 'graphics', 'graphics-quote', 'video', 'outreach', 'outreach-activity']
+const ALL = ['home', 'editorial-launcher', 'editorial-desk', 'editorial-wire', 'graphics', 'graphics-quote', 'video', 'outreach', 'outreach-activity']
 const screens = (args.screens ? args.screens.split(',') : ALL).filter((s) => { if (!ALL.includes(s)) console.error('unknown screen', s); return ALL.includes(s) })
 fs.mkdirSync(out, { recursive: true })
 
@@ -47,6 +47,23 @@ const SETUP = {
     await tile(p, 'Editorial')
     await p.evaluate((d) => { const s = window.__editorialStore.getState(); s.setDraftField('headline', d.headline); s.setDraftField('body', d.body) }, DRAFT)
     await p.waitForSelector('.ed-desk'); await p.waitForTimeout(900)
+  },
+  // W5: the Wire inbox with the synthetic fixture feed's items and one source in backoff (no fetch: no desktop bridge here)
+  'editorial-wire': async (p) => {
+    await p.evaluate((t) => {
+      const H = 36e5, M = 6e4
+      const sources = [
+        { id: 'shot-w1', url: 'https://feed.example.com/rss.xml', name: 'Example Desk', kind: 'auto', intervalMin: 30, enabled: true, lastFetchedAt: t - 4 * M, lastOkAt: t - 4 * M, failures: 0, nextAt: t + 26 * M, lastError: null },
+        { id: 'shot-w2', url: 'https://intranet.example.com/feed', name: 'Intranet', kind: 'auto', intervalMin: 30, enabled: true, lastFetchedAt: t - 4 * M, lastOkAt: null, failures: 1, nextAt: t + 56 * M, lastError: { code: 'private_address', message: 'Host intranet.example.com resolved to private/restricted IP: 10.0.0.5' } },
+      ]
+      const rows = [['Port authority opens second container terminal', 'https://news.example.com/economy/port-terminal-opens', 1], ['Rice prices fall 5% after record harvest & imports', 'https://news.example.com/economy/rice-prices-fall', 3], ['City council approves new river bus routes', 'https://news.example.com/city/river-bus-routes', 9], ['বাজেট ২০২৬: নতুন কর হার ঘোষণা', 'https://news.example.com/bn/budget-2026-tax', 20], ['Garment exports rise for third straight month', 'https://news.example.com/economy/garment-exports-rise', null]]
+      const items = rows.map(([title, link, h]) => ({ id: link, title, link, date: h == null ? null : new Date(t - h * H).toISOString(), source: 'Example Desk', sourceId: 'shot-w1', fetchedAt: t - 4 * M }))
+      localStorage.setItem('esb-banner-studio/wire/sources/v1', JSON.stringify(sources))
+      localStorage.setItem('esb-banner-studio/wire/inbox/v1', JSON.stringify({ items, dismissed: [] }))
+    }, now)
+    await p.reload({ waitUntil: 'load' }); await p.waitForTimeout(900)
+    await tile(p, 'Editorial'); await p.waitForSelector('.ed-launcher-wrap')
+    await p.click('.ed-launcher-wrap .ed-intake-tabs button:has-text("Wire")'); await p.waitForSelector('.ed-wire-item'); await p.waitForTimeout(700)
   },
   'graphics': async (p) => { await tile(p, 'Graphics'); await p.waitForSelector('canvas') },
   'graphics-quote': async (p) => {

@@ -6,6 +6,7 @@
 //
 // Everything stays on this machine (localStorage, two keys below). Nothing is fetched unless a source is due.
 
+import { useEffect } from 'react'
 import { create } from 'zustand'
 import { bengaliToAsciiDigits } from './bengali'
 import type { EsbFetchUrlResult } from '../esb'
@@ -543,4 +544,46 @@ function mergeEdits(current: WireSource[], polled: WireSource[]): WireSource[] {
     if (!p || p.url !== c.url) return c
     return { ...c, lastFetchedAt: p.lastFetchedAt, lastOkAt: p.lastOkAt, failures: p.failures, nextAt: p.nextAt, lastError: p.lastError }
   })
+}
+
+// ---------------------------------------------------------------- wording (pure)
+
+/** "just now", "5 min ago", "3 h ago", "2 d ago"; future times read "in 5 min", "in 2 h". */
+export function relTime(t: number, now: number): string {
+  const d = t - now
+  const m = Math.round(Math.abs(d) / MIN_MS)
+  const span = m < 1 ? '' : m < 60 ? `${m} min` : m < 60 * 48 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d`
+  if (!span) return d > 0 ? 'in under a minute' : 'just now'
+  return d > 0 ? `in ${span}` : `${span} ago`
+}
+
+/** One line about a source's state, read from its own fields. */
+export function sourceStatus(s: WireSource, now: number): { tone: 'ok' | 'warn' | 'idle'; text: string } {
+  if (!s.enabled) return { tone: 'idle', text: 'Paused' }
+  if (s.failures > 0 && s.lastError) return { tone: 'warn', text: `Retrying ${relTime(Math.max(s.nextAt, now), now)} · ${s.lastError.message}` }
+  if (!s.lastFetchedAt) return { tone: 'idle', text: 'Not checked yet' }
+  return { tone: 'ok', text: `Checked ${relTime(s.lastFetchedAt, now)} · next ${s.nextAt <= now ? 'now' : relTime(s.nextAt, now)}` }
+}
+
+/** Case- and digit-insensitive substring filter over title and source. */
+export function filterItems(items: WireItem[], q: string): WireItem[] {
+  const n = normalizeTitle(q)
+  if (!n) return items
+  return items.filter((i) => normalizeTitle(`${i.title} ${i.source}`).includes(n))
+}
+
+// ---------------------------------------------------------------- poll clock
+
+/** The poll clock: checks every minute while the Editorial desk is mounted, and only when the desktop bridge exists. */
+export function useWirePoll() {
+  useEffect(() => {
+    const tick = () => {
+      if (typeof window === 'undefined' || !window.esb?.fetchUrl) return
+      const now = Date.now()
+      if (useWire.getState().sources.some((s) => isDue(s, now))) void useWire.getState().pollDue(now)
+    }
+    const first = window.setTimeout(tick, 5000)
+    const id = window.setInterval(tick, CHECK_EVERY_MS)
+    return () => { window.clearTimeout(first); window.clearInterval(id) }
+  }, [])
 }

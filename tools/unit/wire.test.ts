@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  parseFeed, normalizeTitle, similar, dedupe, nextDue, afterPoll, capInbox, pollSources, checkSourceUrl, clampInterval,
+  parseFeed, normalizeTitle, relTime, sourceStatus, filterItems, similar, dedupe, nextDue, afterPoll, capInbox, pollSources, checkSourceUrl, clampInterval,
   useWire, loadInbox, loadSources, INBOX_KEY, SOURCES_KEY, INBOX_CAP, BACKOFF_CAP_MS,
   type WireSource, type WireItem, type FetchFn,
 } from '../../src/editorial/wire'
@@ -264,5 +264,30 @@ describe('Wire — inbox and polling', () => {
     expect(checkSourceUrl('ftp://a.example.com/x')).toHaveProperty('error')
     expect(checkSourceUrl('file:///C:/x')).toHaveProperty('error')
     expect(checkSourceUrl('example.com/rss')).toEqual({ url: 'https://example.com/rss' })
+  })
+})
+
+describe('Wire — wording', () => {
+  const now = 1_800_000_000_000
+  it('relTime reads past and future spans', () => {
+    expect(relTime(now, now)).toBe('just now')
+    expect(relTime(now - 5 * MIN, now)).toBe('5 min ago')
+    expect(relTime(now - 3 * 60 * MIN, now)).toBe('3 h ago')
+    expect(relTime(now - 72 * 60 * MIN, now)).toBe('3 d ago')
+    expect(relTime(now + 28 * MIN, now)).toBe('in 28 min')
+  })
+  it('sourceStatus: paused, retrying with the error text, checked', () => {
+    expect(sourceStatus(src({ enabled: false }), now)).toEqual({ tone: 'idle', text: 'Paused' })
+    expect(sourceStatus(src(), now).text).toBe('Not checked yet')
+    const bad = afterPoll(src(), now, { code: 'private_address', message: 'Host x resolved to private/restricted IP: 10.0.0.5' })
+    expect(sourceStatus(bad, now)).toEqual({ tone: 'warn', text: 'Retrying in 1 h · Host x resolved to private/restricted IP: 10.0.0.5' })
+    expect(sourceStatus(afterPoll(src(), now, null), now + MIN).text).toBe('Checked 1 min ago · next in 29 min')
+  })
+  it('filterItems matches title or source, ignoring case and digit script', () => {
+    const items = parseFeed(RSS, 'https://news.example.com/feed.xml').items.map((i) => ({ ...i, id: i.link, sourceId: 's', fetchedAt: now }))
+    expect(filterItems(items, 'RICE')).toHaveLength(1)
+    expect(filterItems(items, '2026')).toHaveLength(1)
+    expect(filterItems(items, 'example desk')).toHaveLength(5)
+    expect(filterItems(items, '  ')).toHaveLength(5)
   })
 })
