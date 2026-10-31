@@ -257,6 +257,13 @@ try {
     check('preview has no picture (letters have no picture mark)', !doc.includes('cdn.example.com'))
     const subject = await page.locator(`${DIALOG} .or-dg-subject b`).innerText()
 
+    // a Create that fails says so in the sheet, which stays open with the editor's choices
+    await page.evaluate(() => { const st = window.__outreachStore; window.__realCreate = st.getState().createCampaign; st.setState({ createCampaign: async () => { throw new Error('synthetic failure') } }) })
+    await create.click()
+    const failure = await page.locator(`${DIALOG} .or-dg-failure[role="alert"]`).innerText().catch(() => '')
+    check('a failed Create shows its error and keeps the sheet open', failure.includes('synthetic failure') && await page.locator(DIALOG).count() === 1 && (await campaigns(page)).length === before && await create.isEnabled(), failure)
+    check('the sheet keeps the order and the intro after a failed Create', (await heads(page))[0] === S.solar.headline && (await page.locator(`${DIALOG} textarea[aria-label="Intro"]`).inputValue()) === INTRO)
+    await page.evaluate(() => window.__outreachStore.setState({ createCampaign: window.__realCreate }))
     await create.click()
     await page.waitForSelector(DIALOG, { state: 'detached' })
     const all = await campaigns(page)

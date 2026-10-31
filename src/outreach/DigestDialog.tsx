@@ -50,6 +50,7 @@ export function DigestDialog({ onClose }: { onClose: () => void }) {
   const [intro, setIntro] = useState<string | null>(null) // null = the default intro for the range, until the editor types
   const [logo, setLogo] = useState<string | null>(null) // null until read
   const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState('') // why the last Create did not make a draft; the sheet stays open
 
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
   useEffect(() => {
@@ -91,16 +92,21 @@ export function DigestDialog({ onClose }: { onClose: () => void }) {
   const create = async () => {
     if (!chosen.length || busy) return
     setBusy(true)
+    setFailure('')
     try {
       await s.createCampaign({ name: title, kind: 'list', blueprint: 'blank', lang: 'en', subject: letter.subject, body: letter.body, letterhead: true, scheduledAt: null })
       s.addLog('info', `Draft "${title}" made from ${chosen.length} stor${chosen.length === 1 ? 'y' : 'ies'} — pick its list, then Review & send`)
       onClose()
+    } catch (e) {
+      // createCampaign may have stored the campaign before failing to open it, so say only what is known
+      setFailure(`Create did not finish (${e instanceof Error ? e.message : String(e)}). Check the Campaigns list before trying again.`)
     } finally { setBusy(false) }
   }
 
   return (
     <Dialog title="Campaign from this week's stories" kicker="OUTREACH · DIGEST" width={960} onClose={onClose} footer={<>
-      <span className="or-dg-count">{rows.length ? `${chosen.length} of ${rows.length} stories in the letter` : ''}</span>
+      {failure ? <p className="hint bad or-dg-failure" role="alert">{failure}</p>
+        : <span className="or-dg-count">{rows.length ? `${chosen.length} of ${rows.length} stories in the letter` : ''}</span>}
       <div className="spacer" />
       <button type="button" className="btn" onClick={onClose}>Cancel</button>
       <button type="button" className="btn primary or-dg-create" disabled={!chosen.length || !validRange || !idle || busy} onClick={() => void create()}>Create draft campaign</button>
