@@ -290,6 +290,8 @@ export function describeEvent(ev: OutreachEvent): string {
       return 'Engine started'
     case 'engine.quit':
       return 'Engine quit cleanly'
+    case 'inbox.checked':
+      return 'Inbox checked for replies'
     case 'ai.action':
       return `Assistant: ${ev.text || ''}`
     case 'note':

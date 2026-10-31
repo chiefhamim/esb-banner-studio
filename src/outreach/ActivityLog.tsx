@@ -1,157 +1,225 @@
 // src/outreach/ActivityLog.tsx
 // Activity Desk Log tab: filterable, searchable, expandable transaction log (§3.5, §5.7).
+// Drawn like the rest of Outreach: quiet card rows (`or-row`) with a coloured icon badge and a status chip, grouped by day,
+// filters as the same pills the Contacts list uses.
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useActivityStore, type LogChip } from './activityStore'
 import { describeEvent, fmtClock, fmtDay } from './activityFormat'
-import { Icon } from '../ui/Icon'
+import { dayHeading, eventMeta } from './activityMeta'
+import { Icon, type IconName } from '../ui/Icon'
+
+interface ChipDef {
+  id: LogChip
+  label: string
+  icon: IconName
+  tone: string
+}
+
+const CHIPS: ChipDef[] = [
+  { id: 'all', label: 'All', icon: 'listBullet', tone: 'all' },
+  { id: 'sent', label: 'Sent', icon: 'send', tone: 'sent' },
+  { id: 'failed', label: 'Failed', icon: 'flame', tone: 'bad' },
+  { id: 'replies', label: 'Replies', icon: 'mail', tone: 'reply' },
+  { id: 'bounces', label: 'Bounces', icon: 'refresh', tone: 'bounce' },
+  { id: 'optouts', label: 'Opt-outs', icon: 'user', tone: 'optout' },
+  { id: 'skipped', label: 'Skipped', icon: 'skipForward', tone: 'skip' },
+  { id: 'control', label: 'Control', icon: 'sliders', tone: 'control' },
+  { id: 'assistant', label: 'Assistant', icon: 'sparkle', tone: 'assistant' },
+]
 
 export function ActivityLog() {
   const store = useActivityStore()
   const events = store.logEvents
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const chips: { id: LogChip; label: string }[] = [
-    { id: 'all', label: 'All' },
-    { id: 'sent', label: 'Sent' },
-    { id: 'failed', label: 'Failed' },
-    { id: 'replies', label: 'Replies' },
-    { id: 'bounces', label: 'Bounces' },
-    { id: 'optouts', label: 'Opt-outs' },
-    { id: 'skipped', label: 'Skipped' },
-    { id: 'control', label: 'Control' },
-    { id: 'assistant', label: 'Assistant' },
-  ]
+  const toggleExpand = (id: string) => setExpandedId((prev) => (prev === id ? null : id))
 
-  const toggleExpand = (id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id))
-  }
+  const activeChipDef = CHIPS.find((c) => c.id === store.activeChip)
+  const rangeLabel =
+    store.range === 'today'
+      ? 'today'
+      : store.range === '7d'
+      ? 'the last 7 days'
+      : store.range === '30d'
+      ? 'the last 30 days'
+      : 'all time'
 
   return (
     <div className="oa-log">
-      {/* Filter toolbar: chips + search input */}
       <div className="oa-log-toolbar">
-        <div className="oa-chip-group" role="tablist" aria-label="Log category filters">
-          {chips.map((c) => (
+        <div className="or-chips oa-filter-chips" role="group" aria-label="Log category filters">
+          {CHIPS.map((c) => (
             <button
               key={c.id}
-              role="tab"
-              aria-selected={store.activeChip === c.id}
-              className={`oa-filter-chip ${store.activeChip === c.id ? 'active' : ''}`}
+              type="button"
+              className={`or-fchip oa-chip oa-chip-${c.tone}${store.activeChip === c.id ? ' on' : ''}`}
+              aria-pressed={store.activeChip === c.id}
               onClick={() => store.setActiveChip(c.id)}
             >
-              {c.label}
+              <Icon name={c.icon} size={13} className="oa-chip-ic" />
+              <span>{c.label}</span>
             </button>
           ))}
         </div>
 
         <div className="oa-search-wrap">
-          <Icon name="search" size={14} />
-          <input
-            type="search"
-            className="input xs oa-search-input"
-            placeholder="Search address, name, company"
-            value={store.searchQuery}
-            onChange={(e) => store.setSearchQuery(e.target.value)}
-          />
+          <label className="or-search oa-log-search">
+            <Icon name="search" size={14} className="oa-search-ic" />
+            <input
+              type="search"
+              placeholder="Search address, name, company"
+              aria-label="Search the log"
+              value={store.searchQuery}
+              onChange={(e) => store.setSearchQuery(e.target.value)}
+            />
+            {store.searchQuery && (
+              <button
+                type="button"
+                className="oa-search-clear"
+                onClick={() => store.setSearchQuery('')}
+                aria-label="Clear search"
+                title="Clear search"
+              >
+                <Icon name="x" size={12} />
+              </button>
+            )}
+          </label>
         </div>
       </div>
 
-      {/* Transaction Table */}
-      <div className="oa-log-table-wrap">
-        <table className="oa-log-table">
-          <thead>
-            <tr>
-              <th className="th-time">Time</th>
-              <th className="th-type">What happened</th>
-              <th className="th-who">Who</th>
-              <th className="th-org">Company</th>
-              <th className="th-camp">Campaign</th>
-              <th className="th-detail">Detail</th>
-              <th className="th-took">Took</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="oa-log-empty">
-                  No matching log events in this range.
-                </td>
-              </tr>
-            ) : (
-              events.map((ev) => {
-                const isExpanded = expandedId === ev.id
-                const sentence = describeEvent(ev)
-                const isFail = ev.type === 'send.fail'
-                const isTest = ev.dry === true
+      {events.length === 0 ? (
+        <div className="oa-empty-card oa-card-empty">
+          {store.searchQuery ? (
+            <>
+              <span className="oa-empty-mark oa-empty-mark-search"><Icon name="search" size={20} /></span>
+              <h3>No matching events</h3>
+              <p>No activity records matched “{store.searchQuery}”.</p>
+              <div className="oa-empty-actions">
+                <button type="button" className="btn sm" onClick={() => store.setSearchQuery('')}>
+                  <Icon name="x" size={12} />
+                  <span>Clear search</span>
+                </button>
+              </div>
+            </>
+          ) : store.activeChip === 'bounces' ? (
+            <>
+              <span className="oa-empty-mark tone-good"><Icon name="check" size={20} /></span>
+              <h3>No bounces recorded</h3>
+              <p>Zero bounced messages in {rangeLabel}. Every email reached its recipient server without refusal.</p>
+              <div className="oa-empty-actions">
+                <button type="button" className="btn sm" onClick={() => store.setActiveChip('all')}>
+                  <span>View all activity</span>
+                </button>
+              </div>
+            </>
+          ) : store.activeChip === 'failed' ? (
+            <>
+              <span className="oa-empty-mark tone-good"><Icon name="check" size={20} /></span>
+              <h3>No delivery failures</h3>
+              <p>Zero send failures or SMTP connection problems recorded in {rangeLabel}.</p>
+              <div className="oa-empty-actions">
+                <button type="button" className="btn sm" onClick={() => store.setActiveChip('all')}>
+                  <span>View all activity</span>
+                </button>
+              </div>
+            </>
+          ) : store.activeChip !== 'all' ? (
+            <>
+              <span className={`oa-empty-mark tone-${activeChipDef?.tone || 'quiet'}`}>
+                <Icon name={activeChipDef?.icon || 'activity'} size={20} />
+              </span>
+              <h3>No {activeChipDef?.label.toLowerCase()} events</h3>
+              <p>No matching {activeChipDef?.label.toLowerCase()} entries were found in {rangeLabel}.</p>
+              <div className="oa-empty-actions">
+                <button type="button" className="btn sm" onClick={() => store.setActiveChip('all')}>
+                  <span>View all activity</span>
+                </button>
+                {store.range !== 'all' && (
+                  <button type="button" className="btn sm subtle" onClick={() => store.setRange('all')}>
+                    <span>Switch to All time</span>
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="oa-empty-mark"><Icon name="activity" size={20} /></span>
+              <h3>No activity in this range</h3>
+              <p>No email sends, replies, or engine events were recorded in {rangeLabel}.</p>
+              {store.range !== 'all' && (
+                <div className="oa-empty-actions">
+                  <button type="button" className="btn sm" onClick={() => store.setRange('all')}>
+                    <span>Switch to All time</span>
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="oa-events">
+          {events.map((ev, i) => {
+            const meta = eventMeta(ev.type)
+            const open = expandedId === ev.id
+            const sentence = describeEvent(ev)
+            const isTest = ev.dry === true
+            const prev = events[i - 1]
+            const heading = dayHeading(ev.t)
+            const newDay = !prev || dayHeading(prev.t) !== heading
+            const who = ev.name || ev.email || ev.to || ''
+            const sub = [ev.name ? ev.email || ev.to : '', ev.org, ev.campaignName || ev.campaignId].filter(Boolean)
 
-                return (
-                  <tr
-                    key={ev.id}
-                    className={`oa-log-row ${isExpanded ? 'expanded' : ''} ${isFail ? 'row-fail' : ''}`}
-                    onClick={() => toggleExpand(ev.id)}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        toggleExpand(ev.id)
-                      }
-                    }}
-                  >
-                    <td className="td-time">
-                      <span title={new Date(ev.t).toISOString()}>{fmtClock(ev.t)}</span>
-                    </td>
+            return (
+              <Fragment key={ev.id}>
+                {newDay && <div className="oa-day-head">{heading}</div>}
+                <button
+                  type="button"
+                  className={'or-row oa-ev tone-' + meta.tone + (open ? ' on' : '')}
+                  aria-expanded={open}
+                  onClick={() => toggleExpand(ev.id)}
+                >
+                  <span className="oa-ev-badge" aria-hidden><Icon name={meta.icon} size={15} /></span>
 
-                    <td className="td-type">
-                      <div className="oa-type-cell">
-                        {isFail && <span className="or-chip danger sm">Failed</span>}
-                        {isTest && <span className="or-chip cs-waiting sm">Test</span>}
-                        <span className="oa-type-text">{ev.type}</span>
-                      </div>
-                    </td>
+                  <span className="oa-ev-main">
+                    <b title={sentence}>{sentence}</b>
+                    {(who || sub.length > 0) && (
+                      <span className="oa-ev-sub">
+                        {sub.length > 0 ? sub.map((s, k) => <Fragment key={k}>{k > 0 && <i aria-hidden>·</i>}<span>{s}</span></Fragment>) : <span>{who}</span>}
+                      </span>
+                    )}
 
-                    <td className="td-who">
-                      <div className="oa-who-cell" title={ev.email || ev.to || ''}>
-                        <span className="oa-name">{ev.name || '—'}</span>
-                        <span className="oa-addr or-muted">{ev.email || ev.to || ''}</span>
-                      </div>
-                    </td>
+                    {open && (
+                      <span className="oa-ev-detail">
+                        {ev.error && <span className="oa-kv bad"><em>Error</em>{ev.error}</span>}
+                        {ev.kind && <span className="oa-kv"><em>Kind</em>{ev.kind}</span>}
+                        {ev.attempt && <span className="oa-kv"><em>Attempt</em>{ev.attempt}</span>}
+                        {ev.code && <span className="oa-kv"><em>Code</em>{ev.code}</span>}
+                        {ev.reason && <span className="oa-kv"><em>Reason</em>{ev.reason}</span>}
+                        <span className="oa-kv mono"><em>ID</em>{ev.id}</span>
+                        <span className="oa-kv"><em>Time</em>{fmtDay(ev.t)}</span>
+                      </span>
+                    )}
+                  </span>
 
-                    <td className="td-org">{ev.org || '—'}</td>
+                  <span className="oa-ev-side">
+                    {isTest && <span className="or-chip warn">Test</span>}
+                    <span className={'or-chip oa-tone-' + meta.tone}>{meta.label}</span>
+                    <span className="oa-ev-time" title={new Date(ev.t).toISOString()}>
+                      {fmtClock(ev.t)}
+                      {ev.ms ? <i>{ev.ms} ms</i> : null}
+                    </span>
+                  </span>
+                </button>
+              </Fragment>
+            )
+          })}
+        </div>
+      )}
 
-                    <td className="td-camp">{ev.campaignName || ev.campaignId || '—'}</td>
-
-                    <td className="td-detail">
-                      <div className="oa-detail-cell" title={sentence}>
-                        {sentence}
-                      </div>
-                      {isExpanded && (
-                        <div className="oa-expanded-detail">
-                          {ev.error && <div className="oa-detail-line error"><b>Error:</b> {ev.error}</div>}
-                          {ev.kind && <div className="oa-detail-line"><b>Kind:</b> {ev.kind}</div>}
-                          {ev.attempt && <div className="oa-detail-line"><b>Attempt:</b> {ev.attempt}</div>}
-                          {ev.code && <div className="oa-detail-line"><b>Code:</b> {ev.code}</div>}
-                          {ev.reason && <div className="oa-detail-line"><b>Reason:</b> {ev.reason}</div>}
-                          <div className="oa-detail-line mono or-muted">ID: {ev.id} · Time: {fmtDay(ev.t)}</div>
-                        </div>
-                      )}
-                    </td>
-
-                    <td className="td-took">
-                      {ev.ms ? `${ev.ms} ms` : '—'}
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Show more button */}
       {store.hasMoreEvents && (
         <div className="oa-load-more-row">
-          <button className="btn sm" onClick={() => store.loadMoreLog()}>
+          <button type="button" className="btn sm" onClick={() => store.loadMoreLog()}>
             Show more (next 200 rows)
           </button>
         </div>

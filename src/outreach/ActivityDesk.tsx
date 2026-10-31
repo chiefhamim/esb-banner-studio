@@ -90,13 +90,18 @@ export function ActivityDesk() {
 
   // Campaign dropdown options
   const campaignOptions = [
-    { value: '', label: 'All campaigns' },
-    ...outreach.campaigns.map((c) => ({ value: c.id, label: c.name })),
+    { value: '', label: 'All campaigns', icon: 'layers' as const },
+    ...outreach.campaigns.map((c) => ({
+      value: c.id,
+      label: c.name,
+      icon: 'send' as const,
+      hint: `${Object.keys(c.sent || {}).length} sent`,
+    })),
   ]
 
   return (
     <div className="oa-desk" role="main" aria-label="Activity Desk">
-      {/* 40px Toolbar */}
+      {/* 46px Toolbar */}
       <header className="oa-toolbar">
         <div className="oa-toolbar-left">
           <Seg<ActivityTab>
@@ -143,12 +148,14 @@ export function ActivityDesk() {
 
         <div className="oa-toolbar-right">
           <button
-            className="btn sm"
+            className={`btn sm oa-btn-pause-resume ${isAnyActive ? 'oa-btn-pause-all' : 'oa-btn-resume-all'}`}
             onClick={handleTogglePauseAll}
             disabled={isPausingAll}
             title={isAnyActive ? 'Pause all active campaigns' : 'Resume active campaigns'}
           >
-            <Icon name={isAnyActive ? 'pause' : 'play'} size={14} />
+            <span className="oa-btn-icon-mark" aria-hidden>
+              <Icon name={isAnyActive ? 'pause' : 'play'} size={13} />
+            </span>
             <span>{isAnyActive ? 'Pause all sending' : 'Resume sending'}</span>
           </button>
 
@@ -156,11 +163,11 @@ export function ActivityDesk() {
             label="Export"
             icon="download"
             align="end"
-            className="btn sm"
+            className="btn sm oa-btn-export"
             items={[
-              { label: 'Export log (CSV)', onClick: handleExportLogCsv },
-              { label: 'Export daily report (CSV)', onClick: handleExportDayCsv },
-              { label: 'Export runs report (CSV)', onClick: handleExportRunsCsv },
+              { label: 'Export log (CSV)', icon: 'listBullet', onClick: handleExportLogCsv },
+              { label: 'Export daily report (CSV)', icon: 'calendar', onClick: handleExportDayCsv },
+              { label: 'Export runs report (CSV)', icon: 'chart', onClick: handleExportRunsCsv },
             ]}
           />
         </div>

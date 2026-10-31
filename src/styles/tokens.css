@@ -117,6 +117,12 @@
   --p: 0px;
   --vw-ar: 16 / 9;
 
+  --surface: var(--surface-panel);
+  --surface-2: var(--surface-sunken);
+  --surface-3: var(--surface-hover);
+  --border: var(--border-default);
+  --muted: var(--text-secondary);
+
   /* ---- Studio surfaces (2026-10): cards on a quiet canvas, filled toolbar controls, spring motion ---- */
   --card: #ffffff;
   --card-line: rgba(0, 0, 0, 0.07);
@@ -216,6 +222,12 @@
   --bg-4: #323238;
   --ink-2: #d4d4d8;
   --ink-ring: rgba(244, 244, 245, 0.2);
+
+  --surface: var(--surface-panel);
+  --surface-2: var(--surface-sunken);
+  --surface-3: var(--surface-hover);
+  --border: var(--border-default);
+  --muted: var(--text-secondary);
 
   --card: #222226;
   --card-line: rgba(255, 255, 255, 0.07);

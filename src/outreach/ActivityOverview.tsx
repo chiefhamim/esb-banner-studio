@@ -1,12 +1,49 @@
 // src/outreach/ActivityOverview.tsx
 // Activity Desk Overview tab: KPI strip, hourly distribution, running jobs, days chart, durations (§3.4, §5.7).
+// Cards, icons and figures follow the Outreach inspector (`or-card`, `or-stats`) rather than a separate dashboard look.
 
+import type { ReactNode } from 'react'
 import { useActivityStore } from './activityStore'
 import { BarChart } from './charts'
 import { fmtDuration, fmtDay, describeRun } from './activityFormat'
-import { Icon } from '../ui/Icon'
+import { Icon, type IconName } from '../ui/Icon'
 import { useEngineStore } from './engineStore'
 import { engineClient } from './engineClient'
+
+function Kpi({ icon, tone, label, figure, sub, small }: { icon: IconName; tone: string; label: string; figure: ReactNode; sub: ReactNode; small?: boolean }) {
+  return (
+    <div className={'oa-kpi-tile tone-' + tone}>
+      <div className="oa-kpi-caption">
+        <span className="oa-kpi-mark" aria-hidden><Icon name={icon} size={14} /></span>
+        {label}
+      </div>
+      <div className={'oa-kpi-figure' + (small ? ' sm' : '')}>{figure}</div>
+      <div className="oa-kpi-sub">{sub}</div>
+    </div>
+  )
+}
+
+function CardHead({ icon, title, note, tone = 'quiet' }: { icon: IconName; title: string; note?: ReactNode; tone?: string }) {
+  return (
+    <header className="oa-card-head">
+      <span className={`oa-card-head-mark tone-${tone}`} aria-hidden>
+        <Icon name={icon} size={14} />
+      </span>
+      <h3>{title}</h3>
+      {note != null && <span className="or-small">{note}</span>}
+    </header>
+  )
+}
+
+function Duration({ label, tip, value, sub }: { label: string; tip: string; value: ReactNode; sub: ReactNode }) {
+  return (
+    <div className="oa-duration-tile" title={tip}>
+      <div className="oa-duration-label">{label}</div>
+      <div className="oa-duration-val">{value}</div>
+      <div className="oa-duration-sub">{sub}</div>
+    </div>
+  )
+}
 
 export function ActivityOverview() {
   const store = useActivityStore()
@@ -26,7 +63,7 @@ export function ActivityOverview() {
   if (store.isError) {
     return (
       <div className="oa-error-state">
-        <Icon name="info" size={24} />
+        <span className="oa-empty-mark bad"><Icon name="info" size={20} /></span>
         <p>{store.errorMessage || 'Failed to load activity metrics.'}</p>
         <button className="btn sm" onClick={() => store.fetchStats()}>
           Try again
@@ -42,7 +79,7 @@ export function ActivityOverview() {
     return (
       <div className="oa-empty-desk">
         <div className="oa-empty-card">
-          <Icon name="mail" size={32} />
+          <span className="oa-empty-mark"><Icon name="mail" size={20} /></span>
           <h3>No activity yet</h3>
           <p>
             Nothing has been sent from this app yet. When a campaign runs, every email, reply and problem is listed here
@@ -104,45 +141,31 @@ export function ActivityOverview() {
     <div className="oa-overview">
       {/* KPI strip (6 tiles) */}
       <section className="oa-kpi-strip" aria-label="Key Performance Indicators">
-        <div className="oa-kpi-tile">
-          <div className="oa-kpi-caption">SENT TODAY</div>
-          <div className="oa-kpi-figure">{sentToday.toLocaleString()}</div>
-          <div className="oa-kpi-sub">of {stats.cap || 60} cap</div>
-        </div>
-
-        <div className="oa-kpi-tile">
-          <div className="oa-kpi-caption">SENT (RANGE)</div>
-          <div className="oa-kpi-figure">{sentRange.toLocaleString()}</div>
-          <div className="oa-kpi-sub">total emails</div>
-        </div>
-
-        <div className="oa-kpi-tile">
-          <div className="oa-kpi-caption">REPLIES</div>
-          <div className="oa-kpi-figure">{replies.toLocaleString()}</div>
-          <div className="oa-kpi-sub">
-            {sentRange > 0 ? `${Math.round((replies / sentRange) * 100)}% of sent` : '0% of sent'}
-          </div>
-        </div>
-
-        <div className="oa-kpi-tile">
-          <div className="oa-kpi-caption">BOUNCED OR REFUSED</div>
-          <div className="oa-kpi-figure">{bounced.toLocaleString()}</div>
-          <div className="oa-kpi-sub">
-            {totals.optedOut > 0 ? `${totals.optedOut} unsubscribed` : 'undeliverable'}
-          </div>
-        </div>
-
-        <div className="oa-kpi-tile">
-          <div className="oa-kpi-caption">STILL TO SEND</div>
-          <div className="oa-kpi-figure">{stillToSend.toLocaleString()}</div>
-          <div className="oa-kpi-sub">{activeJobs.length} active runs</div>
-        </div>
-
-        <div className="oa-kpi-tile">
-          <div className="oa-kpi-caption">FINISHES ABOUT</div>
-          <div className="oa-kpi-figure sm">{finishesAbout}</div>
-          <div className="oa-kpi-sub">{activeJobs.length > 0 ? 'based on window & cap' : 'no active runs'}</div>
-        </div>
+        <Kpi icon="send" tone="sent" label="Sent today" figure={sentToday.toLocaleString()} sub={`of ${stats.cap || 60} cap`} />
+        <Kpi icon="mail" tone="sent" label="Sent in range" figure={sentRange.toLocaleString()} sub="total emails" />
+        <Kpi
+          icon="inbox"
+          tone="reply"
+          label="Replies"
+          figure={replies.toLocaleString()}
+          sub={sentRange > 0 ? `${Math.round((replies / sentRange) * 100)}% of sent` : '0% of sent'}
+        />
+        <Kpi
+          icon="info"
+          tone="bad"
+          label="Bounced or refused"
+          figure={bounced.toLocaleString()}
+          sub={totals.optedOut > 0 ? `${totals.optedOut} unsubscribed` : 'undeliverable'}
+        />
+        <Kpi icon="clock" tone="warn" label="Still to send" figure={stillToSend.toLocaleString()} sub={`${activeJobs.length} active runs`} />
+        <Kpi
+          icon="calendar"
+          tone="quiet"
+          label="Finishes about"
+          figure={finishesAbout}
+          small
+          sub={activeJobs.length > 0 ? 'based on window & cap' : 'no active runs'}
+        />
       </section>
 
       {/* Row 2: Today by hour + Running now cards */}
@@ -163,14 +186,12 @@ export function ActivityOverview() {
         </div>
 
         <div className="oa-panel oa-running-panel">
-          <div className="oa-panel-head">
-            <h3>Running now</h3>
-            <span className="or-muted">{activeJobs.length} active</span>
-          </div>
+          <CardHead icon="send" title="Running now" tone="sent" note={`${activeJobs.length} active`} />
 
           <div className="oa-running-list">
             {activeJobs.length === 0 ? (
               <div className="oa-no-runs">
+                <span className="oa-empty-mark"><Icon name="pause" size={18} /></span>
                 <p>No sending is running.</p>
                 {stats.lastSendAt && (
                   <div className="oa-last-run-note">
@@ -201,26 +222,17 @@ export function ActivityOverview() {
 
                     <div className="oa-job-actions">
                       {job.status === 'running' || job.status === 'waiting' ? (
-                        <button
-                          className="btn xs"
-                          onClick={() => engineClient.control(job.jobId, 'pause')}
-                        >
+                        <button className="btn xs" onClick={() => engineClient.control(job.jobId, 'pause')}>
                           <Icon name="pause" size={13} />
                           <span>Pause</span>
                         </button>
                       ) : (
-                        <button
-                          className="btn xs"
-                          onClick={() => engineClient.control(job.jobId, 'resume')}
-                        >
+                        <button className="btn xs" onClick={() => engineClient.control(job.jobId, 'resume')}>
                           <Icon name="play" size={13} />
                           <span>Resume</span>
                         </button>
                       )}
-                      <button
-                        className="btn xs danger-text"
-                        onClick={() => engineClient.control(job.jobId, 'stop')}
-                      >
+                      <button className="btn xs danger-text" onClick={() => engineClient.control(job.jobId, 'stop')}>
                         <Icon name="x" size={13} />
                         <span>Stop</span>
                       </button>
@@ -251,77 +263,45 @@ export function ActivityOverview() {
 
       {/* Row 4: How long it took (6 figures) */}
       <section className="oa-panel oa-durations-panel">
-        <div className="oa-panel-head">
-          <h3>How long it took</h3>
-          <span className="or-muted">Pacing & performance metrics</span>
-        </div>
+        <CardHead icon="clock" title="How long it took" tone="warn" note="Pacing & performance" />
 
         <div className="oa-durations-grid">
-          <div className="oa-duration-tile" title="Average time taken by the SMTP server to accept each email.">
-            <div className="oa-duration-label">
-              <span>Avg time per email</span>
-              <Icon name="info" size={12} />
-            </div>
-            <div className="oa-duration-val">
-              {durations?.avgSendMs ? `${(durations.avgSendMs / 1000).toFixed(1)} s` : '—'}
-            </div>
-            <div className="oa-duration-sub">p95: {(durations?.p95SendMs || 0) / 1000} s</div>
-          </div>
-
-          <div className="oa-duration-tile" title="Average delay spaced out between consecutive emails.">
-            <div className="oa-duration-label">
-              <span>Average gap</span>
-              <Icon name="info" size={12} />
-            </div>
-            <div className="oa-duration-val">
-              {durations?.avgGapSec ? fmtDuration(durations.avgGapSec) : '—'}
-            </div>
-            <div className="oa-duration-sub">between sends</div>
-          </div>
-
-          <div className="oa-duration-tile" title="Total accumulated time when campaigns were actively sending.">
-            <div className="oa-duration-label">
-              <span>Time sending</span>
-              <Icon name="info" size={12} />
-            </div>
-            <div className="oa-duration-val">
-              {durations?.activeMs ? fmtDuration(Math.round(durations.activeMs / 1000)) : '0 s'}
-            </div>
-            <div className="oa-duration-sub">active send time</div>
-          </div>
-
-          <div className="oa-duration-tile" title="Total wall-clock elapsed time across the selected date range.">
-            <div className="oa-duration-label">
-              <span>Elapsed time</span>
-              <Icon name="info" size={12} />
-            </div>
-            <div className="oa-duration-val">
-              {durations?.elapsedMs ? fmtDuration(Math.round(durations.elapsedMs / 1000)) : '—'}
-            </div>
-            <div className="oa-duration-sub">wall clock</div>
-          </div>
-
-          <div className="oa-duration-tile" title="Effective delivery throughput per hour of active sending.">
-            <div className="oa-duration-label">
-              <span>Emails per active hour</span>
-              <Icon name="info" size={12} />
-            </div>
-            <div className="oa-duration-val">
-              {durations?.perActiveHour ? `${durations.perActiveHour}` : '—'}
-            </div>
-            <div className="oa-duration-sub">throughput</div>
-          </div>
-
-          <div className="oa-duration-tile" title="Median duration between sending an email and receiving a recipient reply.">
-            <div className="oa-duration-label">
-              <span>Median time to reply</span>
-              <Icon name="info" size={12} />
-            </div>
-            <div className="oa-duration-val">
-              {stats.replyMedianMs ? fmtDuration(Math.round(stats.replyMedianMs / 1000)) : '—'}
-            </div>
-            <div className="oa-duration-sub">response speed</div>
-          </div>
+          <Duration
+            label="Avg time per email"
+            tip="Average time taken by the SMTP server to accept each email."
+            value={durations?.avgSendMs ? `${(durations.avgSendMs / 1000).toFixed(1)} s` : '—'}
+            sub={`p95: ${(durations?.p95SendMs || 0) / 1000} s`}
+          />
+          <Duration
+            label="Average gap"
+            tip="Average delay spaced out between consecutive emails."
+            value={durations?.avgGapSec ? fmtDuration(durations.avgGapSec) : '—'}
+            sub="between sends"
+          />
+          <Duration
+            label="Time sending"
+            tip="Total accumulated time when campaigns were actively sending."
+            value={durations?.activeMs ? fmtDuration(Math.round(durations.activeMs / 1000)) : '0 s'}
+            sub="active send time"
+          />
+          <Duration
+            label="Elapsed time"
+            tip="Total wall-clock elapsed time across the selected date range."
+            value={durations?.elapsedMs ? fmtDuration(Math.round(durations.elapsedMs / 1000)) : '—'}
+            sub="wall clock"
+          />
+          <Duration
+            label="Emails per active hour"
+            tip="Effective delivery throughput per hour of active sending."
+            value={durations?.perActiveHour ? `${durations.perActiveHour}` : '—'}
+            sub="throughput"
+          />
+          <Duration
+            label="Median time to reply"
+            tip="Median duration between sending an email and receiving a recipient reply."
+            value={stats.replyMedianMs ? fmtDuration(Math.round(stats.replyMedianMs / 1000)) : '—'}
+            sub="response speed"
+          />
         </div>
       </section>
     </div>

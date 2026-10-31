@@ -6,6 +6,7 @@ import { useActivityStore } from './activityStore'
 import { fmtDuration, fmtClock, reportSummary } from './activityFormat'
 import { downloadText } from './campaign'
 import { Icon } from '../ui/Icon'
+import { Seg } from '../ui/controls'
 import type { JobSnapshot } from '../esb'
 
 export function safeCsvCell(val: string | number | null | undefined): string {
@@ -83,137 +84,104 @@ export function ActivityReports() {
     }
   }
 
+  const stat = (label: string, value: number, tone = '') => (
+    <span className={'oa-rstat' + (tone ? ' ' + tone : '')}>
+      <i>{label}</i>
+      <b>{value.toLocaleString()}</b>
+    </span>
+  )
+
   return (
     <div className={`oa-reports ${selectedType ? 'has-sidebar' : ''}`}>
       <div className="oa-reports-main">
         {/* Sub tab toggles */}
         <div className="oa-reports-subnav">
-          <button
-            className={`btn sm ${subTab === 'day' ? 'primary' : ''}`}
-            onClick={() => {
-              setSubTab('day')
-              store.setSelectedJobId(null)
+          <Seg<'day' | 'run'>
+            value={subTab}
+            onChange={(v) => {
+              setSubTab(v)
+              if (v === 'day') store.setSelectedJobId(null)
+              else store.setSelectedDay(null)
             }}
-          >
-            By day
-          </button>
-          <button
-            className={`btn sm ${subTab === 'run' ? 'primary' : ''}`}
-            onClick={() => {
-              setSubTab('run')
-              store.setSelectedDay(null)
-            }}
-          >
-            By run
-          </button>
+            className="oa-report-seg"
+            options={[
+              { value: 'day', label: 'By day', icon: 'calendar' },
+              { value: 'run', label: 'By run', icon: 'send' },
+            ]}
+          />
         </div>
 
-        {/* Table view */}
+        {/* List view */}
         {subTab === 'day' ? (
-          <div className="oa-report-table-wrap">
-            <table className="oa-report-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Sent</th>
-                  <th>Failed</th>
-                  <th>Bounced</th>
-                  <th>Replied</th>
-                  <th>First email</th>
-                  <th>Last email</th>
-                  <th>Time sending</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byDay.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="oa-report-empty">
-                      No days recorded in this range.
-                    </td>
-                  </tr>
-                ) : (
-                  byDay.map((d) => (
-                    <tr
-                      key={d.day}
-                      className={selectedDay === d.day ? 'selected' : ''}
-                      onClick={() => store.setSelectedDay(d.day)}
-                      tabIndex={0}
-                    >
-                      <td>{d.day}</td>
-                      <td>{d.sent.toLocaleString()}</td>
-                      <td>{d.failed.toLocaleString()}</td>
-                      <td>{d.bounced.toLocaleString()}</td>
-                      <td>{d.replied.toLocaleString()}</td>
-                      <td>—</td>
-                      <td>—</td>
-                      <td>—</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          byDay.length === 0 ? (
+            <div className="oa-empty-card oa-card-empty">
+              <span className="oa-empty-mark"><Icon name="calendar" size={20} /></span>
+              <h3>No days yet</h3>
+              <p>No days recorded in this range.</p>
+            </div>
+          ) : (
+            <div className="oa-report-list">
+              {byDay.map((d) => (
+                <button
+                  key={d.day}
+                  type="button"
+                  className={'or-row oa-rrow' + (selectedDay === d.day ? ' on' : '')}
+                  aria-pressed={selectedDay === d.day}
+                  onClick={() => store.setSelectedDay(d.day)}
+                >
+                  <span className="oa-rrow-main">
+                    <b>{d.day}</b>
+                    <span>{d.sent.toLocaleString()} sent{d.replied > 0 ? ` · ${d.replied.toLocaleString()} replied` : ''}</span>
+                  </span>
+                  {stat('Sent', d.sent, 'sent')}
+                  {stat('Failed', d.failed, d.failed > 0 ? 'bad' : '')}
+                  {stat('Bounced', d.bounced, d.bounced > 0 ? 'warn' : '')}
+                  {stat('Replied', d.replied, d.replied > 0 ? 'reply' : '')}
+                </button>
+              ))}
+            </div>
+          )
+        ) : jobs.length === 0 ? (
+          <div className="oa-empty-card oa-card-empty">
+            <span className="oa-empty-mark"><Icon name="send" size={20} /></span>
+            <h3>No runs yet</h3>
+            <p>No sending runs recorded yet.</p>
           </div>
         ) : (
-          <div className="oa-report-table-wrap">
-            <table className="oa-report-table">
-              <thead>
-                <tr>
-                  <th>Campaign</th>
-                  <th>Started</th>
-                  <th>Finished</th>
-                  <th>Sent</th>
-                  <th>Failed</th>
-                  <th>Skipped</th>
-                  <th>Took</th>
-                  <th>Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="oa-report-empty">
-                      No sending runs recorded yet.
-                    </td>
-                  </tr>
-                ) : (
-                  jobs.map((j) => (
-                    <tr
-                      key={j.jobId}
-                      className={selectedJobId === j.jobId ? 'selected' : ''}
-                      onClick={() => store.setSelectedJobId(j.jobId)}
-                      tabIndex={0}
-                    >
-                      <td>{j.name || j.campaignId}</td>
-                      <td>{j.startedAt ? fmtClock(j.startedAt) : '—'}</td>
-                      <td>{j.endedAt ? fmtClock(j.endedAt) : '—'}</td>
-                      <td>{j.sent.toLocaleString()}</td>
-                      <td>{j.failed.toLocaleString()}</td>
-                      <td>{j.skipped.toLocaleString()}</td>
-                      <td>
-                        {j.endedAt && j.startedAt
-                          ? fmtDuration(Math.round((j.endedAt - j.startedAt) / 1000))
-                          : '—'}
-                      </td>
-                      <td>
-                        <span className={`or-chip ${j.status === 'done' ? 'cs-done' : 'cs-stopped'} sm`}>
-                          {j.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="oa-report-list">
+            {jobs.map((j) => (
+              <button
+                key={j.jobId}
+                type="button"
+                className={'or-row oa-rrow' + (selectedJobId === j.jobId ? ' on' : '')}
+                aria-pressed={selectedJobId === j.jobId}
+                onClick={() => store.setSelectedJobId(j.jobId)}
+              >
+                <span className="oa-rrow-main">
+                  <b>{j.name || j.campaignId}</b>
+                  <span>
+                    {j.startedAt ? fmtClock(j.startedAt) : '—'} → {j.endedAt ? fmtClock(j.endedAt) : '—'}
+                    {j.endedAt && j.startedAt ? ` · took ${fmtDuration(Math.round((j.endedAt - j.startedAt) / 1000))}` : ''}
+                  </span>
+                </span>
+                {stat('Sent', j.sent, 'sent')}
+                {stat('Failed', j.failed, j.failed > 0 ? 'bad' : '')}
+                {stat('Skipped', j.skipped, j.skipped > 0 ? 'warn' : '')}
+                <span className={'or-chip oa-rchip ' + (j.status === 'done' ? 'good' : j.status === 'stopped' ? 'warn' : '')}>{j.status}</span>
+              </button>
+            ))}
           </div>
         )}
       </div>
 
-      {/* 360px Sidebar Inspector Panel */}
+      {/* Inspector panel */}
       {selectedType && (
         <aside className="oa-report-sidebar" aria-label="Report Inspector">
-          <div className="oa-sidebar-head">
+          <header className="oa-card-head">
+            <Icon name={selectedType === 'day' ? 'calendar' : 'send'} size={14} />
             <h3>{selectedType === 'day' ? selectedDay : selectedJobData?.name || 'Run Summary'}</h3>
             <button
+              type="button"
               className="ibtn sm"
               aria-label="Close details"
               onClick={() => {
@@ -223,48 +191,24 @@ export function ActivityReports() {
             >
               <Icon name="x" size={14} />
             </button>
-          </div>
+          </header>
 
           <div className="oa-sidebar-body">
             {selectedType === 'day' && selectedDayData && (
-              <div className="oa-sidebar-metrics">
-                <div className="oa-metric-row">
-                  <span>Sent</span>
-                  <b>{selectedDayData.sent.toLocaleString()}</b>
-                </div>
-                <div className="oa-metric-row">
-                  <span>Failed</span>
-                  <b>{selectedDayData.failed.toLocaleString()}</b>
-                </div>
-                <div className="oa-metric-row">
-                  <span>Bounced</span>
-                  <b>{selectedDayData.bounced.toLocaleString()}</b>
-                </div>
-                <div className="oa-metric-row">
-                  <span>Replied</span>
-                  <b>{selectedDayData.replied.toLocaleString()}</b>
-                </div>
+              <div className="or-stats oa-sidebar-stats">
+                <span><i>Sent</i><b>{selectedDayData.sent.toLocaleString()}</b></span>
+                <span className={selectedDayData.failed > 0 ? 'bad' : ''}><i>Failed</i><b>{selectedDayData.failed.toLocaleString()}</b></span>
+                <span><i>Bounced</i><b>{selectedDayData.bounced.toLocaleString()}</b></span>
+                <span className={selectedDayData.replied > 0 ? 'good' : ''}><i>Replied</i><b>{selectedDayData.replied.toLocaleString()}</b></span>
               </div>
             )}
 
             {selectedType === 'run' && selectedJobData && (
-              <div className="oa-sidebar-metrics">
-                <div className="oa-metric-row">
-                  <span>Sent</span>
-                  <b>{selectedJobData.sent.toLocaleString()}</b>
-                </div>
-                <div className="oa-metric-row">
-                  <span>Failed</span>
-                  <b>{selectedJobData.failed.toLocaleString()}</b>
-                </div>
-                <div className="oa-metric-row">
-                  <span>Total</span>
-                  <b>{selectedJobData.total.toLocaleString()}</b>
-                </div>
-                <div className="oa-metric-row">
-                  <span>Status</span>
-                  <b>{selectedJobData.status}</b>
-                </div>
+              <div className="or-stats oa-sidebar-stats">
+                <span><i>Sent</i><b>{selectedJobData.sent.toLocaleString()}</b></span>
+                <span className={selectedJobData.failed > 0 ? 'bad' : ''}><i>Failed</i><b>{selectedJobData.failed.toLocaleString()}</b></span>
+                <span><i>Total</i><b>{selectedJobData.total.toLocaleString()}</b></span>
+                <span><i>Status</i><b className="oa-status-word">{selectedJobData.status}</b></span>
               </div>
             )}
 
@@ -275,11 +219,11 @@ export function ActivityReports() {
             )}
 
             <div className="oa-sidebar-actions">
-              <button className="btn sm primary" onClick={copySummaryText}>
+              <button type="button" className="btn sm primary" onClick={copySummaryText}>
                 <Icon name="copy" size={13} />
                 <span>{copied ? 'Copied!' : 'Copy summary'}</span>
               </button>
-              <button className="btn sm" onClick={exportSelectedCsv}>
+              <button type="button" className="btn sm" onClick={exportSelectedCsv}>
                 <Icon name="download" size={13} />
                 <span>Export CSV</span>
               </button>

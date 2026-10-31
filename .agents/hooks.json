@@ -1,0 +1,12 @@
+{
+  "stop-verifier": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ../tools/agy/stop-check.mjs",
+        "timeout": 30
+      }
+    ]
+  }
+}
