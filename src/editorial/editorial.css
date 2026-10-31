@@ -875,7 +875,7 @@
 .ed-wire-add-row .btn { flex: none; gap: 6px; }
 .ed-wire .ed-wire-add-row :is(.input, .btn), .ed-wire-src :is(.input, .scrub) { height: var(--h-md); }
 .ed-wire-err { margin: 0; font-size: 12px; line-height: 16px; color: var(--danger); }
-.ed-wire-sources { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ed-wire-sources { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .ed-wire-head { display: flex; align-items: center; gap: 8px; min-height: var(--h-sm); cursor: pointer; list-style: none; border-radius: var(--r-1); }
 .ed-wire-head::-webkit-details-marker { display: none; }
 .ed-wire-head:hover b { color: var(--text); }
@@ -901,7 +901,8 @@
 .ed-intake.compact .ed-wire-src-fields { flex-direction: column; }
 .ed-intake.compact .ed-wire-src-fields .ed-wire-name { flex: none; }
 .ed-intake.compact .ed-wire-add-row .btn { flex: 1 1 100%; justify-content: center; }
-.ed-wire-list, .ed-launcher-wrap .ed-intake:not(.compact) .ed-wire .ed-wire-list { flex: 1 1 auto; min-height: 160px; }
+/* one scrolling region: the panel body scrolls, the list grows with its rows (no inner scroller to cut a row in half) */
+.ed-wire .ed-wire-list, .ed-intake.compact .ed-wire .ed-wire-list, .ed-launcher-wrap .ed-intake:not(.compact) .ed-wire .ed-wire-list { flex: none; min-height: auto; max-height: none; margin-right: 0; padding-right: 0; overflow: visible; }
 .ed-wire-sources { flex: none; }
 .ed-wire-item .ed-feed-text span { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .ed-wire-srcname { overflow: hidden; font-style: normal; font-weight: 600; color: var(--text-2); text-overflow: ellipsis; white-space: nowrap; }
