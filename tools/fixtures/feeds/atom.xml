@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic Atom 1.0 fixture for tools/unit/wire.test.ts. Invented example.com content. -->
+<feed xmlns="http://www.w3.org/2005/Atom" xml:base="https://wire.example.com/">
+  <title>Example Wire Service</title>
+  <id>urn:example:wire</id>
+  <updated>2026-10-31T10:00:00Z</updated>
+  <link rel="self" href="https://wire.example.com/feed.atom"/>
+  <entry>
+    <title>Port Authority opens second container terminal!</title>
+    <link rel="alternate" href="https://wire.example.com/stories/port-terminal"/>
+    <id>urn:example:wire:1</id>
+    <updated>2026-10-31T10:00:00Z</updated>
+  </entry>
+  <entry>
+    <title type="html"><![CDATA[Central bank holds policy rate at 8.5%]]></title>
+    <link href="https://wire.example.com/stories/policy-rate"/>
+    <id>urn:example:wire:2</id>
+    <published>2026-10-31T07:45:00+06:00</published>
+    <updated>2026-10-31T08:00:00+06:00</updated>
+  </entry>
+  <entry>
+    <title>Monsoon season ends two weeks early</title>
+    <link rel="alternate" type="text/html" href="stories/monsoon-ends"/>
+    <id>urn:example:wire:3</id>
+    <updated>2026-10-30T12:00:00Z</updated>
+  </entry>
+  <entry>
+    <title>University admission test schedule published</title>
+    <link rel="alternate" href="https://wire.example.com/stories/admission-schedule"/>
+    <id>urn:example:wire:4</id>
+  </entry>
+  <entry>
+    <title>বাজেট 2026: নতুন কর হার ঘোষণা</title>
+    <link rel="enclosure" href="https://wire.example.com/media/budget.jpg"/>
+    <link rel="alternate" href="https://wire.example.com/stories/budget-tax"/>
+    <id>urn:example:wire:5</id>
+    <updated>2026-10-30T06:30:00Z</updated>
+  </entry>
+</feed>

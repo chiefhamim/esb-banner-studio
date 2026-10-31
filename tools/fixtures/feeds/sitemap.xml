@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic news sitemap fixture for tools/unit/wire.test.ts. Invented example.com content. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+  <url>
+    <loc>https://news.example.com/sports/cricket-series-win</loc>
+    <lastmod>2026-10-31T05:00:00Z</lastmod>
+    <news:news>
+      <news:publication><news:name>Example News</news:name><news:language>en</news:language></news:publication>
+      <news:publication_date>2026-10-31T04:30:00Z</news:publication_date>
+      <news:title>National side clinches cricket series</news:title>
+    </news:news>
+  </url>
+  <url>
+    <loc>https://news.example.com/tech/startup-funding-round</loc>
+    <lastmod>2026-10-30</lastmod>
+  </url>
+  <url>
+    <loc>https://news.example.com/world/summit-ends</loc>
+  </url>
+</urlset>

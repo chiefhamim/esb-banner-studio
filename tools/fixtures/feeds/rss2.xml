@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic RSS 2.0 fixture for tools/unit/wire.test.ts and tools/e2e/wire-test.mjs. Invented example.com content. -->
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Example Desk Wire</title>
+    <link>https://news.example.com/</link>
+    <description>Synthetic feed for tests</description>
+    <item>
+      <title>Port authority opens second container terminal</title>
+      <link>https://news.example.com/economy/port-terminal-opens</link>
+      <pubDate>Sat, 31 Oct 2026 09:30:00 GMT</pubDate>
+      <guid>https://news.example.com/economy/port-terminal-opens</guid>
+    </item>
+    <item>
+      <title><![CDATA[Rice prices fall 5% <b>after</b> record harvest & imports]]></title>
+      <link>https://news.example.com/economy/rice-prices-fall</link>
+      <pubDate>Sat, 31 Oct 2026 08:00:00 +0600</pubDate>
+    </item>
+    <item>
+      <title>City council approves new river bus routes</title>
+      <link>/city/river-bus-routes</link>
+      <pubDate>Fri, 30 Oct 2026 18:15:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Garment exports rise for third straight month</title>
+      <link>https://news.example.com/economy/garment-exports-rise</link>
+    </item>
+    <item>
+      <title>বাজেট ২০২৬: নতুন কর হার ঘোষণা</title>
+      <link>https://news.example.com/bn/budget-2026-tax</link>
+      <dc:date>2026-10-30T06:00:00Z</dc:date>
+    </item>
+  </channel>
+</rss>
