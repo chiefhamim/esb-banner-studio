@@ -29,6 +29,40 @@ export function usageTotals(calls: AiUsageEntry[]) {
   return { ...t, prompt, hitRate: prompt ? t.cacheRead / prompt : 0 }
 }
 
+/**
+ * List prices in US dollars per million tokens, used ONLY for an estimate that is always labelled as one. Source:
+ * Anthropic's published first-party API prices (the claude-api reference, table cached 2026-10-06); a 5-minute cache
+ * write is billed at 1.25x the input price, a cache read at the price shown. Only Claude is priced: no verified list
+ * price for Gemini, OpenAI or OpenRouter models was available when this was written, so their calls show tokens and
+ * "no price on file" rather than a guessed figure. Update this table when prices change.
+ */
+export const AI_PRICE_TABLE: { provider: AiProviderId; match: RegExp; label: string; input: number; output: number; cacheRead: number }[] = [
+  { provider: 'anthropic', match: /^claude-opus-5-5/, label: 'Opus 5.5', input: 4, output: 20, cacheRead: 0.2 },
+  { provider: 'anthropic', match: /^claude-opus-(5|4-[678])(?!-5)/, label: 'Opus 5 / 4.6-4.8', input: 5, output: 25, cacheRead: 0.5 },
+  { provider: 'anthropic', match: /^claude-sonnet-5/, label: 'Sonnet 5 / 5.5', input: 2, output: 10, cacheRead: 0.2 },
+  { provider: 'anthropic', match: /^claude-sonnet-4-6/, label: 'Sonnet 4.6', input: 3, output: 15, cacheRead: 0.3 },
+  { provider: 'anthropic', match: /^claude-haiku-5-5/, label: 'Haiku 5.5', input: 0.1, output: 0.5, cacheRead: 0.01 },
+  { provider: 'anthropic', match: /^claude-haiku-4-5/, label: 'Haiku 4.5', input: 1, output: 5, cacheRead: 0.1 },
+]
+export const CACHE_WRITE_FACTOR = 1.25
+
+/** Estimated cost of one call in dollars, or null when the model has no price on file (never a guess). */
+export function estimateCallCost(c: Pick<AiUsageEntry, 'provider' | 'model' | 'input' | 'cacheRead' | 'cacheWrite' | 'output'>): number | null {
+  const p = AI_PRICE_TABLE.find((r) => r.provider === c.provider && r.match.test(c.model))
+  if (!p) return null
+  return (c.input * p.input + c.cacheWrite * p.input * CACHE_WRITE_FACTOR + c.cacheRead * p.cacheRead + c.output * p.output) / 1e6
+}
+
+/** Estimated cost of many calls: the priced total plus how many calls had no price. */
+export function estimateCost(calls: AiUsageEntry[]): { dollars: number; priced: number; unpriced: number } {
+  let dollars = 0, priced = 0, unpriced = 0
+  for (const c of calls) { const d = estimateCallCost(c); if (d == null) unpriced++; else { dollars += d; priced++ } }
+  return { dollars, priced, unpriced }
+}
+
+/** "$0.0123" under a cent shows four places, otherwise two. */
+export const fmtDollars = (d: number) => '$' + (d < 0.01 ? d.toFixed(4) : d.toFixed(2))
+
 export type AiProviderId = 'gemini' | 'anthropic' | 'openai' | 'openrouter'
 
 export interface AiProviderMeta {

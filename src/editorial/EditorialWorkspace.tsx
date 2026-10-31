@@ -58,6 +58,7 @@ import { PublishDialog } from './PublishDialog'
 import type { PublishOutcome } from './PublishDialog'
 import { FacebookDialog } from './FacebookDialog'
 import { EngineStatus } from './EngineStatus'
+import { InsightsDesk } from './InsightsDesk'
 import { ProviderMark } from './ProviderMark'
 import { commentOnPost, getFacebook, postBannerToFacebook, useFacebookPrefs } from './facebook'
 import { fixSeoWithAi } from './seoFix'
@@ -1237,6 +1238,7 @@ export function EditorialWorkspace() {
     ] },
   ]
 
+  const [deskView, setDeskView] = useState<'desk' | 'insights'>('desk')
   return (
     <div ref={wsRef} className={'editorial-workspace' + (hasStory && sourceOpen ? ' source-open' : '')} style={{ ['--cat' as string]: catData.accent, ['--cat-ink' as string]: catData.chipText } as CSSProperties}>
       {/* Header: the same bar Graphics uses — brand, menus, a centred tool group, quiet icon pills, one primary action. */}
@@ -1244,6 +1246,7 @@ export function EditorialWorkspace() {
         <WorkspaceSwitcher />
         <MenuBar menus={menus} />
         <div className="spacer" />
+        <Seg<'desk' | 'insights'> value={deskView} onChange={setDeskView} className="ed-desk-seg" options={[{ value: 'desk', label: 'Desk', icon: 'edit', tip: 'Story desk — source, story and publishing' }, { value: 'insights', label: 'Insights', icon: 'chart', tip: 'Insights — how published stories did on Facebook, and what AI cost' }]} />
         <div className="fmtgroup ed-head-group">
           <IconButton icon="refresh" tip={syncing ? 'Syncing…' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
           {hasStory && (
@@ -1277,7 +1280,7 @@ export function EditorialWorkspace() {
         </button>
       </header>
 
-      {!hasStory ? (
+      {deskView === 'insights' ? <InsightsDesk fb={fbCfg} ai={ai} onConnectFb={() => setShowFbDialog(true)} /> : !hasStory ? (
         <div className={'ed-launcher-wrap' + (storyCount > 0 ? ' has-queue' : '')}>
           <div className="ed-launcher-card ed-launcher-main">
             <div className="ed-launcher-hero">
