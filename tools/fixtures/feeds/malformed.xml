@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic broken feed: the second item is never closed. -->
+<rss version="2.0">
+  <channel>
+    <title>Broken Example Feed</title>
+    <item>
+      <title>First item</title>
+      <link>https://broken.example.com/one</link>
+    </item>
+    <item>
+      <title>Second item & an unescaped ampersand
+      <link>https://broken.example.com/two</link>
+  </channel>
+</rss>
