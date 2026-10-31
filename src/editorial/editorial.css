@@ -862,7 +862,6 @@
   .ed-launcher-wrap .ed-link > .ed-link-stage { gap: 12px; }
 }
 
-<<<<<<< HEAD
 /* W1 — quote library ---------------------------------------------------------------------------------------------------
    The Library tab of the source column (QuoteLibraryPanel.tsx): quiet rows like the story queue, the search field in the
    Outreach search look, the speaker registry in a Panel at the foot. Tokens only. */
@@ -909,7 +908,6 @@
 .ql-sp-add { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--card-line); }
 .ql-sp-add > .ql-sp-name, .ql-sp-add > .ql-sp-addbtn, .ql-sp-add > .ql-note { grid-column: 1 / -1; }
 .ql-sp-addbtn { justify-self: start; margin-top: 4px; }
-=======
 /* W2 — insights desk ------------------------------------------------------------------------------------------------
    Desk · Insights in the header (mirrors Outreach's Compose · Activity), and a full-body view drawn like the Activity
    desk: a 46 px toolbar on --card, a quiet --side canvas, --r-3 cards on --card-shadow, KPI figures in tabular Inter.
@@ -1000,4 +998,3 @@
 .eng-cost-t { color: var(--text); overflow-wrap: anywhere; }
 .eng-cost-note { padding: 4px 8px 0; }
 .eng-esc { margin-top: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; background: var(--fill); border-radius: var(--r-2); }
->>>>>>> overnight/w2-insights
