@@ -5,7 +5,9 @@ final product commit `825cfe4` (docs commits follow it). Orchestrator: Fable 5.1
 subagents, one git worktree per workstream, one independent QA review per workstream, one final adversarial pass.
 Format: CLAUDE.md §12. Nothing is checked off without a command and its output; "NOT VERIFIED" is said where it is so.
 
-**Final gate verdict: ⏳ (filled in from `docs/overnight/qa/FINAL.md` when the pass completes).**
+**Final gate verdict: PASS WITH NON-BLOCKING FINDINGS** (`docs/overnight/qa/FINAL.md`, independent Opus agent, 88 tool
+calls: full suite re-run, all §8 probes on the integrated app in isolated profiles, screenshots inspected, repo hygiene).
+`main` is therefore fast-forwarded to the mission branch (D6).
 
 ## 1. What changed
 
@@ -116,7 +118,17 @@ Electron dry-run proof for the digest (`node tools/e2e/digest-test.mjs --electro
   neutralised too; a reachable-but-empty site feed reads as "could not be read"; the dialog scrolls at small windows.
 - W5: `<script>` *text* inside a CDATA title shows as plain text; the seen-link cap is global (2000); the filter row
   scrolls with the inbox.
-- ⏳ Findings from the final pass.
+- Final pass (qa/FINAL.md), all non-blocking: (1) the UI check "Alt + corner resizes from the centre" failed on both of
+  QA's runs (element at x 592.5, not 540) — no Graphics/core/shell file changed since `79b9c01`, so not caused by the
+  branch, but it is less rare than "intermittent" suggests; (2) D16 unchanged (`src/outreach/idb.ts:23-38`); (3) the
+  `publishedAt` prompt gap from W2 cycle 1 is still open (`insights.ts:411`, needs the publish log edited outside the
+  app); (4) **brand spelling** — the digest letter's subject and intro say "ESB PowerLine" (`src/editorial/digest.ts:26`,
+  `:187`) where the rest of the app says "ESB Power Line", and this letter goes to outside recipients — two-string fix,
+  first thing in the morning; (5) any double-quoted run is harvested as a quote (same class as W1's scare quotes);
+  (6) the Wire list at 1920×1080 leaves ~230 px empty above and below its fixed-height card and cuts the last row
+  without a fade; (7) pre-existing: `tools/e2e/capture-phase{3,4,5}-shots.mjs` contain realistic addresses on real
+  institutional domains (not added tonight, but against the example.com rule); (8) pre-existing:
+  `tools/e2e/packaged-check.mjs` points at a v1.5.4 exe and `.topbar`, so it could not check this branch.
 
 ## 7. Per-agent summary (cumulative tokens as reported by the harness)
 
@@ -131,7 +143,7 @@ Electron dry-run proof for the digest (`node tools/e2e/digest-test.mjs --electro
 | QA-W2 | adversarial review | 2 verdicts | ~344k | PASS w/ findings ×2 |
 | QA-W4 | adversarial review | 2 verdicts | ~245k | PASS w/ findings ×2 |
 | QA-W5 | adversarial review | 3 verdicts | ~288k | PASS w/ findings ×3 |
-| QA-FINAL | final gate | 1 | ⏳ | ⏳ |
+| QA-FINAL | final gate | 1 | ~258k | PASS w/ findings (8 non-blocking) |
 
 All four builders were terminated once by the account's 5-hour Opus limit (~02:50, reset 03:10) and resumed from their
 saved worktrees (D15); W3 alone was not resumed.
@@ -139,10 +151,14 @@ saved worktrees (D15); W3 alone was not resumed.
 ## 8. Branches and commits
 
 Pushed to `origin`: `overnight/2026-11-01` (mission), `overnight/w1-quote-library`, `overnight/w2-insights`,
-`overnight/w3-scheduler` (WIP), `overnight/w4-digest`, `overnight/w5-wire`. `main`: ⏳ (D6 — fast-forwarded only on a
-passing final gate). Worktrees remain under `C:\Users\hamim\esb-overnight\w{1,2,3,4,5}` (`git worktree remove` when
+`overnight/w3-scheduler` (WIP), `overnight/w4-digest`, `overnight/w5-wire`. `main`: fast-forwarded to the mission branch and pushed
+(D6, final verdict passing). Worktrees remain under `C:\Users\hamim\esb-overnight\w{1,2,3,4,5}` (`git worktree remove` when
 done). The auto-sync daemon restarts from the Startup shortcut at next login and pulls `main`.
 
 ## 9. Next recommended step
 
-⏳
+Fix the three small W4/W2 findings before the digest is used for real: the "ESB PowerLine" spelling in
+`src/editorial/digest.ts:26` and `:187`, the `publishedAt` cell cleaning in `src/editorial/insights.ts:411`, and the
+`src/outreach/idb.ts` swallowed-write-failure (D16) — one short builder cycle with a QA re-read, then the regression
+table. After that, **verify Supabase RLS** (SECURITY.md) — it is the one open item that is a security question, not a
+polish one. W3 can be resumed from `overnight/w3-scheduler` + `briefs/W3.md` when a full night is available.
