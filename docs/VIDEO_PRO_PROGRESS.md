@@ -847,6 +847,9 @@ Merge with Part A, then rerun `npm run test:video` against Part A's speed.ts and
   pixel at 0.6 s = [0, 214, 0] (green, source 1.2 s). Freeze-only: [253, 23, 0] in the hold, [0, 214, 0] after.
 - `npm run test:video` (`ESB_PORT_OFFSET=40`): 90 PASS, 0 FAIL, 0 PENDING; 2 NOTEs are the Phase 1 4K30 / 10 × 1080p
   drop notes documented above (skipped draws while the GPU is busy).
+- `npm run lint`: 0 errors. `npm test`: 990 passed (82 files). `npm run build`: ok. `npm run test:electron`
+  (`ESB_PORT_OFFSET=40`): 66 PASS, 0 FAIL. `center-audit`: 0. `text-fit-audit`: 0 text-fit problems (18 deliberate
+  ellipses; the usual Editorial publish/outputs/sign-in and Home steps skipped, as before).
 
 ### Known gaps
 - An adjustment layer or blend mode inside a compound acts on everything below it on the flattened timeline,
