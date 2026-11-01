@@ -58,6 +58,22 @@ function factsForSave(bin: MediaAsset[], folder: FolderRef | null): Record<strin
   return out
 }
 
+/** A Phase 0 single-file project's text, with each bin entry's facts (hash, codec, fps, key-frame interval) added to
+ * its media record — the v1 → v2 migration and `mediaRecordOf` read them back, and a Phase 0 build ignores them. Saving
+ * such a project once dropped the facts, so relink-by-hash and proxies had nothing to go on after a reopen. */
+function singleFileText(): string {
+  const s = useVideoStore.getState()
+  const j = JSON.parse(serializeVideoProject(s.project, s.mediaAssets)) as { mediaAssets?: Record<string, unknown>[] }
+  for (const rec of j.mediaAssets ?? []) {
+    const m = metaFor(String(rec.id)) ?? {}
+    if (m.hash) rec.hash = m.hash
+    if (m.codec) rec.codec = m.codec
+    if (m.fps) rec.fps = m.fps
+    if (m.keyframeInterval != null) rec.keyframeInterval = m.keyframeInterval
+  }
+  return JSON.stringify(j, null, 2)
+}
+
 /** The desk's project as current-schema text (with the folder it belongs to, for a snapshot). */
 function projectText(withFolder: boolean): string {
   const s = useVideoStore.getState()
@@ -251,19 +267,22 @@ export async function findMissingMedia(): Promise<number> {
   return res.length
 }
 
-/** Relink every missing file that was found by hash, in one step. Returns how many were relinked. */
-export async function relinkAllFound(): Promise<number> {
+/** Relink missing files that were found by hash (all of them, or only `ids`), in one step. Returns how many were
+ * relinked. */
+export async function relinkAllFound(ids?: string[]): Promise<number> {
   const { found } = useMediaMeta.getState()
   const st = useVideoStore.getState()
+  const only = ids ? new Set(ids) : null
   let n = 0
   for (const [id, e] of Object.entries(found)) {
+    if (only && !only.has(id)) continue
     const a = st.mediaAssets.find((x) => x.id === id)
     if (!a || !a.missing) continue
     const p = a.type === 'image' ? null : await probeMedia(e.url, a.type).catch(() => null)
     useVideoStore.getState().relinkAsset(id, { url: e.url, path: e.path, size: e.size, mtimeMs: e.mtimeMs, thumbnailUrl: a.type === 'image' ? e.url : p?.thumbnailUrl ?? a.thumbnailUrl })
     n++
   }
-  useMediaMeta.setState({ found: {} })
+  useMediaMeta.setState((s) => ({ found: only ? Object.fromEntries(Object.entries(s.found).filter(([id]) => !only.has(id))) : {} }))
   return n
 }
 
@@ -291,7 +310,7 @@ export async function saveProject(saveAs = false): Promise<string | null> {
     }
     if (!folder && s.projectPath && !saveAs && b.videoSaveProject) {
       // a Phase 0 single-file project stays one (older builds can still open it); Save as makes it a folder
-      const where = await b.videoSaveProject(s.project.name || 'video', serializeVideoProject(s.project, s.mediaAssets), s.projectPath)
+      const where = await b.videoSaveProject(s.project.name || 'video', singleFileText(), s.projectPath)
       if (where) await done(where, null)
       return where
     }
@@ -312,7 +331,7 @@ export async function saveProject(saveAs = false): Promise<string | null> {
     return made.path
   }
   if (b?.videoSaveProject) {
-    const where = await b.videoSaveProject(s.project.name || 'video', serializeVideoProject(s.project, s.mediaAssets), saveAs ? null : s.projectPath)
+    const where = await b.videoSaveProject(s.project.name || 'video', singleFileText(), saveAs ? null : s.projectPath)
     if (where) await done(where, null)
     return where
   }

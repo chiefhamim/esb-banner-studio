@@ -367,7 +367,7 @@ ipcMain.handle('esb:video-open-project', async () => {
     const text = await videoProject.readProjectJson(asFolder)
     const id = videoFolders.add(asFolder)
     if (!id) throw new Error('Not a local project folder')
-    try { videoProject.cleanPartials(videoProject.confinedDir(asFolder, 'proxies')) } catch { /* read-only */ }
+    cleanOnce(asFolder)
     return { path: path.resolve(asFolder), text, folder: { id, path: path.resolve(asFolder) } }
   }
   if (!videoMedia.isVideoProjectPath(filePath) || videoMedia.isNetworkOrDevicePath(filePath)) throw new Error('Not a local .esbvideo project')
@@ -383,17 +383,17 @@ ipcMain.handle('esb:video-autosave', (_e, text, fid) => {
   const root = typeof fid === 'string' && fid !== videoProject.LIBRARY_KEY ? folderRoot(fid) : null
   return videoMedia.writeSnapshot(root ? videoProject.confinedDir(root, 'autosave') : videoAutosaveDir(), text)
 })
-ipcMain.handle('esb:video-autosave-latest', () => {
-  let best = videoMedia.latestSnapshot(videoAutosaveDir())
-  for (const dir of videoFolders.list().slice(-50)) {
-    let snap = null
-    try { snap = videoMedia.latestSnapshot(path.join(dir, 'autosave')) } catch { snap = null }
-    if (snap && (!best || snap.at > best.at)) {
-      const id = videoProject.folderId(dir)
-      if (folderRoot(id)) best = { ...snap, folder: { id, path: dir } }
-    }
+ipcMain.handle('esb:video-autosave-latest', async () => {
+  // every folder's autosave/ is confined (a junction out of the project is skipped); the newest snapshot is picked by
+  // its file name across all of them before one is read, and only snapshots of at most 25 MB are read
+  const dirs = [{ dir: videoAutosaveDir() }]
+  for (const { id, path: dir } of videoFolders.entries().slice(-50)) {
+    if (!folderRoot(id)) continue
+    try { dirs.push({ dir: videoProject.confinedDir(dir, 'autosave'), folder: { id, path: dir } }) } catch { /* linked or unreadable */ }
   }
-  return best
+  const best = await videoMedia.latestSnapshotIn(dirs)
+  if (!best) return null
+  return best.folder ? { at: best.at, text: best.text, folder: best.folder } : { at: best.at, text: best.text }
 })
 ipcMain.handle('esb:video-autosave-clear', (_e, projectId, fid) => {
   const id = typeof projectId === 'string' ? projectId : undefined
@@ -425,8 +425,26 @@ let videoFolders = null
 const videoProxyWriter = videoMedia.createExportWriter()
 const videoCache = videoProject.createCacheStore()
 const LIBRARY_PROXY_CAP = 20 * 1024 * 1024 * 1024
+/** A project folder's proxies/ may hold this much in all (a 540p proxy is ~1-2 GB an hour). */
+const FOLDER_PROXY_CAP = 100 * 1024 * 1024 * 1024
+/** One proxy may be at most this big: twice its source (a 540p proxy is far smaller than any source that needs one),
+ * at least 256 MB, never more than 8 GB. Unknown source: 8 GB. */
+const proxyLimitFor = (sourceSize) => (Number.isSafeInteger(sourceSize) && sourceSize > 0 ? Math.min(8 * 1024 ** 3, Math.max(256 * 1024 ** 2, 2 * sourceSize)) : 8 * 1024 ** 3)
 const libraryRoot = () => { const d = path.join(app.getPath('userData'), 'video-library'); fs.mkdirSync(d, { recursive: true }); return d }
-const folderRoot = (fid) => (fid === videoProject.LIBRARY_KEY ? libraryRoot() : videoFolders ? videoFolders.pathFor(fid) : null)
+/** Each folder is cleaned of half-written files (`*.tmp`, `*.partial`, `*.copying`) once per session, the first time
+ * it is used — also a folder reused by id from an earlier session (autosave restore, proxies), not only one opened. */
+const cleanedFolders = new Set()
+const cleanOnce = (root) => {
+  const k = path.resolve(root).toLowerCase()
+  if (cleanedFolders.has(k)) return
+  cleanedFolders.add(k)
+  try { videoProject.cleanFolder(root) } catch { /* read-only */ }
+}
+const folderRoot = (fid) => {
+  const root = fid === videoProject.LIBRARY_KEY ? libraryRoot() : videoFolders ? videoFolders.pathFor(fid) : null
+  if (root) cleanOnce(root)
+  return root
+}
 /** The folder a call works in: a known project folder by id, or the app's library when none is given. */
 const workRoot = (fid) => {
   if (fid == null) return { key: videoProject.LIBRARY_KEY, root: libraryRoot() }
@@ -435,7 +453,9 @@ const workRoot = (fid) => {
   return { key: fid, root }
 }
 const projectRoot = (fid) => (typeof fid === 'string' && fid !== videoProject.LIBRARY_KEY ? folderRoot(fid) : null)
-const folderFile = (key, rel) => { const root = folderRoot(key); return root ? videoProject.confinedFile(root, rel) : null }
+// esb-media://p answers go through a short memo (range requests ask for the same file many times a second)
+const folderFiles = videoProject.createConfinedResolver()
+const folderFile = (key, rel) => { const root = folderRoot(key); return root ? folderFiles.resolve(key, root, rel) : null }
 /** Entries for imported files; with { mode: 'copy', folderId } each is first copied into the folder's media/. */
 async function importEntries(paths, opts) {
   const copy = !!opts && opts.mode === 'copy'
@@ -461,6 +481,7 @@ ipcMain.handle('esb:video-folder-create', async (_e, name) => {
   if (r.canceled || !r.filePath) return null
   const target = /\.esbvideo$/i.test(r.filePath) ? r.filePath : r.filePath + '.esbvideo'
   const made = videoProject.createProjectFolder(target)
+  cleanedFolders.add(path.resolve(made).toLowerCase()) // createProjectFolder cleaned a reused folder already
   const id = videoFolders.add(made)
   if (!id) throw new Error('Could not create the project folder')
   return { id, path: made }
@@ -491,7 +512,8 @@ function pathForMediaUrl(u) {
   if (url.hostname === 'm') return videoRegistry.pathFor(url.pathname.slice(1))
   const m = /^\/([0-9a-f]{32}|u)\/([^/]+)\/([^/]+)$/.exec(url.pathname)
   if (url.hostname !== 'p' || !m) return null
-  try { return folderFile(m[1], decodeURIComponent(m[2]) + '/' + decodeURIComponent(m[3])) } catch { return null }
+  // media files only (never, say, a project.json or a stray file a project put in renders/)
+  try { const f = folderFile(m[1], decodeURIComponent(m[2]) + '/' + decodeURIComponent(m[3])); return f && videoMedia.isMediaPath(f) ? f : null } catch { return null }
 }
 ipcMain.handle('esb:video-media-facts', async (_e, urls) => {
   // size, modified time and quick hash (for relinking) of files the renderer already plays
@@ -507,7 +529,15 @@ ipcMain.handle('esb:video-media-facts', async (_e, urls) => {
   }
   return out
 })
+// one relink search at a time: a hostile or impatient renderer cannot start many hashing scans at once
+let relinkSearching = null
 ipcMain.handle('esb:video-relink-search', async (_e, fid, items) => {
+  const prev = relinkSearching
+  const run = (async () => { if (prev) await prev.catch(() => {}); return relinkSearch(fid, items) })()
+  relinkSearching = run
+  try { return await run } finally { if (relinkSearching === run) relinkSearching = null }
+})
+async function relinkSearch(fid, items) {
   // missing files found again by size + quick hash in the project's media/ and, for files this app imported before,
   // the folder they were in and its sibling folders (video-project.cjs relinkDirs)
   if (!Array.isArray(items)) return []
@@ -523,7 +553,7 @@ ipcMain.handle('esb:video-relink-search', async (_e, fid, items) => {
   const out = []
   for (const [id, p] of found) { try { const e = videoMedia.entryFor(videoRegistry, p); if (e) out.push({ id, entry: e }) } catch { /* gone */ } }
   return out
-})
+}
 ipcMain.handle('esb:video-proxy-status', (_e, fid, hashes) => {
   if (!Array.isArray(hashes)) return {}
   const out = {}
@@ -539,13 +569,21 @@ ipcMain.handle('esb:video-proxy-status', (_e, fid, hashes) => {
   return out
 })
 let proxyJob = null
-ipcMain.handle('esb:video-proxy-begin', (_e, fid, hash) => {
+ipcMain.handle('esb:video-proxy-begin', async (_e, fid, hash, sourceUrl) => {
   const name = videoProject.proxyName(hash)
   if (!name) throw new Error('Bad proxy name')
   const { key, root } = workRoot(fid)
-  if (key === videoProject.LIBRARY_KEY && videoProject.dirBytes(videoProject.confinedDir(root, 'proxies')) > LIBRARY_PROXY_CAP) throw new Error('The app’s proxy library is full (20 GB). Save the project as a folder to keep its proxies there.')
+  const library = key === videoProject.LIBRARY_KEY
+  const folderBytes = videoProject.dirBytes(videoProject.confinedDir(root, 'proxies'))
+  const folderCap = library ? LIBRARY_PROXY_CAP : FOLDER_PROXY_CAP
+  if (folderBytes >= folderCap) throw new Error(library ? 'The app’s proxy library is full (20 GB). Save the project as a folder to keep its proxies there.' : 'This project’s proxies folder is full (100 GB).')
+  // the proxy's own limit follows its source when the renderer names it by an URL this process handed out
+  let sourceSize = null
+  const src = typeof sourceUrl === 'string' ? pathForMediaUrl(sourceUrl) : null
+  if (src) { try { sourceSize = (await fs.promises.stat(src)).size } catch { sourceSize = null } }
   const target = videoProject.confinedTarget(root, 'proxies', name)
-  const job = videoProxyWriter.begin(target, { minFree: 1024 * 1024 * 1024 })
+  // limits checked on every write too: the file's own size, the folder's running total, the free space left
+  const job = videoProxyWriter.begin(target, { minFree: 1024 * 1024 * 1024, maxBytes: proxyLimitFor(sourceSize), folderCap, folderBytes })
   proxyJob = { id: job.id, key, name }
   return { id: job.id }
 })
@@ -553,7 +591,7 @@ ipcMain.handle('esb:video-proxy-write', (_e, id, position, bytes) => videoProxyW
 ipcMain.handle('esb:video-proxy-end', (_e, id, ok) => {
   const j = proxyJob && proxyJob.id === id ? proxyJob : null
   const done = videoProxyWriter.end(id, ok === true)
-  if (j) proxyJob = null
+  if (j) { proxyJob = null; folderFiles.invalidate(j.key) }
   if (!j || !done || path.basename(done) !== j.name) return null
   return { url: videoProject.folderUrl(j.key, 'proxies/' + j.name) }
 })
@@ -914,8 +952,9 @@ app.whenReady().then(() => {
 
   const userData = app.getPath('userData')
   videoRegistry = videoMedia.createMediaRegistry({ file: path.join(userData, 'video-media.json') })
-  videoFolders = videoProject.createFolderRegistry({ file: path.join(userData, 'video-folders.json') })
-  try { videoProject.cleanPartials(videoProject.confinedDir(libraryRoot(), 'proxies')) } catch { /* first run */ }
+  // folder ids are an HMAC with this install's own secret (userData/video-folder-secret), never a plain hash of the path
+  videoFolders = videoProject.createFolderRegistry({ file: path.join(userData, 'video-folders.json'), secret: videoProject.loadInstallSecret(path.join(userData, 'video-folder-secret')) })
+  cleanOnce(libraryRoot())
   // the editor's session only (the CMS window has its own partition, so it cannot read the editor's media)
   protocol.handle('esb-media', (request) => videoMedia.serveMedia(request, videoRegistry, { devUrl: DEV_URL, folderFile }))
   // the send results the desk projects onto its campaigns go to the window as they happen (engineClient.ts applyEvents);

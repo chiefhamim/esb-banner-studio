@@ -91,7 +91,8 @@ try {
   await page.click('.vw-start-import')
   await page.waitForSelector('.vw-media-card:has-text("speech-6s.mp4")')
   const card = await page.locator('.vw-media-card').first().innerText()
-  check('Import by path: the bin shows length and "sound"', /0:06/.test(card) && /sound/.test(card), card.replace(/\s+/g, ' '))
+  // the bin names only the exception ("silent"); this file has sound
+  check('Import by path: the bin shows length, and no "silent" for a file with sound', /0:06/.test(card) && !/silent/.test(card), card.replace(/\s+/g, ' '))
   await page.click('.vw-media-card .vw-add')
   await page.waitForFunction(() => document.querySelectorAll('.vw-clip-block').length === 2)
   const plays1 = await footagePlays(page)
@@ -109,7 +110,7 @@ try {
   const p = probe(out)
   const a = p.streams.find((s) => s.codec_type === 'audio')
   const quiet = level(out, 0.1, 0.7), voice = level(out, 1.2, 3)
-  check('ACCEPT streamed export: MP4 on disk with the footage’s speech (RMS above the floor where it is)', fs.existsSync(out) && !fs.existsSync(out + '.partial') && !!a && Math.abs(Number(p.format.duration) - 6) < 0.1 && voice > -40 && (quiet === -999 || quiet < -60), `${shown} · ${a?.codec_name} · ${p.format.duration}s · before ${quiet} dB, speech ${voice} dB`)
+  check('ACCEPT streamed export: MP4 on disk with the footage’s speech (RMS above the floor where it is)', fs.existsSync(out) && !fs.readdirSync(path.dirname(out)).some((f) => f.endsWith('.partial')) && !!a && Math.abs(Number(p.format.duration) - 6) < 0.1 && voice > -40 && (quiet === -999 || quiet < -60), `${shown} · ${a?.codec_name} · ${p.format.duration}s · before ${quiet} dB, speech ${voice} dB`)
   results.speechExport = { duration: Number(p.format.duration), audio: a?.codec_name, speechDb: voice, beforeDb: quiet }
 
   // 3. Save the project; then an edit, autosaved
@@ -171,9 +172,11 @@ try {
   check('A missing file is flagged, and Export refuses until it is relinked', (await page.locator('.vx-blocked').count()) === 1)
   await page.click('.vx-actions button:has-text("Cancel")')
   // the moved (renamed) file sits in the same folder: found again by size + quick hash, offered as one click
-  await page.waitForSelector('.vw-bin-relink-all', { timeout: 15000 })
-  const foundText = (await page.locator('.vw-missing').innerText()).replace(/\s+/g, ' ')
-  await page.click('.vw-bin-relink-all')
+  // (one file found: the row's Use it; several: the banner's Use all)
+  await page.waitForSelector('.vw-bin-use-found, .vw-bin-relink-all', { timeout: 15000 })
+  const foundText = (await page.locator('.vw-missing').innerText()).replace(/\s+/g, ' ') + ' | ' + (await page.locator('.vw-bin-card.found').innerText()).replace(/\s+/g, ' ')
+  check('Found again: the row says where (no "Not found"), offers Use it and no Relink', !/Not found/.test(foundText) && (await page.locator('.vw-bin-card.found .vw-relink').count()) === 0, foundText)
+  await page.click('.vw-bin-relink-all, .vw-bin-use-found')
   await page.waitForFunction(() => !document.querySelector('.vw-missing'))
   const relinkedPath = await page.evaluate(() => window.__videoStore ? null : document.querySelector('.vw-media-card .vw-media-title')?.getAttribute('data-tip'))
   check('Relink by hash: the renamed file is found again and Relink all brings the footage back', (await footagePlays(page)).ok && /found again/.test(foundText) && /moved-speech\.mp4/.test(relinkedPath || ''), foundText + ' → ' + relinkedPath)
@@ -226,11 +229,13 @@ try {
     await page.click('.vw-header-actions button:has-text("Export")')
     await page.waitForSelector('.vx-go:not([disabled])')
     await page.click('.vx-go')
-    const started = await (async () => { for (let i = 0; i < 100; i++) { if (fs.existsSync(out + '.partial')) return true; await new Promise((r) => setTimeout(r, 50)) } return false })()
+    // the half file has a random name next to the target (<name>.mp4.<random>.partial, opened 'wx')
+    const partialOf = () => fs.readdirSync(work).filter((f) => f.startsWith(path.basename(out) + '.') && f.endsWith('.partial'))
+    const started = await (async () => { for (let i = 0; i < 100; i++) { if (partialOf().length) return true; await new Promise((r) => setTimeout(r, 50)) } return false })()
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.reload())
     await page.waitForSelector('.launch-tile', { timeout: 20000 })
     await new Promise((r) => setTimeout(r, 500))
-    check('P8: a reload mid-export removes the half-written file (no .partial, no target)', started && !fs.existsSync(out + '.partial') && !fs.existsSync(out), JSON.stringify({ started, partial: fs.existsSync(out + '.partial'), target: fs.existsSync(out) }))
+    check('P8: a reload mid-export removes the half-written file (no .partial, no target)', started && !partialOf().length && !fs.existsSync(out), JSON.stringify({ started, partial: partialOf(), target: fs.existsSync(out) }))
     await openVideo(page)
     if (await page.locator('.vw-restore-discard').count()) await page.click('.vw-restore-discard')
   }
@@ -338,7 +343,7 @@ try {
     const afterCancel = await page.waitForSelector('.vw-bin-card[data-proxy="none"] .vw-bin-proxy.make, .vw-bin-card[data-proxy="ready"]', { timeout: 30000 }).then((e) => e.evaluate((n) => n.closest('.vw-bin-card').getAttribute('data-proxy')))
     const partials = fs.readdirSync(path.join(folder, 'proxies')).filter((f) => f.endsWith('.partial'))
     check('Cancel stops the proxy and leaves no half file; Make proxy is offered', afterCancel === 'none' && partials.length === 0, JSON.stringify({ afterCancel, partials }))
-    if (afterCancel === 'none') await page.click('.vw-bin-proxy.make')
+    if (afterCancel === 'none') await page.click('.vw-bin-proxy-make')
     await page.waitForSelector('.vw-bin-card[data-proxy="ready"]', { timeout: 300000 })
     check('Restart with the proxy gone: it is made again', fs.existsSync(proxyFile))
     await app.close()
