@@ -14,8 +14,9 @@ export interface CardDesign {
   align: Align
   /** big quote mark (quotes only), a short rule, a side bar, or a frame */
   mark: 'none' | 'mark' | 'rule' | 'bar' | 'frame'
-  /** quote: statement first (main) / speaker first (alt); stats: label first (main) / number first (alt) / split */
-  order: 'main' | 'alt' | 'split'
+  /** quote: statement first (main) / speaker first (alt); stats: label first (main) / number first (alt) / split /
+   *  row (two or three figures side by side) */
+  order: 'main' | 'alt' | 'split' | 'row'
   /** speaker name / number in the desk colour or in the text colour */
   emph: 'accent' | 'ink'
   /** the editor's own colours (hex), each over the choice above: card background, text, name / number, accents */
@@ -26,6 +27,59 @@ export interface CardDesign {
   /** header and footer band colours on this card (every format) */
   headerColor?: string
   footerColor?: string
+  /** Quote card typography, each over the typeface choice above (all optional, so older cards render unchanged) */
+  /** statement: font, weight, line height (% of size), letter spacing (px at 1080 wide) */
+  quoteFont?: FontId
+  quoteWeight?: 500 | 700 | 800
+  quoteLh?: number
+  quoteLs?: number
+  /** words in the statement painted in their own colour (the desk colour unless picked) */
+  hiPhrase?: string
+  hiPhraseColor?: string
+  /** speaker name: font, size multiplier (0.7–1.6), capitals or as typed */
+  nameFont?: FontId
+  nameScale?: number
+  nameCase?: 'upper' | 'asis'
+  /** speaker designation: colour and size multiplier */
+  titleColor?: string
+  titleScale?: number
+  /** the big quote mark: size multiplier */
+  markScale?: number
+  /** Stats card typography, likewise optional: the number's font, weight, letter spacing and size multiplier */
+  numFont?: FontId
+  numWeight?: 500 | 700 | 800
+  numLs?: number
+  numScale?: number
+  /** the label: font, capitals or as typed, size multiplier, colour */
+  labelFont?: FontId
+  labelCase?: 'upper' | 'asis'
+  labelScale?: number
+  labelColor?: string
+  /** the change line and the note under it: size multipliers; the note's colour */
+  deltaScale?: number
+  noteScale?: number
+  noteColor?: string
+  /** more phrases, each in its own colour; how every coloured phrase is drawn */
+  hiPhrases?: { text: string; color?: string }[]
+  hiStyle?: 'color' | 'marker' | 'underline'
+  quoteItalic?: boolean
+  /** an effect on every word of the card, for words over a photo: soft shadow, glow, or an outline */
+  textEffect?: 'none' | 'shadow' | 'glow' | 'outline'
+  effectColor?: string
+  /** speaker headshot: shape, place, size multiplier, ring in the accent colour */
+  photoShape?: 'circle' | 'rounded' | 'square'
+  photoPos?: 'beside' | 'above'
+  photoScale?: number
+  photoRing?: boolean
+  /** stats: the unit after the number ("MW", "%", "crore") drawn smaller, in its own colour, on the baseline or raised */
+  unitScale?: number
+  unitColor?: string
+  unitRaise?: boolean
+  /** a fine pattern over the card background */
+  pattern?: 'none' | RectPattern['kind']
+  patternColor?: string
+  patternAlpha?: number
+  patternScale?: number
 }
 
 export interface GradientStop { p: number; c: string; a?: number }
@@ -52,9 +106,12 @@ export interface ElBase {
   stroke?: Stroke
 }
 
-export interface RectEl extends ElBase { kind: 'rect'; fill: Fill; radius: number; shadow?: Shadow }
+/** A fine repeating pattern drawn over a rect's fill (Quote / Stats card backgrounds). scale 1 = 1080-wide spacing. */
+export interface RectPattern { kind: 'dots' | 'lines' | 'grid' | 'diagonal' | 'grain'; color: string; alpha: number; scale: number }
+export interface RectEl extends ElBase { kind: 'rect'; fill: Fill; radius: number; shadow?: Shadow; pattern?: RectPattern }
 
-export interface TextRun { start: number; end: number; color: string }
+/** A coloured stretch of text; 'marker' paints a highlighter band behind it (bg), 'underline' a line under it. */
+export interface TextRun { start: number; end: number; color: string; style?: 'marker' | 'underline'; bg?: string }
 export interface TextBgPill {
   color: string
   alpha: number
@@ -82,10 +139,12 @@ export interface TextEl extends ElBase {
   fit: 'hug' | 'box'
   /** Optional translucent backdrop card rendered behind the text */
   bgPill?: TextBgPill
+  /** slanted (the browser's oblique of the font) */
+  italic?: boolean
 }
 
 export interface IconEl extends ElBase { kind: 'icon'; vw: number; vh: number; paths: IconPathDef[]; /** colour used for '$ink' strokes */ ink?: string }
-export interface ImageEl extends ElBase { kind: 'image'; src: string; fit: 'contain' | 'cover' }
+export interface ImageEl extends ElBase { kind: 'image'; src: string; fit: 'contain' | 'cover'; /** clip to a circle or a rounded square (radius in px) */ shape?: 'rect' | 'circle' | 'rounded'; radius?: number }
 
 export type Backdrop = 'blur' | 'black' | 'white' | 'tint'
 
@@ -207,11 +266,17 @@ export interface Content {
   quoteText?: string
   speakerName?: string
   speakerTitle?: string
+  /** speaker headshot: an image id from the photo library (store images) */
+  speakerPhoto?: string
+  /** a line under the speaker: where and when it was said */
+  quoteSource?: string
   /** Data / Stat mode */
   statNumber?: string
   statLabel?: string
   statDelta?: string
   statNote?: string
+  /** second and third figures for the side-by-side (row) layout */
+  statExtra?: { number: string; label: string }[]
   /** Quote / Stats card: the preset the design starts from (templates.ts QUOTE_PRESETS / STAT_PRESETS) and the
    *  editor's own choices on top of it — any mix of picture, background, typeface, alignment, accent, order, colour */
   quoteStyle?: string

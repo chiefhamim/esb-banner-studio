@@ -20,7 +20,7 @@ import { ELEMENT_DEFS, ELEMENT_SECTIONS } from '../core/elements'
 import { Icon, KIND_ICON } from '../ui/Icon'
 import { PhotoEditor } from './PhotoEditor'
 
-const CONTENT_DRIVEN = new Set(['headline', 'date-num', 'date-month', 'date-weekday', 'speaker-name', 'speaker-title', 'stat-label', 'stat-delta', 'stat-note'])
+const CONTENT_DRIVEN = new Set(['headline', 'date-num', 'date-month', 'date-weekday', 'speaker-name', 'speaker-title', 'quote-source', 'stat-label', 'stat-delta', 'stat-note', 'stat-unit', 'stat-unit-2', 'stat-unit-3', 'stat-num-2', 'stat-num-3', 'stat-label-2', 'stat-label-3'])
 const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 /** The category's own line icon (the same artwork that sits in the banner's chip). */
@@ -58,9 +58,127 @@ function CardArt({ kind, d }: { kind: 'quote' | 'stat'; d: CardDesign }) {
   )
 }
 
-const BG_SWATCHES: { id: CardDesign['bg']; name: string }[] = [
+/** The typeface choice's own values (templates.ts FACE), shown until the editor picks their own */
+const FACE_FONT: Record<CardDesign['face'], FontId> = { serif: 'serif', sans: 'inter', condensed: 'oswald', grotesk: 'grotesk' }
+const FACE_WEIGHT: Record<CardDesign['face'], 500 | 700 | 800> = { serif: 700, sans: 800, condensed: 700, grotesk: 800 }
+const FACE_LH: Record<CardDesign['face'], number> = { serif: 124, sans: 116, condensed: 112, grotesk: 112 }
+const FACE_LS: Record<CardDesign['face'], number> = { serif: 0, sans: -0.4, condensed: 0.2, grotesk: -1 }
+
+const BG_SWATCHES:{ id: CardDesign['bg']; name: string }[] = [
   { id: 'tint', name: 'Desk tint' }, { id: 'paper', name: 'Paper' }, { id: 'ink', name: 'Ink (dark)' }, { id: 'accent', name: 'Desk colour' }, { id: 'gradient', name: 'Gradient' },
 ]
+
+/** The Quote card's speaker headshot: upload one, or pick any picture already in the photo library. */
+function SpeakerPhotoField() {
+  const photo = useStore((s) => s.doc.content.speakerPhoto)
+  const images = useStore((s) => s.images)
+  const setContent = useStore((s) => s.setContent)
+  const addSpeakerPhoto = useStore((s) => s.addSpeakerPhoto)
+  const file = useRef<HTMLInputElement>(null)
+  const cur = images.find((i) => i.id === photo)
+  return (
+    <Field label="Speaker photo (optional)">
+      <div className="speaker-photo-field">
+        {cur ? <img src={cur.url} alt="" className="speaker-photo-thumb" /> : <span className="speaker-photo-thumb empty"><Icon name="image" size={16} /></span>}
+        <div className="speaker-photo-actions">
+          <button type="button" className="btn sm" onClick={() => file.current?.click()}><Icon name="upload" size={13} /><span>{cur ? 'Replace' : 'Upload'}</span></button>
+          {cur && <button type="button" className="btn sm ghost" onClick={() => setContent({ speakerPhoto: undefined })}><Icon name="x" size={13} /><span>Remove</span></button>}
+        </div>
+        <input ref={file} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void addSpeakerPhoto(f); e.target.value = '' }} />
+      </div>
+      {images.length > 0 && (
+        <div className="speaker-photo-lib" role="radiogroup" aria-label="Or pick from the photo library">
+          {images.map((i) => (
+            <button key={i.id} type="button" role="radio" aria-checked={i.id === photo} className={'speaker-photo-pick' + (i.id === photo ? ' on' : '')} onClick={() => setContent({ speakerPhoto: i.id })} data-tip={i.name}>
+              <img src={i.url} alt="" />
+            </button>
+          ))}
+        </div>
+      )}
+    </Field>
+  )
+}
+
+/** Statement words in their own colour: any number of phrases, each with a colour, drawn as colour, marker or underline. */
+function PhraseList({ d, set, setMany, fallback }: { d: CardDesign; set: <K extends keyof CardDesign>(key: K, v: CardDesign[K] | undefined) => void; setMany: (patch: Partial<CardDesign>) => void; fallback: string }) {
+  // the first phrase lives in hiPhrase (older cards), the rest in hiPhrases
+  const list = [{ text: d.hiPhrase ?? '', color: d.hiPhraseColor }, ...(d.hiPhrases ?? [])]
+  const save = (next: { text: string; color?: string }[]) => {
+    const [first, ...rest] = next
+    // one write: separate set() calls each start from the same render's design and would undo each other
+    setMany({ hiPhrase: first?.text ? first.text : undefined, hiPhraseColor: first?.color, hiPhrases: rest.length ? rest : undefined })
+  }
+  return (
+    <div className="phrase-list">
+      <span className="card-sub">Words in their own colour <small>one phrase per row, as it appears in the quote</small></span>
+      {list.map((p, i) => (
+        <div key={i} className="phrase-row">
+          <input type="text" className="input" value={p.text} placeholder={i ? 'Another phrase' : 'e.g. 1,200 MW'} onChange={(e) => save(list.map((q, j) => (j === i ? { ...q, text: e.target.value } : q)))} aria-label={`Phrase ${i + 1}`} />
+          <input type="color" className="phrase-colour" value={p.color ?? fallback} onChange={(e) => save(list.map((q, j) => (j === i ? { ...q, color: e.target.value } : q)))} aria-label={`Colour of phrase ${i + 1}`} data-tip="Colour" />
+          {list.length > 1 && <IconButton icon="x" tip="Remove phrase" onClick={() => save(list.filter((_, j) => j !== i))} />}
+        </div>
+      ))}
+      {list.length < 6 && <button type="button" className="btn sm" onClick={() => save([...list, { text: '' }])}><Icon name="plus" size={13} /><span>Add a phrase</span></button>}
+      {list.some((p) => p.text.trim()) && (
+        <Field label="Drawn as">
+          <Seg<'color' | 'marker' | 'underline'> className="block" value={d.hiStyle ?? 'color'} onChange={(v) => set('hiStyle', v === 'color' ? undefined : v)}
+            options={[{ value: 'color', label: 'Colour' }, { value: 'marker', label: 'Marker' }, { value: 'underline', label: 'Underline' }]} />
+        </Field>
+      )}
+    </div>
+  )
+}
+
+const MY_DESIGNS_KEY = 'esb-banner-studio/card-designs/v1'
+interface SavedDesign { id: string; name: string; style: string; design: Partial<CardDesign>; scale?: number }
+function readMyDesigns(): Record<'quote' | 'stat', SavedDesign[]> {
+  try { const v = JSON.parse(localStorage.getItem(MY_DESIGNS_KEY) ?? 'null'); if (v && Array.isArray(v.quote) && Array.isArray(v.stat)) return v } catch { /* empty or blocked */ }
+  return { quote: [], stat: [] }
+}
+
+/** The editor's own designs: the preset plus every change on top of it, kept on this computer and applied in one click.
+ *  Applying copies the whole design into the banner, so a project file still renders the same on another computer. */
+function MyDesigns({ kind }: { kind: 'quote' | 'stat' }) {
+  const content = useStore((s) => s.doc.content)
+  const setContent = useStore((s) => s.setContent)
+  const [all, setAll] = useState(readMyDesigns)
+  const [naming, setNaming] = useState<string | null>(null)
+  const mine = all[kind]
+  const write = (next: Record<'quote' | 'stat', SavedDesign[]>) => { setAll(next); try { localStorage.setItem(MY_DESIGNS_KEY, JSON.stringify(next)) } catch { /* storage full or blocked */ } }
+  const style = (kind === 'quote' ? content.quoteStyle : content.statStyle) ?? 'classic'
+  const design = (kind === 'quote' ? content.quoteDesign : content.statDesign) ?? {}
+  const save = () => {
+    const name = (naming ?? '').trim() || `My design ${mine.length + 1}`
+    write({ ...all, [kind]: [...mine, { id: Math.random().toString(36).slice(2, 9), name, style, design, scale: content.cardScale }] })
+    setNaming(null)
+  }
+  const apply = (m: SavedDesign) => setContent(kind === 'quote' ? { quoteStyle: m.style, quoteDesign: { ...m.design }, cardScale: m.scale } : { statStyle: m.style, statDesign: { ...m.design }, cardScale: m.scale })
+  const same = (m: SavedDesign) => m.style === style && JSON.stringify(m.design) === JSON.stringify(design)
+  return (
+    <div className="my-designs">
+      <span className="card-sub">My designs <small>saved on this computer</small></span>
+      {mine.length > 0 && (
+        <div className="my-design-list">
+          {mine.map((m) => (
+            <span key={m.id} className={'my-design' + (same(m) ? ' on' : '')}>
+              <button type="button" className="my-design-apply" onClick={() => apply(m)} data-tip="Apply this design">{m.name}</button>
+              <button type="button" className="my-design-x" aria-label={`Delete ${m.name}`} data-tip="Delete" onClick={() => write({ ...all, [kind]: mine.filter((x) => x.id !== m.id) })}><Icon name="x" size={12} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+      {naming === null
+        ? <button type="button" className="btn sm" onClick={() => setNaming('')}><Icon name="plus" size={13} /><span>Save this design</span></button>
+        : (
+          <div className="my-design-name">
+            <input autoFocus type="text" className="input" value={naming} placeholder={`My design ${mine.length + 1}`} onChange={(e) => setNaming(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setNaming(null) }} aria-label="Name for this design" />
+            <button type="button" className="btn sm primary" onClick={save}>Save</button>
+            <button type="button" className="btn sm ghost" onClick={() => setNaming(null)}>Cancel</button>
+          </div>
+        )}
+    </div>
+  )
+}
 
 function CardStylePanel({ kind }: { kind: 'quote' | 'stat' }) {
   const content = useStore((s) => s.doc.content)
@@ -75,6 +193,18 @@ function CardStylePanel({ kind }: { kind: 'quote' | 'stat' }) {
   const set = <K extends keyof CardDesign>(key: K, v: CardDesign[K] | undefined) => {
     const next: Partial<CardDesign> = { ...own, [key]: v }
     if (v === undefined || next[key] === base[key]) delete next[key]
+    setContent(kind === 'quote' ? { quoteDesign: next } : { statDesign: next })
+  }
+  const setMany = (patch: Partial<CardDesign>) => {
+    const next: Partial<CardDesign> = { ...own, ...patch }
+    for (const key of Object.keys(patch) as (keyof CardDesign)[]) if (next[key] === undefined || next[key] === base[key]) delete next[key]
+    setContent(kind === 'quote' ? { quoteDesign: next } : { statDesign: next })
+  }
+  // a new typeface starts clean: the statement's own font, weight and spacing give way to it
+  const setFace = (v: CardDesign['face']) => {
+    const next: Partial<CardDesign> = { ...own, face: v }
+    for (const k of ['quoteFont', 'quoteWeight', 'quoteLh', 'quoteLs', 'numFont', 'numWeight', 'numLs'] as const) delete next[k]
+    if (next.face === base.face) delete next.face
     setContent(kind === 'quote' ? { quoteDesign: next } : { statDesign: next })
   }
   const pick = (id: string) => setContent(kind === 'quote' ? { quoteStyle: id, quoteDesign: {} } : { statStyle: id, statDesign: {} })
@@ -100,6 +230,7 @@ function CardStylePanel({ kind }: { kind: 'quote' | 'stat' }) {
           </button>
         ))}
       </div>
+      <MyDesigns kind={kind} />
 
       <div className="card-design">
         <Field label="Picture">
@@ -114,10 +245,10 @@ function CardStylePanel({ kind }: { kind: 'quote' | 'stat' }) {
           </div>
         </Field>
         <Field label="Typeface">
-          <Seg<CardDesign['face']> className="block card-faces" value={d.face} onChange={(v) => set('face', v)}
+          <Seg<CardDesign['face']> className="block card-faces" value={d.face} onChange={setFace}
             options={[{ value: 'serif', label: 'Serif' }, { value: 'sans', label: 'Sans' }, { value: 'condensed', label: 'Narrow' }, { value: 'grotesk', label: 'Grotesk' }]} />
         </Field>
-        {d.order !== 'split' && (
+        {d.order !== 'split' && d.order !== 'row' && (
           <Field label="Alignment">
             <Seg<'left' | 'center' | 'right'> className="block" value={d.align} onChange={(v) => set('align', v)}
               options={[{ value: 'left', icon: 'alignTextLeft', label: 'Left' }, { value: 'center', icon: 'alignTextCenter', label: 'Centre' }, { value: 'right', icon: 'alignTextRight', label: 'Right' }]} />
@@ -130,7 +261,7 @@ function CardStylePanel({ kind }: { kind: 'quote' | 'stat' }) {
         <Field label="Order">
           {kind === 'quote'
             ? <Seg<CardDesign['order']> className="block" value={d.order === 'split' ? 'main' : d.order} onChange={(v) => set('order', v)} options={[{ value: 'main', label: 'Quote first' }, { value: 'alt', label: 'Speaker first' }]} />
-            : <Seg<CardDesign['order']> className="block" value={d.order} onChange={(v) => set('order', v)} options={[{ value: 'main', label: 'Label first' }, { value: 'alt', label: 'Number first' }, { value: 'split', label: 'Split' }]} />}
+            : <Seg<CardDesign['order']> className="block" value={d.order} onChange={(v) => set('order', v)} options={[{ value: 'main', label: 'Label first', tip: 'Label above the number' }, { value: 'alt', label: 'Number first', tip: 'One big number, label under it' }, { value: 'split', label: 'Split', tip: 'Number | words' }, { value: 'row', label: 'Row', tip: 'Two or three figures side by side (add them in the Stats panel)' }]} />}
         </Field>
         <Field label={kind === 'quote' ? 'Speaker name colour' : 'Number colour'}>
           <Seg<CardDesign['emph']> className="block" value={d.emph} onChange={(v) => set('emph', v)} options={[{ value: 'accent', label: 'Desk colour' }, { value: 'ink', label: 'Text colour' }]} />
@@ -138,6 +269,127 @@ function CardStylePanel({ kind }: { kind: 'quote' | 'stat' }) {
         <Field label={`Text size · ${Math.round(scale * 100)} %`}>
           <Slider value={Math.round(scale * 100)} min={80} max={130} step={5} onChange={(v) => setContent({ cardScale: v / 100 })} />
         </Field>
+
+        {kind === 'quote' && (
+          <div className="card-colours card-type">
+            <span className="card-sub">Statement <small>font, weight and spacing of the quote itself</small></span>
+            <Field label="Font">
+              <Select value={d.quoteFont ?? FACE_FONT[d.face]} options={FONTS.map((f) => ({ value: f.id, label: f.name, hint: f.note }))} onChange={(v) => set('quoteFont', v as FontId)} title="Statement font" />
+            </Field>
+            <Field label="Weight">
+              <Seg<500 | 700 | 800> className="block" value={d.quoteWeight ?? FACE_WEIGHT[d.face]} onChange={(v) => set('quoteWeight', v)}
+                options={[{ value: 500, label: 'Medium' }, { value: 700, label: 'Bold' }, { value: 800, label: 'Heavy' }]} />
+            </Field>
+            <Switch checked={!!d.quoteItalic} onChange={(v) => set('quoteItalic', v || undefined)} label="Italic" />
+            <Field label={`Line spacing · ${d.quoteLh ?? FACE_LH[d.face]} %`}>
+              <Slider value={d.quoteLh ?? FACE_LH[d.face]} min={95} max={160} step={1} onChange={(v) => set('quoteLh', v)} />
+            </Field>
+            <Field label={`Letter spacing · ${(d.quoteLs ?? FACE_LS[d.face]).toFixed(1)} px`}>
+              <Slider value={d.quoteLs ?? FACE_LS[d.face]} min={-3} max={4} step={0.1} onChange={(v) => set('quoteLs', Math.round(v * 10) / 10)} />
+            </Field>
+            <PhraseList d={d} set={set} setMany={setMany} fallback={cat.accent} />
+
+            <span className="card-sub">Speaker <small>name and designation</small></span>
+            <Field label="Font">
+              <Select value={d.nameFont ?? (d.face === 'condensed' ? 'oswald' : 'inter')} options={FONTS.map((f) => ({ value: f.id, label: f.name, hint: f.note }))} onChange={(v) => set('nameFont', v as FontId)} title="Speaker font" />
+            </Field>
+            <Field label="Name">
+              <Seg<'upper' | 'asis'> className="block" value={d.nameCase ?? 'upper'} onChange={(v) => set('nameCase', v)} options={[{ value: 'upper', label: 'CAPITALS' }, { value: 'asis', label: 'As typed' }]} />
+            </Field>
+            <Field label={`Name size · ${Math.round((d.nameScale ?? 1) * 100)} %`}>
+              <Slider value={Math.round((d.nameScale ?? 1) * 100)} min={70} max={160} step={5} onChange={(v) => set('nameScale', v / 100)} />
+            </Field>
+            <Field label={`Designation size · ${Math.round((d.titleScale ?? 1) * 100)} %`}>
+              <Slider value={Math.round((d.titleScale ?? 1) * 100)} min={70} max={160} step={5} onChange={(v) => set('titleScale', v / 100)} />
+            </Field>
+            <ColorField label="Designation" value={d.titleColor ?? (darkBg ? '#b8c2d1' : '#4a5568')} onChange={(v) => set('titleColor', v)} onReset={d.titleColor ? () => set('titleColor', undefined) : undefined} />
+            {d.mark === 'mark' && (
+              <Field label={`Quote mark size · ${Math.round((d.markScale ?? 1) * 100)} %`}>
+                <Slider value={Math.round((d.markScale ?? 1) * 100)} min={50} max={200} step={5} onChange={(v) => set('markScale', v / 100)} />
+              </Field>
+            )}
+            {content.speakerPhoto ? <>
+              <span className="card-sub">Speaker photo <small>upload or pick it in the Quote Statement panel</small></span>
+              <Field label="Shape">
+                <Seg<'circle' | 'rounded' | 'square'> className="block" value={d.photoShape ?? 'circle'} onChange={(v) => set('photoShape', v)} options={[{ value: 'circle', label: 'Circle' }, { value: 'rounded', label: 'Rounded' }, { value: 'square', label: 'Square' }]} />
+              </Field>
+              <Field label="Place">
+                <Seg<'beside' | 'above'> className="block" value={d.photoPos ?? 'beside'} onChange={(v) => set('photoPos', v)} options={[{ value: 'beside', label: 'Beside the name' }, { value: 'above', label: 'Above the name' }]} />
+              </Field>
+              <Field label={`Photo size · ${Math.round((d.photoScale ?? 1) * 100)} %`}>
+                <Slider value={Math.round((d.photoScale ?? 1) * 100)} min={60} max={200} step={5} onChange={(v) => set('photoScale', v / 100)} />
+              </Field>
+              <Switch checked={d.photoRing !== false} onChange={(v) => set('photoRing', v ? undefined : false)} label="Ring in the accent colour" />
+            </> : null}
+          </div>
+        )}
+
+        {kind === 'stat' && (
+          <div className="card-colours card-type">
+            <span className="card-sub">Number <small>font, weight, spacing and size of the figure</small></span>
+            <Field label="Font">
+              <Select value={d.numFont ?? FACE_FONT[d.face]} options={FONTS.map((f) => ({ value: f.id, label: f.name, hint: f.note }))} onChange={(v) => set('numFont', v as FontId)} title="Number font" />
+            </Field>
+            <Field label="Weight">
+              <Seg<500 | 700 | 800> className="block" value={d.numWeight ?? FACE_WEIGHT[d.face]} onChange={(v) => set('numWeight', v)}
+                options={[{ value: 500, label: 'Medium' }, { value: 700, label: 'Bold' }, { value: 800, label: 'Heavy' }]} />
+            </Field>
+            <Field label={`Letter spacing · ${(d.numLs ?? FACE_LS[d.face]).toFixed(1)} px`}>
+              <Slider value={d.numLs ?? FACE_LS[d.face]} min={-4} max={4} step={0.1} onChange={(v) => set('numLs', Math.round(v * 10) / 10)} />
+            </Field>
+            <Field label={`Number size · ${Math.round((d.numScale ?? 1) * 100)} %`}>
+              <Slider value={Math.round((d.numScale ?? 1) * 100)} min={60} max={150} step={5} onChange={(v) => set('numScale', v / 100)} />
+            </Field>
+
+            <span className="card-sub">Label, change and note <small>the words around the number</small></span>
+            <Field label="Font">
+              <Select value={d.labelFont ?? 'inter'} options={FONTS.map((f) => ({ value: f.id, label: f.name, hint: f.note }))} onChange={(v) => set('labelFont', v as FontId)} title="Label font" />
+            </Field>
+            <Field label="Label">
+              <Seg<'upper' | 'asis'> className="block" value={d.labelCase ?? 'upper'} onChange={(v) => set('labelCase', v)} options={[{ value: 'upper', label: 'CAPITALS' }, { value: 'asis', label: 'As typed' }]} />
+            </Field>
+            <Field label={`Label size · ${Math.round((d.labelScale ?? 1) * 100)} %`}>
+              <Slider value={Math.round((d.labelScale ?? 1) * 100)} min={70} max={160} step={5} onChange={(v) => set('labelScale', v / 100)} />
+            </Field>
+            <Field label={`Change size · ${Math.round((d.deltaScale ?? 1) * 100)} %`}>
+              <Slider value={Math.round((d.deltaScale ?? 1) * 100)} min={70} max={160} step={5} onChange={(v) => set('deltaScale', v / 100)} />
+            </Field>
+            <Field label={`Note size · ${Math.round((d.noteScale ?? 1) * 100)} %`}>
+              <Slider value={Math.round((d.noteScale ?? 1) * 100)} min={70} max={160} step={5} onChange={(v) => set('noteScale', v / 100)} />
+            </Field>
+            <ColorField label="Label" value={d.labelColor ?? (d.inkColor ?? defaultInk)} onChange={(v) => set('labelColor', v)} onReset={d.labelColor ? () => set('labelColor', undefined) : undefined} />
+            <ColorField label="Note" value={d.noteColor ?? (darkBg ? '#b8c2d1' : '#4a5568')} onChange={(v) => set('noteColor', v)} onReset={d.noteColor ? () => set('noteColor', undefined) : undefined} />
+
+            <span className="card-sub">Unit <small>"MW", "%", "crore" after the number</small></span>
+            <Field label={`Unit size · ${Math.round((d.unitScale ?? 1) * 100)} %`}>
+              <Slider value={Math.round((d.unitScale ?? 1) * 100)} min={30} max={100} step={5} onChange={(v) => set('unitScale', v >= 100 ? undefined : v / 100)} />
+            </Field>
+            <ColorField label="Unit" value={d.unitColor ?? (d.hiColor ?? cat.accent)} onChange={(v) => set('unitColor', v)} onReset={d.unitColor ? () => set('unitColor', undefined) : undefined} />
+            <Switch checked={!!d.unitRaise} onChange={(v) => set('unitRaise', v || undefined)} label="Raise the unit (superscript)" />
+          </div>
+        )}
+
+        <div className="card-colours card-type">
+          <span className="card-sub">Effects <small>for words over a photo, and a pattern behind the card</small></span>
+          <Field label="Text effect">
+            <Seg<'none' | 'shadow' | 'glow' | 'outline'> className="block" value={d.textEffect ?? 'none'} onChange={(v) => set('textEffect', v === 'none' ? undefined : v)}
+              options={[{ value: 'none', label: 'None' }, { value: 'shadow', label: 'Shadow' }, { value: 'glow', label: 'Glow' }, { value: 'outline', label: 'Outline' }]} />
+          </Field>
+          {d.textEffect && d.textEffect !== 'none' && <ColorField label="Effect colour" value={d.effectColor ?? (d.textEffect === 'shadow' ? '#000000' : darkBg ? '#000000' : '#ffffff')} onChange={(v) => set('effectColor', v)} onReset={d.effectColor ? () => set('effectColor', undefined) : undefined} />}
+          <Field label="Pattern">
+            <Select<'none' | 'dots' | 'lines' | 'grid' | 'diagonal' | 'grain'> value={d.pattern ?? 'none'} onChange={(v) => set('pattern', v === 'none' ? undefined : v)} title="Background pattern"
+              options={[{ value: 'none', label: 'None' }, { value: 'dots', label: 'Dots' }, { value: 'lines', label: 'Lines' }, { value: 'grid', label: 'Grid' }, { value: 'diagonal', label: 'Diagonal lines' }, { value: 'grain', label: 'Grain' }]} />
+          </Field>
+          {d.pattern && d.pattern !== 'none' && <>
+            <Field label={`Strength · ${Math.round((d.patternAlpha ?? 0.08) * 100)} %`}>
+              <Slider value={Math.round((d.patternAlpha ?? 0.08) * 100)} min={2} max={40} step={1} onChange={(v) => set('patternAlpha', v / 100)} />
+            </Field>
+            <Field label={`Scale · ${Math.round((d.patternScale ?? 1) * 100)} %`}>
+              <Slider value={Math.round((d.patternScale ?? 1) * 100)} min={40} max={300} step={10} onChange={(v) => set('patternScale', v / 100)} />
+            </Field>
+            <ColorField label="Pattern colour" value={d.patternColor ?? (darkBg ? '#ffffff' : '#0b0f19')} onChange={(v) => set('patternColor', v)} onReset={d.patternColor ? () => set('patternColor', undefined) : undefined} />
+          </>}
+        </div>
 
         <div className="card-colours">
           <span className="card-sub">Colours <small>pick any colour; reset returns to the design's own</small></span>
@@ -413,7 +665,17 @@ export function StoryPanel() {
               onChange={(e) => setContent({ speakerTitle: e.target.value })}
             />
           </Field>
-          <p className="hint">Rendered with editorial serif quotation marks and speaker attribution.</p>
+          <Field label="Source line (optional)">
+            <input
+              type="text"
+              className="input"
+              value={content.quoteSource ?? ''}
+              placeholder="e.g. Speaking at the Energy Summit, 31 October 2026"
+              onChange={(e) => setContent({ quoteSource: e.target.value })}
+            />
+          </Field>
+          <SpeakerPhotoField />
+          <p className="hint">Bangla text switches to Hind Siliguri by itself unless you pick a font in Quote design.</p>
         </Panel>
       )}
 
@@ -456,6 +718,25 @@ export function StoryPanel() {
               onChange={(e) => setContent({ statNote: e.target.value })}
             />
           </Field>
+          <span className="card-sub">More figures <small>shown with the Side by side order in Stats design</small></span>
+          {[0, 1].map((i) => {
+            const ex = content.statExtra ?? []
+            const f = ex[i] ?? { number: '', label: '' }
+            const put = (p: Partial<{ number: string; label: string }>) => {
+              const next = [0, 1].map((j) => (j === i ? { ...f, ...p } : ex[j] ?? { number: '', label: '' }))
+              setContent({ statExtra: next })
+            }
+            return (
+              <div key={i} className="stat-extra">
+                <Field label={`Figure ${i + 2}`}>
+                  <input type="text" className="input" value={f.number} placeholder={i ? 'e.g. 9,800 MW' : 'e.g. 14,782 MW'} onChange={(e) => put({ number: e.target.value })} />
+                </Field>
+                <Field label="Its label">
+                  <input type="text" className="input" value={f.label} placeholder={i ? 'e.g. Five years ago' : 'e.g. Last year'} onChange={(e) => put({ label: e.target.value })} />
+                </Field>
+              </div>
+            )
+          })}
           <p className="hint">Features high-impact typography with bold numbers, delta indicators, and data source.</p>
         </Panel>
       )}

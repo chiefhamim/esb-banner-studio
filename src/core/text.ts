@@ -9,11 +9,11 @@ export const AUTO_LH = ASC + DESC
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
-export function fontString(weight: number, size: number, font?: string): string {
-  return `${weight} ${size}px "${getFontDef(font).family}", "Hind Siliguri", Inter, sans-serif`
+export function fontString(weight: number, size: number, font?: string, italic?: boolean): string {
+  return `${italic ? 'italic ' : ''}${weight} ${size}px "${getFontDef(font).family}", "Hind Siliguri", Inter, sans-serif`
 }
 
-export function prepare(ctx: Ctx, el: Pick<TextEl, 'weight' | 'size' | 'ls' | 'font'>): void {
+export function prepare(ctx: Ctx, el: Pick<TextEl, 'weight' | 'size' | 'ls' | 'font' | 'italic'>): void {
   ctx.font = fontString(el.weight, el.size, el.font)
   ;(ctx as CanvasRenderingContext2D).letterSpacing = `${el.ls}px`
   ;(ctx as CanvasRenderingContext2D).fontKerning = 'normal'
@@ -47,12 +47,12 @@ export function getMeasureCtx(): CanvasRenderingContext2D {
 }
 
 /** Greedy word wrap, matching how Figma breaks lines (breaks at spaces, trailing spaces ignored). */
-type LayoutKey = Pick<TextEl, 'text' | 'weight' | 'size' | 'ls' | 'lh' | 'fit' | 'w' | 'font'>
+type LayoutKey = Pick<TextEl, 'text' | 'weight' | 'size' | 'ls' | 'lh' | 'fit' | 'w' | 'font' | 'italic'>
 const layoutMemo = new Map<string, TextLayout>()
 
 /** Cached: the same text/style/width is laid out many times per interaction (build, settle, draw, panels). */
 export function layoutText(ctx: Ctx, el: LayoutKey): TextLayout {
-  const key = `${el.font ?? ''}|${el.weight}|${el.size}|${el.ls}|${el.lh}|${el.fit}|${el.fit === 'hug' ? 0 : el.w}|${el.text}`
+  const key = `${el.font ?? ''}|${el.italic ? 'i' : ''}|${el.weight}|${el.size}|${el.ls}|${el.lh}|${el.fit}|${el.fit === 'hug' ? 0 : el.w}|${el.text}`
   const hit = layoutMemo.get(key)
   if (hit) return hit
   const out = computeLayout(ctx, el)
@@ -102,7 +102,7 @@ function computeLayout(ctx: Ctx, el: LayoutKey): TextLayout {
 }
 
 /** Natural (single-line) width of a string in the element's style. */
-export function measureWidth(el: Pick<TextEl, 'text' | 'weight' | 'size' | 'ls' | 'font'>): number {
+export function measureWidth(el: Pick<TextEl, 'text' | 'weight' | 'size' | 'ls' | 'font' | 'italic'>): number {
   const ctx = getMeasureCtx()
   prepare(ctx, el)
   return Math.max(0, ctx.measureText(el.text).width - el.ls)
@@ -134,17 +134,37 @@ export function drawText(ctx: Ctx, el: TextEl): void {
       if (!seg) continue
       const absIdx = line.start + pts[k]
       const run = el.runs.find((r) => absIdx >= r.start && absIdx < r.end)
+      const segW = ctx.measureText(seg).width
+      if (run?.style === 'marker') {
+        // a highlighter band from just under the x-height to just below the baseline, a little wider than the words
+        ctx.save()
+        ctx.shadowColor = 'transparent'
+        ctx.fillStyle = run.bg ?? run.color
+        const top = y - fd.asc * el.size * 0.62, h = fd.asc * el.size * 0.62 + fd.desc * el.size * 0.55
+        ctx.fillRect(cx - el.size * 0.06, top, segW + el.size * 0.12, h)
+        ctx.restore()
+      }
+      // italic: the bundled fonts have no italic files and Chromium will not fake one for a FontFace on a canvas, so
+      // the words are slanted here (a 12 degree shear about the baseline); widths stay the upright ones
+      const at = (fn: (x: number, y: number) => void) => {
+        if (!el.italic) { fn(cx, y); return }
+        ctx.save(); ctx.translate(cx, y); ctx.transform(1, 0, -0.21, 1, 0, 0); fn(0, 0); ctx.restore()
+      }
       if (el.stroke && el.stroke.width > 0) {
         ctx.save()
         ctx.lineWidth = el.stroke.width * 2 // centred stroke: half is hidden under the fill
         ctx.lineJoin = 'round'
         ctx.strokeStyle = el.stroke.color
-        ctx.strokeText(seg, cx, y)
+        at((tx, ty) => ctx.strokeText(seg, tx, ty))
         ctx.restore()
       }
       ctx.fillStyle = run ? run.color : el.color
-      ctx.fillText(seg, cx, y)
-      cx += ctx.measureText(seg).width
+      at((tx, ty) => ctx.fillText(seg, tx, ty))
+      if (run?.style === 'underline') {
+        const t = Math.max(2, el.size * 0.07)
+        ctx.fillRect(cx, y + el.size * 0.1, segW, t)
+      }
+      cx += segW
     }
   })
 }

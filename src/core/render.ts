@@ -32,6 +32,7 @@ function drawRect(ctx: Ctx, el: RectEl) {
   pathRoundRect(ctx, el.x, el.y, el.w, el.h, el.radius)
   ctx.fill()
   ctx.restore()
+  if (el.pattern && el.pattern.alpha > 0) drawPattern(ctx, el)
   if (el.stroke && el.stroke.width > 0) {
     ctx.save()
     ctx.strokeStyle = el.stroke.color
@@ -42,6 +43,40 @@ function drawRect(ctx: Ctx, el: RectEl) {
     ctx.stroke()
     ctx.restore()
   }
+}
+
+/** A fine pattern over a rect's fill, drawn in banner units so it exports at any scale. Grain is a fixed-seed noise,
+ *  so the same card always gets the same grain (no flicker between renders). */
+function drawPattern(ctx: Ctx, el: RectEl) {
+  const p = el.pattern!
+  const step = Math.max(6, 28 * p.scale)
+  ctx.save()
+  pathRoundRect(ctx, el.x, el.y, el.w, el.h, el.radius)
+  ctx.clip()
+  ctx.globalAlpha *= Math.min(1, p.alpha)
+  ctx.fillStyle = p.color
+  ctx.strokeStyle = p.color
+  ctx.lineWidth = Math.max(1, step * 0.06)
+  const x0 = el.x, y0 = el.y, x1 = el.x + el.w, y1 = el.y + el.h
+  if (p.kind === 'dots') {
+    const r = Math.max(1, step * 0.09)
+    for (let y = y0 + step / 2; y < y1; y += step) for (let x = x0 + step / 2; x < x1; x += step) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill() }
+  } else if (p.kind === 'lines' || p.kind === 'grid') {
+    ctx.beginPath()
+    for (let y = y0 + step; y < y1; y += step) { ctx.moveTo(x0, y); ctx.lineTo(x1, y) }
+    if (p.kind === 'grid') for (let x = x0 + step; x < x1; x += step) { ctx.moveTo(x, y0); ctx.lineTo(x, y1) }
+    ctx.stroke()
+  } else if (p.kind === 'diagonal') {
+    ctx.beginPath()
+    for (let d = -el.h; d < el.w; d += step) { ctx.moveTo(x0 + d, y1); ctx.lineTo(x0 + d + el.h, y0) }
+    ctx.stroke()
+  } else if (p.kind === 'grain') {
+    let seed = 1234567
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 }
+    const g = Math.max(1.5, step * 0.08), n = Math.min(60000, Math.round((el.w * el.h) / (g * g * 6)))
+    for (let i = 0; i < n; i++) { ctx.globalAlpha = Math.min(1, p.alpha) * rnd(); ctx.fillRect(x0 + rnd() * el.w, y0 + rnd() * el.h, g, g) }
+  }
+  ctx.restore()
 }
 
 const pathCache = new Map<string, Path2D>()
@@ -272,11 +307,22 @@ export function drawElement(ctx: Ctx, el: El, assets: Assets) {
       const img = assets[el.src]
       if (img) {
         if (el.dropShadow) applyShadow(ctx, el.dropShadow)
+        const shapePath = (inset: number) => {
+          ctx.beginPath()
+          if (el.shape === 'circle') ctx.ellipse(el.x + el.w / 2, el.y + el.h / 2, Math.max(0, el.w / 2 - inset), Math.max(0, el.h / 2 - inset), 0, 0, Math.PI * 2)
+          else if (el.shape === 'rounded') ctx.roundRect(el.x + inset, el.y + inset, Math.max(0, el.w - inset * 2), Math.max(0, el.h - inset * 2), Math.max(0, (el.radius ?? 16) - inset))
+          else ctx.rect(el.x + inset, el.y + inset, Math.max(0, el.w - inset * 2), Math.max(0, el.h - inset * 2))
+        }
+        if (el.shape && el.shape !== 'rect' && el.dropShadow) {
+          // the shadow follows the shape, not the picture's square box
+          ctx.save(); ctx.fillStyle = '#000'; shapePath(0); ctx.fill(); ctx.restore()
+        }
         ctx.save()
-        ctx.beginPath(); ctx.rect(el.x, el.y, el.w, el.h); ctx.clip()
+        if (el.shape && el.shape !== 'rect') ctx.shadowColor = 'transparent'
+        shapePath(0); ctx.clip()
         drawImageFit(ctx, img, el.x, el.y, el.w, el.h, el.fit)
         ctx.restore()
-        if (el.stroke && el.stroke.width > 0) { ctx.shadowColor = 'transparent'; ctx.strokeStyle = el.stroke.color; ctx.lineWidth = el.stroke.width; const i = el.stroke.width / 2; ctx.strokeRect(el.x + i, el.y + i, el.w - el.stroke.width, el.h - el.stroke.width) }
+        if (el.stroke && el.stroke.width > 0) { ctx.shadowColor = 'transparent'; ctx.strokeStyle = el.stroke.color; ctx.lineWidth = el.stroke.width; shapePath(el.stroke.width / 2); ctx.stroke() }
       }
       break
     }

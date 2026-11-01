@@ -112,6 +112,8 @@ interface State {
   assignImage: (slot: number, imageId: string | null) => void
   swapSlots: (a: number, b: number) => void
   addImages: (files: File[]) => Promise<void>
+  /** a picture that goes in the photo library but not into a photo slot (the Quote card's speaker headshot) */
+  addSpeakerPhoto: (file: File) => Promise<void>
   removeImage: (id: string) => void
   newBanner: (keepStyle?: boolean) => void
 
@@ -434,6 +436,20 @@ export const useStore = create<State>((set, get) => {
       }
     }),
 
+    addSpeakerPhoto: async (file) => {
+      if (!file.type.startsWith('image/')) { set({ notice: 'That file is not an image.' }); return }
+      const url = URL.createObjectURL(file)
+      try {
+        const img = await loadImage(url)
+        const id = 'img-' + Math.random().toString(36).slice(2, 9)
+        imageAssets[id] = img
+        set({ images: [...get().images, { id, name: file.name, url, w: img.naturalWidth, h: img.naturalHeight }] })
+        get().setContent({ speakerPhoto: id })
+      } catch {
+        URL.revokeObjectURL(url)
+        set({ notice: 'That image could not be read.' })
+      }
+    },
     addImages: async (files) => {
       const added: ImageItem[] = []
       for (const file of files) {

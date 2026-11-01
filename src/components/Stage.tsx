@@ -16,7 +16,7 @@ import { Icon, KIND_ICON } from '../ui/Icon'
 import { Quickbar } from './Quickbar'
 
 /** The words of a Quote / Stats card: they move and re-wrap with its text box ('card-box'). */
-const CARD_TEXT_IDS = new Set(['headline', 'speaker-name', 'speaker-title', 'quote-mark', 'quote-rule', 'stat-label', 'stat-delta', 'stat-note', 'stat-rule', 'card-bar', 'card-frame'])
+const CARD_TEXT_IDS = new Set(['headline', 'speaker-name', 'speaker-title', 'quote-mark', 'quote-rule', 'stat-label', 'stat-delta', 'stat-note', 'stat-rule', 'card-bar', 'card-frame', 'speaker-photo', 'quote-source', 'stat-unit', 'stat-unit-2', 'stat-unit-3', 'stat-num-2', 'stat-num-3', 'stat-label-2', 'stat-label-3', 'stat-rule-2'])
 
 type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 type Box = { x: number; y: number; w: number; h: number }

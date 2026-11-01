@@ -2064,3 +2064,34 @@ label.switch:active i { filter: brightness(.94); }
 .pe-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .pe-row .btn.on { background: color-mix(in srgb, var(--sel) 14%, var(--fill)); color: var(--text); box-shadow: inset 0 0 0 1px var(--sel); }
 .photo-editor .rot90 { transform: rotate(90deg); }
+
+/* Quote card typography block: the Speaker heading gets air from the Statement controls above it */
+.card-type > .card-sub:not(:first-child) { margin-top: 12px; }
+
+/* ---------------------------------------------------------------- Quote / Stats card: phrases, my designs, speaker photo, extra figures */
+.phrase-list, .my-designs { display: flex; flex-direction: column; gap: 8px; }
+.phrase-row { display: flex; align-items: center; gap: 6px; }
+.phrase-row .input { flex: 1 1 auto; min-width: 0; }
+.phrase-colour { flex: none; width: 32px; height: 32px; padding: 3px; background: var(--field); border: 0; border-radius: var(--r-2); cursor: pointer; }
+.phrase-colour::-webkit-color-swatch-wrapper { padding: 0; }
+.phrase-colour::-webkit-color-swatch { border: 0; border-radius: 5px; }
+.phrase-list > .btn, .my-designs > .btn { align-self: flex-start; }
+.my-designs { margin: 4px 0 12px; }
+.my-design-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.my-design { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; height: 28px; background: var(--fill); border-radius: var(--r-2); }
+.my-design.on { color: var(--sel-ink, var(--text)); background: var(--sel, var(--fill-hover)); }
+.my-design-apply { min-width: 0; padding: 0 4px 0 10px; font: 500 12px/1 var(--font-ui); color: inherit; background: none; border: 0; cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+.my-design-x { display: grid; place-items: center; flex: none; width: 24px; height: 24px; margin-right: 2px; color: inherit; opacity: .6; background: none; border: 0; border-radius: var(--r-1); cursor: pointer; }
+.my-design-x:hover { opacity: 1; background: var(--fill-hover); }
+.my-design-apply:hover { text-decoration: underline; text-underline-offset: 2px; }
+.my-design-name { display: flex; gap: 6px; align-items: center; }
+.my-design-name .input { flex: 1 1 auto; min-width: 0; }
+.speaker-photo-field { display: flex; align-items: center; gap: 10px; }
+.speaker-photo-thumb { flex: none; width: 44px; height: 44px; object-fit: cover; border-radius: 50%; background: var(--fill); }
+.speaker-photo-thumb.empty { display: grid; place-items: center; color: var(--text-3); }
+.speaker-photo-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.speaker-photo-lib { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.speaker-photo-pick { width: 36px; height: 36px; padding: 0; overflow: hidden; background: var(--fill); border: 0; border-radius: var(--r-2); cursor: pointer; box-shadow: 0 0 0 1px var(--card-line); }
+.speaker-photo-pick img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.speaker-photo-pick.on { box-shadow: 0 0 0 2px var(--sel, var(--ink)); }
+.stat-extra { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
