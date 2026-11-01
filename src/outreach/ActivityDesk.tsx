@@ -8,13 +8,16 @@ import { ActivityLog } from './ActivityLog'
 import { ActivityReports, buildDayCsv, buildRunCsv, safeCsvCell } from './ActivityReports'
 import { Seg, Switch, Select, MenuButton } from '../ui/controls'
 import { Icon } from '../ui/Icon'
-import { useOutreachStore } from './outreachStore'
-import { downloadText } from './campaign'
+import { useDesk } from './outreachStore'
+import { downloadText, resultsCsv } from './campaign'
+import { CampaignResults } from './CampaignResults'
+import { useCloud } from './cloudStore'
 
 export function ActivityDesk() {
   const store = useActivityStore()
-  const outreach = useOutreachStore()
+  const outreach = useDesk()
   const [isPausingAll, setIsPausingAll] = useState(false)
+  const openCampaign = outreach.campaign()
 
   // Mount desk: subscribe to push events debounced to 1s
   useEffect(() => {
@@ -172,6 +175,7 @@ export function ActivityDesk() {
               { label: 'Export log (CSV)', icon: 'listBullet', onClick: handleExportLogCsv },
               { label: 'Export daily report (CSV)', icon: 'calendar', onClick: handleExportDayCsv },
               { label: 'Export runs report (CSV)', icon: 'chart', onClick: handleExportRunsCsv },
+              { label: 'Export contact results (CSV)', icon: 'users', disabled: !openCampaign || !outreach.contacts.length, onClick: () => { if (openCampaign) downloadText(`${openCampaign.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(openCampaign, outreach.contacts, useCloud.getState().engagement[openCampaign.id] ?? {})) } },
             ]}
           />
         </div>
@@ -179,6 +183,7 @@ export function ActivityDesk() {
 
       {/* Main Content Area */}
       <div className="oa-content-scroll">
+        {store.tab === 'overview' && <CampaignResults campaignId={store.campaignId || outreach.activeId} />}
         {store.tab === 'overview' && <ActivityOverview />}
         {store.tab === 'log' && <ActivityLog />}
         {store.tab === 'reports' && <ActivityReports />}

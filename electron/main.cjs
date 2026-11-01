@@ -420,8 +420,29 @@ ipcMain.on('esb:start-drag', (event, arg) => {
 // Outreach desk: the account, the encrypted app password and the send ledger live here (electron/mailer.cjs); the
 // renderer can ask for one checked email at a time and read the status, nothing more.
 let mailer = null
-const outreachMailer = () => (mailer ??= require('./mailer.cjs').createMailer({ dir: app.getPath('userData'), safeStorage: require('electron').safeStorage, nodemailer: require('nodemailer') }))
-ipcMain.handle('esb:outreach-status', () => outreachMailer().status())
+// open/click tracking switches itself on only once esbpowerline.com answers on /api/o and /r (outreach-tracking.cjs)
+let trackingGate = null
+const outreachTracking = () => (trackingGate ??= require('./outreach-tracking.cjs').createTrackingGate({ env: process.env }))
+const outreachMailer = () => (mailer ??= require('./mailer.cjs').createMailer({ dir: app.getPath('userData'), safeStorage: require('electron').safeStorage, nodemailer: require('nodemailer'), tracking: outreachTracking() }))
+// pcLabel: this computer's name, shown on other PCs as "Sending from …" (the shared send lock); tracking: whether the
+// site's open/click endpoints were live at the last check
+ipcMain.handle('esb:outreach-status', () => ({ ...outreachMailer().status(), pcLabel: require('node:os').hostname().slice(0, 60), tracking: outreachTracking().status() }))
+// sends another PC made (the shared ledger): validated, then entered in the mailer's ledger and the event log so no
+// check on this PC — the 7-day repeat rule, the engine's "already sent", follow-up eligibility — can miss them
+ipcMain.handle('esb:outreach-mark-sent', async (_e, raw) => {
+  const g = outreachGuard.validateRemoteSends(raw)
+  if (!g.ok) return { ok: false, error: g.error }
+  const added = await outreachMailer().markSent(g.entries)
+  const have = new Set(outreachEvents.read({ types: ['send.ok'], limit: 100000, includeDry: false }).events
+    .filter((e) => e.campaignId).map((e) => `${e.run === 'followup' ? 'followup' : 'campaign'}|${String(e.email || '').toLowerCase()}|${e.campaignId}`))
+  let logged = 0
+  for (const e of g.entries) {
+    if (e.kind === 'test' || have.has(`${e.kind}|${e.email}|${e.campaignId}`)) continue
+    outreachEvents.append({ type: 'send.ok', remote: true, campaignId: e.campaignId, email: e.email, run: e.kind === 'followup' ? 'followup' : 'first', t: e.at })
+    logged++
+  }
+  return { ok: true, ledger: added.length, events: logged, rejected: g.rejected }
+})
 ipcMain.handle('esb:outreach-save', (_e, settings, password) => {
   try { return { ok: true, status: outreachMailer().saveSettings(settings, password) } } catch (e) { return { ok: false, error: e.message } }
 })
@@ -594,7 +615,10 @@ app.whenReady().then(() => {
   fsScope.allow(path.join(app.getPath('temp'), 'esb-studio-drag')) // the drag staging folder only, never the whole temp directory
 
   const userData = app.getPath('userData')
-  outreachEvents = createEventLog({ dir: userData })
+  // the send results the desk projects onto its campaigns go to the window as they happen (engineClient.ts applyEvents);
+  // without this the list only caught up at the next launch
+  const LIVE = new Set(['send.ok', 'send.fail', 'send.skip', 'reply', 'bounce', 'optout'])
+  outreachEvents = createEventLog({ dir: userData, onAppend: (ev) => { if (LIVE.has(ev.type)) pushToWindow('esb:outreach-push', { kind: 'event', event: ev }) } })
   outreachJobs = createJobStore({ dir: userData })
   outreachSettings = createSettingsManager({ dir: userData })
 

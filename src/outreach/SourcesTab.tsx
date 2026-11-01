@@ -3,8 +3,8 @@
 // to be in it). The Letter AI may use only the points that are ticked here, and the Review flags any figure in the
 // letter that no source contains.
 
-import { useRef, useState } from 'react'
-import { useOutreachStore, uid } from './outreachStore'
+import { memo, useRef, useState } from 'react'
+import { uid, useDesk } from './outreachStore'
 import { researchSource } from './outreachAi'
 import { OUTREACH_BLUEPRINTS } from './outreachAi'
 import { useEditorialStore } from '../editorial/editorialStore'
@@ -21,8 +21,9 @@ import type { Source } from './types'
 const CAP = 24_000
 const KIND_ICON = { story: 'newspaper', link: 'link', file: 'filePlus', text: 'text' } as const
 
-export function SourcesTab() {
-  const s = useOutreachStore()
+// memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
+export const SourcesTab = memo(function SourcesTab() {
+  const s = useDesk()
   const c = s.campaign()
   const draft = useEditorialStore((e) => e.draft)
   const story = useStoryQueue((q) => q.stories.find((x) => x.id === q.activeId))
@@ -177,4 +178,4 @@ export function SourcesTab() {
       </div>
     </div>
   )
-}
+})

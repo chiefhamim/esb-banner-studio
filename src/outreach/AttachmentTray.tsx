@@ -6,7 +6,7 @@
 //     (/articles/{slug}; the first version linked /news/{slug}, which does not exist).
 
 import { useRef, useState } from 'react'
-import { useOutreachStore } from './outreachStore'
+import { useDesk } from './outreachStore'
 import { Icon } from '../ui/Icon'
 import { FileTypeIcon } from '../editorial/FileTypeIcon'
 import { AttachmentViewer } from './AttachmentViewer'
@@ -23,7 +23,7 @@ const fmt = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} 
 const asDataUrl = (blob: Blob) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(blob) })
 
 export function AttachmentTray() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const input = useRef<HTMLInputElement>(null)
   const [rendering, setRendering] = useState(false)
   const [viewing, setViewing] = useState<AttachmentItem | null>(null)

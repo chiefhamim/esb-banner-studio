@@ -19,12 +19,14 @@ import { SubjectVersionsDialog } from './SubjectVersionsDialog'
 import { AssistantDialog } from './AssistantDialog'
 import { OutreachActivity } from './OutreachActivity'
 import { AskDialog, FollowUpDialog, FooterDialog, HeaderDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
-import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore } from './outreachStore'
+import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore, useDesk } from './outreachStore'
 import { ask, useOutreachUi, type LeftTab } from './outreachUi'
 import { downloadText, eligible, inAudience, resultsCsv, resumeBatch } from './campaign'
 import { useEngineStore } from './engineStore'
 import { describeRun, fmtDay } from './activityFormat'
 import { applyDesignFile } from './designImport'
+import { useCloud } from './cloudStore'
+import { CloudPill } from './CloudPill'
 import { AiSettingsDialog } from '../editorial/AiSettingsDialog'
 import { EngineStatus } from '../editorial/EngineStatus'
 import { ProviderMark } from '../editorial/ProviderMark'
@@ -35,7 +37,7 @@ import { Icon } from '../ui/Icon'
 import { MenuBar, Tabs, Seg, type MenuDef } from '../ui/controls'
 
 export function OutreachWorkspace() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const ai = useEditorialStore((e) => e.ai)
   const theme = useStore((x) => x.theme)
@@ -98,7 +100,7 @@ export function OutreachWorkspace() {
       { divider: true },
       { label: 'Review & send', icon: 'send', disabled: !c || !idle, onClick: () => ui.set({ sheet: 'review-send' }) },
       { label: 'Check the inbox for replies', icon: 'inbox', disabled: !desktop || !s.mail?.hasPassword || s.inbox.state === 'busy', onClick: () => void s.checkInbox(true) },
-      { label: 'Export results (CSV)', icon: 'download', disabled: !c || !s.contacts.length, onClick: () => c && downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts)) },
+      { label: 'Export results (CSV)', icon: 'download', disabled: !c || !s.contacts.length, onClick: () => c && downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts, useCloud.getState().engagement[c.id] ?? {})) },
       { label: 'Ask the assistant', icon: 'sparkle', onClick: () => ui.set({ sheet: 'assistant' }) },
       { label: 'Autopilot settings', icon: 'sliders', onClick: () => ui.set({ sheet: 'autopilot' }) },
       { divider: true },
@@ -220,6 +222,8 @@ export function OutreachWorkspace() {
             <span className="sb-pill"><i className="sb-dot" aria-hidden />{s.inbox.state === 'busy' ? 'Reading' : s.inbox.state === 'bad' ? 'Not read' : s.inbox.state === 'ok' ? <span className="sb-text">{totalReplies} repl{totalReplies === 1 ? 'y' : 'ies'} · {new Date(s.inbox.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> : 'Not read yet'}</span>
           </button>
         </>}
+        <div className="sep" />
+        <CloudPill />
         <div className="sep" />
         <button
           type="button"

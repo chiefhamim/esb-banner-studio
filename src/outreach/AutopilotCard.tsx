@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useEngineStore } from './engineStore'
-import { useOutreachStore } from './outreachStore'
+import { useDesk } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { describeRun } from './activityFormat'
 import { eligible, pauseBatch, resumeBatch, stopBatch } from './campaign'
@@ -8,7 +8,7 @@ import { Icon } from '../ui/Icon'
 
 export function AutopilotCard() {
   const ui = useOutreachUi()
-  const s = useOutreachStore()
+  const s = useDesk()
   const engine = useEngineStore()
   const c = s.campaign()
   const [, setTick] = useState(0)

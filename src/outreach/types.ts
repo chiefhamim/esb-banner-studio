@@ -4,7 +4,8 @@
  */
 export type DeliverabilityStatus = 'SAFE_TO_SEND' | 'REVIEW_REQUIRED' | 'TECHNICAL_ONLY' | 'EXCLUDED' | 'UNDELIVERABLE' | 'UNKNOWN'
 
-/** Where a contact is in this desk's own sending. There is no "opened": nothing here can see that. */
+/** Where a contact is in this desk's own sending. Opens and clicks are not a send state: they come from the site's
+ *  tracking events and are laid over a SENT contact by outcome.ts ("Opened (approx.)", "Clicked"). */
 export type SendStatus = 'QUEUED' | 'SENDING' | 'SENT' | 'FAILED' | 'OPTED_OUT' | 'REPLIED' | 'BOUNCED'
 
 export interface Contact {
@@ -140,6 +141,13 @@ export interface Campaign {
   openers?: Record<string, { text: string; at: number }>
   /** Reply classification labels sorted by AI when enabled. */
   replyLabels?: Record<string, { label: 'interested' | 'question' | 'not_now' | 'unsubscribe' | 'wrong_person' | 'other'; summary: string; at: number }>
+  /** The tracking key the main process gave each letter (`campaign:{email}` / `followup:{email}` → 22-char key), so
+   *  open/click events from esbpowerline.com can be matched to the recipient. Absent when tracking was off. */
+  tracking?: Record<string, string>
+  /** Addresses the sending engine passed over, with its reason code (suppressed, cooldown, elsewhere). */
+  skipped?: Record<string, string>
+  /** Which PC sent each address (`{email}` → pc label), when another PC did — from the shared send ledger. */
+  sentBy?: Record<string, string>
 }
 
 /** A saved workbook (its rows live in IndexedDB under `list:{id}`). */

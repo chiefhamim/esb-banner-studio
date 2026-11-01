@@ -13,6 +13,11 @@
   --or-sent-soft: rgba(37, 99, 235, 0.1);
   --or-reply: #0f766e;
   --or-reply-soft: rgba(15, 118, 110, 0.11);
+  /* opened (approx.) and clicked: the site's tracking events, laid over a sent letter */
+  --or-open: #6d28d9;
+  --or-open-soft: rgba(109, 40, 217, 0.1);
+  --or-click: #0e7490;
+  --or-click-soft: rgba(14, 116, 144, 0.11);
 
   /* Outreach is unaffected by news categories: enforce Outreach's own brand color */
   --cat: var(--or-brand);
@@ -31,6 +36,10 @@
   --or-sent-soft: rgba(59, 130, 246, 0.14);
   --or-reply: #14b8a6;
   --or-reply-soft: rgba(20, 184, 166, 0.15);
+  --or-open: #a78bfa;
+  --or-open-soft: rgba(167, 139, 250, 0.16);
+  --or-click: #22d3ee;
+  --or-click-soft: rgba(34, 211, 238, 0.14);
 
   --cat: var(--or-brand);
   --cat-ink: #ffffff;
@@ -90,6 +99,9 @@
 .st-out, .cs-draft { --st: var(--text-3); --st-soft: var(--fill); }
 .st-replied { --st: var(--or-reply); --st-soft: var(--or-reply-soft); }
 .st-bounced { --st: var(--danger); --st-soft: var(--danger-soft); }
+.st-opened { --st: var(--or-open); --st-soft: var(--or-open-soft); }
+.st-clicked { --st: var(--or-click); --st-soft: var(--or-click-soft); }
+.st-noemail { --st: var(--danger); --st-soft: var(--danger-soft); }
 .st-busy { --st: var(--sel, var(--ink)); --st-soft: color-mix(in srgb, var(--sel, var(--ink)) 14%, transparent); }
 .or-dot[class*='cs-'] { background: var(--st); box-shadow: 0 0 0 3px var(--st-soft); }
 .or-dot.cs-sending { animation: sb-breathe 3.6s ease-in-out infinite; }
@@ -407,6 +419,12 @@
 .or-interrupted { background: color-mix(in srgb, var(--card) 90%, var(--warning) 10%); }
 .or-interrupted > header > svg { color: var(--warning); }
 .or-sb-inbox.on { --sb: var(--or-reply); --sb2: #4f8cff; }
+/* Cloud: green-blue when shared, red when it could not reach the server, grey when sharing is simply off */
+.or-sb-cloud.on { --sb: #4f8cff; --sb2: #10b9a0; }
+.or-sb-cloud.quiet { --sb: var(--text-3); --sb2: var(--text-3); }
+.or-sb-cloud.quiet .sb-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--sb); }
+@media (max-width: 1180px) { .or-sb-cloud .sb-text { display: none; } }
+.or-block { display: block; margin-top: 2px; }
 .or-fu-row { display: flex; align-items: flex-end; gap: 12px; }
 .or-fu-row .field { flex: 0 1 260px; }
 .or-fu-row .select { width: 100%; }

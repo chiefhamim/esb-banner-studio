@@ -8,7 +8,7 @@
 // marks have no picture mark (digest.ts IMAGE_MARK).
 
 import { useEffect, useMemo, useState } from 'react'
-import { DEFAULT_SIGNATURE, useOutreachStore } from './outreachStore'
+import { DEFAULT_SIGNATURE, useDesk } from './outreachStore'
 import { OPT_OUT_LINE } from './compose'
 import { logoDataUrl, renderEmail } from './emailRender'
 import { Check, DatePicker, Dialog, Field, IconButton, Seg } from '../ui/controls'
@@ -40,7 +40,7 @@ function siteList(): Promise<SiteLike[]> {
 const dayText = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', weekday: 'short', day: 'numeric', month: 'short' })
 
 export function DigestDialog({ onClose }: { onClose: () => void }) {
-  const s = useOutreachStore()
+  const s = useDesk()
   const queue = useStoryQueue((q) => q.stories)
   const [preset, setPreset] = useState<Preset>('last7')
   const [range, setRange] = useState<DayRange>(() => presetRange('last7', Date.now()))

@@ -144,9 +144,11 @@ function validateMail(m) {
   const attachments = list.map(attachmentFrom)
   const design = designFrom(o.design)
   const vars = varsFrom(o.vars)
+  // which campaign the letter belongs to: only used to label the tracking links (…&c=id), never to find anything
+  const campaignId = /^[A-Za-z0-9_-]{1,100}$/.test(String(o.campaignId ?? '')) ? String(o.campaignId) : ''
   const bytes = attachments.reduce((n, a) => n + a.content.length, 0) + (design ? design.images.reduce((n, i) => n + i.content.length, 0) : 0)
   if (bytes > MAX_ATTACH_BYTES) throw new Error('Attachments are over 18 MB together — Gmail would refuse the message')
-  return { to: to.toLowerCase(), subject, body, signature, optOut, footerLine, headerBg, footerBg, stripeColors, fontFamily, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, design, vars, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
+  return { to: to.toLowerCase(), subject, body, signature, optOut, footerLine, headerBg, footerBg, stripeColors, fontFamily, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, design, vars, campaignId, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
 }
 
 /** May this send go now? Reads the ledger of earlier sends. */
@@ -206,7 +208,11 @@ async function padQrPng() {
   return padQrBuffer
 }
 
-function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), render = renderer }) {
+/**
+ * `tracking` (electron/outreach-tracking.cjs createTrackingGate) says whether the site's open/click endpoints are live;
+ * without it, or while they are not, letters go out exactly as before and carry no key.
+ */
+function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), render = renderer, tracking = null, newKey = null }) {
   const settingsFile = path.join(dir, 'outreach-smtp.json')
   const ledgerFile = path.join(dir, 'outreach-ledger.json')
   const read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return fallback } }
@@ -298,13 +304,21 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     try {
       const { renderEmail, renderDesigned } = await render()
       const unsubscribeHref = `mailto:${saved.user}?subject=unsubscribe`
-      const { html, text } = mail.design ? renderDesigned({
+      let { html, text } = mail.design ? renderDesigned({
         html: mail.design.html, vars: mail.vars, lang: mail.lang, optOut: mail.optOut, unsubscribeHref,
       }) : renderEmail({
         body: mail.body, signature: mail.signature, optOut: mail.optOut, lang: mail.lang, letterhead: mail.letterhead,
         logoSrc: 'cid:esb-logo', officialPad: mail.officialPad, sidebarSrc: 'cid:esb-pad-sidebar', qrSrc: 'cid:esb-pad-qr',
         footerLine: mail.footerLine, headerBg: mail.headerBg, footerBg: mail.footerBg, stripeColors: mail.stripeColors, fontFamily: mail.fontFamily,
       })
+      // tracking is added AFTER the page was built and cut down: the key, the rewritten links and the one pixel come
+      // from here, never from the renderer or the HTML it sent (OUTREACH_SYNC_CONTRACT §3)
+      let messageKey = null
+      if (tracking && await tracking.enabled().catch(() => false)) {
+        const T = require('./outreach-tracking.cjs')
+        messageKey = (newKey || T.newMessageKey)()
+        html = T.trackHtml(html, { key: messageKey, campaignId: mail.campaignId })
+      }
       // every pad/letterhead image travels inside the message (cid:), never as a link to a server; the QR is built
       // fresh from PAD_VCARD above, not read off the printed pad
       // a designed letter brings its own pictures and frame — no letterhead or pad chrome around it
@@ -329,15 +343,40 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
         // a follow-up sits under the first letter in the recipient's mail client
         ...(gate.inReplyTo ? { inReplyTo: gate.inReplyTo, references: [gate.inReplyTo] } : {}),
       })
-      l.push({ t: clock(), to: mail.to, kind: mail.isTest ? 'test' : mail.followUp ? 'followup' : 'campaign', id: String(info.messageId || '') })
+      l.push({ t: clock(), to: mail.to, kind: mail.isTest ? 'test' : mail.followUp ? 'followup' : 'campaign', id: String(info.messageId || ''), ...(messageKey ? { key: messageKey } : {}), ...(mail.campaignId ? { c: mail.campaignId } : {}) })
       write(ledgerFile, l.filter((e) => clock() - e.t < 45 * DAY).slice(-60000))
-      return { ok: true, messageId: info.messageId, sent24h: status().sent24h }
+      return { ok: true, messageId: info.messageId, messageKey, sent24h: status().sent24h }
     } catch (e) {
       // the server's answer, without the account password (nodemailer does not echo it, but never risk it)
       const errText = String(e && e.message || e).slice(0, 300)
       const classified = require('./outreach-errors.cjs').classifySendError(e)
       return { ok: false, error: errText, kind: classified.kind, scope: classified.scope, code: classified.code }
     }
+  }
+
+  /**
+   * Sends another PC made (the shared ledger, outreach_sends), entered here so this PC's repeat, cap and follow-up
+   * checks see them. Entries come from validateRemoteSends (outreach-guard.cjs); one already in the ledger (same
+   * address and kind within a minute) is not added twice. Returns the entries that were new.
+   */
+  function markSent(entries) {
+    // in the same chain as sends, so a send never checks a ledger that is half-way through a merge
+    const run = sendChain.then(() => {
+      const l = ledger()
+      const added = []
+      for (const e of entries) {
+        if (e.kind === 'test') continue
+        if (clock() - e.at > 45 * DAY) continue
+        if (l.some((x) => x.to === e.email && x.kind === e.kind && Math.abs(x.t - e.at) < 60_000)) continue
+        const entry = { t: e.at, to: e.email, kind: e.kind, id: '', remote: true, ...(e.campaignId ? { c: e.campaignId } : {}) }
+        l.push(entry)
+        added.push(e)
+      }
+      if (added.length) { l.sort((a, b) => a.t - b.t); write(ledgerFile, l.filter((e) => clock() - e.t < 45 * DAY).slice(-60000)) }
+      return added
+    })
+    sendChain = run.catch(() => {})
+    return run
   }
 
   /** For inbox.cjs only (never sent over IPC): the account with its password, and the ledger of sends. */
@@ -347,7 +386,7 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     return { user: saved.user, pass: safeStorage.decryptString(Buffer.from(saved.password, 'base64')), imapHost: require('./inbox.cjs').imapHostFor(saved.host, saved.imapHost) }
   }
 
-  return { status, saveSettings, forgetPassword, send, verify, inboxAccount, ledger }
+  return { status, saveSettings, forgetPassword, send, verify, inboxAccount, ledger, markSent }
 }
 
 module.exports = { validateSmtpSettings, validateMail, ledgerCheck, createMailer, EMAIL_RE, MAX_DAILY, MIN_GAP_SEC, REPEAT_DAYS, FOLLOW_MIN_DAYS, FOLLOW_ONCE_DAYS, MAX_ATTACH_BYTES }

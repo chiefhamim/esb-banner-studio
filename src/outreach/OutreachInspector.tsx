@@ -4,8 +4,8 @@
 // process's ledger, the campaign or the list; nothing here is a placeholder. In the browser preview (no desktop
 // bridge) the column says sending needs the desktop app instead of pretending to send.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useOutreachStore } from './outreachStore'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { useDesk } from './outreachStore'
 import { ask, useOutreachUi, type RightTab } from './outreachUi'
 import { cannotStart, downloadText, eligible, followUpQueue, followUpReason, inAudience, pauseBatch, resultsCsv, resumeBatch, sendTest, signatureOf, startBatch, stopBatch } from './campaign'
 import { skipReason } from './compose'
@@ -23,12 +23,15 @@ import { renderEmail, withViewerMargin } from './emailRender'
 import { designPreviewHtml } from './design'
 import { NeedsYou } from './NeedsYou'
 import { domainOf, roleMailbox, disposableDomain } from './addressCheck'
+import { cloudAgo, lockBlock, useCloud } from './cloudStore'
+import { clickedText, engineSkipText, keyOf, openedText, outcomeOf } from './outcome'
 
 const fmtWhen = (t: number) => new Date(t).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const mmss = (ms: number) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 const gap = (lo: number, hi: number) => (lo >= 60 ? `${Math.round(lo / 60)}–${Math.round(hi / 60)} min` : `${lo}–${hi} s`)
 
-export function OutreachInspector() {
+// memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
+export const OutreachInspector = memo(function OutreachInspector() {
   const ui = useOutreachUi()
   return (
     <aside className="or-right" aria-label="Sending and review">
@@ -43,10 +46,10 @@ export function OutreachInspector() {
       <SendFooter />
     </aside>
   )
-}
+})
 
 function SendTab() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const c = s.campaign()
   const desktop = !!window.esb?.outreachSend
   const [testTo, setTestTo] = useState('')
@@ -73,6 +76,12 @@ function SendTab() {
   const active = s.contacts.find((x) => x.id === s.activeContact)
   const sent = c ? Object.keys(c.sent).length : 0
   const failed = c ? Object.keys(c.failed).length : 0
+  const engagement = useCloud((x) => (c ? x.engagement[c.id] : undefined))
+  const engaged = useMemo(() => {
+    let opened = 0, clicked = 0
+    for (const [email, e] of Object.entries(engagement ?? {})) { if (!c?.sent[email]) continue; if (e.opens || e.clicks) opened++; if (e.clicks) clicked++ }
+    return { opened, clicked }
+  }, [engagement, c?.sent]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -117,10 +126,12 @@ function SendTab() {
         {c && (sent > 0 || failed > 0) && (
           <div className="or-results">
             <span><b>{sent}</b> sent</span>
+            {engaged.opened > 0 && <span data-tip="Opened (approx.): the letter's picture was loaded. Some mail apps load it on their own, others never do"><b>{engaged.opened}</b> opened (approx.)</span>}
+            {engaged.clicked > 0 && <span className="good" data-tip="Clicked a link in the letter (links to esbpowerline.com, Facebook, YouTube and WhatsApp are counted)"><b>{engaged.clicked}</b> clicked</span>}
             {Object.keys(c.replied).length > 0 && <span className="good"><b>{Object.keys(c.replied).length}</b> replied</span>}
             {Object.keys(c.bounced).length > 0 && <span className="bad"><b>{Object.keys(c.bounced).length}</b> bounced</span>}
             {failed > 0 && <span className="bad"><b>{failed}</b> failed</span>}
-            <button type="button" className="ibtn or-results-dl" aria-label="Download the results (CSV)" onClick={() => downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts))} data-tip="Download the results (CSV) — every contact in the audience: sent, failed, skipped and why"><Icon name="download" size={14} /></button>
+            <button type="button" className="ibtn or-results-dl" aria-label="Download the results (CSV)" onClick={() => downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts, useCloud.getState().engagement[c.id] ?? {}))} data-tip="Download the results (CSV) — every contact in the audience: sent, failed, skipped and why"><Icon name="download" size={14} /></button>
           </div>
         )}
       </section>
@@ -162,7 +173,8 @@ function SendTab() {
 }
 
 function ContactTab() {
-  const s = useOutreachStore()
+  const s = useDesk()
+  const engagementAll = useCloud((x) => (s.activeId ? x.engagement[s.activeId] : undefined))
   const [previewModal, setPreviewModal] = useState(false)
   const c = s.campaign()
   const active = s.contacts.find((x) => x.id === s.activeContact)
@@ -190,6 +202,9 @@ function ContactTab() {
   if (!active) return <div className="or-empty"><Icon name="user" size={22} /><p>Pick a contact in the list to see what the sheet says about them.</p></div>
   const reason = c ? skipReason(active, c.subject, c.body) : null
   const outside = c && !inAudience(active, c.audience)
+  const eng = engagementAll?.[active.email]
+  const es = c?.skipped?.[active.email]
+  const outcome = outcomeOf(active, active.status === 'QUEUED' ? reason : null, eng, es ? engineSkipText(es) : undefined)
   return (
     <section className="or-card">
       <div className="or-contact">
@@ -222,7 +237,11 @@ function ContactTab() {
         })()}
         {active.diagnostic && <><dt>Sheet note</dt><dd>{active.diagnostic}</dd></>}
         {active.sheet && <><dt>From sheet</dt><dd>{active.sheet.replace(/_/g, ' ')}</dd></>}
-        <dt>This campaign</dt><dd>{outside ? 'Outside the audience' : active.status === 'REPLIED' ? `Replied ${active.repliedAt ? fmtWhen(active.repliedAt) : ''}` : active.status === 'BOUNCED' ? `Bounced: ${active.error}` : active.status === 'SENT' ? `Sent ${active.sentAt ? fmtWhen(active.sentAt) : ''}` : active.status === 'FAILED' ? `Failed: ${active.error}` : reason ?? 'Will be sent'}</dd>
+        <dt>This campaign</dt><dd>{outside ? 'Outside the audience' : <><span className={'or-chip st-' + outcome.st}>{outcome.label}</span> {outcome.st === 'ready' ? 'Will be sent' : outcome.st === 'opened' || outcome.st === 'clicked' ? (active.sentAt ? `Sent ${fmtWhen(active.sentAt)}` : '') : outcome.detail}</>}</dd>
+        {c?.sentBy?.[active.email] && <><dt>Sent from</dt><dd>{c.sentBy[active.email]}</dd></>}
+        {!outside && eng && eng.opens > 0 && <><dt>Opened (approx.)</dt><dd>{openedText(eng).slice('Opened (approx.) '.length)}<small className="or-small or-block">Counted when the letter's picture loads. Some mail apps (Apple Mail, Gmail's image proxy) load it without anyone reading; others never load it.</small></dd></>}
+        {!outside && eng && eng.clicks > 0 && <><dt>Clicked</dt><dd>{clickedText(eng).slice('Clicked '.length)}</dd></>}
+        {!outside && c && active.status === 'SENT' && !keyOf(c, active.email) && <><dt>Tracking</dt><dd>Not tracked — sent before the site's tracking was live, so opens and clicks are not known</dd></>}
         {c && c.sent[active.email] && <><dt>Follow-up</dt><dd>{c.followed[active.email] ? `Sent ${fmtWhen(c.followed[active.email])}` : followUpReason(active, c) ?? 'Due now'}</dd></>}
         {c?.replyLabels?.[active.email] && (
           <>
@@ -313,7 +332,7 @@ function ContactTab() {
 
 function ReviewTab() {
   const ui = useOutreachUi()
-  const s = useOutreachStore()
+  const s = useDesk()
   const c = s.campaign()
   const [notes, setNotes] = useState<{ list: ReviewNote[]; model: string; for: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -430,7 +449,7 @@ const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60_000); re
 
 /** What came back: read from the sender's own inbox (electron/inbox.cjs), read-only. */
 function InboxCard() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const c = s.campaign()!
   const ib = s.inbox
   const desktop = !!window.esb?.outreachInbox
@@ -454,7 +473,7 @@ function InboxCard() {
 }
 
 function FollowUpCard() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const c = s.campaign()!
   const q = followUpQueue(s.contacts, c)
@@ -478,7 +497,7 @@ function FollowUpCard() {
 /** Pinned to the foot of the right column on every tab, like Editorial's Review & publish: what is ready, and the
  *  one button that sends — or, while a batch runs, its progress with Pause and Stop. */
 function SendFooter() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const c = s.campaign()
   const [, tick] = useState(0)
@@ -490,16 +509,19 @@ function SendFooter() {
   const set = s.mail?.settings
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
   const willSend = Math.min(queue.length, Math.max(0, (set?.dailyLimit ?? 0) - (s.mail?.sent24h ?? 0)))
+  const lock = useCloud((x) => (c ? x.locks[c.id] : undefined))
   const why = cannotStart()
+  const blocked = lockBlock(lock)
   if (s.run !== 'idle') {
     return (
       <footer className="or-right-foot">
+        {blocked && <p className="or-foot-note" role="status">{blocked}</p>}
         <div className="or-progress"><span><b>{s.runSent}</b> of {s.runTotal} sent</span>{s.current ? <span>Sending to {s.current}</span> : s.nextAt ? <span>Next in <b>{mmss(s.nextAt - Date.now())}</b></span> : null}</div>
         <div className="or-meter"><i style={{ width: `${s.runTotal ? (s.runSent / s.runTotal) * 100 : 0}%` }} /></div>
         <div className="or-actions">
           {s.run === 'running'
             ? <button type="button" className="btn" onClick={pauseBatch}><Icon name="pause" size={14} /><span>Pause</span></button>
-            : <button type="button" className="btn primary" onClick={resumeBatch}><Icon name="play" size={14} /><span>Resume</span></button>}
+            : <button type="button" className="btn primary" onClick={resumeBatch} disabled={!!blocked} data-tip={blocked ?? (lock && lock.stale && !lock.mine ? `${lock.label} was last seen ${cloudAgo(lock.heartbeatAt)} — Resume offers to take over` : 'Carry on from where it paused; nobody already sent is sent again')}><Icon name="play" size={14} /><span>Resume</span></button>}
           <button type="button" className="btn" onClick={async () => {
             if (await ask({
               title: 'Stop sending?',
@@ -516,7 +538,7 @@ function SendFooter() {
   }
   return (
     <footer className="or-right-foot">
-      <p className="or-foot-note">{!c ? 'Open or create a campaign' : why ? why : <><b>{willSend}</b> ready to go today{queue.length > willSend ? ` · ${queue.length - willSend} on later days` : ''}</>}</p>
+      <p className="or-foot-note">{!c ? 'Open or create a campaign' : why ? why : <><b>{willSend}</b> ready to go today{queue.length > willSend ? ` · ${queue.length - willSend} on later days` : ''}{lock && !lock.mine && lock.stale ? ` · ${lock.label} was last seen ${cloudAgo(lock.heartbeatAt)}; sending will offer to take over` : ''}</>}</p>
       <button type="button" className="btn primary or-wide or-send-btn" onClick={() => ui.set({ sheet: 'review-send' })} disabled={!c} data-tip="Check everything once more, then send now or at a time">
         <Icon name="send" size={15} /><span>{willSend ? `Review & send to ${willSend}` : 'Review & send'}</span>
       </button>

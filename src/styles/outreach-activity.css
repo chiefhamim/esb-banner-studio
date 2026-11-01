@@ -1194,3 +1194,10 @@
     gap: 6px;
   }
 }
+
+/* ---------------------------------------------------------------- campaign results (outcome.ts words and colours) */
+.oa-results { flex: none; margin-bottom: 12px; }
+.oa-results > header { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.oa-results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; margin: 8px 0; }
+.oa-result { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; font-size: 11px; color: var(--text-2); background: var(--fill); border-radius: var(--r-2); }
+.oa-result b { font: 800 18px/1 var(--font-ui); font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--st, var(--text)); }

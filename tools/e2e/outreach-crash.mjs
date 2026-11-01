@@ -38,7 +38,7 @@ try {
   console.log('Launching app for Part 1 (Mid-run Kill)...')
   let app = await launchApp()
   let page = await app.firstWindow()
-  await page.waitForSelector('.topbar', { timeout: 15000 })
+  await page.waitForSelector('.home-shell, .topbar', { timeout: 15000 })
   await page.waitForTimeout(500)
 
   // Configure settings: autoResume = true, dailyLimit = 500
@@ -107,7 +107,7 @@ try {
   console.log('Relaunching Electron with same profile...')
   app = await launchApp()
   page = await app.firstWindow()
-  await page.waitForSelector('.topbar', { timeout: 15000 })
+  await page.waitForSelector('.home-shell, .topbar', { timeout: 15000 })
   await page.waitForTimeout(1000)
 
   // Wait for auto-resume
@@ -212,7 +212,7 @@ try {
   console.log('Relaunching app after clean quit...')
   app = await launchApp()
   page = await app.firstWindow()
-  await page.waitForSelector('.topbar', { timeout: 15000 })
+  await page.waitForSelector('.home-shell, .topbar', { timeout: 15000 })
   await page.waitForTimeout(500)
 
   // Verify job is paused with reason 'quit'

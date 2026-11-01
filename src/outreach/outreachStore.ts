@@ -8,6 +8,7 @@
 
 import { designBytes, type DesignLetter } from './design'
 import { create } from 'zustand'
+import { useShallow } from 'zustand/react/shallow'
 import type { EsbInboxResult, EsbOutreachStatus } from '../esb'
 import type { AttachmentItem, Campaign, Contact, ListMeta, OutreachBlueprintId, OutreachLang, Signature, Source, Template } from './types'
 import { OUTREACH_BLUEPRINTS } from './outreachAi'
@@ -164,7 +165,7 @@ interface OutreachState extends Saved {
   contacts: Contact[]
   importNote: string | null
   activeContact: string | null
-  view: 'all' | 'ready' | 'skipped' | 'sent' | 'replied' | 'failed' | 'has_server' | 'no_server' | 'role' | 'disposable'
+  view: 'all' | 'ready' | 'skipped' | 'sent' | 'opened' | 'replied' | 'failed' | 'has_server' | 'no_server' | 'role' | 'disposable'
   verifiedAddrs: Record<string, DomainCheckResult>
   checkingAddresses: { total: number; checked: number; active: boolean } | null
   lastBulkApproval: { previous: string[]; added: string[] } | null
@@ -238,13 +239,19 @@ interface OutreachState extends Saved {
   refreshMail: () => Promise<void>
   checkSmtp: (force?: boolean) => Promise<void>
   addLog: (level: LogEntry['level'], text: string) => void
+  /** cloudSync.ts only: lay the shared copy over this PC's — merged campaigns, lists that arrived, addresses that
+   *  opted out or bounced elsewhere — save, and re-read the open campaign's list or design if they just arrived. */
+  cloudApply: (p: { campaigns?: Campaign[]; lists?: ListMeta[]; optOut?: string[]; bouncedAddrs?: Record<string, string>; reload?: { contacts?: boolean; design?: boolean } }) => Promise<void>
 }
 
-/** The sheet's contacts with what the editor and the ledgers know laid over them. */
+/** The sheet's contacts with what the editor and the ledgers know laid over them. A contact whose overlay did not
+ *  change keeps its object, and the array itself is kept when nothing changed, so memoised rows and eligible()'s cache
+ *  survive a relay (a log line, an inbox check, an approval elsewhere) instead of re-rendering 2,000 rows. */
 export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'> & { bouncedAddrs?: Record<string, string>; verified?: Record<string, DomainCheckResult> }, c: Campaign | null, mail: EsbOutreachStatus | null): Contact[] {
   const approved = new Set(s.approved), optOut = new Set(s.optOut), bounced = s.bouncedAddrs ?? {}
   const ledger = new Map((mail?.sentTo ?? []).map((e) => [e.to, e.t]))
-  return list.map((x) => {
+  let changed = false
+  const out = list.map((x) => {
     const sentAt = c?.sent[x.email] ?? ledger.get(x.email)
     const failed = c?.failed[x.email]
     const bounce = c?.bounced?.[x.email] ?? bounced[x.email]
@@ -252,17 +259,16 @@ export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'> &
     const dom = domainOf(x.email)
     const ver = s.verified?.[dom]
     const noServer = ver && !ver.mx && !ver.a
-    return {
-      ...x,
-      mxStatus: noServer ? 'UNDELIVERABLE' : x.mxStatus,
-      rawStatus: noServer ? 'No mail server (checked)' : x.rawStatus,
-      approved: x.approved || approved.has(x.email),
-      status: optOut.has(x.email) ? 'OPTED_OUT' : bounce ? 'BOUNCED' : replied ? 'REPLIED' : sentAt ? 'SENT' : failed ? 'FAILED' : x.status === 'SENDING' ? 'SENDING' : 'QUEUED',
-      sentAt,
-      repliedAt: replied,
-      error: bounce ?? failed,
-    }
+    const mxStatus = noServer ? 'UNDELIVERABLE' : x.mxStatus
+    const rawStatus = noServer ? 'No mail server (checked)' : x.rawStatus
+    const isApproved = x.approved || approved.has(x.email)
+    const status: Contact['status'] = optOut.has(x.email) ? 'OPTED_OUT' : bounce ? 'BOUNCED' : replied ? 'REPLIED' : sentAt ? 'SENT' : failed ? 'FAILED' : x.status === 'SENDING' ? 'SENDING' : 'QUEUED'
+    const error = bounce ?? failed
+    if (x.mxStatus === mxStatus && x.rawStatus === rawStatus && x.approved === isApproved && x.status === status && x.sentAt === sentAt && x.repliedAt === replied && x.error === error) return x
+    changed = true
+    return { ...x, mxStatus, rawStatus, approved: isApproved, status, sentAt, repliedAt: replied, error }
   })
+  return changed ? out : list
 }
 /** Typed addresses for an ordinary email: each one is the editor's own choice, so it counts as approved. */
 export function directContacts(addresses: string[]): Contact[] {
@@ -287,20 +293,27 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
   // each load is numbered: opening A then B while A's list is still being read must not leave A's contacts on B (the
   // send queue reads `contacts`)
   let contactsSeq = 0
+  const listCache = new Map<string, Sheet[]>()
+  const parsedCache = new Map<string, ReturnType<typeof contactsFromRows>>()
   const loadContacts = async () => {
     const seq = ++contactsSeq
     const c = get().campaign()
     if (!c) return set({ sheets: [], contacts: [], groupNames: new Map(), importNote: null })
     if (c.kind === 'direct') return set({ sheets: [], groupNames: new Map(), importNote: null, contacts: overlay(directContacts(c.recipients), get(), c, get().mail) })
-    const sheets = c.listId ? (await idbGet<Sheet[]>(`list:${c.listId}`)) ?? [] : []
+    // a list's rows never change under its id (a new import is a new id), so the read and the parse are kept for the
+    // session: switching between two campaigns on a 2,000-row list re-read IndexedDB and re-parsed every row each time
+    const sheets = c.listId ? (listCache.get(c.listId) ?? (await idbGet<Sheet[]>(`list:${c.listId}`)) ?? []) : []
+    if (c.listId && sheets.length) listCache.set(c.listId, sheets)
     const verifiedAddrs = c.listId ? (await idbGet<Record<string, DomainCheckResult>>(`verify:${c.listId}`)) ?? {} : {}
-    set({ verifiedAddrs })
     if (seq !== contactsSeq || get().activeId !== c.id) return
+    set({ verifiedAddrs })
     const groupNames = groupNamesOf(sheets)
     const sh = sheets.find((x) => x.name === c.sheet) ?? sheets.find((x) => x.rows.slice(0, 15).some((r) => r.some((v) => /^e-?mail(\s+address)?$/i.test(v))))
     if (!sh) return set({ sheets, groupNames, contacts: [], importNote: c.listId ? 'The list for this campaign is not on this computer any more — import it again.' : null })
     try {
-      const r = contactsFromRows(sh.rows, new Map(groupNames), sh.name)
+      const parseKey = `${c.listId}|${sh.name}`
+      const r = parsedCache.get(parseKey) ?? contactsFromRows(sh.rows, new Map(groupNames), sh.name)
+      parsedCache.set(parseKey, r)
       const note = [r.skipped ? `${r.skipped} row${r.skipped === 1 ? '' : 's'} without a valid address skipped` : '', r.duplicates ? `${r.duplicates} repeated address${r.duplicates === 1 ? '' : 'es'} left out` : ''].filter(Boolean).join(' · ')
       if (sh.name !== c.sheet) patchCampaign(c.id, { sheet: sh.name })
       set({ sheets, groupNames, contacts: overlay(r.contacts, get(), get().campaign(), get().mail), importNote: note || null })
@@ -599,7 +612,25 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
       set({ smtp: r.ok ? { state: 'ok', ms: r.ms ?? 0, at: r.at } : { state: 'bad', error: r.error ?? 'Could not log in', at: r.at } })
     },
     addLog: (level, text) => set({ log: [...get().log.slice(-299), { t: Date.now(), level, text }] }),
+    cloudApply: async (p) => {
+      const next: Partial<OutreachState> = {}
+      if (p.campaigns) next.campaigns = p.campaigns
+      if (p.lists) next.lists = p.lists
+      if (p.optOut) next.optOut = p.optOut
+      if (p.bouncedAddrs) next.bouncedAddrs = p.bouncedAddrs
+      if (p.campaigns && get().activeId && !p.campaigns.some((c) => c.id === get().activeId)) next.activeId = p.campaigns[0]?.id ?? null
+      set(next)
+      persist()
+      if (next.activeId !== undefined && next.activeId) { await get().openCampaign(next.activeId); return }
+      if (p.reload?.contacts) await loadContacts(); else relay()
+      if (p.reload?.design) await loadDesign()
+    },
   }
 })
+
+/** The whole desk state except the activity log: what a column or dialog that reads "everything" should use. With
+ *  plain `useOutreachStore()` every log line (one per send, inbox check, AI step) re-rendered the entire desk. */
+const withoutLog = (x: OutreachState): OutreachState => { const { log: _log, ...rest } = x; return rest as OutreachState }
+export function useDesk(): OutreachState { return useOutreachStore(useShallow(withoutLog)) }
 
 if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') Object.assign(window, { __outreachStore: useOutreachStore })

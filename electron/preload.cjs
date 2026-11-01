@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('esb', {
   outreachOptOut: (email, on) => ipcRenderer.invoke('esb:outreach-opt-out', email, on),
   outreachSyncOptOuts: (emails) => ipcRenderer.invoke('esb:outreach-sync-opt-outs', emails),
   outreachReplyTexts: (emails) => ipcRenderer.invoke('esb:outreach-reply-texts', emails),
+  outreachMarkSent: (sends) => ipcRenderer.invoke('esb:outreach-mark-sent', sends),
   onOutreach: (cb) => {
     const listener = (_e, msg) => {
       if (typeof cb === 'function') cb(msg)

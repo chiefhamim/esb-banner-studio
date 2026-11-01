@@ -15,6 +15,9 @@ import { buildJobSpec } from './jobSpec'
 import { engineClient } from './engineClient'
 import { useEngineStore } from './engineStore'
 import { letterFor } from './segments'
+import { beforeSend, recordTest, releaseLock, startCloudSync } from './cloudSync'
+import { lockBlock, useCloud } from './cloudStore'
+import { clickedText, engineSkipText, keyOf, openedText, outcomeOf, type Engagement } from './outcome'
 
 /** The campaign's audience: one group and/or any of the chosen purposes ("" filters nothing). */
 export function inAudience(c: Contact, a: Campaign['audience'] | undefined): boolean {
@@ -89,23 +92,44 @@ export function followUpLetter(c: Campaign): { subject: string; body: string } {
  * month" again on its own ledger.
  */
 export function followUpReason(x: Contact, c: Campaign, now = Date.now()): string | null {
+  const code = followUpCode(x, c, now)
+  if (code !== 'due-later') return code
+  return `Due ${new Date(c.sent[x.email] + c.followUp.afterDays * DAY).toLocaleDateString([], { day: 'numeric', month: 'short' })}`
+}
+
+/** followUpReason without the date formatting: 'due-later' stands for "Due <date>". Intl date formatting is slow
+ *  enough that doing it for 800 sent contacts on every render of the Send tab cost ~50 ms a click. */
+function followUpCode(x: Contact, c: Campaign, now: number): string | 'due-later' | null {
   const sentAt = c.sent[x.email]
   if (!sentAt) return 'Not sent the first letter'
   if (x.status === 'OPTED_OUT') return 'Asked not to be emailed'
   if (x.status === 'BOUNCED' || c.bounced[x.email]) return 'Bounced'
   if (c.replied[x.email]) return 'Replied'
   if (c.followed[x.email]) return 'Already followed up'
-  if (now - sentAt < c.followUp.afterDays * DAY) return `Due ${new Date(sentAt + c.followUp.afterDays * DAY).toLocaleDateString([], { day: 'numeric', month: 'short' })}`
+  if (now - sentAt < c.followUp.afterDays * DAY) return 'due-later'
   const l = followUpLetter(c)
   const miss = missingFields(x, l.subject, l.body)
   return miss.length ? `Missing ${miss.join(', ')}` : null
 }
 
+// asked on every render of the Send tab and by cannotStart('followup'); the answer only changes with the contacts, the
+// campaign or the minute
+let lastFollowUp: { contacts: Contact[]; c: Campaign; minute: number; out: { due: Contact[]; later: number } } | null = null
 export function followUpQueue(contacts: Contact[], c: Campaign, now = Date.now()): { due: Contact[]; later: number } {
-  const sent = contacts.filter((x) => inAudience(x, c.audience) && c.sent[x.email])
-  const due = sent.filter((x) => !followUpReason(x, c, now))
-  const later = sent.filter((x) => followUpReason(x, c, now)?.startsWith('Due')).length
-  return { due, later }
+  const minute = Math.floor(now / 60_000)
+  const l = lastFollowUp
+  if (l && l.contacts === contacts && l.c === c && l.minute === minute) return l.out
+  const due: Contact[] = []
+  let later = 0
+  for (const x of contacts) {
+    if (!c.sent[x.email] || !inAudience(x, c.audience)) continue
+    const code = followUpCode(x, c, now)
+    if (code === null) due.push(x)
+    else if (code === 'due-later') later++
+  }
+  const out = { due, later }
+  lastFollowUp = { contacts, c, minute, out }
+  return out
 }
 
 /** Why the batch cannot start now, or null. The same answer the Send button and the Review sheet show. */
@@ -115,6 +139,9 @@ export function cannotStart(mode: 'first' | 'followup' = 'first'): string | null
   if (!window.esb?.outreachSend && !window.esb?.outreachJobSubmit) return 'Sending needs the ESB Studio desktop app'
   if (!c) return 'Open or create a campaign first'
   if (!s.mail?.hasPassword || !s.mail.settings) return 'Save the sender account and app password first'
+  // another PC is sending this campaign right now (fresh heartbeat on the shared lock)
+  const held = lockBlock(useCloud.getState().locks[c.id])
+  if (held) return held
   if (mode === 'first') {
     if (!c.subject.trim() || !c.body.trim()) return 'The letter needs a subject and a body'
     if (c.design && !s.design) return 'The designed letter is not loaded — pick the HTML file again (Letter → Designed HTML)'
@@ -130,6 +157,11 @@ export async function startBatch(mode: 'first' | 'followup' = 'first', startAt?:
   const why = cannotStart(mode)
   if (why) { s.addLog('warn', why); return }
   const c = s.campaign()!
+
+  // the shared ledger first: everyone another PC already wrote to is entered here, then this PC takes the send lock
+  const gate = await beforeSend(c.id)
+  if (!gate.ok) { s.addLog('warn', gate.reason); return }
+  if (gate.note) s.addLog('info', gate.note)
 
   let spec
   try {
@@ -183,6 +215,9 @@ export async function resumeBatch() {
   const s = useOutreachStore.getState()
   const c = s.campaign()
   if (c) {
+    const gate = await beforeSend(c.id)
+    if (!gate.ok) { s.addLog('warn', gate.reason); return }
+    if (gate.note) s.addLog('info', gate.note)
     const job = useEngineStore.getState().jobForCampaign(c.id)
     if (job) {
       await engineClient.control(job.jobId, 'resume')
@@ -206,6 +241,7 @@ export async function stopBatch() {
   s.setRun('idle')
   s.patch({ status: 'paused', interrupted: null })
   s.addLog('warn', 'Batch stopped')
+  if (c && useCloud.getState().locks[c.id]?.mine) void releaseLock(c.id)
 }
 
 /** A stand-in recipient for a test or a preview when the list has nobody: no name, so the greeting is "Sir/Madam". */
@@ -220,8 +256,9 @@ export async function sendTest(to: string, sample: Contact | undefined) {
   if (!c) return { ok: false as const, error: 'Open a campaign first' }
   let m
   try { m = mailFor(sample ?? { ...STAND_IN, email: to }, c) } catch (e) { return { ok: false as const, error: (e as Error).message } }
-  const r = await send({ to, ...m, subject: `[Test] ${m.subject}`, attachments: attachmentsOf(), isTest: true })
+  const r = await send({ to, ...m, subject: `[Test] ${m.subject}`, attachments: attachmentsOf(), isTest: true, campaignId: c.id })
   s.addLog(r.ok ? 'ok' : 'error', r.ok ? `Test sent to ${to}` : `Test to ${to}: ${r.error}`)
+  if (r.ok) recordTest(c.id, to, Date.now(), r.messageKey)
   return r
 }
 
@@ -231,21 +268,36 @@ export async function sendTest(to: string, sample: Contact | undefined) {
 // 12 hours late; older ones wait for the editor, so a forgotten schedule never fires a week later.
 export function startScheduler() {
   void engineClient.init()
+  // the renderer stays alive in the tray when the window is closed, so it owns cloud sync
+  startCloudSync()
 }
 
 // ------------------------------------------------------------------ results
 const csvCell = (v: string | number) => { const t = String(v); return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t }
 
-/** One row per contact in the campaign's audience: what happened and why. Read from the campaign, nothing estimated. */
-export function resultsCsv(c: Campaign, contacts: Contact[]): string {
-  const head = ['Email', 'Name', 'Designation', 'Organization', 'Group', 'Sheet status', 'Result', 'When', 'Detail', 'Replied', 'Followed up']
+/**
+ * One row per contact in the campaign's audience: what happened and why. Read from the campaign, the inbox and the
+ * site's tracking events; nothing estimated. "Opened (approx.)" is the letter's picture being fetched — some mail apps
+ * do that on their own and others never do — so the column is named that way.
+ */
+export function resultsCsv(c: Campaign, contacts: Contact[], engagement: Record<string, Engagement> = {}): string {
+  const head = ['Email', 'Name', 'Designation', 'Organization', 'Group', 'Sheet status', 'Result', 'Detail', 'Sent at', 'Sent from', 'Opened (approx.)', 'Opens', 'First opened', 'Last opened', 'Clicked', 'Links clicked', 'Replied', 'Bounced', 'Bounce reason', 'Failed (server said)', 'Opted out', 'Followed up', 'Tracked']
+  const iso = (v?: number) => (v ? new Date(v).toISOString() : '')
   const rows = contacts.filter((x) => inAudience(x, c.audience)).map((x) => {
+    const skip = x.status === 'QUEUED' ? skipReason(x, c.subject, c.body) : null
+    const es = c.skipped?.[x.email]
+    const e = engagement[x.email]
+    const o = outcomeOf(x, skip, e, es ? engineSkipText(es) : undefined)
+    const detail = o.st === 'opened' && e ? openedText(e) : o.st === 'clicked' && e ? clickedText(e) : o.detail
     const t = c.sent[x.email]
-    const bounced = c.bounced[x.email]
-    const result = bounced ? 'Bounced' : t ? 'Sent' : c.failed[x.email] ? 'Failed' : x.status === 'OPTED_OUT' ? 'Opted out' : skipReason(x, c.subject, c.body) ? 'Skipped' : 'Not sent yet'
-    const detail = bounced ?? c.failed[x.email] ?? (t ? (x.status === 'OPTED_OUT' ? 'Asked not to be emailed' : '') : skipReason(x, c.subject, c.body) ?? '')
-    const iso = (v?: number) => (v ? new Date(v).toISOString() : '')
-    return [x.email, x.personName, x.designation, x.organization, x.sectorGroup, x.rawStatus, result, iso(t), detail, iso(c.replied[x.email]), iso(c.followed[x.email])]
+    return [
+      x.email, x.personName, x.designation, x.organization, x.sectorGroup, x.rawStatus,
+      o.st === 'ready' ? 'Not sent yet' : o.label, detail, iso(t), c.sentBy?.[x.email] ?? (t ? 'This PC' : ''),
+      e?.opens ? 'yes' : '', e?.opens ?? '', iso(e?.firstOpen), iso(e?.lastOpen),
+      e?.clicks ? 'yes' : '', e?.links.map((l) => `${l.link} (${l.n})`).join('; ') ?? '',
+      iso(c.replied[x.email]), c.bounced[x.email] ? 'yes' : '', c.bounced[x.email] ?? '', c.failed[x.email] ?? '',
+      x.status === 'OPTED_OUT' ? 'yes' : '', iso(c.followed[x.email]), t ? (keyOf(c, x.email) ? 'yes' : 'no') : '',
+    ]
   })
   return [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n'
 }

@@ -31,7 +31,8 @@ page.on('console', (m) => {
 })
 
 try {
-  await page.waitForSelector('.topbar', { timeout: 15000 })
+  // the app opens on Home, which has no visible .topbar since the Home redesign (same wait as electron-test.mjs)
+  await page.waitForSelector('.home-shell, .topbar', { timeout: 15000 })
   await page.waitForTimeout(1000)
 
   // 1. Submit a 5-message dry-run job
@@ -82,6 +83,31 @@ try {
   }
 
   console.log(snap && snap.status === 'done' && snap.sent === 5 ? 'PASS' : 'FAIL', 'job snapshot completed as done', JSON.stringify(snap ? { status: snap.status, sent: snap.sent } : null))
+
+  // 4. Sends another PC made (the shared ledger): hostile entries are dropped, a valid one reaches this PC's ledger
+  //    and event log, and a job that includes that address skips it ('elsewhere') instead of sending it again
+  const mark = await page.evaluate(async () => window.esb.outreachMarkSent([
+    { email: 'shared@example.com', kind: 'campaign', campaignId: 'e2e-shared', at: Date.now() - 60_000 },
+    { email: 'a@example.com\r\nBcc: x@example.com', kind: 'campaign', campaignId: 'e2e-shared', at: Date.now() },
+    { email: 'b@example.com', kind: 'blast', campaignId: 'e2e-shared', at: Date.now() },
+    { email: 'c@example.com', kind: 'campaign', campaignId: '../etc', at: Date.now() },
+  ]))
+  const st = await page.evaluate(async () => window.esb.outreachStatus())
+  console.log(mark && mark.ok && mark.ledger === 1 && mark.events === 1 && mark.rejected === 3 ? 'PASS' : 'FAIL', 'outreachMarkSent keeps the valid send and drops 3 hostile ones', JSON.stringify(mark))
+  console.log((st.sentTo || []).some((e) => e.to === 'shared@example.com') ? 'PASS' : 'FAIL', 'the shared send is in the main-process ledger (7-day rule applies)')
+  console.log(typeof st.pcLabel === 'string' && st.pcLabel.length > 0 && st.tracking && 'live' in st.tracking ? 'PASS' : 'FAIL', 'status carries this PC’s name and the tracking state', JSON.stringify({ pcLabel: !!st.pcLabel, tracking: st.tracking }))
+  const again = await page.evaluate(async () => window.esb.outreachMarkSent([{ email: 'shared@example.com', kind: 'campaign', campaignId: 'e2e-shared', at: Date.now() - 50_000 }]))
+  console.log(again && again.ledger === 0 && again.events === 0 ? 'PASS' : 'FAIL', 'marking the same send again adds nothing', JSON.stringify(again))
+  const sub2 = await page.evaluate(async () => window.esb.outreachJobSubmit({ campaignId: 'e2e-shared', campaignName: 'Shared', kind: 'first', messages: [{ to: 'shared@example.com', subject: 'S', body: 'B' }, { to: 'fresh@example.org', subject: 'S', body: 'B' }] }))
+  let skips = [], oks = []
+  const t2 = Date.now()
+  while (Date.now() - t2 < 15000) {
+    const r = await page.evaluate(async (jobId) => window.esb.outreachEvents({ jobId, limit: 20, includeDry: true }), sub2.jobId)
+    skips = r.events.filter((e) => e.type === 'send.skip'); oks = r.events.filter((e) => e.type === 'send.ok')
+    if (skips.length + oks.length >= 2) break
+    await page.waitForTimeout(300)
+  }
+  console.log(skips.length === 1 && skips[0].email === 'shared@example.com' && skips[0].reason === 'elsewhere' && oks.length === 1 && oks[0].email === 'fresh@example.org' ? 'PASS' : 'FAIL', 'a job skips the address another PC sent, sends the rest', JSON.stringify({ skips: skips.map((e) => [e.email, e.reason]), oks: oks.map((e) => e.email) }))
   console.log(errors.length === 0 ? 'PASS' : 'FAIL', 'no console errors during run')
 } finally {
   await app.close().catch(() => {})

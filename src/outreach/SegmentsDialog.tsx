@@ -4,7 +4,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { Dialog } from '../ui/controls'
 import { Icon } from '../ui/Icon'
-import { useOutreachStore } from './outreachStore'
+import { useDesk } from './outreachStore'
 import { inAudience } from './campaign'
 import { segmentOf, segmentLabel, blueprintFor } from './segments'
 import { openerCandidates, buildOtherEntities, guardOpener, writeOpenerWithAi } from './openers'
@@ -19,7 +19,7 @@ interface SegmentsDialogProps {
 }
 
 export function SegmentsDialog({ onClose }: SegmentsDialogProps) {
-  const s = useOutreachStore()
+  const s = useDesk()
   const campaign = s.campaign()
   const [editingSeg, setEditingSeg] = useState<string | null>(null)
   const [draftingSegs, setDraftingSegs] = useState<Record<string, 'busy' | 'done' | 'error'>>({})

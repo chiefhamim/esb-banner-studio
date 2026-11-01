@@ -1,0 +1,96 @@
+// What happened to one contact in one campaign, said once and the same way everywhere it is shown: the contact list
+// chip, the Contact tab, the Activity desk and the results CSV. Every word is backed by a fact the desk holds — a
+// send result from the main process, a bounce or reply read from the inbox, an open/click event from the site's
+// tracking endpoints, a skip reason. Nothing is claimed beyond that: "Sent" means the server accepted it, never that it
+// was delivered or read; "Opened (approx.)" means the letter's 1×1 picture was fetched, which some mail apps do on
+// their own (Apple Mail Privacy Protection, Gmail's image proxy) and others never do.
+
+import type { Campaign, Contact } from './types'
+
+/** Opens and clicks seen for one recipient's message key(s), folded from outreach_events. */
+export interface Engagement {
+  opens: number
+  firstOpen?: number
+  lastOpen?: number
+  clicks: number
+  /** host + path of each link clicked, most clicked first. */
+  links: { link: string; n: number }[]
+  firstClick?: number
+  lastClick?: number
+}
+
+export type OutcomeState = 'busy' | 'out' | 'bounced' | 'replied' | 'clicked' | 'opened' | 'sent' | 'failed' | 'noemail' | 'skip' | 'ready'
+
+export interface Outcome {
+  st: OutcomeState
+  /** The chip's word. */
+  label: string
+  /** One line of what is known: the server's text, the bounce reason, the skip reason, when it was opened. */
+  detail: string
+}
+
+/** The same shape the main process accepts (electron/mailer.cjs EMAIL_RE). */
+export const EMAIL_SYNTAX = /^[A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/
+export const isEmailSyntax = (s: string) => s.length <= 254 && EMAIL_SYNTAX.test(s)
+
+// one formatter for every row: Date#toLocaleString builds a new Intl formatter on each call, which for 800 sent
+// contacts cost ~40 ms every time the list was recomputed (each keystroke in the letter)
+const WHEN = new Intl.DateTimeFormat([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+const when = (t?: number) => (t ? WHEN.format(t) : '')
+
+export const LABEL: Record<OutcomeState, string> = {
+  busy: 'Sending', out: 'Opted out', bounced: 'Bounced', replied: 'Replied', clicked: 'Clicked', opened: 'Opened (approx.)',
+  sent: 'Sent', failed: 'Failed', noemail: 'Not an email', skip: 'Skipped', ready: 'Ready',
+}
+
+/** Why an address can never take mail: bad syntax, or DNS says the domain has no mail server. null otherwise. */
+export function notAnEmail(c: Pick<Contact, 'email' | 'mxStatus' | 'rawStatus'>): string | null {
+  if (!isEmailSyntax(c.email)) return 'Not a valid email address'
+  if (c.mxStatus === 'UNDELIVERABLE') return `No mail server for ${c.email.split('@')[1] ?? 'this domain'} (DNS)${c.rawStatus ? ` · ${c.rawStatus}` : ''}`
+  return null
+}
+
+export function openedText(e: Engagement): string {
+  if (!e.opens) return ''
+  const times = e.opens === 1 ? `once, ${when(e.firstOpen)}` : `${e.opens} times · first ${when(e.firstOpen)} · last ${when(e.lastOpen)}`
+  return `Opened (approx.) ${times}`
+}
+
+export function clickedText(e: Engagement): string {
+  if (!e.clicks) return ''
+  return `Clicked ${e.links.map((l) => (l.n > 1 ? `${l.link} (${l.n}×)` : l.link)).join(', ')}`
+}
+
+/**
+ * The contact's outcome in this campaign. `skip` is skipReason()'s answer for a contact not yet sent; `engineSkip` a
+ * reason the sending engine gave when it passed the address over (suppressed, cooldown, sent from another PC).
+ */
+export function outcomeOf(c: Contact, skip: string | null, eng?: Engagement | null, engineSkip?: string): Outcome {
+  const o = (st: OutcomeState, detail: string): Outcome => ({ st, label: LABEL[st], detail })
+  if (c.status === 'SENDING') return o('busy', 'Being sent now')
+  if (c.status === 'OPTED_OUT') return o('out', 'Asked not to be emailed')
+  if (c.status === 'BOUNCED') return o('bounced', c.error || 'The mail system returned the letter')
+  const engaged = eng ? [clickedText(eng), openedText(eng)].filter(Boolean).join(' · ') : ''
+  if (c.status === 'REPLIED') return o('replied', [`Replied ${when(c.repliedAt)}`.trim(), engaged].filter(Boolean).join(' · '))
+  if (c.status === 'SENT' && eng?.clicks) return o('clicked', engaged)
+  if (c.status === 'SENT' && eng?.opens) return o('opened', `${engaged} — counted when the letter's picture loads; some mail apps load it on their own, others never do`)
+  if (c.status === 'SENT') return o('sent', c.sentAt ? `Accepted by the mail server ${when(c.sentAt)} — not proof it was read` : 'Accepted by the mail server')
+  if (c.status === 'FAILED') return o('failed', c.error || 'The server refused it')
+  const bad = notAnEmail(c)
+  if (bad) return o('noemail', bad)
+  if (engineSkip) return o('skip', engineSkip)
+  if (skip) return o('skip', skip)
+  return o('ready', c.approved && c.mxStatus !== 'SAFE_TO_SEND' ? 'Approved by you' : 'Will be sent')
+}
+
+/** The engine's reason codes for passing an address over, in words. */
+export function engineSkipText(reason: string): string {
+  if (reason === 'suppressed') return 'Skipped: opted out, bounced or refused before'
+  if (reason === 'cooldown') return 'Skipped: emailed within the cooldown period'
+  if (reason === 'elsewhere') return 'Skipped: already sent from another PC'
+  if (reason === 'already-sent') return 'Skipped: already emailed in the last 7 days (this PC or another)'
+  return `Skipped: ${reason}`
+}
+
+/** The tracking key the main process gave one recipient's letter (campaign.tracking), if any. */
+export const keyOf = (c: Campaign, email: string, kind: 'campaign' | 'followup' = 'campaign') => c.tracking?.[`${kind}:${email}`]

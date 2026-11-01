@@ -1,8 +1,8 @@
 // Every campaign on this desk, newest first — like the Editorial story queue: the open one is raised, each row's edge
 // carries its state (draft, scheduled, sending, paused, done), and the figures are the campaign's own results.
 
-import { useState } from 'react'
-import { useOutreachStore } from './outreachStore'
+import { memo, useState } from 'react'
+import { useDesk } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { DigestDialog } from './DigestDialog'
 import { Icon } from '../ui/Icon'
@@ -16,8 +16,9 @@ const when = (t: number) => {
   return d.toDateString() === now.toDateString() ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString([], { day: 'numeric', month: 'short' })
 }
 
-export function CampaignsTab() {
-  const s = useOutreachStore()
+// memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
+export const CampaignsTab = memo(function CampaignsTab() {
+  const s = useDesk()
   const ui = useOutreachUi()
   const idle = s.run === 'idle'
   const sorted = [...s.campaigns].sort((a, b) => b.updatedAt - a.updatedAt)
@@ -64,4 +65,4 @@ export function CampaignsTab() {
       </div>
     </div>
   )
-}
+})

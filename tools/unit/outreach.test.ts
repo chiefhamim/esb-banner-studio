@@ -109,6 +109,9 @@ describe('Compose: who the batch sends to, and what they get', () => {
   })
 })
 
+/** One CSV line into its cells (quoted cells may hold commas). */
+const cells = (line: string) => [...line.matchAll(/("(?:[^"]|"")*"|[^,]*)(,|$)/g)].slice(0, -1).map((x) => (x[1].startsWith('"') ? x[1].slice(1, -1).replace(/""/g, '"') : x[1]))
+
 describe('Campaigns: audience, typed addresses, results', () => {
   const { contacts } = contactsFromRows(rows)
   it('an audience narrows by group and by purpose', () => {
@@ -127,11 +130,36 @@ describe('Campaigns: audience, typed addresses, results', () => {
     const over = overlay(contacts, { approved: ['ce@example.org'], optOut: ['planning@example.net'] }, c, null)
     expect(over.map((x) => x.status)).toEqual(['SENT', 'FAILED', 'OPTED_OUT', 'QUEUED'])
     const csv = resultsCsv(c, over).trim().split('\r\n')
-    expect(csv[0]).toBe('Email,Name,Designation,Organization,Group,Sheet status,Result,When,Detail,Replied,Followed up')
-    expect(csv[1]).toMatch(/^md@example\.com,A\. Rahman,.*,Sent,2026-10-28T06:00:00\.000Z,,,$/)
-    expect(csv[2]).toMatch(/,Failed,,Mailbox full,,$/)
-    expect(csv[3]).toMatch(/,Opted out,/)
-    expect(csv[4]).toMatch(/,Skipped,,No mail server/)
+    const head = csv[0].split(',')
+    expect(head).toEqual(['Email', 'Name', 'Designation', 'Organization', 'Group', 'Sheet status', 'Result', 'Detail', 'Sent at', 'Sent from', 'Opened (approx.)', 'Opens', 'First opened', 'Last opened', 'Clicked', 'Links clicked', 'Replied', 'Bounced', 'Bounce reason', 'Failed (server said)', 'Opted out', 'Followed up', 'Tracked'])
+    const col = (line: string, name: string) => cells(line)[head.indexOf(name)]
+    expect(csv[1]).toMatch(/^md@example\.com,A\. Rahman,/)
+    expect(col(csv[1], 'Result')).toBe('Sent')
+    expect(col(csv[1], 'Sent at')).toBe('2026-10-28T06:00:00.000Z')
+    expect(col(csv[1], 'Sent from')).toBe('This PC')
+    // sent with no tracking key: said plainly, never shown as "not opened"
+    expect(col(csv[1], 'Tracked')).toBe('no')
+    expect(col(csv[1], 'Opened (approx.)')).toBe('')
+    expect(col(csv[2], 'Result')).toBe('Failed')
+    expect(col(csv[2], 'Failed (server said)')).toBe('Mailbox full')
+    expect(col(csv[3], 'Result')).toBe('Opted out')
+    // the sheet's DEAD_NO_DNS: no mail server, so "Not an email" with the reason, not a generic "Skipped"
+    expect(col(csv[4], 'Result')).toBe('Not an email')
+    expect(col(csv[4], 'Detail')).toMatch(/^No mail server for nomail\.example\.com \(DNS\)/)
+  })
+  it('opens and clicks from the site lay over a sent letter: approximate, with times, counts and links', () => {
+    const c = newCampaign({ subject: 'S', body: 'Dear {name},', sent: { 'md@example.com': Date.UTC(2026, 9, 28, 6) }, tracking: { 'campaign:md@example.com': 'A'.repeat(22) } })
+    const over = overlay(contacts, { approved: ['ce@example.org'], optOut: [] }, c, null)
+    const t1 = Date.UTC(2026, 9, 28, 7), t2 = Date.UTC(2026, 9, 29, 9)
+    const csv = resultsCsv(c, over, { 'md@example.com': { opens: 2, firstOpen: t1, lastOpen: t2, clicks: 1, links: [{ link: 'esbpowerline.com/magazine', n: 1 }], firstClick: t2, lastClick: t2 } }).trim().split('\r\n')
+    const head = csv[0].split(',')
+    const col = (name: string) => cells(csv[1])[head.indexOf(name)]
+    expect(col('Result')).toBe('Clicked')
+    expect(col('Opened (approx.)')).toBe('yes')
+    expect(col('Opens')).toBe('2')
+    expect(col('First opened')).toBe(new Date(t1).toISOString())
+    expect(col('Links clicked')).toBe('esbpowerline.com/magazine (1)')
+    expect(col('Tracked')).toBe('yes')
   })
   it('replies and bounces read from the inbox lay over the list: a bounced address is never written to again', () => {
     const c = newCampaign({ sent: { 'md@example.com': 1, 'ce@example.org': 1 }, replied: { 'md@example.com': 5 }, bounced: { 'ce@example.org': '550 No such user' } })

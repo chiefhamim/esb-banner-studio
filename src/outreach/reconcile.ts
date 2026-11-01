@@ -38,6 +38,8 @@ export function project(state: ReconcileState, events: OutreachEvent[]): Reconci
       replied: { ...c.replied },
       bounced: { ...c.bounced },
       followed: { ...c.followed },
+      tracking: { ...(c.tracking ?? {}) },
+      skipped: { ...(c.skipped ?? {}) },
     }
     campaignMap.set(c.id, copy)
     return copy
@@ -59,6 +61,13 @@ export function project(state: ReconcileState, events: OutreachEvent[]): Reconci
         const c = campaignMap.get(ev.campaignId)
         if (!c) break
         const t = ev.t || Date.now()
+        // the letter's tracking key, so the site's open/click events can be matched to this address
+        const key = typeof ev.messageKey === 'string' && /^[A-Za-z0-9_-]{22}$/.test(ev.messageKey) ? ev.messageKey : null
+        if (key) {
+          const slot = `${ev.run === 'followup' ? 'followup' : 'campaign'}:${email}`
+          if (c.tracking![slot] !== key) { c.tracking![slot] = key; touchedCampaignIds.add(c.id) }
+        }
+        if (c.skipped![email]) { delete c.skipped![email]; touchedCampaignIds.add(c.id) }
 
         if (ev.run === 'followup') {
           if (c.followed[email] !== t) {
@@ -97,6 +106,16 @@ export function project(state: ReconcileState, events: OutreachEvent[]): Reconci
             bouncedChanged = true
           }
         }
+        break
+      }
+
+      case 'send.skip': {
+        // why the engine passed the address over (suppressed, cooldown, sent from another PC): shown as Skipped + why
+        if (!email || !ev.campaignId || ev.run === 'followup') break
+        const c = campaignMap.get(ev.campaignId)
+        if (!c || c.sent[email]) break
+        const reason = String(ev.reason || 'skipped').slice(0, 40)
+        if (c.skipped![email] !== reason) { c.skipped![email] = reason; touchedCampaignIds.add(c.id) }
         break
       }
 

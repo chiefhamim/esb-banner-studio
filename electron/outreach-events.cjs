@@ -27,6 +27,8 @@ function createEventLog(options = {}) {
   const dir = options.dir || process.cwd()
   const clock = options.clock || (() => Date.now())
   const fs = options.fs || nodeFs
+  // told about every event once it is on disk (main.cjs pushes the ones the desk projects to the renderer)
+  const onAppend = typeof options.onAppend === 'function' ? options.onAppend : null
 
   let seq = 0
   let badLines = 0
@@ -183,6 +185,7 @@ function createEventLog(options = {}) {
       recentEvents.shift()
     }
 
+    if (onAppend) { try { onAppend(ev) } catch { /* a listener never breaks the log */ } }
     return ev
   }
 

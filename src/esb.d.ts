@@ -46,7 +46,7 @@ export interface EsbBridge {
   outreachForgetPassword?: () => Promise<EsbOutreachStatus>
   outreachVerify?: (force?: boolean) => Promise<{ ok: boolean; ms?: number; error?: string; at: number }>
   outreachInbox?: (force?: boolean) => Promise<EsbInboxResult>
-  outreachSend?: (mail: EsbOutreachMail) => Promise<{ ok: true; messageId: string; sent24h: number } | { ok: false; error: string; nextAt?: number; duplicate?: boolean }>
+  outreachSend?: (mail: EsbOutreachMail) => Promise<{ ok: true; messageId: string; messageKey?: string | null; sent24h: number } | { ok: false; error: string; nextAt?: number; duplicate?: boolean }>
   outreachJobSubmit?: (spec: JobSpec) => Promise<{ ok: true; jobId: string; rejected: { index: number; error: string }[] } | { ok: false; error: string }>
   outreachJobControl?: (jobId: string, action: 'pause' | 'resume' | 'stop' | 'hold' | 'release', arg?: string | number) => Promise<{ ok: boolean; error?: string }>
   outreachPauseAll?: (on: boolean) => Promise<{ ok: boolean }>
@@ -61,6 +61,8 @@ export interface EsbBridge {
   outreachOptOut?: (email: string, on: boolean) => Promise<{ ok: boolean }>
   outreachSyncOptOuts?: (emails: string[]) => Promise<{ ok: boolean; added: number }>
   outreachReplyTexts?: (emails: string[]) => Promise<{ email: string; text?: string; ownWords?: string; subject?: string; at?: number }[]>
+  /** Sends another PC made (the shared ledger), entered in this PC's ledger and event log so they are never repeated. */
+  outreachMarkSent?: (sends: { email: string; kind: 'campaign' | 'followup' | 'test'; campaignId: string; at: number }[]) => Promise<{ ok: true; ledger: number; events: number; rejected: number } | { ok: false; error: string }>
   onOutreach?: (cb: (m: OutreachPush) => void) => () => void
 }
 
@@ -87,6 +89,10 @@ export interface EsbOutreachStatus {
   sentTo: { to: string; t: number }[]
   /** Where replies are read: the saved choice or the one worked out from the SMTP server. */
   imapHost?: string
+  /** This computer's name, as other PCs show it ("Sending from …"). */
+  pcLabel?: string
+  /** Whether esbpowerline.com's open/click endpoints answered at the last check (null = not checked yet). */
+  tracking?: { live: boolean | null; why: string | null; at: number | null }
 }
 /** One email: plain text only (the main process builds the HTML part), attachments as data URLs. */
 export interface EsbOutreachMail {
@@ -118,6 +124,8 @@ export interface EsbOutreachMail {
   design?: { html: string; images: { cid: string; dataUrl: string }[] }
   /** The recipient's words for the designed letter's {placeholders}, one line each. */
   vars?: Record<string, string>
+  /** The campaign the letter belongs to; labels its tracking links. */
+  campaignId?: string
   isTest?: boolean
   resend?: boolean
   /** A second letter to someone who did not answer: the main process checks there was a first one, threads it under it. */

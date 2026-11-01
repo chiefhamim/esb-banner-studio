@@ -3,7 +3,7 @@ import { Dialog, Seg } from '../ui/controls'
 import { Icon, type IconName } from '../ui/Icon'
 import { aiFor, aiPaused } from '../editorial/aiProviders'
 import { useEngineStore } from './engineStore'
-import { useOutreachStore } from './outreachStore'
+import { useDesk } from './outreachStore'
 import { useOutreachUi } from './outreachUi'
 import { engineClient } from './engineClient'
 import { askAssistant, applyAssistantAction, type AssistantActionItem } from './operator'
@@ -91,7 +91,7 @@ function ResultView({ result }: { result: unknown }) {
 
 export function AssistantDialog({ onClose }: { onClose: () => void }) {
   const ui = useOutreachUi()
-  const outreach = useOutreachStore()
+  const outreach = useDesk()
   const engine = useEngineStore()
   const camp = outreach.campaign()
 

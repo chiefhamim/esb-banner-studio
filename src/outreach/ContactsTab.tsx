@@ -3,36 +3,44 @@
 // a coloured edge, like the Editorial story queue. Nothing here is invented: a contact with no name shows its
 // address, a row with no status says so.
 
-import { useMemo, useRef, useState } from 'react'
+import { memo, useDeferredValue, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOutreachStore } from './outreachStore'
 import { skipReason } from './compose'
 import { inAudience } from './campaign'
-import { STATUS_LABEL, purposeLabel } from './directory'
+import { purposeLabel } from './directory'
 import { domainOf, roleMailbox, disposableDomain, summarizeChecks } from './addressCheck'
 import { ask } from './outreachUi'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/controls'
 import type { Contact } from './types'
+import { engineSkipText, outcomeOf, type Outcome } from './outcome'
+import { useCloud } from './cloudStore'
 
-type Row = { c: Contact; skip: string | null }
-export type RowState = 'ready' | 'skip' | 'sent' | 'failed' | 'out' | 'busy' | 'replied' | 'bounced'
+const sameOutcome = (a: Outcome, b: Outcome) => a.st === b.st && a.label === b.label && a.detail === b.detail
+const rowCache = new WeakMap<Contact, { c: Contact; skip: string | null; out: Outcome }>()
 
-export const rowState = ({ c, skip }: Row): { st: RowState; text: string; tip: string } => {
-  if (c.status === 'SENDING') return { st: 'busy', text: 'Sending', tip: 'Being sent now' }
-  if (c.status === 'REPLIED') return { st: 'replied', text: 'Replied', tip: c.repliedAt ? `Replied ${new Date(c.repliedAt).toLocaleString()}` : 'Replied' }
-  if (c.status === 'BOUNCED') return { st: 'bounced', text: 'Bounced', tip: c.error || 'The mail system returned the letter' }
-  if (c.status === 'SENT') return { st: 'sent', text: 'Sent', tip: c.sentAt ? `Sent ${new Date(c.sentAt).toLocaleString()}` : 'Sent' }
-  if (c.status === 'FAILED') return { st: 'failed', text: 'Failed', tip: c.error || 'The server refused it' }
-  if (c.status === 'OPTED_OUT') return { st: 'out', text: 'Opted out', tip: 'Asked not to be emailed' }
-  if (skip) return { st: 'skip', text: 'Skipped', tip: skip }
-  return { st: 'ready', text: 'Ready', tip: c.approved && c.mxStatus !== 'SAFE_TO_SEND' ? 'Approved by you' : STATUS_LABEL[c.mxStatus] }
-}
+type Row = { c: Contact; skip: string | null; out: Outcome }
+
+/** One contact row. Memoised: selecting a contact or paging re-renders the rows that changed, not all 2,000. */
+const ContactRow = memo(function ContactRow({ c, out, on, onPick }: { c: Contact; out: Outcome; on: boolean; onPick: (id: string) => void }) {
+  return (
+    <button type="button" role="option" aria-selected={on} className={'or-row st-' + out.st + (on ? ' on' : '')} onClick={() => onPick(c.id)}>
+      <span className="or-row-main">
+        <b>{c.personName || c.email}</b>
+        <span className="or-row-org" title={[c.designation, c.organization].filter(Boolean).join(' · ')}>{[c.designation, c.organization].filter(Boolean).join(' · ') || 'No designation or organisation in the sheet'}</span>
+        {c.personName && <span className="or-row-mail">{c.email.split('@')[0]}<wbr />@{c.email.split('@').slice(1).join('@')}</span>}
+      </span>
+      <span className={'or-chip st-' + out.st} data-tip={out.detail}>{out.label}</span>
+    </button>
+  )
+})
 
 // a list of thousands renders a page at a time; filtering and search still run over all of it
 const PAGE = 200
 
-export function ContactsTab() {
+// memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
+export const ContactsTab = memo(function ContactsTab() {
   // only what this tab reads: subscribing to the whole store re-rendered every row on each log line and inbox check
   const s = useOutreachStore(useShallow((x) => ({
     campaigns: x.campaigns, activeId: x.activeId, campaign: x.campaign, activeContact: x.activeContact, contacts: x.contacts,
@@ -47,7 +55,25 @@ export function ContactsTab() {
   const listMeta = s.lists.find((l) => l.id === c?.listId)
 
   const inAud = useMemo(() => s.contacts.filter((x) => inAudience(x, c?.audience)), [s.contacts, c?.audience])
-  const rows: Row[] = useMemo(() => inAud.map((x) => ({ c: x, skip: c ? skipReason(x, c.subject, c.body) : null })), [inAud, c?.subject, c?.body]) // eslint-disable-line react-hooks/exhaustive-deps
+  const engagement = useCloud((x) => (c ? x.engagement[c.id] : undefined))
+  const engineSkips = c?.skipped
+  // skipReason runs a placeholder regex per contact; it is only asked again when the contacts or the letter change.
+  // The letter is typed in the centre column, so its skip reasons over the whole list follow a frame later instead
+  // of inside each keystroke. Row objects are reused when nothing about the contact changed (rowCache, keyed by the
+  // contact object), so the memoised rows do not re-render.
+  const subject = useDeferredValue(c?.subject ?? '')
+  const body = useDeferredValue(c?.body ?? '')
+  const rows: Row[] = useMemo(() => inAud.map((x) => {
+    const skip = c ? skipReason(x, subject, body) : null
+    const eng = engagement?.[x.email]
+    const es = engineSkips?.[x.email]
+    const out = outcomeOf(x, skip, eng, es ? engineSkipText(es) : undefined)
+    const old = rowCache.get(x)
+    if (old && old.skip === skip && sameOutcome(old.out, out)) return old
+    const row = { c: x, skip, out }
+    rowCache.set(x, row)
+    return row
+  }), [inAud, subject, body, engagement, engineSkips]) // eslint-disable-line react-hooks/exhaustive-deps
   const eligibleForBulkApprove = useMemo(() => {
     return inAud.filter((x) => {
       if (x.approved) return false
@@ -82,19 +108,27 @@ export function ContactsTab() {
     for (const x of s.contacts) if (c?.audience.group == null || x.groupNo === c.audience.group) for (const p of x.purposes) m.set(p, (m.get(p) ?? 0) + 1)
     return [...m].sort((a, b) => b[1] - a[1])
   }, [s.contacts, c?.audience.group])
-  const counts = useMemo(() => ({
-    ready: rows.filter((r) => !r.skip && r.c.status === 'QUEUED').length,
-    skipped: rows.filter((r) => r.skip && r.c.status === 'QUEUED').length,
-    sent: rows.filter((r) => r.c.status === 'SENT' || r.c.status === 'REPLIED').length,
-    replied: rows.filter((r) => r.c.status === 'REPLIED').length,
-    bounced: rows.filter((r) => r.c.status === 'BOUNCED').length,
-    failed: rows.filter((r) => r.c.status === 'FAILED').length,
-  }), [rows])
+  const counts = useMemo(() => {
+    const n = { ready: 0, skipped: 0, sent: 0, replied: 0, bounced: 0, failed: 0, opened: 0, clicked: 0, noemail: 0 }
+    for (const r of rows) {
+      const st = r.out.st
+      if (st === 'ready') n.ready++
+      else if (st === 'skip' || st === 'noemail') { n.skipped++; if (st === 'noemail') n.noemail++ }
+      if (r.c.status === 'SENT' || r.c.status === 'REPLIED') n.sent++
+      if (r.c.status === 'REPLIED') n.replied++
+      if (r.c.status === 'BOUNCED') n.bounced++
+      if (r.c.status === 'FAILED') n.failed++
+      if (st === 'opened' || st === 'clicked') n.opened++
+      if (st === 'clicked') n.clicked++
+    }
+    return n
+  }, [rows])
   const shown = useMemo(() => {
     const q = s.query.trim().toLowerCase()
-    return rows.filter(({ c: x, skip }) => {
-      if (s.view === 'ready' && (skip || x.status !== 'QUEUED')) return false
-      if (s.view === 'skipped' && !(skip && x.status === 'QUEUED')) return false
+    return rows.filter(({ c: x, out }) => {
+      if (s.view === 'ready' && out.st !== 'ready') return false
+      if (s.view === 'skipped' && out.st !== 'skip' && out.st !== 'noemail') return false
+      if (s.view === 'opened' && out.st !== 'opened' && out.st !== 'clicked') return false
       if (s.view === 'sent' && x.status !== 'SENT' && x.status !== 'REPLIED') return false
       if (s.view === 'failed' && x.status !== 'FAILED' && x.status !== 'BOUNCED') return false
       if (s.view === 'replied' && x.status !== 'REPLIED') return false
@@ -110,7 +144,7 @@ export function ContactsTab() {
       if (s.view === 'disposable' && !disposableDomain(x.email)) return false
       return !q || [x.personName, x.organization, x.email, x.designation].some((v) => v.toLowerCase().includes(q))
     })
-  }, [rows, s.view, s.query])
+  }, [rows, s.view, s.query, s.verifiedAddrs])
   // back to the first page whenever what is listed changes
   const [limit, setLimit] = useState(PAGE)
   const [listKey, setListKey] = useState('')
@@ -210,8 +244,9 @@ export function ContactsTab() {
               {([
                 ['all', 'All', inAud.length, `${inAud.length} in the audience`],
                 ['ready', 'Ready', counts.ready, 'The batch will send to these'],
-                ['skipped', 'Skipped', counts.skipped, 'Not sent until you fix or approve them'],
+                ['skipped', 'Skipped', counts.skipped, counts.noemail ? `Not sent until you fix or approve them · ${counts.noemail} not an email (bad address or no mail server)` : 'Not sent until you fix or approve them'],
                 ['sent', 'Sent', counts.sent, 'Sent by this campaign'],
+                ...(counts.opened ? [['opened', 'Opened', counts.opened, `Opened (approx.) — the letter's picture was loaded${counts.clicked ? `; ${counts.clicked} also clicked a link` : ''}. Some mail apps load it on their own, others never do, so this is a lower and upper bound at once`]] : []),
                 ...(counts.replied ? [['replied', 'Replied', counts.replied, 'Answered — read from your inbox']] : []),
                 ...(counts.failed + counts.bounced ? [['failed', 'Failed', counts.failed + counts.bounced, 'Refused when sent, or returned later by the mail system']] : []),
               ] as [typeof s.view, string, number, string][]).map(([v, label, n, tip]) => (
@@ -237,20 +272,7 @@ export function ContactsTab() {
           )
         ) : !shown.length ? (
           <div className="or-empty"><p>No contact matches.</p></div>
-        ) : <>{shown.slice(0, limit).map((r) => {
-          const st = rowState(r)
-          const on = r.c.id === s.activeContact
-          return (
-            <button key={r.c.id} type="button" role="option" aria-selected={on} className={'or-row st-' + st.st + (on ? ' on' : '')} onClick={() => s.setActiveContact(r.c.id)}>
-              <span className="or-row-main">
-                <b>{r.c.personName || r.c.email}</b>
-                <span className="or-row-org" title={[r.c.designation, r.c.organization].filter(Boolean).join(' · ')}>{[r.c.designation, r.c.organization].filter(Boolean).join(' · ') || 'No designation or organisation in the sheet'}</span>
-                {r.c.personName && <span className="or-row-mail">{r.c.email.split('@')[0]}<wbr />@{r.c.email.split('@').slice(1).join('@')}</span>}
-              </span>
-              <span className={'or-chip st-' + st.st} data-tip={st.tip}>{st.text}</span>
-            </button>
-          )
-        })}
+        ) : <>{shown.slice(0, limit).map((r) => <ContactRow key={r.c.id} c={r.c} out={r.out} on={r.c.id === s.activeContact} onPick={s.setActiveContact} />)}
         {shown.length > limit && (
           <button type="button" className="btn or-wide or-more" onClick={() => setLimit((n) => n + PAGE)}>
             Show {Math.min(PAGE, shown.length - limit)} more · {shown.length - limit} not shown
@@ -259,4 +281,4 @@ export function ContactsTab() {
       </div>
     </div>
   )
-}
+})

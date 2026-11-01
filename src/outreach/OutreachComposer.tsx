@@ -3,8 +3,8 @@
 // renderer the main process sends with). One template for the whole audience: {name}, {designation}, {organization}
 // and {sector} are filled from each contact's row.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useOutreachStore } from './outreachStore'
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useOutreachStore, useDesk } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { OUTREACH_BLUEPRINTS, REWRITES, rewriteLetter, suggestBlueprint, writeOutreachWithAi, type LetterContext, type RewriteAction } from './outreachAi'
 import { PLACEHOLDERS, applyMark, buildMessage, mentionsAttachment, missingFields, softBreakOnEnter } from './compose'
@@ -36,8 +36,9 @@ const TOOLS: { kind: string; icon: IconName; tip: string }[] = [
   { kind: 'rule', icon: 'rule', tip: 'Divider' },
 ]
 
-export function OutreachComposer() {
-  const s = useOutreachStore()
+// memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
+export const OutreachComposer = memo(function OutreachComposer() {
+  const s = useDesk()
   const ui = useOutreachUi()
   const c = s.campaign()
   const [busy, setBusy] = useState<string | null>(null)
@@ -59,7 +60,10 @@ export function OutreachComposer() {
 
   const audience = useMemo(() => s.contacts.filter((x) => inAudience(x, c?.audience)), [s.contacts, c?.audience])
   const suggestion = useMemo(() => (c?.kind === 'list' ? suggestBlueprint(audience, c.audience.purposes) : null), [audience, c?.kind, c?.audience.purposes])
-  const missingCount = useMemo(() => (c ? audience.filter((x) => x.status === 'QUEUED' && missingFields(x, c.subject, c.body).length).length : 0), [audience, c?.subject, c?.body]) // eslint-disable-line react-hooks/exhaustive-deps
+  // counted over the whole audience: a frame behind the typing, not inside each keystroke
+  const lateSubject = useDeferredValue(c?.subject ?? '')
+  const lateBody = useDeferredValue(c?.body ?? '')
+  const missingCount = useMemo(() => (c ? audience.filter((x) => x.status === 'QUEUED' && missingFields(x, lateSubject, lateBody).length).length : 0), [audience, lateSubject, lateBody]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const preview = useMemo(() => {
     if (!c || ui.view !== 'preview') return null
@@ -320,4 +324,4 @@ export function OutreachComposer() {
       <AttachmentTray />
     </main>
   )
-}
+})

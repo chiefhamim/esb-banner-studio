@@ -99,6 +99,14 @@ function createEngine(deps = {}) {
     return res.events.some((e) => e.run !== 'followup' && e.t >= cutoff)
   }
 
+  // Did another PC already send this campaign's letter to this address? (merged from the shared ledger as send.ok
+  // events marked remote — see esb:outreach-mark-sent)
+  function sentElsewhere(email, campaignId, kind) {
+    if (!events || typeof events.read !== 'function') return false
+    const res = events.read({ types: ['send.ok'], email, limit: 50, includeDry: true })
+    return res.events.some((e) => e.remote && e.campaignId === campaignId && (kind === 'followup' ? e.run === 'followup' : e.run !== 'followup'))
+  }
+
   function cleanDomainStats(now) {
     for (const [dom, st] of domainStats.entries()) {
       if (now >= st.resetAt) {
@@ -377,6 +385,17 @@ function createEngine(deps = {}) {
       return
     }
 
+    // Sent from another PC (shared ledger): never again from here
+    if (sentElsewhere(email, job.campaignId, job.kind)) {
+      job.state.skipped[msgIdx] = 'elsewhere'
+      job.state.sent.push(msgIdx)
+      jobs.saveState(job)
+      events.append({ type: 'send.skip', jobId: job.id, campaignId: job.campaignId, email, run: job.kind, reason: 'elsewhere', dry: job.dry })
+      pushProgress(job)
+      activeTimer = setTimer(tick, 100)
+      return
+    }
+
     // Check contact cooldown (first letters only)
     if (job.kind !== 'followup' && isUnderCooldown(email, cfg.contactCooldownDays || 30)) {
       job.state.skipped[msgIdx] = 'cooldown'
@@ -424,6 +443,8 @@ function createEngine(deps = {}) {
           body: msg.body,
           optOut: msg.optOut,
           ...job.shared,
+          // labels the tracking links (…&c=id); the mailer validates it
+          campaignId: job.campaignId,
           // a designed letter's per-recipient words ({name}, …); the page itself is in job.shared.design
           ...(msg.vars ? { vars: msg.vars } : {}),
           attachments: job.attachments,
@@ -454,6 +475,8 @@ function createEngine(deps = {}) {
         org: msg.org,
         key: msg.key,
         messageId: sendResult.messageId,
+        // the tracking key the mailer put in this letter (null when the site's tracking was not live)
+        ...(sendResult.messageKey ? { messageKey: sendResult.messageKey } : {}),
         ms,
         attempt: (job.state.failed[msgIdx]?.attempts || 0) + 1,
         dry: job.dry || dryRun,
@@ -462,6 +485,14 @@ function createEngine(deps = {}) {
       job.state.sent.push(msgIdx)
       delete job.state.failed[msgIdx]
       jobs.saveState(job)
+      pushProgress(job)
+    } else if (sendResult.duplicate) {
+      // the mailer's own ledger refused a repeat (sent within 7 days, perhaps from another PC): a skip, not a failure
+      job.state.skipped[msgIdx] = 'already-sent'
+      job.state.sent.push(msgIdx)
+      delete job.state.failed[msgIdx]
+      jobs.saveState(job)
+      events.append({ type: 'send.skip', jobId: job.id, campaignId: job.campaignId, email, run: job.kind, reason: 'already-sent', detail: String(sendResult.error || '').slice(0, 200), dry: job.dry || dryRun })
       pushProgress(job)
     } else {
       const errInfo = classifySendError(sendResult)
@@ -628,7 +659,8 @@ function createEngine(deps = {}) {
         for (const bnc of res.bounces || []) {
           events.append({ type: 'bounce', email: bnc.email, at: bnc.at, reason: bnc.reason, dry: dryRun })
         }
-        emit('inbox', res)
+        // the renderer reads payload.result (engineClient.ts); spreading res made every field top-level and it was lost
+        emit('inbox', { result: res })
       }
     } catch {}
   }

@@ -866,4 +866,32 @@ describe('outreach-engine: headless send loop, error recovery & lifecycle (§1.5
     expect(quitEv).toBeDefined()
     expect(quitEv?.clean).toBe(true)
   })
+
+  // (26) cross-PC sync: an address another PC already sent is skipped here, never sent twice
+  it('(26) skips an address the shared ledger says another PC sent, and passes the campaign id to the mailer', async () => {
+    const h = createTestHarness()
+    h.events.append({ type: 'send.ok', remote: true, campaignId: 'c26', email: 'done@example.com', run: 'first', t: now - 3600e3 })
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c26', messages: [{ to: 'done@example.com', subject: 'S', body: 'B' }, { to: 'new@example.org', subject: 'S', body: 'B' }] })
+    await h.engine.tick()
+    await advanceTime(500)
+    await h.engine.tick()
+    expect(h.sentMails.map((x) => x.to)).toEqual(['new@example.org'])
+    expect(h.sentMails[0].campaignId).toBe('c26')
+    const skip = h.events.read({ types: ['send.skip'], limit: 5 }).events[0]
+    expect(skip).toMatchObject({ email: 'done@example.com', reason: 'elsewhere', campaignId: 'c26' })
+  })
+
+  // (27) the mailer's ledger refusing a repeat is a skip with its reason, not a failure that trips the breaker
+  it('(27) a duplicate refused by the mailer ledger is recorded as skipped, and the tracking key is kept on send.ok', async () => {
+    const h = createTestHarness({ sendError: (p: { to: string }) => (p.to === 'dup@example.com' ? { ok: false, error: 'Already emailed dup@example.com on 2026-10-30', duplicate: true } : { ok: true, messageId: '<m@example.com>', messageKey: 'K'.repeat(22) }) })
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c27', messages: [{ to: 'dup@example.com', subject: 'S', body: 'B' }, { to: 'ok@example.org', subject: 'S', body: 'B' }] })
+    await h.engine.tick()
+    now += 2000
+    await h.engine.tick()
+    expect(h.events.read({ types: ['send.fail', 'send.retry'], limit: 5 }).events).toEqual([])
+    expect(h.events.read({ types: ['send.skip'], limit: 5 }).events[0]).toMatchObject({ email: 'dup@example.com', reason: 'already-sent' })
+    expect(h.events.read({ types: ['send.ok'], limit: 5 }).events[0]).toMatchObject({ email: 'ok@example.org', messageKey: 'K'.repeat(22) })
+  })
 })

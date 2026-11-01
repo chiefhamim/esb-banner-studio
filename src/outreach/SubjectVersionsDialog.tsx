@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { Dialog } from '../ui/controls'
 import { Icon } from '../ui/Icon'
-import { useOutreachStore } from './outreachStore'
+import { useDesk } from './outreachStore'
 import { pickSubjectVariant } from './segments'
 import { aiPaused, aiFor, aiJson, type AiSchema } from '../editorial/aiProviders'
 
@@ -24,7 +24,7 @@ const subjectSchema: AiSchema = {
 }
 
 export function SubjectVersionsDialog({ onClose }: SubjectVersionsDialogProps) {
-  const s = useOutreachStore()
+  const s = useDesk()
   const campaign = s.campaign()
   const [newSubj, setNewSubj] = useState('')
   const [busy, setBusy] = useState(false)

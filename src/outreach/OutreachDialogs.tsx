@@ -2,7 +2,7 @@
 // Review & send — the last look before a batch starts, now or at a time.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore, uid } from './outreachStore'
+import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, uid, useDesk, useOutreachStore } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { cannotStart, eligible, followUpLetter, followUpQueue, inAudience, signatureOf, startBatch } from './campaign'
 import { engineClient } from './engineClient'
@@ -18,7 +18,7 @@ import { Dialog, Field, Select, Switch } from '../ui/controls'
 import { Icon, type IconName } from '../ui/Icon'
 
 export function SignaturesDialog() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const c = s.campaign()
   const [id, setId] = useState(c?.signatureId && c.signatureId !== 'none' ? c.signatureId : s.signatures[0]?.id)
@@ -68,7 +68,7 @@ const FOOTER_TOOLS: { kind: string; icon: IconName; tip: string }[] = [
 ]
 
 export function FooterDialog() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const [text, setText] = useState(s.footerLine)
   const [useBg, setUseBg] = useState(!!s.footerBg)
@@ -129,7 +129,7 @@ export function FooterDialog() {
 const STRIPE_NAMES = ['First bar', 'Second bar', 'Third bar']
 
 export function HeaderDialog() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const [useBg, setUseBg] = useState(!!s.headerBg)
   const [hex, setHex] = useState(s.headerBg || '#ffe9c7')
@@ -190,7 +190,7 @@ export function HeaderDialog() {
 }
 
 export function HousePromptDialog() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const [text, setText] = useState(s.housePrompt)
   const close = () => ui.set({ sheet: null })
@@ -211,7 +211,7 @@ export function HousePromptDialog() {
 }
 
 export function NameDialog({ mode }: { mode: 'rename' | 'save-template' }) {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const c = s.campaign()
   const [name, setName] = useState(mode === 'rename' ? c?.name ?? '' : c?.subject.slice(0, 48) ?? '')
@@ -238,7 +238,7 @@ export function NameDialog({ mode }: { mode: 'rename' | 'save-template' }) {
 const toLocalInput = (t: number) => { const d = new Date(t - new Date(t).getTimezoneOffset() * 60_000); return d.toISOString().slice(0, 16) }
 
 export function ReviewSendDialog() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const c = s.campaign()!
   const [when, setWhen] = useState<'now' | 'later'>('now')
@@ -335,7 +335,7 @@ export function ReviewSendDialog() {
   const hasRoom = room > 0
   const attachMentioned = mentionsAttachment(c.body)
   const attachOk = !attachMentioned || s.attachments.length > 0
-  const testSent = s.log.some((l) => l.text.includes('Test sent to'))
+  const testSent = useOutreachStore((x) => x.log.some((l) => l.text.includes('Test sent to')))
   const checksBad = checks.some((x) => x.level === 'bad')
 
   const needsYouCount = useMemo(() => {
@@ -585,7 +585,7 @@ export function AskDialog() {
 
 /** The second letter: when it goes, what it says. Defaults are a short, honest nudge with "Re:" on the subject. */
 export function FollowUpDialog() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const c = s.campaign()!
   const def = followUpLetter({ ...c, followUp: { ...c.followUp, subject: '', body: '' } })
@@ -631,7 +631,7 @@ export function FollowUpDialog() {
 }
 
 export function TemplatesDialog() {
-  const s = useOutreachStore()
+  const s = useDesk()
   const ui = useOutreachUi()
   const c = s.campaign()
   const close = () => ui.set({ sheet: null })

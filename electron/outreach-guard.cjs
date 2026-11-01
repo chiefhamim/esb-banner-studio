@@ -1,7 +1,7 @@
 // ESB Studio — Outreach IPC Guard (electron/outreach-guard.cjs)
 // Pure argument validators for all outreach IPC channels (Appendix A, §1.7).
 
-const { validateMail } = require('./mailer.cjs')
+const { validateMail, EMAIL_RE } = require('./mailer.cjs')
 const { validateSettings } = require('./outreach-settings.cjs')
 
 const SAFE_ID_RE = /^[a-zA-Z0-9_\-]+$/
@@ -422,7 +422,36 @@ function validateLogEvent(e) {
   return { ok: true, event }
 }
 
+/**
+ * Validates outreachMarkSent: sends another PC made, read from the shared ledger, to be entered in this PC's ledger so
+ * it never writes to those addresses again. Treated like every other renderer argument — as hostile: at most 20,000
+ * entries, each a plain address, a known kind, a safe campaign id and a time no later than a few minutes from now and
+ * no older than 400 days. A bad entry is dropped and counted, never passed on.
+ */
+function validateRemoteSends(raw, now = Date.now()) {
+  if (!Array.isArray(raw)) return { ok: false, error: 'Expected a list of sends' }
+  if (raw.length > 20000) return { ok: false, error: 'Cannot mark more than 20,000 sends at once' }
+  const entries = []
+  let rejected = 0
+  const seen = new Set()
+  for (const e of raw) {
+    if (!e || typeof e !== 'object' || Array.isArray(e) || hasHostileKeys(e)) { rejected++; continue }
+    const email = typeof e.email === 'string' ? e.email.trim().toLowerCase() : ''
+    const kind = e.kind === 'campaign' || e.kind === 'followup' || e.kind === 'test' ? e.kind : null
+    const campaignId = typeof e.campaignId === 'string' ? e.campaignId : ''
+    const at = typeof e.at === 'number' && Number.isFinite(e.at) ? Math.round(e.at) : NaN
+    if (!email || email.length > 254 || !EMAIL_RE.test(email) || !kind || !SAFE_ID_RE.test(campaignId) || campaignId.length > 100
+      || !(at > now - 400 * 24 * 3600 * 1000 && at < now + 10 * 60 * 1000)) { rejected++; continue }
+    const k = `${kind}|${email}|${campaignId}`
+    if (seen.has(k)) continue
+    seen.add(k)
+    entries.push({ email, kind, campaignId, at })
+  }
+  return { ok: true, entries, rejected }
+}
+
 module.exports = {
+  validateRemoteSends,
   validateJobSpec,
   validateControl,
   validateEventsQuery,
