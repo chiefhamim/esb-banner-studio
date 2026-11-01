@@ -15,7 +15,7 @@
     "test:insights": "node tools/e2e/insights-test.mjs",
     "test:wire": "node tools/e2e/wire-test.mjs",
     "test:digest": "node tools/e2e/digest-test.mjs",
-    "test:video": "node tools/e2e/video-test.mjs && node tools/e2e/video-engine-test.mjs",
+    "test:video": "node tools/e2e/video-test.mjs && node tools/e2e/video-engine-test.mjs && node tools/e2e/video-fx-test.mjs",
     "test:unit": "vitest run",
     "preapp": "node tools/ensure-deps.mjs",
     "app": "npm run build && electron .",

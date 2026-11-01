@@ -18,7 +18,7 @@
 // MP4 (H.264) is the default. Audio is AAC where the platform encodes it (Windows, macOS) and Opus otherwise. WebM
 // (VP9 + Opus) is the fallback when H.264 is unavailable.
 
-import { AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, StreamTarget, VideoSampleSink, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny'
+import { AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, EncodedPacketSink, Mp4OutputFormat, Output, QUALITY_HIGH, StreamTarget, VideoSampleSink, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny'
 import type { Input, StreamTargetChunk, VideoSample } from 'mediabunny'
 import type { Clip, VideoProject } from './timeline'
 import { audibleClips, clipsMissingMedia, contentEnd, isActive } from './timeline'
@@ -29,6 +29,9 @@ import { renderFrame } from './engine/render'
 import type { FrameInput } from './engine/render'
 import { exportUrl } from './engine/mediaSource'
 import { holdBackgroundFor, holdProxies } from './engine/background'
+import { animated, isPlainSpeed, sampleProp, srcAt } from './engine/animation'
+import { PcmSource } from './engine/pcmSource'
+import { ClipSpeedAudio } from './engine/speedAudio'
 
 /** The graphics context went away mid-export (GPU reset, driver update): the frames would be black. */
 export const CONTEXT_LOST_MESSAGE = 'The graphics context was lost during the export (the GPU was reset), so the remaining frames could not be drawn. Nothing was saved; export again.'
@@ -99,8 +102,8 @@ export async function pickCodecs(width: number, height: number, fps: number, pre
 
 // ---------------------------------------------------------------- footage frames
 
-/** Source time of `clip` at timeline time `t`. */
-const srcTime = (c: Clip, t: number) => Math.max(0, (c.in || 0) + (t - c.start))
+/** Source time of `clip` at timeline time `t` (its speed, ramp, reverse or freeze included: engine/animation.ts). */
+const srcTime = (c: Clip, t: number) => srcAt(c, t)
 
 /** The frame numbers of an export at which `clip` is on screen. */
 export function activeFrames(clip: Clip, fps: number, totalFrames: number): number[] {
@@ -111,7 +114,68 @@ export function activeFrames(clip: Clip, fps: number, totalFrames: number): numb
   return out
 }
 
-interface FootageReader { input: Input; iter: AsyncIterator<VideoSample | null>; lastFrame: number }
+/** One export frame's picture of a footage clip, and how to free it once the frame is drawn. */
+interface FootageFrame extends FrameInput { close(): void }
+interface FootageReader { input: Input; iter: AsyncIterator<FootageFrame | null>; lastFrame: number }
+
+const sampleFrame = (s: VideoSample): FootageFrame => ({ image: s.toCanvasImageSource(), width: s.displayWidth, height: s.displayHeight, close: () => { try { s.close() } catch { /* closed */ } } })
+
+/** A decoded frame copied out of the decoder (a reverse run keeps a GOP's worth of frames). */
+async function copyFrame(s: VideoSample): Promise<FootageFrame> {
+  const vf = s.toVideoFrame()
+  try {
+    const bmp = await createImageBitmap(vf)
+    return { image: bmp, width: bmp.width, height: bmp.height, close: () => bmp.close() }
+  } finally { try { vf.close() } catch { /* closed */ } }
+}
+
+/** Frames a reverse run keeps at once (bytes); a GOP bigger than this is decoded again for its lower part. */
+const REVERSE_BUDGET = 512 * 1024 * 1024
+
+/** The frames at `times` (descending) of a reversed stretch: GOP by GOP from the top, each decoded forward from its key
+ * frame once, copied, and handed out last first. */
+async function* reverseRun(sink: VideoSampleSink, packets: EncodedPacketSink, times: number[], frameBytes: number): AsyncGenerator<FootageFrame | null> {
+  const maxChunk = Math.max(1, Math.floor(REVERSE_BUDGET / Math.max(1, frameBytes)))
+  let i = 0
+  while (i < times.length) {
+    const top = times[i]
+    const key = await packets.getKeyPacket(top).catch(() => null)
+    const start = key ? key.timestamp : 0
+    let m = i
+    while (m < times.length && times[m] >= start - 1e-9 && m - i < maxChunk) m++
+    const want = times.slice(i, m).reverse() // ascending
+    const got: (FootageFrame | null)[] = new Array(want.length).fill(null)
+    let w = 0
+    let prev: VideoSample | null = null
+    try {
+      for await (const smp of sink.samples(start, top + 1e-4)) {
+        while (w < want.length && want[w] < smp.timestamp - 1e-6) { if (prev) got[w] = await copyFrame(prev); w++ }
+        prev?.close()
+        prev = smp
+        if (w >= want.length) break
+      }
+      while (w < want.length) { if (prev) got[w] = await copyFrame(prev); w++ }
+    } finally { prev?.close() }
+    for (let j = got.length - 1; j >= 0; j--) yield got[j]
+    i = m
+  }
+}
+
+/** Every export frame of a speed-changed clip, in order: forward stretches through samplesAtTimestamps (each packet
+ * decoded once), reversed stretches through reverseRun. */
+async function* footageFrames(sink: VideoSampleSink, packets: EncodedPacketSink, times: number[], frameBytes: number): AsyncGenerator<FootageFrame | null> {
+  let i = 0
+  while (i < times.length) {
+    let j = i + 1
+    const down = j < times.length && times[j] < times[i] - 1e-9
+    if (down) while (j < times.length && times[j] < times[j - 1] - 1e-9) j++
+    else while (j < times.length && times[j] >= times[j - 1] - 1e-9) j++
+    const run = times.slice(i, j)
+    if (down) yield* reverseRun(sink, packets, run, frameBytes)
+    else for await (const smp of sink.samplesAtTimestamps(run)) yield smp ? sampleFrame(smp) : null
+    i = j
+  }
+}
 
 /** Open a decoder for one footage clip that yields exactly one frame per export frame it is on screen; null when the
  * decoder cannot read it (the <video> fallback is used). */
@@ -127,7 +191,10 @@ async function openFootage(clip: Clip, fps: number, totalFrames: number): Promis
     if (!track || !(await track.canDecode())) { input.dispose(); return null }
     const sink = new VideoSampleSink(track)
     const times = frames.map((i) => srcTime(clip, i / fps))
-    return { input, iter: sink.samplesAtTimestamps(times)[Symbol.asyncIterator](), lastFrame: frames[frames.length - 1] }
+    const iter: AsyncIterator<FootageFrame | null> = isPlainSpeed(clip)
+      ? (async function* () { for await (const smp of sink.samplesAtTimestamps(times)) yield smp ? sampleFrame(smp) : null })()
+      : footageFrames(sink, new EncodedPacketSink(track), times, track.displayWidth * track.displayHeight * 4)
+    return { input, iter, lastFrame: frames[frames.length - 1] }
   } catch {
     input?.dispose()
     return null
@@ -180,8 +247,26 @@ async function openAudio(url: string): Promise<AudioReader | null> {
   }
 }
 
+/** Per export: the speed-changed clips' sound renderers (by clip id) and their source readers (by URL). */
+export interface SpeedAudioState { clips: Map<string, ClipSpeedAudio>; sources: Map<string, PcmSource> }
+export const newSpeedAudioState = (): SpeedAudioState => ({ clips: new Map(), sources: new Map() })
+export function closeSpeedAudio(st: SpeedAudioState) { st.sources.forEach((p) => p.dispose()); st.sources.clear(); st.clips.clear() }
+
+const decodeWhole = async (url: string) => {
+  try { return await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await (await fetch(url)).arrayBuffer()) } catch { return null }
+}
+
+/** A clip's volume over [a, b) of the timeline as a gain curve (100 values a second), when it has volume keyframes. */
+function volumeCurve(c: Clip, a: number, b: number): Float32Array | null {
+  if (!animated(c, 'volume')) return null
+  const n = Math.max(2, Math.ceil((b - a) * 100) + 1)
+  const out = new Float32Array(n)
+  for (let i = 0; i < n; i++) out[i] = Math.max(0, Math.min(1, sampleProp(c, 'volume', a + ((b - a) * i) / (n - 1) - c.start, c.volume ?? 1)))
+  return out
+}
+
 /** Mix the audible clips over [t0, t1) of the timeline into one stereo 48 kHz buffer (silence where nothing plays). */
-async function mixPiece(clips: Clip[], readers: Map<string, AudioReader | null>, t0: number, t1: number): Promise<AudioBuffer> {
+async function mixPiece(clips: Clip[], readers: Map<string, AudioReader | null>, t0: number, t1: number, speed: SpeedAudioState = newSpeedAudioState()): Promise<AudioBuffer> {
   const length = Math.max(1, Math.round((t1 - t0) * SAMPLE_RATE))
   const here = clips.filter((c) => c.start < t1 && c.start + c.duration > t0)
   if (!here.length) return new AudioBuffer({ length, numberOfChannels: 2, sampleRate: SAMPLE_RATE })
@@ -196,7 +281,29 @@ async function mixPiece(clips: Clip[], readers: Map<string, AudioReader | null>,
     if (b <= a) continue
     const gain = ctx.createGain()
     gain.gain.value = c.volume ?? 1
+    const curve = volumeCurve(c, a, b)
+    if (curve) gain.gain.setValueCurveAtTime(curve, a - t0, b - a)
     gain.connect(ctx.destination)
+    if (!isPlainSpeed(c)) {
+      // speed-changed: the stretcher makes this span's samples (pitch kept unless the clip says otherwise)
+      let sa = speed.clips.get(c.id)
+      if (!sa) {
+        let pcm = speed.sources.get(url)
+        if (!pcm) { pcm = new PcmSource(url, decodeWhole); speed.sources.set(url, pcm) }
+        sa = new ClipSpeedAudio(c, pcm, SAMPLE_RATE)
+        speed.clips.set(c.id, sa)
+      }
+      const chans = await sa.render(a, b)
+      if (!chans || !chans[0]?.length) continue
+      const buf = new AudioBuffer({ length: chans[0].length, numberOfChannels: 2, sampleRate: SAMPLE_RATE })
+      buf.copyToChannel(chans[0] as Float32Array<ArrayBuffer>, 0)
+      buf.copyToChannel((chans[1] ?? chans[0]) as Float32Array<ArrayBuffer>, 1)
+      const src = ctx.createBufferSource()
+      src.buffer = buf
+      src.connect(gain)
+      src.start(a - t0)
+      continue
+    }
     for await (const wb of reader.buffers(srcTime(c, a), srcTime(c, b))) {
       // where this decoded piece's first sample lands in the mix, clipped to the part of the clip inside [t0, t1)
       const when = c.start + (wb.timestamp - (c.in || 0)) - t0
@@ -219,7 +326,8 @@ export async function mixAudio(project: VideoProject, duration: number): Promise
   const clips = audibleClips(project).filter((c) => c.start < duration)
   if (!clips.length) return null
   const readers = new Map<string, AudioReader | null>()
-  try { return await mixPiece(clips, readers, 0, duration) } finally { readers.forEach((r) => r?.close()) }
+  const speed = newSpeedAudioState()
+  try { return await mixPiece(clips, readers, 0, duration, speed) } finally { readers.forEach((r) => r?.close()); closeSpeedAudio(speed) }
 }
 
 async function fontsReady() {
@@ -273,12 +381,13 @@ export async function exportTimelineVideo(
   const footage = timeline.clips.filter((c) => c.kind === 'video' && !c.still && !!c.sourceUrl)
   const readers = new Map<string, FootageReader | null>()
   const audioReaders = new Map<string, AudioReader | null>()
+  const speedAudio = newSpeedAudioState()
   let audioUpTo = 0
   const addAudioUntil = async (t: number) => {
     if (!audioSource) return
     while (audioUpTo < Math.min(t, duration) - 1e-9) {
       const t1 = Math.min(duration, audioUpTo + AUDIO_CHUNK_SECONDS)
-      await audioSource.add(await mixPiece(sounding, audioReaders, audioUpTo, t1))
+      await audioSource.add(await mixPiece(sounding, audioReaders, audioUpTo, t1, speedAudio))
       audioUpTo = t1
     }
   }
@@ -293,7 +402,7 @@ export async function exportTimelineVideo(
       // the sound for the next 10 s goes in as the picture reaches it
       if (t >= audioUpTo) await addAudioUntil(t + AUDIO_CHUNK_SECONDS)
       const frames = new Map<string, FrameInput>()
-      const samples: VideoSample[] = []
+      const samples: FootageFrame[] = []
       try {
         const waits: Promise<void>[] = []
         for (const c of footage) {
@@ -308,7 +417,7 @@ export async function exportTimelineVideo(
             const { value } = await r.iter.next()
             if (value) {
               samples.push(value)
-              frames.set(c.id, { image: value.toCanvasImageSource(), width: value.displayWidth, height: value.displayHeight })
+              frames.set(c.id, value)
             }
           } else {
             waits.push(seekElement(c, t, fps).then((f) => { if (f) frames.set(c.id, f) }))
@@ -341,6 +450,7 @@ export async function exportTimelineVideo(
     releaseProxies()
     readers.forEach((r) => r?.input.dispose())
     audioReaders.forEach((r) => r?.close())
+    closeSpeedAudio(speedAudio)
     comp.dispose()
     comp.gl.getExtension('WEBGL_lose_context')?.loseContext()
     canvas.width = canvas.height = 0

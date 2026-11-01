@@ -40,6 +40,15 @@ const SPECS = {
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-g', '30', '-an', '-movflags', '+faststart'],
   'offset-1500.mp4': ['-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=6', '-f', 'lavfi', '-i', 'sine=f=660:d=6:sample_rate=48000',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-pix_fmt', 'yuv420p', '-g', '15', '-bf', '0', '-c:a', 'aac', '-b:a', '96k', '-ac', '2', '-output_ts_offset', '1.5'],
+  // Phase 2 — Part B (effects, speed):
+  //   greenscreen.mp4  4 s 1280x720 30 fps: noisy studio green (#00b140), a skin-tone square with a dark band, ringed by
+  //                    an 8 px green-spill fringe (#7fae6e), slightly blurred (soft edges like a real key)
+  //   counter-360p.mp4 6 s 640x360 30 fps, GOP 30: frame number N as 10 bars of 64 px (bit b = bar b, LSB left, white
+  //                    = 1), so any exported frame says which source frame it is
+  'greenscreen.mp4': ['-f', 'lavfi', '-i', 'color=c=0x00b140:s=1280x720:r=30:d=4,noise=alls=6:allf=t,drawbox=x=440:y=160:w=400:h=400:color=0x7fae6e:t=fill,drawbox=x=448:y=168:w=384:h=384:color=0xc89678:t=fill,drawbox=x=560:y=330:w=160:h=60:color=0x303040:t=fill,gblur=sigma=1.2',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '16', '-pix_fmt', 'yuv420p', '-g', '30', '-an', '-movflags', '+faststart'],
+  'counter-360p.mp4': ['-f', 'lavfi', '-i', "nullsrc=s=640x360:r=30:d=6,format=gray,geq=lum='if(gt(mod(floor(N/pow(2,floor(X/64))),2),0),235,16)'",
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p', '-g', '30', '-bf', '2', '-an', '-movflags', '+faststart'],
   'uhd-a-30.mp4': ['-f', 'lavfi', '-i', 'testsrc2=size=3840x2160:rate=30:duration=12',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p', '-g', '30', '-bf', '2', '-an', '-movflags', '+faststart'],
   'uhd-b-30.mp4': ['-f', 'lavfi', '-i', "smptehdbars=size=3840x2160:rate=30:duration=12,drawbox=x='mod(t*700,3400)':y=800:w=440:h=440:color=white@0.9:t=fill",

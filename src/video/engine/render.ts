@@ -2,12 +2,19 @@
 // with frames from the preview engine (cache + look-ahead, proxies); the export calls it with frames decoded exactly
 // at each export frame time from the original files. Everything else — layer order, transforms, crossfades, titles,
 // the bug — is decided here once, so a preview frame and an export frame are drawn the same way.
+//
+// Phase 2: transforms, opacity and crop are sampled each frame (keyframes, engine/animation.ts); a clip's effects and
+// blend mode are resolved into the compositor's LayerFx (engine/fxResolve.ts); an adjustment layer (an overlay clip
+// with `adjustment: true`) applies its effects to everything drawn below it; footage source time follows the clip's
+// speed (sourceTimeAt) — the frame lookup is told the clip, and asks animation.ts for the time itself.
 
 import type { Clip, VideoProject } from '../timeline'
 import { footageRect, layersAt } from '../timeline'
 import { bugKey, captionLimit, getCachedImage, offlineKey, rasterBug, rasterKey, rasterLayer, rasterOffline } from '../compositor'
-import type { GLCompositor, LayerDraw } from './glCompositor'
+import type { GLCompositor, LayerDraw, LayerFx } from './glCompositor'
 import { frameQuad, layerQuad, uvOf } from './layerMath'
+import { hasKeyframes, sampleProp, srcAt } from './animation'
+import { beginFxFrame, resolveFx } from './fxResolve'
 
 /** A footage picture for this instant: a decoded frame (ImageBitmap / VideoFrame) or, for a file the decoder cannot
  * read, its <video> element (`live`: the picture changes under the same object). */
@@ -29,8 +36,8 @@ export interface RenderReport {
 
 const FULL_UV: [number, number, number, number] = [0, 0, 1, 1]
 
-/** Source time of `clip` at timeline time `t`. */
-export const srcTime = (c: Clip, t: number) => Math.max(0, (c.in || 0) + (t - c.start))
+/** Source time of `clip` at timeline time `t` (its speed, ramp, reverse or freeze included). */
+export const srcTime = (c: Clip, t: number) => srcAt(c, t)
 
 /** The still's slow move: 0→6 % over the clip, so a held picture does not read as a frozen frame. */
 export function kenBurnsZoom(c: Clip, t: number) {
@@ -38,16 +45,49 @@ export function kenBurnsZoom(c: Clip, t: number) {
   return 1 + 0.06 * (c.kenBurns === 'out' ? 1 - p : p)
 }
 
+/** The animated transform of a clip at one instant (a reused object: footageRect reads it at once). */
+interface Pose { fit: Clip['fit']; scale: number; offX: number; offY: number; cropL: number; cropR: number; cropT: number; cropB: number; rotation: number; opacity: number }
+const pose: Pose = { fit: undefined, scale: 1, offX: 0, offY: 0, cropL: 0, cropR: 0, cropT: 0, cropB: 0, rotation: 0, opacity: 1 }
+
+/** Fill `pose` with the clip's transform at timeline time t: keyframes where it has them (x, y, scale, rotation,
+ * opacity, crop), its static fields elsewhere. */
+export function poseAt(c: Clip, t: number): Readonly<Pose> {
+  pose.fit = c.fit
+  if (!hasKeyframes(c)) {
+    pose.scale = c.scale ?? 1; pose.offX = c.offX ?? 0; pose.offY = c.offY ?? 0
+    pose.cropL = c.cropL ?? 0; pose.cropR = c.cropR ?? 0; pose.cropT = c.cropT ?? 0; pose.cropB = c.cropB ?? 0
+    pose.rotation = c.rotation ?? 0; pose.opacity = c.opacity ?? 1
+    return pose
+  }
+  const tl = t - c.start
+  pose.scale = sampleProp(c, 'scale', tl, c.scale ?? 1)
+  pose.offX = sampleProp(c, 'x', tl, c.offX ?? 0)
+  pose.offY = sampleProp(c, 'y', tl, c.offY ?? 0)
+  pose.cropL = sampleProp(c, 'cropL', tl, c.cropL ?? 0)
+  pose.cropR = sampleProp(c, 'cropR', tl, c.cropR ?? 0)
+  pose.cropT = sampleProp(c, 'cropT', tl, c.cropT ?? 0)
+  pose.cropB = sampleProp(c, 'cropB', tl, c.cropB ?? 0)
+  pose.rotation = sampleProp(c, 'rotation', tl, c.rotation ?? 0)
+  pose.opacity = Math.min(1, Math.max(0, sampleProp(c, 'opacity', tl, c.opacity ?? 1)))
+  return pose
+}
+
+/** An adjustment layer: an overlay clip whose effects apply to what is below it. */
+export const isAdjustment = (c: Clip) => (c as { adjustment?: boolean }).adjustment === true
+
 export function renderFrame(comp: GLCompositor, project: VideoProject, t: number, w: number, h: number, opts: RenderOptions): RenderReport {
   const editor = !!opts.editor
   comp.begin(w, h)
+  beginFxFrame()
   const layers = layersAt(project, t)
   const captionBottom = captionLimit(layers.map((l) => l.clip), w, h, editor)
   const report: RenderReport = { footage: 0, missing: [] }
   const slots = new Set<string>()
+  const fxOf = (clip: Clip): LayerFx | null => resolveFx(comp, clip, t, h, project.height, false, editor)
 
   const drawOf = (clip: Clip, alpha: number): LayerDraw | null => {
     if (clip.kind === 'video') {
+      const p = poseAt(clip, t)
       if (clip.still) {
         if (!clip.sourceUrl) return editor ? offline(clip) : null
         const img = getCachedImage(clip.sourceUrl)
@@ -56,8 +96,8 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
         const ih = img.naturalHeight
         const tex = comp.staticTexture(`img|${clip.sourceUrl}`, () => ({ src: img, width: iw, height: ih }))
         if (!tex) return null
-        const r = footageRect(iw, ih, w, h, clip, kenBurnsZoom(clip, t))
-        return { tex, quad: layerQuad(r, clip.rotation, clip.anchorX, clip.anchorY), uv: uvOf(r, iw, ih), alpha }
+        const r = footageRect(iw, ih, w, h, p, kenBurnsZoom(clip, t))
+        return { tex, quad: layerQuad(r, p.rotation, clip.anchorX, clip.anchorY), uv: uvOf(r, iw, ih), alpha, fx: fxOf(clip) }
       }
       const f = clip.sourceUrl ? opts.frames(clip) : null
       if (!f) {
@@ -67,13 +107,14 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
       report.footage++
       slots.add(clip.id)
       const tex = comp.slotTexture(clip.id, f.image, f.width, f.height, f.live)
-      const r = footageRect(f.width, f.height, w, h, clip)
-      return { tex, quad: layerQuad(r, clip.rotation, clip.anchorX, clip.anchorY), uv: uvOf(r, f.width, f.height), alpha }
+      const r = footageRect(f.width, f.height, w, h, p)
+      return { tex, quad: layerQuad(r, p.rotation, clip.anchorX, clip.anchorY), uv: uvOf(r, f.width, f.height), alpha, fx: fxOf(clip) }
     }
     if (clip.kind === 'overlay' || clip.kind === 'caption') {
       const tex = comp.staticTexture(rasterKey(clip, w, h, editor, captionBottom), () => rasterLayer(clip, w, h, editor, captionBottom))
       if (!tex) return null
-      return { tex, quad: frameQuad(w, h, clip.offX, clip.offY, clip.rotation, clip.anchorX, clip.anchorY), uv: FULL_UV, alpha }
+      const p = poseAt(clip, t)
+      return { tex, quad: frameQuad(w, h, p.offX, p.offY, p.rotation, clip.anchorX, clip.anchorY), uv: FULL_UV, alpha, fx: fxOf(clip) }
     }
     return null
   }
@@ -81,25 +122,39 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
     const tex = comp.staticTexture(offlineKey(clip, w, h), () => rasterOffline(clip, w, h))
     return tex ? { tex, quad: frameQuad(w, h), uv: FULL_UV, alpha: 1 } : null
   }
+  /** A layer's opacity now: its (keyframed) opacity × the crossfade's share of layersAt's alpha. */
+  const alphaOf = (clip: Clip, layerAlpha: number, progress?: number) => {
+    if (!hasKeyframes(clip)) return layerAlpha
+    const base = clip.opacity ?? 1
+    const share = base > 0 ? layerAlpha / base : progress ?? 1
+    return poseAt(clip, t).opacity * share
+  }
 
   // the draw list; a crossfade replaces the outgoing clip's own draw with one two-input mix
-  type Item = { kind: 'layer'; clip: Clip; d: LayerDraw | null } | { kind: 'mix'; clip: Clip; a: LayerDraw | null; b: LayerDraw | null; p: number }
+  type Item = { kind: 'layer'; clip: Clip; d: LayerDraw | null } | { kind: 'mix'; clip: Clip; a: LayerDraw | null; b: LayerDraw | null; p: number } | { kind: 'adjust'; clip: Clip; fx: LayerFx | null; alpha: number }
   const items: Item[] = []
   let branded = false
   for (const l of layers) {
     if (l.clip.kind === 'video' && l.clip.branded) branded = true
-    if (l.mix) {
-      const prev = items[items.length - 1]
-      const b = drawOf(l.clip, l.clip.opacity ?? 1)
-      if (prev && prev.kind === 'layer' && prev.clip.id === l.mix.from.id) items[items.length - 1] = { kind: 'mix', clip: l.clip, a: prev.d, b, p: l.mix.progress }
-      else items.push({ kind: 'layer', clip: l.clip, d: b ? { ...b, alpha: l.alpha } : null })
+    if (isAdjustment(l.clip)) {
+      const a = alphaOf(l.clip, l.alpha)
+      items.push({ kind: 'adjust', clip: l.clip, fx: a > 0 ? resolveFx(comp, l.clip, t, h, project.height, true, editor) : null, alpha: a })
       continue
     }
-    if (l.alpha <= 0) { items.push({ kind: 'layer', clip: l.clip, d: null }); continue }
-    items.push({ kind: 'layer', clip: l.clip, d: drawOf(l.clip, l.alpha) })
+    if (l.mix) {
+      const prev = items[items.length - 1]
+      const b = drawOf(l.clip, alphaOf(l.clip, l.clip.opacity ?? 1))
+      if (prev && prev.kind === 'layer' && prev.clip.id === l.mix.from.id) items[items.length - 1] = { kind: 'mix', clip: l.clip, a: prev.d, b, p: l.mix.progress }
+      else items.push({ kind: 'layer', clip: l.clip, d: b ? { ...b, alpha: alphaOf(l.clip, l.alpha, l.mix.progress) } : null })
+      continue
+    }
+    const a = alphaOf(l.clip, l.alpha)
+    if (a <= 0) { items.push({ kind: 'layer', clip: l.clip, d: null }); continue }
+    items.push({ kind: 'layer', clip: l.clip, d: drawOf(l.clip, a) })
   }
   for (const it of items) {
     if (it.kind === 'layer') { if (it.d) comp.draw(it.d) }
+    else if (it.kind === 'adjust') { if (it.fx) comp.adjust(it.fx, it.alpha) }
     else if (it.b) comp.mix(it.a, it.b, it.p)
     else if (it.a) comp.draw({ ...it.a, alpha: it.a.alpha * (1 - it.p) })
   }

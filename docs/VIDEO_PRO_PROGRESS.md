@@ -563,3 +563,124 @@ Review findings on the decode engine, compositor and playback, plus the lead's s
 - Preview frames are scaled with the cheap bilinear filter ('low'); a 4K source on a small monitor can alias slightly
   in the preview (the export always decodes full size).
 - Scrub of three 1 s-GOP 1080p originals at once is still p95 200 ms without proxies (one layer: 40 ms).
+
+
+## Phase 2 — Part B: effects rendering, speed and keyframes in the engine (2026-11-02, branch `video-p2-fx`)
+
+Part A (edit operations, keyframe and speed MODELS + UI, markers, groups/compounds) is built in parallel on
+`video-p1-io`; this part draws and plays what those models describe, through one guarded adapter, and works on its own
+until the merge.
+
+### What changed
+
+**Adapter to Part A (`engine/animation.ts`).** `sampleProp`, `sourceTimeAt`, `clipDurationFor`, `audioRateAt` and
+`preservePitch` are the only animation/speed functions the engine calls. Part A's `src/video/keyframes.ts` and
+`src/video/speed.ts` are picked up with `import.meta.glob` (present → used; absent, missing a function or throwing →
+fallback), so this branch builds without them. The fallbacks read the v2 clip fields directly: `keyframes[prop]`
+(linear / ease-in/out in both spellings / bezier), `speed` (constant 0.1–10×, `{ ramp }` integrated), `reverse`,
+`freezes` — the field shapes Part A's model uses. Two guards: Part A's `sourceTimeAt` is probed once for absolute vs
+in-relative times, and a reversed clip's time gets −1 ms (`out − P(0)` is the first frame after the span; −1 ms shows
+frame N−1−k at timeline frame k, which the reverse export test checks).
+
+**One render path, per frame (`engine/render.ts`, `engine/fxResolve.ts`).** Position x/y, scale, rotation, opacity and
+crop are sampled each frame (`poseAt`, a reused object; a clip without keyframes reads its fields as before). A clip's
+`effects` and `blendMode` resolve into a pooled `LayerFx` (no allocation per frame once its LUT and key colour have been
+seen); an adjustment layer (an overlay clip with `adjustment: true`) becomes an `adjust` item drawn in track order.
+Footage source time is `sourceTimeAt` everywhere (monitor, golden still, export, the `<video>` fallback).
+
+**Compositor (`engine/glCompositor.ts`).** Plain layers keep Phase 1's shader (the Phase 1 goldens are unchanged). A
+layer with effects goes through one "uber" fragment shader switched by flags: sharpen (one output pixel), chroma key
+(BT.709 chroma distance, tolerance/softness, spill suppression along the key's chroma direction), colour (exposure,
+shadows, highlights, contrast, temperature, tint, saturation, vibrance — in sRGB, clamped), a .cube LUT (`RGB16F` 3D
+texture, hardware trilinear, domain, intensity), vignette, up to 4 masks (rectangle/ellipse in the layer's own frame,
+feather as a share of its shorter side, invert) and the blend mode: normal by hardware blending; multiply, screen,
+overlay, add, darken, lighten and soft light (W3C formulas) by copying the frame below (`blitFramebuffer`) and blending
+in the shader. Blur: the layer is first drawn at its drawn size (capped at the frame) into a framebuffer with
+key/colour/LUT, blurred there in two separable Gaussian passes (radius in export pixels, scaled to the output, so
+preview == export), then laid in with the rest. Adjustment layer: the frame so far → its effects → mixed back by
+opacity × masks. Every sampler has its own texture unit, set once (a `sampler3D` left on unit 0 beside `uTex`
+invalidated every draw — caught by the golden test). Framebuffers are made per frame size, LUT textures once per text
+(4 kept), vertices go through one reused buffer.
+
+**Effects model (`src/video/effects.ts`).** Types, parameter definitions (ranges, defaults, units), `newEffect`,
+`withEffect`/`setParam`, `sanitizeEffects` (run by `migrateTimeline`: known types only, values clamped, per-type caps,
+safe ids, a LUT whose text does not parse is dropped), `parseCube` (TITLE, LUT_3D_SIZE 2–65, DOMAIN_MIN/MAX,
+LUT_3D_INPUT_RANGE; refuses 1D LUTs, wrong counts and stray words, with the reason), `compactCube` (what the project
+stores, ≤ 8 MB; a 33-point cube is ~0.8 MB), `applyLutCpu` (reference), chroma helpers. `Clip` gains `blendMode` and
+`adjustment` (timeline.ts, typed only).
+
+**Speed playback.** Preview (`engine/previewEngine.ts`, `engine/decoder.ts`): a speed-changed clip shows the source
+frame of the timeline frame under the playhead (as the export does at i/fps); forward streams decode up to the last
+frame the look-ahead needs and, above 1.05×, copy only the frames that will be shown (`want` set); reverse uses
+`ReverseStream`: GOP by GOP from the key frame below, each decoded forward once into the cache (its wanted frames, one
+GOP of lead below the look-ahead) and shown last first; a freeze is one exact decode. Export (`exportVideo.ts`):
+forward stretches through `samplesAtTimestamps`, reversed stretches through `reverseRun` (GOP chunks copied to
+ImageBitmaps, ≤ 512 MB at once; a bigger GOP is decoded again for its lower part). Proxies serve the preview as before.
+
+**Speed sound (`engine/timeStretch.ts`, `engine/pcmSource.ts`, `engine/speedAudio.ts`).** One pure-TS renderer for
+preview and export. preservePitch (default): mapping-driven WSOLA — 42.7 ms Hann grains every 21.3 ms, each centred on
+the source position `sourceTimeAt` gives and moved up to ±10 ms to the best normalised cross-correlation with the
+previous grain's natural continuation (4× decimated search, ±4 sample refine); reverse grains read backwards;
+|rate| < 0.05 (a freeze) is silent. preservePitch = false: linear-interpolated resampling (the pitch follows the
+speed). Quality: tones and speech keep their pitch from 0.25× to 4× (unit tests: 440 Hz at 0.5/2/4× within 2 Hz,
+click-free joins between pieces, rate 1 reproduces the input within 1e-4); below ~0.5× steady sounds get a slight
+phasiness, transients smear by up to a grain, above ~4× syllables are skipped. Source PCM is read in 2 s blocks (LRU of
+24), so reverse walks the blocks backwards once each. The preview schedules 0.5 s pieces on Web Audio at the context
+time of their first sample. Volume keyframes: a gain curve (100 values a second) in the export and the preview.
+
+**UI.** Inspector sections (collapsed by default; open state for the session): `EffectsPanel.tsx` — blend mode; Add
+effect → Mask, Chroma key (footage only), Blur, Sharpen, Vignette; per effect on/off and remove; key colour as a hex
+field plus Pick from the monitor (the key is left out of the monitor — never the export — until the click, a 5×5
+average, Esc cancels). `ColourPanel.tsx` — eight sliders (double-click a label to reset), Reset colour, Load/Replace
+.cube (the parser's reason when refused), LUT name and size, intensity. Overlays tab: an "Adjustment layer" card (5 s
+at the playhead on the overlay track, a neutral colour effect); the inspector reads ADJUSTMENT and hides
+position/rotation for it. Styles in `src/styles/video-fx.css`.
+
+### Files
+- New: `src/video/{effects.ts,EffectsPanel.tsx,ColourPanel.tsx}`,
+  `src/video/engine/{animation,fxResolve,timeStretch,pcmSource,speedAudio}.ts`, `src/styles/video-fx.css`,
+  `tools/e2e/video-fx-test.mjs`, `tools/unit/video-effects.test.ts`.
+- Changed: `src/video/engine/{glCompositor,render,layerMath,decoder,previewEngine,audioEngine}.ts`,
+  `src/video/exportVideo.ts`, `src/video/timeline.ts` (two typed fields; `sanitizeEffects` in `migrateTimeline`),
+  `src/video/VideoWorkspace.tsx` (mounts the two sections and the card, ADJUSTMENT label, dev handle
+  `animationSource`), `tools/fixtures/video/engine-fixtures.mjs` (greenscreen, counter),
+  `tools/e2e/{video-playback-measure,video-shots}.mjs`, `tools/unit/video-timeline-v2.test.ts` (effects are validated
+  now), `package.json` (`test:video` also runs the fx suite).
+- No new dependencies.
+
+### Acceptance (measured 2026-11-02 on this PC: RTX 3060, headless Edge, dev server)
+| Test | Result | Measured |
+|---|---|---|
+| Golden frames preview == export for each effect (15 cases: colour, LUT, two masks, chroma key, blur, sharpen + vignette, seven blend modes, adjustment layer, keyframed x/scale/rotation/opacity/crop) | PASS (≤ 1 %) | mean difference 0.47–0.68 % of full scale; pixels off by > 48 levels 0.02–0.52 %. Each effect also changes the picture (2–12 % mean), so a no-op could not pass |
+| LUT export vs a CPU reference frame | PASS (≤ 1 %) | 33-point cube, trilinear on the CPU over the app's decoded source frame: mean 0.62 %, 0.25 % of pixels > 48 levels (the LUT itself moves this frame 3.3 %). Against ffmpeg's own decode of the source it is 3.7 %: ffmpeg and the browser convert this untagged YUV with different matrices, before any LUT |
+| Chroma key, green-screen fixture with a spill fringe | PASS (< 1 %) | green-spill pixels 83.8 % before → 0.00 % after; subject kept (204, 152, 116), screen black |
+| 2× clip: length and pitch | PASS | 8 s of source → 4.01 s file; the 440 Hz tone measures 440.0 Hz (preservePitch) and 880.0 Hz (preservePitch = false); preview through Web Audio 440.3–440.9 Hz |
+| Reverse clip frame order (counter fixture) | PASS | 120 frames, 119 → 0, every step −1. Also: 2× forward shows every second frame; a 1×→3× ramp's steps grow 1 → 3 |
+| 1080p30, 3 layers + colour + LUT + blur, 60 s | PASS (≤ 2 %) | 2 dropped of 1,797 (0.11 %), 5,510 draws, cache 639 MB (a 30 s run: 0 of 897) |
+| Preview: a 1080p clip reversed at 2× (1 s GOP, no proxy) | PASS (≤ 5 %) | 2–3 dropped of 88 (2.3–3.4 %), single frames |
+
+### Checks
+- `npm run lint`: 0 errors (warnings only, existing kinds; none in the new files).
+- `npm test`: 952 passed (80 files; + `video-effects.test.ts`).
+- `npm run build`: ok.
+- `npm run test:video`: 78 PASS, 0 FAIL — video-test and engine-test unchanged (golden worst mean 0.72 %, 60 s
+  3-layer play 0.06 % dropped, scrub p95 32 ms, A/V export 0 ms) + the fx suite above.
+- `npm run test:electron`: 66 PASS, 0 FAIL.
+- `node tools/audit/text-fit-audit.mjs`: 0 text-fit problems (17 deliberate ellipses; skipped steps are Editorial publish/outputs/sign-in and Home, as before). `node tools/audit/center-audit.mjs`: 0.
+- Screens: `OUT=tools/out/p2-fx PORT=5293 node tools/e2e/video-shots.mjs` — 237 shots, 0 n/a, 0 failed, 0 timeline geometry problems; new states
+  `effects-panel`, `colour-panel`, `lut-loaded`, `monitor-mask`, `chroma-key`, `adjustment-layer`.
+
+### Known gaps
+- Keyframe and speed UI are Part A's; until the merge the engine runs on the fallbacks (same field shapes). Filmstrips
+  and waveforms on the lanes still show the source unretimed.
+- Blend modes are not applied inside a crossfade (both inputs draw normal there); blur stays within the layer (its
+  outer edge is not softened); colour math is in sRGB, not linear light.
+- An adjustment layer ignores chroma key; a mask alone on an adjustment layer does nothing.
+- Above ~3× the preview still decodes every source frame (only the shown ones are copied); at 10× on 1080p originals
+  without proxies expect drops. Reverse without proxies needs a GOP decoded ahead (2.3–3.4 % drops at 2× on a 1 s GOP;
+  longer GOPs are worse — proxies are all-intra).
+- A 65-point LUT keeps ~5.5 MB in the project (and in each autosave snapshot).
+
+### Next step
+Merge with Part A, then rerun `npm run test:video` against Part A's speed.ts and keyframes.ts (the fx suite sets
+`reverse`, `speed` and `keyframes` in Part A's shapes).

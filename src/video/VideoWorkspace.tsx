@@ -20,6 +20,9 @@ import { holdBackground, holdProxies, noteScrub } from './engine/background'
 import { releaseFilmstrips } from './engine/filmstrip'
 import { ExportSheet } from './ExportSheet'
 import { StoryVideoPanel } from './StoryVideoPanel'
+import { AdjustmentPresetCard, EffectsPanel } from './EffectsPanel'
+import { ColourPanel } from './ColourPanel'
+import { animationSource } from './engine/animation'
 import { PROBE_CONCURRENCY, assetFromEntry, assetFromFile, hasDiskMedia, importOptions, keepTake, mapLimit, patchMeta, probeMedia, takeImportErrors, videoBridge } from './media'
 import type { FolderRef } from './media'
 import { BinCard, BinImportMode, BinMissingBar } from './BinCard'
@@ -858,6 +861,7 @@ export function VideoWorkspace() {
                       <p className="vw-preset-desc">{p.desc}</p>
                     </div>
                   ))}
+                  <AdjustmentPresetCard />
                 </div>
               )}
 
@@ -1073,7 +1077,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
       onPointerDownCapture={(e) => { if ((e.target as HTMLElement).matches?.('input[type=range]')) onGestureStart() }}
     >
       <div className="vw-inspector-head">
-        <span className="vw-inspector-title">{isFootage ? (clip.still ? 'STILL' : 'FOOTAGE') : clip.kind === 'audio' ? 'SOUND' : clip.kind === 'caption' ? 'CAPTION' : 'OVERLAY'}</span>
+        <span className="vw-inspector-title">{isFootage ? (clip.still ? 'STILL' : 'FOOTAGE') : clip.kind === 'audio' ? 'SOUND' : clip.kind === 'caption' ? 'CAPTION' : clip.adjustment ? 'ADJUSTMENT' : 'OVERLAY'}</span>
         <div className="vw-inspector-actions">
           <IconButton icon="trash" size={14} tip={locked ? 'On a locked track' : 'Delete clip (Del)'} disabled={locked} onClick={onDelete} />
           <IconButton icon="x" size={14} tip={closeLabel} onClick={onClose} className="vw-inspector-close" />
@@ -1145,7 +1149,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
             <Switch checked={!clip.muted} onChange={(on) => set({ muted: !on })} label="Sound on" />
           </>
         )}
-        {clip.kind !== 'audio' && !isFootage && (
+        {clip.kind !== 'audio' && !isFootage && !clip.adjustment && (
           <>
             <div className="vw-field">
               <label>Position X <em>{pct(clip.offX ?? 0)}</em></label>
@@ -1157,7 +1161,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
             </div>
           </>
         )}
-        {clip.kind !== 'audio' && (
+        {clip.kind !== 'audio' && !clip.adjustment && (
           <div className="vw-field">
             <label>Rotation <em>{Math.round(clip.rotation ?? 0)}°</em></label>
             <Slider className="vw-s-rot" min={-180} max={180} step={1} value={clip.rotation ?? 0} onChange={(v) => set({ rotation: v || undefined })} />
@@ -1169,6 +1173,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
             <Slider className="vw-s-opacity" min={0} max={1} step={0.05} value={clip.opacity ?? 1} onChange={(v) => set({ opacity: v })} />
           </div>
         )}
+        {clip.kind !== 'audio' && <><EffectsPanel clip={clip} onChange={onChange} /><ColourPanel clip={clip} onChange={onChange} /></>}
         {linkedWith && (
           <div className="vw-linked">
             <Icon name="link" size={12} />
@@ -1202,6 +1207,7 @@ if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof w
     __videoEngine: {
       preview: previewEngine,
       audio: audioEngine,
+      animationSource: () => animationSource,
       stats: () => previewEngine().stats(),
       scrubLatencies: () => previewEngine().scrubLatencies.slice(),
       still: async (t: number) => {

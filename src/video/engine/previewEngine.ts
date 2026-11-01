@@ -8,7 +8,8 @@ import { isActive } from '../timeline'
 import { getCachedVideo } from '../compositor'
 import { FrameCache } from './frameCache'
 import type { FrameEntry } from './frameCache'
-import { FrameStream, SourceDecoder } from './decoder'
+import { FrameStream, ReverseStream, SourceDecoder } from './decoder'
+import { audioRateAt, directionAt, isPlainSpeed } from './animation'
 import { previewUrl } from './mediaSource'
 import type { FrameInput, FrameLookup } from './render'
 import { srcTime } from './render'
@@ -24,6 +25,8 @@ const PREROLL = 1.0
 const PREROLL_AHEAD = 0.5
 /** A stream more than this behind the playhead is restarted at the playhead (it drops frames instead of lagging). */
 const BEHIND = 0.2
+/** A reverse stream keeps this much source below its look-ahead decoded (seconds; about one GOP). */
+const REVERSE_LEAD = 1.0
 
 export interface PlaybackStats {
   /** Timeline frames the playhead passed while playing. */
@@ -41,7 +44,7 @@ export interface PlaybackStats {
 export class PreviewEngine {
   readonly cache: FrameCache
   private decoders = new Map<string, SourceDecoder>()
-  private streams = new Map<string, { s: FrameStream; url: string; at: number }>()
+  private streams = new Map<string, { s: FrameStream | ReverseStream; url: string; at: number; dir: 1 | -1 }>()
   /** Called when a frame the monitor asked for has arrived (schedule a redraw). */
   onFrame: () => void = () => {}
   // playback stats
@@ -60,6 +63,8 @@ export class PreviewEngine {
   maxHeight = 720
   /** How long the last play waited for its first frames before the clock started (ms). */
   prerollMs = 0
+  /** The project's frame rate (speed-changed clips pick their source frame on the timeline frame grid). */
+  fps = 30
   /** The look-ahead the streams use now (seconds), sized to the budget. */
   ahead = AHEAD
   /** Per clip: the source URL it was last drawn from. A clip whose preview URL changes (a proxy became ready) keeps
@@ -101,7 +106,9 @@ export class PreviewEngine {
     const frames: FrameLookup = (clip: Clip): FrameInput | null => {
       const url = previewUrl(clip)
       if (!url) return null
-      const st = srcTime(clip, t)
+      // a speed-changed clip shows the source frame of the timeline frame under the playhead (as the export does at
+      // i / fps), so the look-ahead knows exactly which frames to keep
+      const st = isPlainSpeed(clip) ? srcTime(clip, t) : srcTime(clip, Math.max(clip.start, quantize(t, this.fps)))
       const shown = this.shownUrl.get(clip.id)
       const now = this.frameOf(url, st, playing)
       if (now.exact || !shown || shown === url) {
@@ -151,7 +158,9 @@ export class PreviewEngine {
     if (!playing) { this.stopStreams(); return }
     const want = new Set<string>()
     const now = performance.now()
-    const live: { c: Clip; url: string; dec: SourceDecoder; from: number }[] = []
+    const fps = Math.max(1, project.fps || 30)
+    this.fps = fps
+    const live: { c: Clip; url: string; dec: SourceDecoder; from: number; rate: number }[] = []
     for (const c of project.clips) {
       if (c.kind !== 'video' || c.still || !c.sourceUrl) continue
       const soon = isActive(c, t) || (c.start > t && c.start - t < PREROLL)
@@ -160,30 +169,106 @@ export class PreviewEngine {
       if (!url) continue
       const dec = this.decoderFor(url)
       if (dec.state !== 'ready') continue
-      live.push({ c, url, dec, from: srcTime(c, Math.max(t, c.start)) })
+      const at = Math.max(t, c.start)
+      live.push({ c, url, dec, from: srcTime(c, at), rate: isPlainSpeed(c) ? 1 : audioRateAt(c, at - c.start) })
     }
     let perSecond = 0
-    for (const l of live) perSecond += l.dec.frameBytes() * l.dec.fps
+    // frames kept per second of play: every source frame up to the project rate (a fast clip keeps only the shown ones)
+    for (const l of live) perSecond += l.dec.frameBytes() * Math.max(0.1, Math.min(l.dec.fps * Math.max(0.1, l.rate), fps * 1.05))
     this.ahead = perSecond > 0 ? Math.max(MIN_AHEAD, Math.min(AHEAD, (this.cache.budget * AHEAD_SHARE) / perSecond)) : AHEAD
     const windows = new Map<string, [number, number][]>()
-    for (const { c, url, dec, from } of live) {
+    const addWindow = (url: string, lo: number, hi: number) => { const w = windows.get(url) ?? []; w.push([lo, hi]); windows.set(url, w) }
+    for (const { c, url, dec, from, rate } of live) {
       want.add(c.id)
       let cur = this.streams.get(c.id)
-      const lost = cur && (cur.url !== url || cur.s.stopped || (cur.s.last < from - BEHIND && now - cur.at > (cur.s.last === -Infinity ? 1000 : 300)) || cur.s.last > from + this.ahead + 0.6)
-      if (lost) { cur!.s.stop(); this.streams.delete(c.id); cur = undefined }
-      if (!cur) {
-        const s = dec.stream(from)
-        if (!s) continue
-        cur = { s, url, at: now }
-        this.streams.set(c.id, cur)
+      if (isPlainSpeed(c)) {
+        const lost = cur && (cur.dir !== 1 || cur.url !== url || cur.s.stopped || (cur.s.last < from - BEHIND && now - cur.at > (cur.s.last === -Infinity ? 1000 : 300)) || cur.s.last > from + this.ahead + 0.6)
+        if (lost) { cur!.s.stop(); this.streams.delete(c.id); cur = undefined }
+        if (!cur) {
+          const s = dec.stream(from)
+          if (!s) continue
+          cur = { s, url, at: now, dir: 1 }
+          this.streams.set(c.id, cur)
+        }
+        cur.s.target = from + this.ahead
+        addWindow(url, Math.max(0, dec.index(from) - 1), dec.index(from + this.ahead) + 2)
+        continue
       }
-      cur.s.target = from + this.ahead
-      const w = windows.get(url) ?? []
-      w.push([Math.max(0, dec.index(from) - 1), dec.index(from + this.ahead) + 2])
-      windows.set(url, w)
+      // a speed-changed clip: the source frames the next `ahead` seconds of timeline show
+      const at = Math.max(c.start, quantize(Math.max(t, c.start), fps))
+      const n = Math.max(1, Math.ceil(this.ahead * fps))
+      const needed = this.neededFor(c.id)
+      needed.clear()
+      let lo = Infinity
+      let hi = -Infinity
+      for (let k = 0; k <= n; k++) {
+        const tt = at + k / fps
+        if (tt >= c.start + c.duration) break
+        const st = srcTime(c, tt)
+        needed.add(dec.index(st))
+        if (st < lo) lo = st
+        if (st > hi) hi = st
+      }
+      const dir = directionAt(c, at - c.start)
+      if (dir === 0) {
+        // a freeze frame: one exact frame
+        if (cur) { cur.s.stop(); this.streams.delete(c.id) }
+        void dec.exact(from).then((x) => { if (x) this.onFrame() })
+        addWindow(url, dec.index(from), dec.index(from))
+        continue
+      }
+      const slack = BEHIND * Math.max(1, rate)
+      if (dir === 1) {
+        const lost = cur && (cur.dir !== 1 || cur.url !== url || cur.s.stopped || (cur.s.last < from - slack && now - cur.at > (cur.s.last === -Infinity ? 1000 : 300)) || cur.s.last > hi + 0.6 * Math.max(1, rate))
+        if (lost) { cur!.s.stop(); this.streams.delete(c.id); cur = undefined }
+        if (!cur) {
+          const s = dec.stream(from)
+          if (!s) continue
+          cur = { s, url, at: now, dir: 1 }
+          this.streams.set(c.id, cur)
+        }
+        cur.s.want = rate > 1.05 ? needed : null
+        cur.s.target = hi
+        addWindow(url, Math.max(0, dec.index(lo) - 1), dec.index(hi) + 2)
+      } else {
+        const rs = cur?.s instanceof ReverseStream ? cur.s : null
+        // a reverse stream is lost when the playhead went above where it started, or fell below what it has covered
+        // while its GOP is still decoding (it restarts at the playhead: frames dropped, never late)
+        const lost = cur && (!rs || cur.url !== url || rs.stopped || from > rs.top + 1 / fps || (from < rs.pending - slack && now - cur.at > 300))
+        if (lost) { cur!.s.stop(); this.streams.delete(c.id); cur = undefined }
+        if (!cur) {
+          const s = dec.reverseStream(from)
+          if (!s) continue
+          cur = { s, url, at: now, dir: -1 }
+          this.streams.set(c.id, cur)
+        }
+        const r = cur.s as ReverseStream
+        // the GOP below the look-ahead is decoded before the playhead gets there: its wanted frames must be known too
+        // (up to 3 s of source further down), or they would be dropped and never decoded again
+        const ext = Math.min(900, Math.ceil((this.ahead + 3 / Math.max(0.1, rate)) * fps))
+        for (let k = n + 1; k <= ext; k++) {
+          const tt = at + k / fps
+          if (tt >= c.start + c.duration) break
+          needed.add(dec.index(srcTime(c, tt)))
+        }
+        r.want = rate > 1.05 ? needed : null
+        // one GOP (~1 s of source) further down than the look-ahead: the next GOP is decoded while this one plays, so
+        // the frame after a key frame (the last of the GOP below) is there in time
+        r.target = lo - REVERSE_LEAD
+        // keep what this stream decoded from its pending GOP up to the playhead
+        addWindow(url, Math.max(0, dec.index(Math.min(r.pending, lo)) - 1), dec.index(from) + 2)
+      }
     }
     this.cache.setWindows(windows)
     for (const [id, s] of this.streams) if (!want.has(id)) { s.s.stop(); this.streams.delete(id) }
+  }
+
+  /** The reused set of source indexes a speed-changed clip needs (no new Set per frame). */
+  private needed = new Map<string, Set<number>>()
+  private neededFor(id: string): Set<number> {
+    let s = this.needed.get(id)
+    if (!s) { s = new Set(); this.needed.set(id, s); if (this.needed.size > 64) this.needed.delete(this.needed.keys().next().value!) }
+    return s
   }
 
   /** Have the streams of every footage clip under `t` decoded their first frames (so the clock can start)? A clip
@@ -194,6 +279,11 @@ export class PreviewEngine {
       const url = previewUrl(c)
       const dec = url ? this.decoders.get(url) : undefined
       if (!dec || dec.state !== 'ready') continue
+      if (!isPlainSpeed(c)) {
+        // a speed-changed clip: its first frame is in the cache
+        if (!this.cache.has(url!, dec.index(srcTime(c, t)))) return false
+        continue
+      }
       const s = this.streams.get(c.id)
       if (!s || s.s.stopped) return false
       if (s.s.last < srcTime(c, t) + Math.min(PREROLL_AHEAD, this.ahead) - 1.5 / dec.fps) return false
@@ -289,6 +379,9 @@ export class PreviewEngine {
     this.cache.clear()
   }
 }
+
+/** The start of the timeline frame `t` falls in. */
+const quantize = (t: number, fps: number) => Math.floor(t * fps + 1e-6) / fps
 
 /** Preview frame heights (device pixels); 0 = full size (a monitor taller than 2160 px). */
 export const PREVIEW_HEIGHTS = [360, 540, 720, 1080, 1440, 2160]

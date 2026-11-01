@@ -6,6 +6,9 @@
 // trim, split and delete together until unlinked. Fields Phase 2 will use (speed, keyframes, effects, transitions) are
 // typed here but optional, and nothing reads them yet. Every edit is a pure function of the project.
 
+import type { BlendMode } from './effects'
+import { BLEND_MODES, sanitizeEffects } from './effects'
+
 export type TrackKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio'
 export const TRACK_KINDS: readonly TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']
 export type AspectRatio = '16:9' | '9:16' | '1:1' | '4:5'
@@ -105,6 +108,10 @@ export interface Clip {
   /** Layer transform: the point it rotates around, as a fraction of the layer (default 0.5, the centre). */
   anchorX?: number
   anchorY?: number
+  /** Phase 2 (effects, Part B): how the layer combines with what is below it (effects.ts BLEND_MODES; normal when unset). */
+  blendMode?: BlendMode
+  /** Phase 2 (effects, Part B): an overlay clip that draws nothing itself; its effects apply to everything below it. */
+  adjustment?: boolean
   // ---- Phase 2, reserved: typed so projects can carry them; not read by this version
   /** Playback speed: a constant (1 = normal) or a ramp. */
   speed?: number | { ramp: Keyframe[] }
@@ -701,6 +708,10 @@ export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unkno
     clip.out = num(o.out, clip.in + clip.duration)
     if (typeof clip.title !== 'string') clip.title = String(clip.title ?? '')
     if (typeof clip.color !== 'string') clip.color = '#2563eb'
+    // effects (Part B): known types and safe values only; a blend mode or adjustment flag only when valid
+    if (o.effects !== undefined) { const fx = sanitizeEffects(o.effects); if (fx) clip.effects = fx; else delete clip.effects }
+    if (o.blendMode !== undefined && (!BLEND_MODES.includes(o.blendMode as BlendMode) || o.blendMode === 'normal')) delete clip.blendMode
+    if (o.adjustment !== undefined && !(o.adjustment === true && kind === 'overlay')) delete clip.adjustment
     if (!track) {
       // the clip's track is gone: give it one of its kind rather than lose the clip
       const want = typeof o.trackId === 'string' && /^[\w-]{1,40}$/.test(o.trackId) && !seen.has(o.trackId) ? o.trackId : undefined

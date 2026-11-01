@@ -206,7 +206,8 @@ describe('timeline v1 → v2 migration', () => {
   it('carries Phase 2 fields through untouched (typed, reserved)', () => {
     const c = clip({ id: 'k', trackId: 'v1', kind: 'video', speed: 2, keyframes: { opacity: [{ t: 0, v: 0 }, { t: 1, v: 1, ease: 'ease-in-out' }] }, effects: [{ id: 'e', type: 'blur', params: { r: 4 } }], transitionIn: { type: 'crossfade', duration: 0.5 } })
     const tl = migrateTimeline({ timelineVersion: 2, tracks: V1_TRACKS, clips: [c] })
-    expect(tl.clips[0]).toEqual(c)
+    // effects are validated since Phase 2 (effects.ts sanitizeEffects): the unknown param goes, the radius gets its default
+    expect(tl.clips[0]).toEqual({ ...c, effects: [{ id: 'e', type: 'blur', enabled: true, params: { radius: 8 } }] })
   })
 })
 
