@@ -21,10 +21,13 @@
 import { AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, StreamTarget, VideoSampleSink, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny'
 import type { Input, StreamTargetChunk, VideoSample } from 'mediabunny'
 import type { Clip, VideoProject } from './timeline'
-import { clipsMissingMedia, contentEnd, isActive } from './timeline'
-import type { FrameSource } from './compositor'
-import { getCachedImage, getCachedVideo, renderCompositeFrame } from './compositor'
+import { audibleClips, clipsMissingMedia, contentEnd, isActive } from './timeline'
+import { getCachedImage, getCachedVideo, picturesReady } from './compositor'
 import { inputFor } from './media'
+import { GLCompositor } from './engine/glCompositor'
+import { renderFrame } from './engine/render'
+import type { FrameInput } from './engine/render'
+import { exportUrl } from './engine/mediaSource'
 
 export type ExportContainer = 'mp4' | 'webm'
 
@@ -53,12 +56,7 @@ export interface ExportOptions {
 const SAMPLE_RATE = 48000
 const AUDIO_CHUNK_SECONDS = 10
 
-/** The clips whose sound goes into the file: clips on audio tracks with a source, not muted, volume above zero, on a
- * track that is not muted. A footage clip's own sound is its linked clip on A1, so it follows the same rules. */
-export function audibleClips(project: VideoProject): Clip[] {
-  const mutedTracks = new Set(project.tracks.filter((t) => t.muted).map((t) => t.id))
-  return project.clips.filter((c) => c.kind === 'audio' && !!c.sourceUrl && !c.muted && (c.volume ?? 1) > 0 && !mutedTracks.has(c.trackId))
-}
+export { audibleClips }
 
 /** How long the file is: up to the end of the last clip, or the requested draft length. */
 export function exportDuration(project: VideoProject, maxDuration?: number): number {
@@ -114,12 +112,13 @@ interface FootageReader { input: Input; iter: AsyncIterator<VideoSample | null>;
 /** Open a decoder for one footage clip that yields exactly one frame per export frame it is on screen; null when the
  * decoder cannot read it (the <video> fallback is used). */
 async function openFootage(clip: Clip, fps: number, totalFrames: number): Promise<FootageReader | null> {
-  if (!clip.sourceUrl) return null
+  const url = exportUrl(clip)
+  if (!url) return null
   const frames = activeFrames(clip, fps, totalFrames)
   if (!frames.length) return null
   let input: Input | null = null
   try {
-    input = inputFor(clip.sourceUrl)
+    input = inputFor(url)
     const track = await input.getPrimaryVideoTrack()
     if (!track || !(await track.canDecode())) { input.dispose(); return null }
     const sink = new VideoSampleSink(track)
@@ -132,18 +131,20 @@ async function openFootage(clip: Clip, fps: number, totalFrames: number): Promis
 }
 
 /** Fallback: put a footage clip's <video> at its exact source frame and wait until the frame is decoded. */
-async function seekElement(c: Clip, time: number, fps: number) {
-  const v = getCachedVideo(c.sourceUrl!)
-  if (!v) return
+async function seekElement(c: Clip, time: number, fps: number): Promise<FrameInput | null> {
+  const v = getCachedVideo(exportUrl(c)!)
+  if (!v) return null
   const target = srcTime(c, time)
   if (v.readyState < 1) await new Promise<void>((res) => { v.addEventListener('loadedmetadata', () => res(), { once: true }); setTimeout(res, 4000) })
-  if (Math.abs(v.currentTime - target) < 1 / (fps * 4) && v.readyState >= 2) return
-  await new Promise<void>((res) => {
-    const done = () => { clearTimeout(t); v.removeEventListener('seeked', done); res() }
-    const t = setTimeout(done, 3000)
-    v.addEventListener('seeked', done)
-    v.currentTime = target
-  })
+  if (!(Math.abs(v.currentTime - target) < 1 / (fps * 4) && v.readyState >= 2)) {
+    await new Promise<void>((res) => {
+      const done = () => { clearTimeout(t); v.removeEventListener('seeked', done); res() }
+      const t = setTimeout(done, 3000)
+      v.addEventListener('seeked', done)
+      v.currentTime = target
+    })
+  }
+  return v.readyState >= 2 && v.videoWidth > 0 ? { image: v, width: v.videoWidth, height: v.videoHeight, live: true } : null
 }
 
 // ---------------------------------------------------------------- sound
@@ -182,7 +183,7 @@ async function mixPiece(clips: Clip[], readers: Map<string, AudioReader | null>,
   if (!here.length) return new AudioBuffer({ length, numberOfChannels: 2, sampleRate: SAMPLE_RATE })
   const ctx = new OfflineAudioContext(2, length, SAMPLE_RATE)
   for (const c of here) {
-    const url = c.sourceUrl!
+    const url = exportUrl(c)!
     if (!readers.has(url)) readers.set(url, await openAudio(url))
     const reader = readers.get(url)
     if (!reader) continue
@@ -236,11 +237,12 @@ export async function exportTimelineVideo(
   const codecs = await pickCodecs(timeline.width, timeline.height, fps, options.container)
   await fontsReady()
 
+  // the same WebGL2 compositor and render path as the monitor; without WebGL2 the export stops with the reason
   const canvas = document.createElement('canvas')
   canvas.width = timeline.width
   canvas.height = timeline.height
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Could not get a 2D canvas for the render')
+  const comp = new GLCompositor(canvas)
+  await picturesReady(timeline.clips.filter((c) => c.sourceUrl && (c.still || c.kind === 'overlay')).map((c) => c.sourceUrl!))
 
   const sounding = codecs.audio ? audibleClips(timeline).filter((c) => c.start < duration) : []
   const bufferTarget = options.writable ? null : new BufferTarget()
@@ -283,7 +285,7 @@ export async function exportTimelineVideo(
       const t = i / fps
       // the sound for the next 10 s goes in as the picture reaches it
       if (t >= audioUpTo) await addAudioUntil(t + AUDIO_CHUNK_SECONDS)
-      const frames = new Map<string, FrameSource>()
+      const frames = new Map<string, FrameInput>()
       const samples: VideoSample[] = []
       const waits: Promise<void>[] = []
       for (const c of footage) {
@@ -301,7 +303,7 @@ export async function exportTimelineVideo(
             frames.set(c.id, { image: value.toCanvasImageSource(), width: value.displayWidth, height: value.displayHeight })
           }
         } else {
-          waits.push(seekElement(c, t, fps))
+          waits.push(seekElement(c, t, fps).then((f) => { if (f) frames.set(c.id, f) }))
         }
       }
       for (const c of timeline.clips) {
@@ -311,7 +313,7 @@ export async function exportTimelineVideo(
         }
       }
       await Promise.all(waits)
-      renderCompositeFrame(ctx, timeline, t, canvas.width, canvas.height, { frames })
+      renderFrame(comp, timeline, t, canvas.width, canvas.height, { frames: (c) => frames.get(c.id) ?? null })
       for (const s of samples) s.close()
       await videoSource.add(t, 1 / fps)
       onProgress(i + 1, totalFrames)
@@ -324,6 +326,8 @@ export async function exportTimelineVideo(
   } finally {
     readers.forEach((r) => r?.input.dispose())
     audioReaders.forEach((r) => r?.close())
+    comp.dispose()
+    comp.gl.getExtension('WEBGL_lose_context')?.loseContext()
     canvas.width = canvas.height = 0
   }
 

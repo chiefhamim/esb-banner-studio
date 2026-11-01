@@ -154,3 +154,127 @@ restore card, the New confirm (after its open animation), missing media with Rel
 - Two clips of one file at different points share one `<video>` / `<audio>` element in the preview (the first active clip drives it). Phase 1's decode engine gives each clip its own reader.
 - Text typed in the inspector is one undo step per keystroke (drags and sliders are gestures).
 - P7, as above.
+
+---
+
+## Phase 1 — Part B: decode engine, WebGL2 compositor, timeline v2, waveforms, smooth preview (2026-11-01, branch `video-p1-engine`)
+
+Part A (project folder, media protocol, proxies, bin metadata) is built in parallel on `video-p1-io`; this part
+consumes its contract through one adapter and works on its own until the merge.
+
+### What changed
+
+**Decode engine (`src/video/engine/`).** One `SourceDecoder` per source file (mediabunny demux + WebCodecs
+`VideoSampleSink`); decoded frames are copied out at once into ImageBitmaps (a hardware decoder's few output buffers
+are never held) and kept in a `FrameCache` keyed by (source, frame index) with an LRU byte budget (640 MB). Paused:
+`exact(t)` decodes the frame under the playhead, coalescing a fast scrub to its newest request; the monitor holds the
+nearest earlier cached frame meanwhile, so it never flashes black. Playing: a `FrameStream` per footage clip decodes
+sequentially 0.4 s ahead of the playhead (and 1 s before a clip starts); a stream that falls behind is restarted at the
+playhead (frames dropped, never late). Two clips of one file share the cache but have their own streams. A file the
+decoder cannot read falls back to its `<video>` element (labelled `live`, re-uploaded each draw). The preview's
+`<video>` seeking is gone.
+
+**One render path (`engine/render.ts`).** `renderFrame(compositor, project, t, w, h, { frames })` draws the monitor
+and every export frame. The monitor gets frames from the preview engine (`previewUrlFor` = the proxy when Part A has
+one); the export decodes the originals (`exportUrlFor`) exactly at each frame time with `samplesAtTimestamps`, as
+before. Everything else — order, transforms, crossfades, titles, the bug — is decided once.
+
+**WebGL2 compositor v1 (`engine/glCompositor.ts`).** Unlimited layers as textured quads over black, premultiplied
+alpha; per layer: position, scale, rotation around an anchor (`clip.rotation`, `anchorX/Y`), crop (UV), opacity,
+fit/fill. Crossfade is a two-input pass (outgoing and incoming each drawn into their own framebuffer, mixed by the
+progress in one shader, then laid over the layers below — so fit bars on the incoming clip show the outgoing one
+fading out, not stuck at full). Titles, captions, picture overlays, the offline slate and the ESB bug are drawn by
+Canvas 2D (`compositor.ts`, now only a rasteriser; Bangla shaped by the browser) once per change and kept as textures
+by content key (words, accent, place, frame size, editor/export, picture loaded, fonts loaded). No WebGL2 → the
+monitor shows a clear message and the export stops with the reason (`GLUnavailableError`); never a wrong frame.
+Inspector: Rotation for every visual clip; Position X/Y for titles and captions too.
+
+**Timeline model v2 (`timeline.ts`).** Track kinds `video | overlay | text | caption | audio`, any number of each.
+Visual tracks draw in list order from the bottom up (the top of the list covers the rest), so reordering a track
+changes what covers what; a track can be hidden (not drawn, not exported). Pure, unit-tested edits: `addTrack`
+(free ids V3, T1, C2, A2…), `removeTrack` (its clips go; partners elsewhere are unlinked; refused when locked),
+`moveTrack`, `renameTrack`, `setTrackHidden`, `trackAccepts`/`canPlaceOn` (a text track takes titles and captions;
+footage only goes on video tracks), `trackForKind`, `ensureTracksFor`. Clips keep their link groups (`linkId`) and
+Phase 0's lock/link/undo-per-gesture rules; dragging a clip over another lane that takes it moves it there. Phase 2
+fields are typed and carried, not read: `speed`, `keyframes`, `effects`, `transitionIn/Out`. **Migration:**
+`migrateTimeline(raw)` (pure) runs inside `deserializeVideoProject`; `serializeVideoProject` writes
+`timelineVersion: 2`. A v1 timeline (no `timelineVersion`) gets its visual tracks ordered so the v2 rule draws exactly
+what v1 drew (v1 drew footage, then overlays, then captions whatever their place); clips are untouched. Both versions
+are cleaned: repaired ids/kinds, duplicate ids renamed, a clip whose track is gone gets one (never dropped), bad
+numbers made safe. A new project lists C1 · V2 · V1 · A1 (same drawing as before).
+
+**Timeline UI.** Track headers: show/hide (visual) or mute (sound), lock, and a ⋯ menu (Move up, Move down, Remove
+track and its N clips — Ctrl+Z brings it back). **+ Track** in the timeline toolbar adds Footage / Overlays / Text /
+Captions / Audio tracks. Headers are 184 px so "Captions" fits beside three tools.
+
+**Playback (`VideoWorkspace` `PlaybackEngine`, `engine/audioEngine.ts`).** The wall clock stays (Phase 0's fix); it
+starts 60 ms in the future so the first sound is scheduled and the first frames decoded before it moves. Sound is one
+Web Audio graph — clip gain (volume, clip mute) → track gain (track mute) → master — replacing the `<audio>` element per
+file: each audible clip (footage sound on its linked A-track clip, music, voiceover) is decoded in pieces by mediabunny
+(`AudioBufferSink`) ≤ 1.5 s ahead and every piece is started at the AudioContext time that matches its timeline time,
+mapped from the same wall clock with `getOutputTimestamp()` (so output latency is accounted for). A volume or mute
+change moves a gain; a move/trim restarts the schedule. `clipGain` is the one rule for preview and export.
+
+**Waveforms and filmstrips (`engine/peaks.ts`, `engine/filmstrip.ts`, `engine/laneCanvas.ts`).** Waveforms come
+from decoded PCM: min/max peaks at 200 bins/s with three coarser levels (50, 12.5, 3.125); the lane draws the coarsest
+level with a bin per device pixel. Filmstrips: a frame a second (≤ 600 tiles) decoded from the preview source into one
+JPEG sprite. Both go through `writeCache`/`readCache` (Part A's `cache/`; a session LRU before the merge or when Part
+A refuses a write past its cap). They are drawn imperatively into ONE canvas over the visible part of the lanes (it
+follows the scroll; redrawn on DOM changes of the lanes, scroll, resize, and when a waveform/strip finishes) — no React
+re-render per frame or per tile, and a long clip at high zoom never needs a canvas wider than the window. A clip whose
+sound is still being read shows no waveform (never a placeholder). Background reading waits while the preview plays
+(`engine/background.ts`).
+
+**Adapter to Part A (`engine/mediaSource.ts`).** Looks up `previewUrlFor`, `exportUrlFor`, `onProxyReady`,
+`readCache`, `writeCache`, `mediaInfo` by name on `src/video/media.ts` at call time. `''` from Part A (missing or
+unknown asset) falls back to the clip's own URL, which `relinkClips` already clears for a missing file (so offline stays
+offline, and a browser-session import still plays). A rejected `writeCache` keeps the entry in memory only. A proxy
+arriving redraws the monitor; the next draw decodes the proxy (its URL is the decoder key).
+
+### Files
+- New: `src/video/engine/{mediaSource,frameCache,decoder,previewEngine,glCompositor,layerMath,render,still,audioEngine,peaks,filmstrip,laneCanvas,background}.ts`,
+  `tools/e2e/video-engine-test.mjs`, `tools/fixtures/video/engine-fixtures.mjs`,
+  `tools/unit/video-timeline-v2.test.ts`, `tools/unit/video-engine.test.ts`.
+- Changed: `src/video/{timeline,videoStore,compositor,exportVideo,VideoWorkspace}.ts(x)`, `src/styles/video.css`,
+  `tools/e2e/{video-playback-measure,video-shots,video-electron-test}.mjs`, `tools/unit/video.test.ts` (new default
+  track order), `package.json` (`test:video` also runs the engine suite).
+- No new dependencies.
+
+### Acceptance (measured 2026-11-01 on this PC: RTX 3060, headless Edge, dev server)
+| Test | Result | Measured |
+|---|---|---|
+| 1080p30 playback, 3 video layers + lower third + caption, 60 s | PASS (≤ 1 % dropped) | two runs: **1 dropped of 1,798 (0.06 %)** and **8 of 1,798 (0.44 %**, frames 1–2 at the start and single frames spread over the minute); ~5,500 draws in 60.0 s; playhead 59.93 s after 60.0 s wall; cache 633 MB. A frame counts as dropped if the monitor never drew it with every footage layer exact (held or skipped). Before background reading waited for playback: 55 of 1,798 (3.1 %), with three filmstrips decoding at the same time |
+| Scrub shows the frame under the cursor within 50 ms (540p all-keyframe fixture standing in for a proxy) | PASS (p95 ≤ 50 ms) | 40 random seeks: p50 21 ms, p95 22 ms, max 22–33 ms over three runs (seek → that exact frame drawn, including the wait for the next animation frame) |
+| Golden frames: preview == export at 10 timestamps | PASS | 1080p, footage + rotated/cropped fit inset + crossfade + Bangla lower third + Bangla caption + card at 80 %: mean difference 0.45–0.72 % of full scale; pixels off by > 48 levels 0.23–0.78 %. Both frames come from the same `renderFrame`; what differs is H.264 at 10 Mb/s on the test pattern's sharp edges |
+| v1 project opens unchanged | PASS | a Phase 0 file (V2/V1/C1/A1, lower third + caption + card) opens with every clip's track, time and words equal, tracks C1 · V2 · V1 · A1, the lower-third stripe drawn where it was; unit tests prove the layer order is identical for any v1 track order, the migration is pure and a v2 file reopens unchanged |
+| A/V sync, flash + beep fixture | PASS | export: flashes at 1/3/5/7 s, beep onsets at 1.000/3.000/5.000/7.000 s → 0 ms; preview: beep heard 6–19 ms before the draw of its flash frame (under one frame; the draw reaches the screen at the next vsync, ~16 ms later). Heard time comes from a tap on the master (its own 43 ms buffer delay calibrated out) mapped to wall time with `getOutputTimestamp` |
+
+Also: waveform (real PCM) and filmstrip drawn on the lanes (lane canvas reports 1 waveform + 1 strip, 0 pending);
+track add / move / remove / undo through the UI; no page errors.
+
+### Checks
+- `npm run lint`: 0 errors (warnings only, existing kinds).
+- `npm test`: 872 passed (76 files; 820 after the Phase 0 fix round + `video-timeline-v2.test.ts` and `video-engine.test.ts`).
+- `npm run build`: ok.
+- `npm run test:video`: 55 PASS, 0 FAIL — `video-test.mjs` (every Phase 0 export check, now through the WebGL2 path) + `video-engine-test.mjs` (the table above).
+- `npm run test:electron`: 53 PASS, 0 FAIL (`video-electron-test.mjs` reads the WebGL2 monitor through a 2D copy).
+- `node tools/audit/text-fit-audit.mjs`: 0 text-fit problems (no Video step skipped; the skipped steps are Editorial publish/outputs and Home under load). `node tools/audit/center-audit.mjs`: 0.
+- Screens: `tools/out/p1-engine/` (light/dark × 900/1366/1920); new states `multi-track`, `waveform-lane`,
+  `add-track-menu`, `track-menu`, `track-removed`.
+
+### Known gaps
+- Speed, keyframes, effects and transitions are typed and saved, not played (Phase 2).
+- Audio clips that overlap still simply sum (no fades); waveforms are mono (all channels folded).
+- The preview cache holds frames at source size (≤ 1080p expected once Part A's proxies are in; a 4K original without a
+  proxy costs 33 MB a frame).
+- A/V sync was measured in headless Edge (its audio clock and a tap), not with a microphone at the speakers.
+- Two of 150 shots in the first screenshot run showed a half-decoded footage frame at t = 1 s. It could not be made
+  to happen again in 800 isolated decodes; the likely path is the `<video>` fallback taken when the decoder failed to
+  open under load, drawn mid-seek. Now the decoder retries once before falling back (and says why in the console), and
+  the fallback never uploads a frame while its element is seeking. The second full run (`tools/out/p1-engine/`, 150 shots) has none.
+- An export whose source URL was revoked under it (browser session: opening another project releases the old
+  imports) waits instead of failing — not reachable from the UI, seen only in a test that did it on purpose.
+
+### Next step
+Phase 2 (pro editing) on top of the v2 model: speed and keyframes are already in the type; the compositor's layer pass
+takes them per frame.

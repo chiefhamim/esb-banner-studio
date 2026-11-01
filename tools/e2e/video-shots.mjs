@@ -140,8 +140,15 @@ async function seedTimeline(page, { playhead = 1.0, select = null, zoom = null, 
       clips[0] = { ...clips[0], linkId: 'link-shot' }
       clips[5] = { ...clips[5], duration: 6, out: 6, linkId: 'link-shot', title: 'Sample clip · sound' }
     }
+    if (extra === 'multi-track') {
+      // timeline v2: a second footage track over V1 (a picture in picture), a text track with a title
+      st.addTrack('video')
+      st.addTrack('text')
+      clips.push({ id: 'shot-v3', trackId: 'v3', title: 'Sample clip (inset)', kind: 'video', start: 1, duration: 5, in: 0, out: 5, color: '#0ea5e9', sourceUrl: vid?.url, mediaAssetId: vid?.id, fit: 'fit', scale: 0.38, offX: 0.27, offY: -0.25, rotation: -3 })
+      clips.push({ id: 'shot-t1', trackId: 't1', title: 'Card', kind: 'overlay', start: 6.5, duration: 3, in: 0, out: 3, color: '#7c3aed', overlayType: 'card', overlayText: 'Sample card title', overlaySub: 'Sample card text' })
+    }
     if (extra === 'empty-card') clips.push({ id: 'shot-card', trackId: 'v2', title: 'Text card', kind: 'overlay', start: 9.2, duration: 2.5, in: 0, out: 2.5, color: '#7c3aed', overlayType: 'card', overlayText: '', overlaySub: '' })
-    st.loadProject({ ...st.project, name: 'Sample project', duration: 12, clips }, { dirty: true })
+    st.loadProject({ ...vs.getState().project, name: 'Sample project', duration: 12, clips }, { dirty: true })
     if (extra === 'missing') {
       // the footage file is gone: its bin row says so with Relink, its clip is offline
       vs.setState((s) => ({ mediaAssets: s.mediaAssets.map((x) => (x.type === 'video' ? { ...x, missing: true, url: '', path: 'C:\\Footage\\sample-clip.mp4' } : x)), project: { ...s.project, clips: s.project.clips.map((c) => (c.mediaAssetId === vid?.id ? { ...c, sourceUrl: undefined } : c)) } }))
@@ -183,6 +190,9 @@ async function settle(page) {
     })
   }
   await page.evaluate(() => document.fonts.ready)
+  // the lane canvas has drawn every waveform and filmstrip it is reading (real ones, decoded from the files)
+  await page.waitForFunction(() => { const c = document.querySelector('.vw-lane-visuals'); return !c || c.dataset.pending === '0' || c.dataset.pending === undefined }, null, { timeout: 20000 }).catch(() => {})
+  await page.waitForTimeout(150)
 }
 
 // ------------------------------------------------------------------ states
@@ -264,6 +274,28 @@ const STATES = {
   'monitor-0.5': async (page) => { await seedTimeline(page, { playhead: 0.5 }); return { el: page.locator('.vw-canvas').first() } },
   'monitor-3.0': async (page) => { await seedTimeline(page, { playhead: 3.0 }); return { el: page.locator('.vw-canvas').first() } },
   'timeline-zoomed': async (page) => { await seedTimeline(page, { playhead: 1.0, zoom: 120 }); return {} },
+  'multi-track': async (page) => { await seedTimeline(page, { playhead: 2.0, extra: 'multi-track' }); return {} },
+  'waveform-lane': async (page) => { await seedTimeline(page, { playhead: 1.0, zoom: 160, extra: 'linked' }); return { el: page.locator('.vw-timeline-footer').first() } },
+  'add-track-menu': async (page) => {
+    await seedTimeline(page)
+    await page.click('.vw-add-track')
+    await page.waitForSelector('.menu .menu-item:has-text("Text track")')
+    await waitAnimations(page)
+    return {}
+  },
+  'track-menu': async (page) => {
+    await seedTimeline(page, { extra: 'multi-track' })
+    await page.click('.vw-track-head[data-track-id="v3"] .vw-th-more')
+    await page.waitForSelector('.menu .menu-item:has-text("Remove track")')
+    await waitAnimations(page)
+    return {}
+  },
+  'track-removed': async (page) => {
+    await seedTimeline(page, { extra: 'multi-track' })
+    await page.click('.vw-track-head[data-track-id="v3"] .vw-th-more')
+    await page.click('.menu .menu-item:has-text("Remove track")')
+    return { note: 'V3 and its clip removed (Ctrl+Z brings it back)' }
+  },
 }
 
 /** Every running CSS/Web animation on the page has finished (a dialog's open fade, a sliding chip). */

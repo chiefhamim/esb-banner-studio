@@ -52,7 +52,12 @@ const openVideo = async (page) => { await page.click('.launch-tile:has-text("Vid
  * proves the media protocol's CORS keeps it untainted (the export reads it back). */
 async function footagePlays(page) {
   const sample = () => page.evaluate(() => {
-    const c = document.querySelector('.vw-canvas')
+    // the monitor is a WebGL2 canvas (Phase 1): copy it into a 2D one to read it (it would throw if tainted)
+    const g = document.querySelector('.vw-canvas')
+    const c = document.createElement('canvas')
+    c.width = g.width
+    c.height = g.height
+    c.getContext('2d').drawImage(g, 0, 0)
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
     let sum = 0, sq = 0, n = 0
     const vals = []
