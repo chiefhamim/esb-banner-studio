@@ -26,6 +26,7 @@ const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'b
 for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://localhost:${PORT}/`)).ok) break } catch {} await new Promise((r) => setTimeout(r, 500)) }
 
 // long but realistic: a full-length headline, a compound proper noun, a long name, a long email, many tags
+const LONG_MARKER = 'A long marker name that checks the markers list keeps every word inside its own field'
 const LONG = {
   headline: 'Bangladesh–India Cross-Border Transmission Interconnection Raises Rooppur Nuclear Grid Capacity by 1,200 MW',
   deck: 'The Bangladesh Power Development Board says the 400 kV double-circuit Bheramara–Baharampur interconnection upgrade will raise firm import capacity before the 2027 summer peak, easing load-shedding.',
@@ -210,6 +211,28 @@ try {
     await tryStep('video-sound-inspector', async () => { await page.click('.vw-clip-block[data-clip-kind="audio"]') })
     await tryStep('video-story-built', async () => { await vtab('Story'); await page.click('.vw-story-build'); await page.click('.vw-story-confirm button:has-text("Replace")'); await page.waitForSelector('.vw-story-note') })
     await tryStep('video-clip-selected', async () => { await page.locator('.vw-clip-block').first().click() })
+    // Phase 2 editing: the tool menu, a named marker in the markers list, the speed panel with a ramp, the keyframe lane
+    // under a clip with keys, the shortcuts sheet
+    await tryStep('video-tools-menu', async () => { await page.click('.vw-tool-menu'); await page.waitForSelector('.vw-tool-pop') })
+    await page.keyboard.press('Escape')
+    await tryStep('video-markers', async () => {
+      await page.evaluate(() => { const st = window.__videoStore.getState(); st.addMarker(1); st.addMarker(2.5) })
+      await page.click('.vw-markers-btn')
+      await page.locator('.vw-ml-name').first().fill(LONG_MARKER)
+    })
+    await page.keyboard.press('Escape')
+    await tryStep('video-speed-ramp', async () => {
+      await page.evaluate(() => { const st = window.__videoStore.getState(); const c = st.project.clips.find((x) => x.kind === 'video' && !x.still && x.srcDuration != null) ?? st.project.clips.find((x) => x.kind === 'video'); st.updateClip({ ...c, srcDuration: c.srcDuration ?? 60, still: false }); st.selectClip(c.id) })
+      await page.click('.vw-ramp-menu')
+      await page.click('.menu .menu-item:has-text("Hero moment")')
+      await page.waitForSelector('.vw-ramp-svg')
+    })
+    await tryStep('video-keyframe-lane', async () => {
+      await page.evaluate(() => { const st = window.__videoStore.getState(); const c = st.project.clips.find((x) => x.id === st.selectedClipId); st.updateClip({ ...c, keyframes: { scale: [{ t: 0, v: 1 }, { t: 1, v: 1.2 }], opacity: [{ t: 0.5, v: 1 }] } }); st.selectClip(c.id) })
+      await page.waitForSelector('.vw-kf-lane .vw-kf-key')
+    })
+    await tryStep('video-shortcuts', async () => { await page.click('.vw-keys-btn'); await page.waitForSelector('.dialog .vw-keys') })
+    await page.keyboard.press('Escape')
     await tryStep('video-export', async () => { await page.click('.vw-header-actions button:has-text("Export")'); await page.waitForSelector('.vx') })
     await page.keyboard.press('Escape')
     await tryStep('video-new-confirm', async () => { await page.click('.vw-new'); await page.waitForSelector('.dialog[aria-label="Start a new video?"]') })

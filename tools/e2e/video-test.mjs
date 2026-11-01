@@ -172,6 +172,81 @@ try {
   const quiet = level(L, 0.1, 0.7), tone = level(L, 1.2, 1.5)
   check('A1 tone starts where its clip starts', (quiet === -999 || quiet < -60) && tone > -30, `before ${quiet} dB, during ${tone} dB`)
   fs.rmSync(L, { force: true })
+  // 5b. Phase 2: a keyframed move lands at the exact pixel positions at three times, and a 2× clip plays its source
+  // twice as fast. Keyframes and speed are applied by the engine (Part B, src/video/engine/*) through the contract in
+  // src/video/keyframes.ts / speed.ts; before that engine is merged these two checks are reported PENDING-MERGE.
+  await page.evaluate(() => { window.__layersProject = window.__videoStore.getState().project })
+  const engineDir = path.join(root, 'src/video/engine')
+  const engineReads = (name) => fs.readdirSync(engineDir).some((f) => f.endsWith('.ts') && fs.readFileSync(path.join(engineDir, f), 'utf8').includes(name))
+  const engineKeyframes = engineReads('sampleProp')
+  const engineSpeed = engineReads('sourceTimeAt')
+  /** The first and last lit pixel of row y (r+g+b over 150) in the frame at t. */
+  const litSpan = (file, t, y) => {
+    const row = spawnSync('ffmpeg', ['-v', 'error', '-ss', String(t), '-i', file, '-frames:v', '1', '-vf', `format=rgb24,crop=1920:1:0:${y}`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']).stdout
+    let first = -1, last = -1
+    for (let x = 0; x < 1920; x++) if (row[x * 3] + row[x * 3 + 1] + row[x * 3 + 2] > 150) { if (first < 0) first = x; last = x }
+    return [first, last]
+  }
+  await page.evaluate(() => {
+    const st = window.__videoStore.getState()
+    const vid = st.mediaAssets.find((x) => x.name === 'red-green-2s.mp4')
+    // a quarter-size picture (fit, 25 %) moved from 30 % left of centre to 30 % right of it over 2 s, linear
+    window.__videoStore.setState({ project: { ...st.project, bug: false, duration: 5, clips: [
+      { id: 'kf', trackId: 'v1', title: 'kf', kind: 'video', start: 0, duration: 2, in: 0, out: 2, color: '#2563eb', sourceUrl: vid.url, mediaAssetId: vid.id, srcDuration: 2, fit: 'fit', scale: 0.25, offX: 0, keyframes: { x: [{ t: 0, v: -0.3 }, { t: 2, v: 0.3 }] } },
+      { id: 'fast', trackId: 'v1', title: 'fast', kind: 'video', start: 3, duration: 1, in: 0, out: 2, color: '#2563eb', sourceUrl: vid.url, mediaAssetId: vid.id, srcDuration: 2, speed: 2 },
+    ] } })
+  })
+  const kfx = await exportOnce()
+  // expected left edge: centre 960 + x·1920, minus half the 480 px picture → x(0.5) = −0.15 → 432; x(1) = 0 → 720; x(1.5) = 0.15 → 1008
+  const want = [[0.5, 432], [1, 720], [1.5, 1008]]
+  const got = want.map(([t]) => litSpan(kfx.file, t + 0.001, 540))
+  const kfOk = got.every(([a, b], i) => Math.abs(a - want[i][1]) <= 2 && Math.abs(b - (want[i][1] + 479)) <= 2)
+  if (engineKeyframes) check('ACCEPT a keyframed move exports to the exact pixel positions at three times (±2 px)', kfOk, JSON.stringify({ want: want.map((w) => w[1]), got }))
+  else console.log(`PENDING-MERGE keyframed move export: the engine (Part B) does not read keyframes on this branch yet; picture spans now ${JSON.stringify(got)}, after the merge they must start at ${want.map((w) => w[1]).join(' / ')} ±2 px`)
+  const fastPx = pixelAt(kfx.file, 3.6, 960, 540) // 0.6 s into a 2× clip = source 1.2 s: green
+  if (engineSpeed) check('ACCEPT a 2× clip plays its source twice as fast (green at 0.6 s = source 1.2 s)', near(fastPx, [0, 255, 0], 80), JSON.stringify(fastPx))
+  else console.log(`PENDING-MERGE 2× speed export: the engine (Part B) does not map source time through speed.ts on this branch yet; pixel now ${JSON.stringify(fastPx)}, after the merge it must be green`)
+  check('A 2× clip of a 2 s file is 1 s on the timeline (the export runs 4 s)', Math.abs(Number(probe(kfx.file).format.duration) - 4) < 0.1, String(probe(kfx.file).format.duration))
+  fs.rmSync(kfx.file, { force: true })
+
+  // 5c. Phase 2 editing through the UI: tools, ripple delete, markers, a keyframe diamond, a compound opened in place
+  await page.evaluate(() => {
+    const st = window.__videoStore.getState()
+    const vid = st.mediaAssets.find((x) => x.name === 'red-green-2s.mp4')
+    const pair = (id, start) => [
+      { id, trackId: 'v1', title: id, kind: 'video', start, duration: 2, in: 0, out: 2, color: '#2563eb', sourceUrl: vid.url, mediaAssetId: vid.id, srcDuration: 2, linkId: `L${id}` },
+      { id: `${id}s`, trackId: 'a1', title: `${id} sound`, kind: 'audio', start, duration: 2, in: 0, out: 2, color: '#7c3aed', sourceUrl: vid.url, mediaAssetId: vid.id, srcDuration: 2, linkId: `L${id}` },
+    ]
+    window.__videoStore.setState({ project: { ...st.project, clips: [...pair('p1', 0), ...pair('p2', 2), ...pair('p3', 4)], markers: undefined }, selectedClipId: null, selectedIds: [], currentTime: 1 })
+  })
+  await page.keyboard.press('b')
+  check('B picks the Ripple tool (toolbar shows it)', (await page.evaluate(() => window.__videoStore.getState().tool)) === 'ripple' && /Ripple/.test(await page.locator('.vw-tool-menu').innerText()))
+  await page.keyboard.press('v')
+  await page.click('.vw-clip-block[data-clip-id="p2"]', { position: { x: 30, y: 20 } })
+  const h0 = await page.evaluate(() => window.__videoStore.getState().history.length)
+  await page.keyboard.press('Shift+Delete')
+  const rip = await page.evaluate(() => { const s = window.__videoStore.getState(); const g = (id) => s.project.clips.find((c) => c.id === id); return { h: s.history.length, p3: g('p3')?.start, p3s: g('p3s')?.start, gone: !g('p2') && !g('p2s') } })
+  check('Shift+Del ripple-deletes: the pair goes, the next pair moves up in sync, one undo step', rip.gone && rip.p3 === 2 && rip.p3s === 2 && rip.h === h0 + 1, JSON.stringify(rip))
+  await page.keyboard.press('m')
+  await page.waitForSelector('.vw-marker')
+  check('M drops a marker on the ruler at the playhead', (await page.evaluate(() => window.__videoStore.getState().project.markers?.map((m) => m.t))).join() === '1')
+  await page.click('.vw-clip-block[data-clip-id="p1"]', { position: { x: 30, y: 20 } })
+  await page.click('.vw-prop[data-prop="scale"] .vw-kf-toggle')
+  await page.waitForSelector('.vw-kf-lane .vw-kf-key')
+  const kfs = await page.evaluate(() => JSON.stringify(window.__videoStore.getState().project.clips.find((c) => c.id === 'p1').keyframes))
+  check('The ◆ beside Scale adds a keyframe at the playhead and the keyframe lane appears under the clip', kfs === JSON.stringify({ scale: [{ t: 1, v: 1 }] }), kfs)
+  await page.keyboard.down('Shift'); await page.click('.vw-clip-block[data-clip-id="p3"]', { position: { x: 30, y: 20 } }); await page.keyboard.up('Shift')
+  await page.keyboard.press('Control+Alt+g')
+  const cmp = await page.evaluate(() => { const s = window.__videoStore.getState(); return s.project.clips.filter((c) => c.compound).map((c) => ({ id: c.id, n: c.compound.clips.length, d: c.duration })) })
+  check('Ctrl+Alt+G makes one compound clip of the selection (with the linked sound)', cmp.length === 1 && cmp[0].n === 4 && cmp[0].d === 4, JSON.stringify(cmp))
+  await page.dblclick(`.vw-clip-block[data-clip-id="${cmp[0]?.id}"]`, { position: { x: 30, y: 20 } })
+  await page.waitForSelector('.vw-compound-bar')
+  check('Double-click opens the compound in place (breadcrumb, its own clips on the lanes)', (await page.locator('.vw-clip-block').count()) === 4 && (await page.locator('.vw-clip-block[data-clip-id="p3"]').count()) === 1)
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+  check('Esc closes it back to the main timeline', (await page.locator('.vw-compound-bar').count()) === 0 && (await page.evaluate(() => window.__videoStore.getState().compoundPath.length)) === 0)
+  // back to the layers project of step 5 for the bug-off export
+  await page.evaluate(() => { const s = window.__videoStore.getState(); s.loadProject(window.__layersProject, { assets: s.mediaAssets, dirty: true }) })
   await page.click('.vw-bin-panel .side-tabs button:has-text("Overlays")')
   await page.click('.vw-bug-row .switch')
   const noBug = await exportOnce()

@@ -1,13 +1,16 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { Dialog, IconButton, MenuButton, MenuList, Popover, Seg, Select, Slider, Switch, Tabs } from '../ui/controls'
 import type { MenuEntry } from '../ui/controls'
-import type { AspectRatio, Clip, MediaAsset, OverlayTemplate, Track, TrackKind } from './timeline'
-import { TRACK_KIND_LABEL, canPlaceOn, clipsForAsset, contentEnd, formatShortTime, formatTimecode, groupLocked, trackForKind } from './timeline'
-import { useVideoStore } from './videoStore'
+import type { AspectRatio, Clip, MediaAsset, OverlayTemplate, Track, TrackKind, VideoProject } from './timeline'
+import { TRACK_KIND_LABEL, allClips, canPlaceOn, clipsForAsset, contentEnd, flattenCompounds, formatShortTime, formatTimecode, groupLocked, neighbours, trackForKind } from './timeline'
+import { useVideoStore, viewOf } from './videoStore'
+import type { EditTool } from './videoStore'
+import { constantSpeed } from './speed'
+import { CompoundBar, KeyframeHead, KeyframeLane, MarkersButton, PROP_RANGES, PasteAttributesDialog, PropRow, RulerMarkers, ShortcutsSheet, SpeedSection, TOOLS, ToolMenu } from './TimelinePro'
 import { OVERLAY_LABELS, dropCachedMedia, pruneMediaCache } from './compositor'
 import { GLCompositor } from './engine/glCompositor'
 import { renderFrame } from './engine/render'
@@ -44,6 +47,15 @@ const pct = (v: number) => `${Math.round(v * 100)}%`
 const WIDE_INSPECTOR = '(min-width: 1180px)'
 
 const getState = useVideoStore.getState
+/** The timeline being edited (the project, or the open compound's inside). */
+const view = () => viewOf(getState())
+const flatMemo = new WeakMap<VideoProject, VideoProject>()
+/** What the monitor, the sound and the export play: compound clips replaced by their insides (cached per project). */
+function playable(p: VideoProject): VideoProject {
+  let f = flatMemo.get(p)
+  if (!f) { f = flattenCompounds(p); flatMemo.set(p, f) }
+  return f
+}
 
 function useMediaQuery(q: string) {
   const [on, setOn] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches)
@@ -71,6 +83,9 @@ const START_WAIT_MS = 700
  * a little ahead of the playhead. */
 function PlaybackEngine() {
   const playing = useVideoStore((s) => s.playing)
+  // J/K/L: 2× and 4× play forwards on the same clock (silent: the sound engine plays at 1× only); backwards is the
+  // ReverseShuttle below
+  const rate = useVideoStore((s) => (s.playing ? Math.max(1, s.rate || 1) : 0))
   useEffect(() => {
     const eng = previewEngine()
     const audio = audioEngine()
@@ -78,30 +93,33 @@ function PlaybackEngine() {
     if (!playing) { eng.stopStreams(); audio.stop(); return }
     // the proxy maker waits while the preview plays (Part A; a no-op without it)
     const releaseProxies = holdProxies('playback')
+    const cur = () => playable(view())
+    const withSound = rate === 1
     let raf = 0
     let origin = performance.now() + START_LEAD_MS
     let base = getState().currentTime
     let last = base
-    let project = getState().project
+    let project = cur()
     let sig = audioSignature(project)
     // the clock waits (at most START_WAIT_MS) until every stream under the playhead has its first frames, so playback
     // starts on exact frames instead of dropping the first ones; the sound starts with the clock
     let started = false
     const waitFrom = performance.now()
-    const position = () => base + Math.max(0, performance.now() - origin) / 1000
-    const restartAudio = () => { void audio.start(getState().project, base, origin, position) }
+    const position = () => base + (Math.max(0, performance.now() - origin) / 1000) * rate
+    const restartAudio = () => { if (withSound) void audio.start(cur(), base, origin, position); else audio.stop() }
     eng.updateStreams(project, base, true)
     const tick = () => {
       const st = getState()
       if (!st.playing) return
       const now = performance.now()
+      const p = cur()
       if (!started) {
         if (Math.abs(st.currentTime - last) > 1e-4) { base = st.currentTime; last = base }
-        eng.updateStreams(st.project, base, true)
-        if (eng.prerolled(st.project, base) || now - waitFrom > START_WAIT_MS) {
+        eng.updateStreams(p, base, true)
+        if (eng.prerolled(p, base) || now - waitFrom > START_WAIT_MS) {
           started = true
           eng.prerollMs = now - waitFrom
-          project = st.project
+          project = p
           sig = audioSignature(project)
           origin = now + START_LEAD_MS
           eng.startStats()
@@ -111,24 +129,48 @@ function PlaybackEngine() {
         return
       }
       if (Math.abs(st.currentTime - last) > 1e-4) { origin = now + START_LEAD_MS; base = st.currentTime; restartAudio() } // the editor seeked
-      const end = Math.max(0.1, contentEnd(st.project) || st.project.duration)
-      let t = base + Math.max(0, now - origin) / 1000
+      const end = Math.max(0.1, contentEnd(p) || p.duration)
+      let t = base + (Math.max(0, now - origin) / 1000) * rate
       if (t >= end) { t = 0; base = 0; origin = now + START_LEAD_MS; restartAudio() }
-      if (st.project !== project) {
-        project = st.project
+      if (p !== project) {
+        project = p
         const next = audioSignature(project)
-        if (next !== sig) { sig = next; base = t; origin = now; restartAudio() } else audio.updateGains(project)
+        if (next !== sig) { sig = next; base = t; origin = now; restartAudio() } else if (withSound) audio.updateGains(project)
       }
       st.seek(t)
       last = getState().currentTime
-      eng.updateStreams(st.project, last, true)
+      eng.updateStreams(p, last, true)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => { cancelAnimationFrame(raf); eng.stopStreams(); audio.stop(); releaseProxies() }
-  }, [playing])
+  }, [playing, rate])
   // leaving the desk stops the sound and the decoders' look-ahead
   useEffect(() => () => { audioEngine().stop(); previewEngine().stopStreams(); holdBackground(false) }, [])
+  return null
+}
+
+/** J backwards (−1×, −2×, −4×): the playhead runs back on the wall clock while the monitor shows each exact frame as a
+ * paused scrub would (the decoders read forwards only, so this never streams). Stops at 0 or on any other key. */
+function ReverseShuttle() {
+  const rate = useVideoStore((s) => (!s.playing && s.rate < 0 ? s.rate : 0))
+  useEffect(() => {
+    if (!rate) return
+    let raf = 0
+    let prev = performance.now()
+    const tick = () => {
+      const st = getState()
+      if (st.playing || st.rate !== rate) return
+      const now = performance.now()
+      const t = st.currentTime + ((now - prev) / 1000) * rate
+      prev = now
+      if (t <= 0) { st.seek(0); useVideoStore.setState({ rate: 0 }); return }
+      st.seek(t)
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [rate])
   return null
 }
 
@@ -143,7 +185,7 @@ function HeaderTimecode() {
 function TransportTime() {
   const t = useVideoStore((s) => s.currentTime)
   const fps = useVideoStore((s) => s.project.fps)
-  const end = useVideoStore((s) => contentEnd(s.project))
+  const end = useVideoStore((s) => contentEnd(viewOf(s)))
   return <><span className="vw-current-time mono">{formatTimecode(t, fps)}</span><span className="vw-total-time mono">/ {formatTimecode(end, fps)}</span></>
 }
 
@@ -154,7 +196,7 @@ function Playhead({ zoom }: { zoom: number }) {
 
 function SplitButton() {
   const can = useVideoStore((s) => {
-    const p = s.project
+    const p = viewOf(s)
     const t = s.currentTime
     const target = s.selectedClipId ? p.clips.find((c) => c.id === s.selectedClipId) : p.clips.find((c) => t > c.start && t < c.start + c.duration)
     return !!target && t > target.start + 1e-3 && t < target.start + target.duration - 1e-3 && !groupLocked(p, target.id)
@@ -186,7 +228,7 @@ function Monitor({ aspect }: { aspect: number }) {
       const st = getState()
       const t = st.currentTime
       const { frames, exact } = eng.lookup(t, st.playing)
-      renderFrame(comp, st.project, t, w, h, { editor: true, frames })
+      renderFrame(comp, playable(viewOf(st)), t, w, h, { editor: true, frames })
       eng.drawLog?.push({ perf: performance.now(), t })
       if (st.playing) eng.noteDraw(Math.round(t * st.project.fps), exact())
       else if (exact()) eng.noteExactPaused(t)
@@ -197,7 +239,7 @@ function Monitor({ aspect }: { aspect: number }) {
     eng.onFrame = schedule
     const unsub = useVideoStore.subscribe((s, prev) => {
       if (s.currentTime !== prev.currentTime && !s.playing) { eng.noteSeek(s.currentTime); noteScrub() }
-      if (s.project !== prev.project || s.currentTime !== prev.currentTime || s.playing !== prev.playing) schedule()
+      if (s.project !== prev.project || s.compoundPath !== prev.compoundPath || s.currentTime !== prev.currentTime || s.playing !== prev.playing) schedule()
     })
     const offProxy = onProxyReady(() => schedule())
     window.addEventListener('esb:video-media-ready', schedule)
@@ -226,7 +268,7 @@ function LaneVisuals({ scrollerRef, lanesRef }: { scrollerRef: React.RefObject<H
     const scroller = scrollerRef.current
     const lanes = lanesRef.current
     if (!canvas || !scroller || !lanes) return
-    const lc = attachLaneCanvas(canvas, scroller, lanes, { clips: () => getState().project.clips, assets: () => getState().mediaAssets, zoom: () => getState().zoom })
+    const lc = attachLaneCanvas(canvas, scroller, lanes, { clips: () => view().clips, assets: () => getState().mediaAssets, zoom: () => getState().zoom })
     const unsub = useVideoStore.subscribe((s, p) => { if (s.mediaAssets !== p.mediaAssets || s.zoom !== p.zoom) lc.redraw() })
     return () => { unsub(); lc.detach() }
   }, [scrollerRef, lanesRef])
@@ -306,64 +348,106 @@ function TracksBelowCue({ scrollerRef, count }: { scrollerRef: React.RefObject<H
 
 // ---------------------------------------------------------------- the timeline (memoised: it redraws on edits, not on the playhead)
 
-const Ruler = memo(function Ruler({ duration, zoom, onPointerDown, rulerRef }: { duration: number; zoom: number; onPointerDown: (e: React.PointerEvent) => void; rulerRef: React.RefObject<HTMLDivElement | null> }) {
+const Ruler = memo(function Ruler({ duration, zoom, onPointerDown, rulerRef, markers, range, onOpenMarker }: { duration: number; zoom: number; onPointerDown: (e: React.PointerEvent) => void; rulerRef: React.RefObject<HTMLDivElement | null>; markers: VideoProject['markers']; range: { in: number | null; out: number | null }; onOpenMarker: (id: string) => void }) {
   return (
     <div ref={rulerRef} className="vw-ruler" onPointerDown={onPointerDown} style={{ width: `${duration * zoom}px`, '--vw-sec': `${zoom}px` } as React.CSSProperties}>
       {Array.from({ length: Math.ceil(duration / 5) + 1 }).map((_, i) => (
         <div key={i} className="vw-ruler-mark" style={{ left: `${i * 5 * zoom}px` }}><span className="vw-ruler-label mono">{formatShortTime(i * 5)}</span></div>
       ))}
+      <RulerMarkers markers={markers ?? NO_MARKERS} zoom={zoom} range={range} onOpen={onOpenMarker} />
     </div>
   )
 })
+const NO_MARKERS: NonNullable<VideoProject['markers']> = []
 
 type ClipGrab = (e: React.PointerEvent, clip: Clip, what: 'move' | 'left' | 'right') => void
 
-const Lanes = memo(function Lanes({ tracks, clips, selectedClipId, zoom, onGrab, lanesRef }: { tracks: Track[]; clips: Clip[]; selectedClipId: string | null; zoom: number; onGrab: ClipGrab; lanesRef: React.RefObject<HTMLDivElement | null> }) {
+/** The selected clip shows its keyframe lane under its track while it has keys. */
+const kfClipOf = (clips: Clip[], selectedIds: string[]) => {
+  if (selectedIds.length !== 1) return undefined
+  const c = clips.find((x) => x.id === selectedIds[0])
+  return c && !c.compound && c.keyframes && Object.values(c.keyframes).some((k) => k?.length) ? c : undefined
+}
+
+const Lanes = memo(function Lanes({ tracks, clips, selectedIds, zoom, tool, onGrab, onOpen, lanesRef, onDropAsset }: { tracks: Track[]; clips: Clip[]; selectedIds: string[]; zoom: number; tool: EditTool; onGrab: ClipGrab; onOpen: (clip: Clip) => void; lanesRef: React.RefObject<HTMLDivElement | null>; onDropAsset: (e: React.DragEvent) => void }) {
   const locked = new Set(tracks.filter((t) => t.locked).map((t) => t.id))
+  const sel = new Set(selectedIds)
+  // a selected clip's linked partners (and its group) are shown as part of the selection
+  const links = new Set(clips.filter((c) => sel.has(c.id) && c.linkId).map((c) => c.linkId!))
+  const groups = new Set(clips.filter((c) => sel.has(c.id) && c.groupId).map((c) => c.groupId!))
+  const kf = kfClipOf(clips, selectedIds)
+  const [dropping, setDropping] = useState(false)
   return (
-    <div className="vw-lanes-container" ref={lanesRef}>
+    <div
+      className={`vw-lanes-container tool-${tool}${dropping ? ' dropping' : ''}`}
+      ref={lanesRef}
+      onDragOver={(e) => { if (e.dataTransfer.types.includes(ASSET_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropping(true) } }}
+      onDragLeave={(e) => { if (!(e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget))) setDropping(false) }}
+      onDrop={(e) => { setDropping(false); onDropAsset(e) }}
+    >
       {tracks.map((t) => {
         const own = clips.filter((c) => c.trackId === t.id)
         const rows = laneRows(own)
         return (
-          <div key={t.id} className={`vw-track-lane lane-${t.kind}${t.locked ? ' locked' : ''}${t.hidden ? ' hidden' : ''}`} data-track-id={t.id}>
-            {own.map((clip) => {
-              const row = rows.row.get(clip.id) ?? 0
-              const isLocked = locked.has(clip.trackId)
-              return (
-                <div
-                  key={clip.id}
-                  className={`vw-clip-block ${clip.id === selectedClipId ? 'selected' : ''}${clip.sourceUrl || (clip.kind !== 'video' && clip.kind !== 'audio') ? '' : ' offline'}${rows.count > 1 ? ' stacked' : ''}${clip.sourceUrl && (clip.kind === 'video' || clip.kind === 'audio') && rows.count === 1 ? ' has-visual' : ''}`}
-                  data-clip-kind={clip.kind}
-                  data-clip-id={clip.id}
-                  style={{ left: `${clip.start * zoom}px`, width: `${clip.duration * zoom}px`, backgroundColor: clip.color, '--row': row, '--rows': rows.count } as React.CSSProperties}
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => onGrab(e, clip, 'move')}
-                >
-                  {!isLocked && <div className="vw-trim-handle left" data-tip="Drag to trim the start" onPointerDown={(e) => onGrab(e, clip, 'left')} />}
-                  <span className="vw-clip-label">
-                    {clip.linkId && <span className="vw-clip-link" aria-label="Linked to its sound"><Icon name="link" size={10} /></span>}
-                    <span className="vw-clip-title">{clipLabel(clip)}</span>
-                  </span>
-                  <span className="vw-clip-duration mono">{clip.duration.toFixed(1)}s</span>
-                  {!isLocked && <div className="vw-trim-handle right" data-tip="Drag to trim the end" onPointerDown={(e) => onGrab(e, clip, 'right')} />}
-                </div>
-              )
-            })}
-          </div>
+          <Fragment key={t.id}>
+            <div className={`vw-track-lane lane-${t.kind}${t.locked ? ' locked' : ''}${t.hidden ? ' hidden' : ''}`} data-track-id={t.id}>
+              {own.map((clip) => {
+                const row = rows.row.get(clip.id) ?? 0
+                const isLocked = locked.has(clip.trackId)
+                const isSel = sel.has(clip.id)
+                const partner = !isSel && ((clip.linkId && links.has(clip.linkId)) || (clip.groupId && groups.has(clip.groupId)))
+                const speed = clip.speed != null || clip.freezes?.length || clip.reverse
+                return (
+                  <div
+                    key={clip.id}
+                    className={`vw-clip-block ${clip.id === selectedIds[0] ? 'selected' : isSel ? 'selected also' : partner ? 'linked-sel' : ''}${clip.sourceUrl || clip.compound || (clip.kind !== 'video' && clip.kind !== 'audio') ? '' : ' offline'}${rows.count > 1 ? ' stacked' : ''}${clip.sourceUrl && (clip.kind === 'video' || clip.kind === 'audio') && rows.count === 1 ? ' has-visual' : ''}${clip.compound ? ' compound' : ''}`}
+                    data-clip-kind={clip.kind}
+                    data-clip-id={clip.id}
+                    style={{ left: `${clip.start * zoom}px`, width: `${clip.duration * zoom}px`, backgroundColor: clip.color, '--row': row, '--rows': rows.count } as React.CSSProperties}
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => onGrab(e, clip, 'move')}
+                    onDoubleClick={() => onOpen(clip)}
+                  >
+                    {!isLocked && <div className="vw-trim-handle left" data-tip={TRIM_TIP[tool].left} onPointerDown={(e) => onGrab(e, clip, 'left')} />}
+                    <span className="vw-clip-label">
+                      {clip.linkId && <span className="vw-clip-link" aria-label="Linked to its sound"><Icon name="link" size={10} /></span>}
+                      {clip.compound && <span className="vw-clip-link" aria-label="Compound clip (double-click to open)"><Icon name="layers" size={10} /></span>}
+                      {clip.groupId && <span className="vw-clip-link" aria-label="Grouped"><Icon name="grid" size={10} /></span>}
+                      <span className="vw-clip-title">{clipLabel(clip)}</span>
+                    </span>
+                    <span className="vw-clip-duration mono">{speed ? <i className="vw-clip-speed">{clip.reverse ? '◂ ' : ''}{rampOfLabel(clip)}</i> : null}{clip.duration.toFixed(1)}s</span>
+                    {!isLocked && <div className="vw-trim-handle right" data-tip={TRIM_TIP[tool].right} onPointerDown={(e) => onGrab(e, clip, 'right')} />}
+                  </div>
+                )
+              })}
+            </div>
+            {kf && kf.trackId === t.id && <KeyframeLane clip={kf} zoom={zoom} />}
+          </Fragment>
         )
       })}
     </div>
   )
 })
 
+const ASSET_MIME = 'application/x-esb-asset'
+const APOSTROPHE = "'"
+const TRIM_TIP: Record<EditTool, { left: string; right: string }> = {
+  select: { left: 'Drag to trim the start', right: 'Drag to trim the end' },
+  ripple: { left: 'Ripple trim the start: later clips follow', right: 'Ripple trim the end: later clips follow' },
+  roll: { left: 'Roll this cut with the clip before', right: 'Roll this cut with the clip after' },
+  slip: { left: 'Drag to trim the start', right: 'Drag to trim the end' },
+  slide: { left: 'Drag to trim the start', right: 'Drag to trim the end' },
+}
+const rampOfLabel = (c: Clip) => (c.speed && typeof c.speed === 'object' ? 'ramp ' : c.freezes?.length && c.speed == null ? 'freeze ' : `${constantSpeed(c)}× `)
+
 // ---------------------------------------------------------------- the desk
 
 export function VideoWorkspace() {
   const {
-    project, playing, selectedClipId, zoom, exporting, canUndo, canRedo, mediaAssets, isRecordingVoiceover, dirty, generation, projectPath,
+    project, tl, playing, selectedClipId, selectedIds, tool, range, inCompound, zoom, exporting, canUndo, canRedo, mediaAssets, isRecordingVoiceover, dirty, generation, projectPath,
   } = useVideoStore(useShallow((s) => ({
-    project: s.project, playing: s.playing, selectedClipId: s.selectedClipId, zoom: s.zoom, exporting: s.exporting,
+    project: s.project, tl: viewOf(s), playing: s.playing, selectedClipId: s.selectedClipId, selectedIds: s.selectedIds, tool: s.tool, range: s.range, inCompound: s.compoundPath.length > 0,
+    zoom: s.zoom, exporting: s.exporting,
     canUndo: s.history.length > 0, canRedo: s.future.length > 0, mediaAssets: s.mediaAssets, isRecordingVoiceover: s.isRecordingVoiceover,
     dirty: s.dirty, generation: s.generation, projectPath: s.projectPath,
   })))
@@ -385,8 +469,17 @@ export function VideoWorkspace() {
   const [importing, setImporting] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [captionDraft, setCaptionDraft] = useState('')
+  const [showKeys, setShowKeys] = useState(false)
+  const [pasteAttrs, setPasteAttrs] = useState(false)
+  const [markerFocus, setMarkerFocus] = useState<string | null>(null)
 
-  const drag = useRef<{ kind: 'playhead' } | { kind: 'move'; id: string; startX: number; origStart: number } | { kind: 'trim'; id: string; side: 'left' | 'right'; startX: number } | null>(null)
+  type Drag =
+    | { kind: 'playhead' }
+    | { kind: 'move'; id: string; startX: number; origStart: number; others: { id: string; start: number }[] }
+    | { kind: 'trim' | 'rtrim'; id: string; side: 'left' | 'right'; startX: number }
+    | { kind: 'roll'; left: string; right: string; startX: number }
+    | { kind: 'slip' | 'slide'; id: string; startX: number; speed: number }
+  const drag = useRef<Drag | null>(null)
 
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -433,13 +526,13 @@ export function VideoWorkspace() {
     setNote(null)
     const st = getState()
     const keep = new Set<string>()
-    for (const p of [st.project, ...st.history, ...st.future]) for (const c of p.clips) if (c.sourceUrl) keep.add(c.sourceUrl)
+    for (const p of [st.project, ...st.history, ...st.future]) for (const c of allClips(p)) if (c.sourceUrl) keep.add(c.sourceUrl)
     for (const a of st.mediaAssets) if (a.url) keep.add(a.url)
     pruneMediaCache(keep)
     releaseFilmstrips(keep)
     audioEngine().releaseSound(keep)
     const urls = new Set<string>()
-    for (const c of st.project.clips) { const u = previewUrl(c); if (u) urls.add(u) }
+    for (const c of playable(viewOf(st)).clips) { const u = previewUrl(c); if (u) urls.add(u) }
     previewEngine().forgetClips()
     previewEngine().prune(urls)
   }, [generation])
@@ -451,10 +544,10 @@ export function VideoWorkspace() {
       const st = getState()
       const urls = new Set<string>()
       const clips = new Set<string>()
-      for (const c of st.project.clips) { clips.add(c.id); const u = previewUrl(c); if (u) urls.add(u) }
+      for (const c of playable(viewOf(st)).clips) { clips.add(c.id); const u = previewUrl(c); if (u) urls.add(u) }
       return { urls, clips }
     })
-    const unsub = useVideoStore.subscribe((s, p) => { if (s.project.clips !== p.project.clips) eng.schedulePrune() })
+    const unsub = useVideoStore.subscribe((s, p) => { if (s.project.clips !== p.project.clips || s.compoundPath !== p.compoundPath) eng.schedulePrune() })
     const offProxy = onProxyReady(() => eng.schedulePrune(4000))
     return () => { unsub(); offProxy(); eng.setPruneSource(null) }
   }, [])
@@ -514,17 +607,49 @@ export function VideoWorkspace() {
       const target = e.target as HTMLElement
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable) return
       if (document.querySelector('.modal-bg')) return
+      // a focused keyframe diamond handles its own Delete and Enter
+      if (target.closest?.('.vw-kf-lane') && (e.key === 'Delete' || e.key === 'Backspace' || e.key === 'Enter')) return
       const st = getState()
+      const ctrl = e.ctrlKey || e.metaKey
+      const k = e.key.toLowerCase()
+      const tool = !ctrl && !e.altKey && !e.shiftKey ? TOOLS.find((t) => t.key.toLowerCase() === k) : undefined
       if (e.code === 'Space') { e.preventDefault(); st.togglePlay() }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); st.stepFrame(e.shiftKey ? -10 : -1) }
       else if (e.key === 'ArrowRight') { e.preventDefault(); st.stepFrame(e.shiftKey ? 10 : 1) }
-      else if (e.key.toLowerCase() === 's' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void doSave(e.shiftKey) }
-      else if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); st.splitAtPlayhead() }
-      else if (e.key === 'Delete' || e.key === 'Backspace') { if (st.selectedClipId) { e.preventDefault(); removeSelected() } }
+      else if (k === 's' && ctrl) { e.preventDefault(); void doSave(e.shiftKey) }
+      else if (k === 's' && !ctrl) { e.preventDefault(); st.splitAtPlayhead() }
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (!st.selectedClipId) return
+        e.preventDefault()
+        if (e.shiftKey || st.tool === 'ripple') { if (!st.rippleDeleteSelected()) flash('Ripple delete would move a clip on a locked track (or split a linked pair). Unlock it first.') }
+        else removeSelected()
+      }
       else if (e.key === 'Home') { e.preventDefault(); st.seek(0) }
-      else if (e.key === 'End') { e.preventDefault(); st.seek(contentEnd(st.project)) }
-      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) st.redo(); else st.undo() }
-      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); st.redo() }
+      else if (e.key === 'End') { e.preventDefault(); st.seek(contentEnd(view())) }
+      else if (ctrl && k === 'z') { e.preventDefault(); if (e.shiftKey) st.redo(); else st.undo() }
+      else if (ctrl && k === 'y') { e.preventDefault(); st.redo() }
+      else if (ctrl && e.altKey && k === 'v') { e.preventDefault(); setPasteAttrs(true) }
+      else if (ctrl && k === 'c') { if (st.selectedClipId) { e.preventDefault(); const n = st.copySelected(); flash(`Copied ${n} clip${n === 1 ? '' : 's'}`) } }
+      else if (ctrl && k === 'v') { e.preventDefault(); if (!st.clipboard) flash('Nothing copied yet (Ctrl+C on a clip).'); else if (!st.pasteClips()) flash('Could not paste there (a locked track).') }
+      else if (ctrl && e.altKey && k === 'g') { e.preventDefault(); if (!st.compoundSelected()) flash('Select clips on unlocked tracks to make a compound clip.') }
+      else if (ctrl && e.shiftKey && k === 'g') { e.preventDefault(); if (!st.ungroupSelected()) flash('No group in the selection.') }
+      else if (ctrl && k === 'g') { e.preventDefault(); if (!st.groupSelected()) flash('Shift+click two or more clips to group them.') }
+      else if (ctrl && k === 'm') { e.preventDefault(); st.toggleMagnetic(); flash(getState().project.magnetic ? 'Magnetic main track on: V1 closes its gaps' : 'Magnetic main track off') }
+      else if (ctrl) return
+      else if (k === 'm' && e.shiftKey) { e.preventDefault(); st.jumpMarker(1) }
+      else if (k === 'm' && e.altKey) { e.preventDefault(); st.jumpMarker(-1) }
+      else if (k === 'm') { e.preventDefault(); st.addMarker() }
+      else if (k === 'x' && e.altKey) { e.preventDefault(); st.setRangeIn(null); st.setRangeOut(null) }
+      else if (e.altKey) return
+      else if (k === 'j' || k === 'k' || k === 'l') { e.preventDefault(); st.shuttle(k) }
+      else if (k === 'i') { e.preventDefault(); st.setRangeIn(st.currentTime) }
+      else if (k === 'o') { e.preventDefault(); st.setRangeOut(st.currentTime) }
+      else if (e.key === ';') { e.preventDefault(); if (!st.lift()) flash('Set in and out (I, O) or select a clip to lift.') }
+      else if (e.key === APOSTROPHE) { e.preventDefault(); if (!st.extract()) flash('Set in and out (I, O) or select a clip to extract.') }
+      else if (e.key === '?') { e.preventDefault(); setShowKeys(true) }
+      else if (e.key === 'Enter') { const c = view().clips.find((x) => x.id === st.selectedClipId); if (c?.compound) { e.preventDefault(); st.openCompound(c.id) } }
+      else if (e.key === 'Escape') { if (st.compoundPath.length && !document.querySelector('.popover')) { e.preventDefault(); st.closeCompound() } else if (st.selectedClipId) st.selectClip(null) }
+      else if (tool) { e.preventDefault(); st.setTool(tool.id) }
     }
   })
   useEffect(() => {
@@ -535,15 +660,15 @@ export function VideoWorkspace() {
 
   const removeSelected = () => {
     const st = getState()
-    if (st.selectedClipId && groupLocked(st.project, st.selectedClipId)) { flash('That clip is on a locked track (or linked to one). Unlock it first.'); return }
+    if (st.selectedClipId && groupLocked(view(), st.selectedClipId)) { flash('That clip is on a locked track (or linked to one). Unlock it first.'); return }
     st.deleteSelectedClip()
   }
 
-  // ---------------------------------------------------------------- Pointer: scrub, move and trim (one undo step per gesture)
+  // ---------------------------------------------------------------- Pointer: scrub, move, trim and the tools (one undo step per gesture)
   const timeAt = (clientX: number) => {
     const rect = rulerRef.current?.getBoundingClientRect()
     const st = getState()
-    return rect ? Math.max(0, Math.min(st.project.duration, (clientX - rect.left) / st.zoom)) : st.currentTime
+    return rect ? Math.max(0, Math.min(view().duration, (clientX - rect.left) / st.zoom)) : st.currentTime
   }
   const onRulerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
@@ -552,31 +677,66 @@ export function VideoWorkspace() {
   }, [])
   const onGrab = useCallback<ClipGrab>((e, clip, what) => {
     e.stopPropagation()
+    if (e.button !== 0) return
     const st = getState()
-    st.selectClip(clip.id)
-    if (groupLocked(st.project, clip.id)) return
+    const v = view()
+    // Shift / Ctrl+click adds to (or takes from) the selection; it does not drag
+    if (e.shiftKey || e.ctrlKey || e.metaKey) { st.selectClip(clip.id, 'toggle'); return }
+    const keepMulti = st.selectedIds.length > 1 && st.selectedIds.includes(clip.id) && what === 'move'
+    if (keepMulti) useVideoStore.setState({ selectedClipId: clip.id, selectedIds: [clip.id, ...st.selectedIds.filter((x) => x !== clip.id)] })
+    else st.selectClip(clip.id)
+    if (groupLocked(v, clip.id)) return
+    const tool = st.tool
+    if (what === 'move') {
+      if (tool === 'slip' && clip.srcDuration != null) { st.beginGesture(); drag.current = { kind: 'slip', id: clip.id, startX: e.clientX, speed: constantSpeed(clip) }; return }
+      if (tool === 'slide') { st.beginGesture(); drag.current = { kind: 'slide', id: clip.id, startX: e.clientX, speed: 1 }; return }
+      st.beginGesture()
+      const others = keepMulti ? getState().selectedIds.filter((x) => x !== clip.id).map((id) => ({ id, start: v.clips.find((c) => c.id === id)?.start ?? 0 })) : []
+      drag.current = { kind: 'move', id: clip.id, startX: e.clientX, origStart: clip.start, others }
+      return
+    }
+    if (tool === 'roll') {
+      const n = neighbours(v, clip.id)
+      const pair = what === 'right' ? (n.next ? { left: clip.id, right: n.next.id } : null) : (n.prev ? { left: n.prev.id, right: clip.id } : null)
+      if (pair) { st.beginGesture(); drag.current = { kind: 'roll', ...pair, startX: e.clientX }; return }
+    }
     st.beginGesture()
-    drag.current = what === 'move' ? { kind: 'move', id: clip.id, startX: e.clientX, origStart: clip.start } : { kind: 'trim', id: clip.id, side: what, startX: e.clientX }
+    drag.current = { kind: tool === 'ripple' ? 'rtrim' : 'trim', id: clip.id, side: what, startX: e.clientX }
   }, [])
+  const onOpenClip = useCallback((clip: Clip) => { if (clip.compound) getState().openCompound(clip.id) }, [])
   useEffect(() => {
     const move = (e: PointerEvent) => {
       const d = drag.current
       if (!d) return
       const st = getState()
+      const v = view()
+      const frame = 1 / (v.fps || 30)
       if (d.kind === 'playhead') st.seek(timeAt(e.clientX))
       else if (d.kind === 'move') {
         const lane = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('.vw-track-lane')
-        const clip = st.project.clips.find((c) => c.id === d.id)
-        const to = lane?.dataset.trackId && clip && lane.dataset.trackId !== clip.trackId && canPlaceOn(st.project, clip, lane.dataset.trackId) ? lane.dataset.trackId : undefined
-        st.moveClip(d.id, Math.max(0, d.origStart + (e.clientX - d.startX) / st.zoom), to)
-      }
-      else {
+        const clip = v.clips.find((c) => c.id === d.id)
+        const to = lane?.dataset.trackId && clip && lane.dataset.trackId !== clip.trackId && canPlaceOn(v, clip, lane.dataset.trackId) ? lane.dataset.trackId : undefined
         const dt = (e.clientX - d.startX) / st.zoom
-        if (Math.abs(dt) >= 0.1) {
-          if (d.side === 'left') st.trimClipLeftDelta(d.id, dt)
+        st.moveClip(d.id, Math.max(0, d.origStart + dt), to)
+        for (const o of d.others) st.moveClip(o.id, Math.max(0, o.start + dt))
+      }
+      else if (d.kind === 'trim' || d.kind === 'rtrim') {
+        const dt = (e.clientX - d.startX) / st.zoom
+        if (Math.abs(dt) >= (d.kind === 'rtrim' ? frame : 0.1)) {
+          if (d.kind === 'rtrim') st.rippleTrimDelta(d.id, d.side, dt)
+          else if (d.side === 'left') st.trimClipLeftDelta(d.id, dt)
           else st.trimClipRightDelta(d.id, dt)
           d.startX = e.clientX
         }
+      }
+      else {
+        const dt = (e.clientX - d.startX) / st.zoom
+        if (Math.abs(dt) < frame) return
+        if (d.kind === 'roll') st.rollDelta(d.left, d.right, dt)
+        // slip: dragging right shows earlier content (the picture moves with the pointer)
+        else if (d.kind === 'slip') st.slipDelta(d.id, -dt * d.speed)
+        else st.slideDelta(d.id, dt)
+        d.startX = e.clientX
       }
     }
     // a gesture ends on release anywhere (a slider in the inspector starts one too)
@@ -586,6 +746,27 @@ export function VideoWorkspace() {
     window.addEventListener('pointercancel', up)
     return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up) }
   }, [])
+
+  /** A bin item dropped on a lane: at the drop time, on that lane when it takes the clip, by the edit mode. */
+  const onDropAsset = useCallback((e: React.DragEvent) => {
+    const id = e.dataTransfer.getData(ASSET_MIME)
+    if (!id) return
+    e.preventDefault()
+    const st = getState()
+    const asset = st.mediaAssets.find((a) => a.id === id)
+    if (!asset) return
+    if (asset.missing) { flash(`${asset.name} is missing. Relink it first.`); return }
+    const v = view()
+    const t = Math.round(timeAt(e.clientX) * v.fps) / v.fps
+    const lane = (e.target as HTMLElement).closest<HTMLElement>('.vw-track-lane')?.dataset.trackId
+    const laneKind = v.tracks.find((x) => x.id === lane)?.kind
+    const clips = clipsForAsset(v, asset, t, asset.type === 'image' && laneKind === 'overlay' ? 'overlay' : 'auto')
+    if (!clips.length) return
+    const shift = t - clips[0].start
+    const placed = clips.map((c, i) => ({ ...c, start: c.start + shift, trackId: i === 0 && lane && canPlaceOn(v, c, lane) ? lane : c.trackId }))
+    if (!st.placeClips(placed)) flash('Could not drop there: the track is locked.')
+    else flash(`${st.editMode === 'insert' ? 'Inserted' : 'Placed'} ${asset.name} at ${formatShortTime(t)}`)
+  }, [flash])
 
   // ---------------------------------------------------------------- Import
   const addAssets = (assets: (MediaAsset | null)[]) => {
@@ -618,7 +799,7 @@ export function VideoWorkspace() {
   const addAssetToTimeline = (asset: MediaAsset, as: 'auto' | 'overlay' = 'auto') => {
     if (asset.missing) { flash(`${asset.name} is missing. Relink it first.`); return }
     const st = getState()
-    addClips(clipsForAsset(st.project, asset, st.currentTime, as))
+    addClips(clipsForAsset(view(), asset, st.currentTime, as))
   }
 
   const relink = async (asset: MediaAsset) => {
@@ -653,7 +834,7 @@ export function VideoWorkspace() {
         // the take is written to disk (desktop) before it goes on the timeline, so a save or a crash restore keeps it
         void keepTake(blob, name, dur).then(({ asset, onDisk, error }) => {
           addMediaAsset(asset)
-          addClip({ id: `clip-vo-${Date.now()}`, trackId: trackForKind(getState().project, 'audio') ?? 'a1', title: name, kind: 'audio', start: at, duration: dur, in: 0, out: dur, color: '#7c3aed', sourceUrl: asset.url, mediaAssetId: asset.id, srcDuration: dur })
+          addClip({ id: `clip-vo-${Date.now()}`, trackId: trackForKind(view(), 'audio') ?? 'a1', title: name, kind: 'audio', start: at, duration: dur, in: 0, out: dur, color: '#7c3aed', sourceUrl: asset.url, mediaAssetId: asset.id, srcDuration: dur })
           if (!onDisk && hasDiskMedia()) flash(`The voiceover could not be written to disk (${error ?? 'unknown error'}); it plays this session only.`)
         })
       }
@@ -718,47 +899,52 @@ export function VideoWorkspace() {
   // ---------------------------------------------------------------- Overlays and captions
   const handleAddOverlay = (type: OverlayTemplate, tag: string) => {
     const color = OVERLAY_PRESETS.find((p) => p.type === type)?.color ?? '#10b981'
-    const p = getState().project
+    const p = view()
     const clip: Clip = { id: `clip-ov-${Date.now().toString(36)}`, trackId: trackForKind(p, 'overlay') ?? (type !== 'logo' ? trackForKind(p, 'text') : undefined) ?? 'v2', title: tag, kind: 'overlay', start: getState().currentTime, duration: 5, in: 0, out: 5, color, overlayType: type }
     if (type !== 'logo') { clip.overlayText = ''; clip.overlaySub = '' }
     addClip(clip)
   }
   const handleAddCaption = () => {
     const text = captionDraft.trim()
-    const p = getState().project
+    const p = view()
     addClip({ id: `clip-cap-${Date.now().toString(36)}`, trackId: trackForKind(p, 'caption') ?? trackForKind(p, 'text') ?? 'c1', title: text ? text.slice(0, 40) : 'Caption', kind: 'caption', start: getState().currentTime, duration: 4.5, in: 0, out: 4.5, color: '#f59e0b', captionText: text })
     setCaptionDraft('')
   }
 
-  const selectedClip = project.clips.find((c) => c.id === selectedClipId)
+  const selectedClip = tl.clips.find((c) => c.id === selectedClipId)
   const binAssets = mediaAssets.filter((a) => !a.removed || a.missing)
   const missingAssets = mediaAssets.filter((a) => a.missing)
-  const empty = project.clips.length === 0
-  const length = contentEnd(project)
+  const empty = tl.clips.length === 0 && !inCompound
+  const length = contentEnd(tl)
   // the room under the header and over the status bar, shared by the monitor row and the timeline
   const room = Math.max(320, viewH - HEADER_H - STATUS_H)
   const tlMax = Math.max(TL_MIN, room - MONITOR_MIN)
   const tlAuto = monitorW > 0 ? Math.min(room * 0.55, Math.max(TL_AUTO_MIN, room - (monitorW / (project.width / project.height) + MONITOR_CHROME))) : TL_AUTO_MIN
   const timelineH = Math.round(Math.max(TL_MIN, Math.min(tlMax, timelineUser ?? tlAuto)))
   const showTab = (t: BinTab) => { setActiveTab(t); selectClip(null) }
+  const kfClip = kfClipOf(tl.clips, selectedIds)
+  const editMode = useVideoStore((s) => s.editMode)
 
   const inspector = selectedClip && (
     <ClipInspector
       clip={selectedClip}
-      locked={groupLocked(project, selectedClip.id)}
+      locked={groupLocked(tl, selectedClip.id)}
       onChange={updateClip}
       onDelete={removeSelected}
       onClose={() => selectClip(null)}
       onUnlink={() => unlinkClip(selectedClip.id)}
       onGestureStart={beginGesture}
       closeLabel={wide ? 'Close the inspector' : 'Back to the bin'}
-      linkedWith={selectedClip.linkId ? project.clips.find((c) => c.linkId === selectedClip.linkId && c.id !== selectedClip.id) : undefined}
+      linkedWith={selectedClip.linkId ? tl.clips.find((c) => c.linkId === selectedClip.linkId && c.id !== selectedClip.id) : undefined}
+      flash={flash}
+      selectionCount={selectedIds.length}
     />
   )
 
   return (
     <div className="video-workspace">
       <PlaybackEngine />
+      <ReverseShuttle />
       <input type="file" ref={fileInputRef} multiple accept="video/*,audio/*,image/*" style={{ display: 'none' }} onChange={(e) => { void importFiles(e.target.files ? Array.from(e.target.files) : null); e.target.value = '' }} />
       <input type="file" ref={projectInputRef} accept=".esbvideo" style={{ display: 'none' }} onChange={openFromInput} />
 
@@ -940,64 +1126,75 @@ export function VideoWorkspace() {
       </div>
 
       {/* 3. Timeline */}
-      <footer className="vw-timeline-footer" style={{ height: `${timelineH}px` }}>
+      <footer className={`vw-timeline-footer${inCompound ? ' in-compound' : ''}`} style={{ height: `${timelineH}px` }}>
         <TimelineResizer height={timelineH} min={TL_MIN} max={tlMax} onChange={setTimelineUser} />
+        <CompoundBar />
         <div className="vw-timeline-toolbar">
           <div className="vw-tl-tools-left">
             <SplitButton />
-            <button type="button" className="btn sm subtle vw-delete" disabled={!selectedClipId} onClick={removeSelected} data-tip="Delete the selected clip (Del)"><Icon name="trash" size={13} /> Delete</button>
+            <button type="button" className="btn sm subtle vw-delete" disabled={!selectedClipId} onClick={removeSelected} data-tip="Delete the selected clip (Del · Shift+Del closes the gap)"><Icon name="trash" size={13} /><span className="vw-del-lbl">Delete</span></button>
+            <span className="vw-tl-sep" />
+            <ToolMenu />
+            <IconButton icon="magnet" className={`vw-magnet${project.magnetic ? ' on' : ''}`} active={!!project.magnetic} tip={project.magnetic ? 'Magnetic main track is on: V1 closes its gaps (Ctrl+M)' : 'Magnetic main track: V1 closes its gaps (Ctrl+M)'} onClick={() => { getState().toggleMagnetic(); flash(getState().project.magnetic ? 'Magnetic main track on: V1 closes its gaps' : 'Magnetic main track off') }} />
           </div>
           <div className="vw-tl-tools-right">
+            <MarkersButton focusId={markerFocus} onFocusDone={() => setMarkerFocus(null)} />
             <MenuButton label="Track" icon="plus" className="sm subtle vw-add-track" menuClassName="vw-solid vw-add-track-menu" items={ADD_TRACK.map((k) => ({ label: `${TRACK_KIND_LABEL[k]} track`, icon: ADD_ICON[k], hint: ADD_HINT[k], onClick: () => { const id = getState().addTrack(k); flash(`Added ${id.toUpperCase()} · ${TRACK_KIND_LABEL[k]}`) } }))} align="end" />
             <span className="vw-tl-sep" />
             <IconButton icon="minus" tip="Zoom out" onClick={() => setZoom(zoom - 10)} />
             <span className="vw-zoom-label mono">{zoom} px/s</span>
             <IconButton icon="plus" tip="Zoom in" onClick={() => setZoom(zoom + 10)} />
+            <IconButton icon="keyboard" className="vw-keys-btn" tip="Keyboard shortcuts (?)" onClick={() => setShowKeys(true)} />
           </div>
         </div>
 
         <div className="vw-tracks-scroll" ref={tracksScrollRef}>
           <div className="vw-track-headers">
-            <div className="vw-ruler-header">Tracks</div>
-            {project.tracks.map((t) => (
-              <div key={t.id} className={`vw-track-head${t.hidden ? ' hidden' : ''}`} data-track-id={t.id}>
-                <span className="vw-th-title" data-tip={t.name}><b>{t.id.toUpperCase()}</b>{TRACK_KIND_LABEL[t.kind]}</span>
-                <div className="vw-th-actions">
-                  {t.kind === 'audio' ? (
-                    <button type="button" className={`vw-th-btn ${t.muted ? 'active' : ''}`} onClick={() => toggleTrackMute(t.id)} aria-label={`${t.muted ? 'Unmute' : 'Mute'} ${t.id.toUpperCase()}`} aria-pressed={!!t.muted} data-tip={t.muted ? 'Unmute track' : 'Mute track'}>
-                      <Icon name={t.muted ? 'volumeX' : 'volume'} size={13} />
+            <div className="vw-ruler-header">{inCompound ? 'Compound' : 'Tracks'}</div>
+            {tl.tracks.map((t) => (
+              <Fragment key={t.id}>
+                <div className={`vw-track-head${t.hidden ? ' hidden' : ''}`} data-track-id={t.id}>
+                  <span className="vw-th-title" data-tip={t.name}><b>{t.id.toUpperCase()}</b>{TRACK_KIND_LABEL[t.kind]}</span>
+                  <div className="vw-th-actions">
+                    {t.kind === 'audio' ? (
+                      <button type="button" className={`vw-th-btn ${t.muted ? 'active' : ''}`} onClick={() => toggleTrackMute(t.id)} aria-label={`${t.muted ? 'Unmute' : 'Mute'} ${t.id.toUpperCase()}`} aria-pressed={!!t.muted} data-tip={t.muted ? 'Unmute track' : 'Mute track'}>
+                        <Icon name={t.muted ? 'volumeX' : 'volume'} size={13} />
+                      </button>
+                    ) : (
+                      <button type="button" className={`vw-th-btn vw-th-hide ${t.hidden ? 'active' : ''}`} onClick={() => toggleTrackHidden(t.id)} aria-label={`${t.hidden ? 'Show' : 'Hide'} ${t.id.toUpperCase()}`} aria-pressed={!!t.hidden} data-tip={t.hidden ? 'Show track (drawn again)' : 'Hide track (not drawn or exported)'}>
+                        <Icon name={t.hidden ? 'eyeOff' : 'eye'} size={13} />
+                      </button>
+                    )}
+                    <button type="button" className={`vw-th-btn ${t.locked ? 'active' : ''}`} onClick={() => toggleTrackLock(t.id)} aria-label={`${t.locked ? 'Unlock' : 'Lock'} ${t.id.toUpperCase()}`} aria-pressed={!!t.locked} data-tip={t.locked ? 'Unlock track' : 'Lock track'}>
+                      <Icon name={t.locked ? 'lock' : 'unlock'} size={13} />
                     </button>
-                  ) : (
-                    <button type="button" className={`vw-th-btn vw-th-hide ${t.hidden ? 'active' : ''}`} onClick={() => toggleTrackHidden(t.id)} aria-label={`${t.hidden ? 'Show' : 'Hide'} ${t.id.toUpperCase()}`} aria-pressed={!!t.hidden} data-tip={t.hidden ? 'Show track (drawn again)' : 'Hide track (not drawn or exported)'}>
-                      <Icon name={t.hidden ? 'eyeOff' : 'eye'} size={13} />
+                    <button type="button" className={`vw-th-btn vw-th-more${trackMenu?.id === t.id ? ' open' : ''}`} aria-expanded={trackMenu?.id === t.id} aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setTrackMenu((m) => (m?.id === t.id ? null : { id: t.id, x: r.left, y: r.bottom + 4 })) }} aria-label={`More for ${t.id.toUpperCase()}`} data-tip="Move or remove the track">
+                      <Icon name="more" size={13} />
                     </button>
-                  )}
-                  <button type="button" className={`vw-th-btn ${t.locked ? 'active' : ''}`} onClick={() => toggleTrackLock(t.id)} aria-label={`${t.locked ? 'Unlock' : 'Lock'} ${t.id.toUpperCase()}`} aria-pressed={!!t.locked} data-tip={t.locked ? 'Unlock track' : 'Lock track'}>
-                    <Icon name={t.locked ? 'lock' : 'unlock'} size={13} />
-                  </button>
-                  <button type="button" className={`vw-th-btn vw-th-more${trackMenu?.id === t.id ? ' open' : ''}`} aria-expanded={trackMenu?.id === t.id} aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setTrackMenu((m) => (m?.id === t.id ? null : { id: t.id, x: r.left, y: r.bottom + 4 })) }} aria-label={`More for ${t.id.toUpperCase()}`} data-tip="Move or remove the track">
-                    <Icon name="more" size={13} />
-                  </button>
+                  </div>
                 </div>
-              </div>
+                {kfClip && kfClip.trackId === t.id && <KeyframeHead clip={kfClip} />}
+              </Fragment>
             ))}
           </div>
 
-          <div className="vw-lanes-area" style={{ width: `${project.duration * zoom + 300}px` }}>
-            <Ruler duration={project.duration} zoom={zoom} onPointerDown={onRulerDown} rulerRef={rulerRef} />
+          <div className="vw-lanes-area" style={{ width: `${tl.duration * zoom + 300}px` }}>
+            <Ruler duration={tl.duration} zoom={zoom} onPointerDown={onRulerDown} rulerRef={rulerRef} markers={tl.markers} range={range} onOpenMarker={setMarkerFocus} />
             <Playhead zoom={zoom} />
-            <Lanes tracks={project.tracks} clips={project.clips} selectedClipId={selectedClipId} zoom={zoom} onGrab={onGrab} lanesRef={lanesRef} />
+            <Lanes tracks={tl.tracks} clips={tl.clips} selectedIds={selectedIds} zoom={zoom} tool={tool} onGrab={onGrab} onOpen={onOpenClip} lanesRef={lanesRef} onDropAsset={onDropAsset} />
             <LaneVisuals scrollerRef={tracksScrollRef} lanesRef={lanesRef} />
           </div>
         </div>
-        <TracksBelowCue scrollerRef={tracksScrollRef} count={project.tracks.length} />
+        <TracksBelowCue scrollerRef={tracksScrollRef} count={tl.tracks.length} />
       </footer>
 
       <footer className="statusbar vw-statusbar">
-        <span>{project.clips.length} {project.clips.length === 1 ? 'clip' : 'clips'} · {project.tracks.length} tracks</span>
-        {selectedClip && <><span className="sep" /><span className="vw-sb-sel">{clipLabel(selectedClip)}</span></>}
+        <span>{tl.clips.length} {tl.clips.length === 1 ? 'clip' : 'clips'} · {tl.tracks.length} tracks</span>
+        {selectedClip && <><span className="sep" /><span className="vw-sb-sel">{selectedIds.length > 1 ? `${selectedIds.length} clips selected` : clipLabel(selectedClip)}</span></>}
         {note && <><span className="sep" /><span className="vw-sb-note">{note}</span></>}
         <div className="spacer" />
+        <span className="muted vw-sb-tool" data-tip="Tool · drop and paste mode">{TOOLS.find((x) => x.id === tool)?.label} · {editMode === 'insert' ? 'Insert' : 'Overwrite'}{project.magnetic ? ' · Magnetic' : ''}</span>
+        <span className="sep" />
         <span className={`muted vw-sb-save${autosave?.error && dirty ? ' failed' : ''}`} data-tip={autosave?.error && dirty ? `Autosave failed: ${autosave.error}` : undefined}>
           {dirty ? (autosave?.error ? 'Unsaved · autosave failed' : autosave?.at ? `Unsaved · autosaved ${fmtTime(autosave.at, { seconds: true })}` : 'Unsaved') : empty && !projectPath ? 'New video' : 'Saved'}
         </span>
@@ -1006,7 +1203,7 @@ export function VideoWorkspace() {
       </footer>
 
       {trackMenu && (() => {
-        const st = getState()
+        const st = { project: view() }
         const i = st.project.tracks.findIndex((t) => t.id === trackMenu.id)
         const t = st.project.tracks[i]
         if (!t) return null
@@ -1020,7 +1217,9 @@ export function VideoWorkspace() {
         ]
         return <Popover anchor={{ x: trackMenu.x, y: trackMenu.y }} onClose={() => setTrackMenu(null)} className="menu ctx vw-solid" minWidth={200}><MenuList items={items} onDone={() => setTrackMenu(null)} /></Popover>
       })()}
-      {exportModal && <ExportSheet project={project} onClose={() => setExportModal(false)} onShowMedia={() => { setExportModal(false); showTab('media') }} />}
+      {showKeys && <ShortcutsSheet onClose={() => setShowKeys(false)} />}
+      {pasteAttrs && <PasteAttributesDialog onClose={() => setPasteAttrs(false)} flash={flash} />}
+      {exportModal && <ExportSheet project={playable(project)} onClose={() => setExportModal(false)} onShowMedia={() => { setExportModal(false); showTab('media') }} />}
       {confirmReplace && (
         <Dialog
           title={confirmReplace === 'new' ? 'Start a new video?' : 'Open another video?'}
@@ -1060,12 +1259,18 @@ function clipLabel(c: Clip): string {
   return c.title
 }
 
-function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, onGestureStart, closeLabel, linkedWith }: { clip: Clip; locked: boolean; onChange: (c: Clip) => void; onDelete: () => void; onClose: () => void; onUnlink: () => void; onGestureStart: () => void; closeLabel: string; linkedWith?: Clip }) {
-  const isFootage = clip.kind === 'video'
+function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, onGestureStart, closeLabel, linkedWith, flash, selectionCount }: { clip: Clip; locked: boolean; onChange: (c: Clip) => void; onDelete: () => void; onClose: () => void; onUnlink: () => void; onGestureStart: () => void; closeLabel: string; linkedWith?: Clip; flash: (s: string) => void; selectionCount: number }) {
+  const isFootage = clip.kind === 'video' && !clip.compound
   const labels = clip.overlayType ? OVERLAY_LABELS[clip.overlayType] : null
   const set = (patch: Partial<Clip>) => onChange({ ...clip, ...patch })
   const textOverlay = clip.kind === 'overlay' && clip.overlayType && clip.overlayType !== 'logo' && !clip.sourceUrl
   const anyEmpty = textOverlay && (!(clip.overlayText ?? '').trim() || !(clip.overlaySub ?? '').trim())
+  const pctF = (v: number) => pct(v)
+  const row = (prop: keyof typeof PROP_RANGES, cls: string, format: (v: number) => string = pctF) => (
+    <PropRow key={prop} clip={clip} prop={prop} {...PROP_RANGES[prop]} format={format} className={cls} onChange={onChange} disabled={locked} />
+  )
+  // speed is for footage and sound read from a file (not stills, titles or compounds)
+  const timed = !clip.compound && !clip.still && clip.srcDuration != null && (clip.kind === 'video' || clip.kind === 'audio')
   return (
     <div
       className="vw-inspector"
@@ -1073,18 +1278,28 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
       onPointerDownCapture={(e) => { if ((e.target as HTMLElement).matches?.('input[type=range]')) onGestureStart() }}
     >
       <div className="vw-inspector-head">
-        <span className="vw-inspector-title">{isFootage ? (clip.still ? 'STILL' : 'FOOTAGE') : clip.kind === 'audio' ? 'SOUND' : clip.kind === 'caption' ? 'CAPTION' : 'OVERLAY'}</span>
+        <span className="vw-inspector-title">{clip.compound ? 'COMPOUND' : isFootage ? (clip.still ? 'STILL' : 'FOOTAGE') : clip.kind === 'audio' ? 'SOUND' : clip.kind === 'caption' ? 'CAPTION' : 'OVERLAY'}</span>
         <div className="vw-inspector-actions">
           <IconButton icon="trash" size={14} tip={locked ? 'On a locked track' : 'Delete clip (Del)'} disabled={locked} onClick={onDelete} />
           <IconButton icon="x" size={14} tip={closeLabel} onClick={onClose} className="vw-inspector-close" />
         </div>
       </div>
       <div className="vw-inspector-body">
+        {selectionCount > 1 && <p className="vw-hint vw-multi-hint"><Icon name="info" size={12} />{selectionCount} clips selected. Ctrl+G groups them, Ctrl+Alt+G makes a compound clip; this shows the first.</p>}
         {locked && <p className="vw-hint vw-locked-hint"><Icon name="lock" size={12} />On a locked track{linkedWith ? ' (or linked to one)' : ''}: it cannot be moved, trimmed, split or deleted.</p>}
         {!textOverlay && clip.kind !== 'caption' && (
           <div className="vw-field">
             <label htmlFor="vw-f-title">Name on the timeline</label>
             <input id="vw-f-title" type="text" value={clip.title} onChange={(e) => set({ title: e.target.value })} />
+          </div>
+        )}
+        {clip.compound && (
+          <div className="vw-compound-actions">
+            <p className="vw-hint">A nested timeline of {clip.compound.clips.length} clip{clip.compound.clips.length === 1 ? '' : 's'}. Open it to edit inside; it plays here as one clip.</p>
+            <div className="vw-btn-row">
+              <button type="button" className="btn sm vw-open-compound" onClick={() => getState().openCompound(clip.id)}><Icon name="layers" size={12} />Open (Enter)</button>
+              <button type="button" className="btn sm subtle vw-break-compound" disabled={locked} onClick={() => { if (!getState().breakCompound(clip.id)) flash('Unlock the track first.') }}>Break apart</button>
+            </div>
           </div>
         )}
         {textOverlay && labels && (
@@ -1114,72 +1329,52 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
               <label>Frame</label>
               <Seg<'fill' | 'fit'> value={clip.fit ?? 'fill'} onChange={(v) => set({ fit: v })} options={[{ value: 'fill', label: 'Fill' }, { value: 'fit', label: 'Fit' }]} />
             </div>
-            <div className="vw-field">
-              <label>Scale <em>{pct(clip.scale ?? 1)}</em></label>
-              <Slider className="vw-s-scale" min={0.1} max={4} step={0.01} value={clip.scale ?? 1} onChange={(v) => set({ scale: v })} />
-            </div>
-            <div className="vw-field">
-              <label>Position X <em>{pct(clip.offX ?? 0)}</em></label>
-              <Slider className="vw-s-x" min={-1} max={1} step={0.005} value={clip.offX ?? 0} onChange={(v) => set({ offX: v })} />
-            </div>
-            <div className="vw-field">
-              <label>Position Y <em>{pct(clip.offY ?? 0)}</em></label>
-              <Slider className="vw-s-y" min={-1} max={1} step={0.005} value={clip.offY ?? 0} onChange={(v) => set({ offY: v })} />
-            </div>
+            {row('scale', 'vw-s-scale')}
+            {row('x', 'vw-s-x')}
+            {row('y', 'vw-s-y')}
             <div className="vw-subhead">Crop</div>
-            {(['cropL', 'cropR', 'cropT', 'cropB'] as const).map((k) => (
-              <div className="vw-field" key={k}>
-                <label>{k === 'cropL' ? 'Left' : k === 'cropR' ? 'Right' : k === 'cropT' ? 'Top' : 'Bottom'} <em>{pct(clip[k] ?? 0)}</em></label>
-                <Slider className={`vw-s-${k}`} min={0} max={0.45} step={0.005} value={clip[k] ?? 0} onChange={(v) => set({ [k]: v })} />
-              </div>
-            ))}
-            <button type="button" className="btn sm vw-reset-transform" onClick={() => set({ fit: undefined, scale: undefined, offX: undefined, offY: undefined, cropL: undefined, cropR: undefined, cropT: undefined, cropB: undefined, rotation: undefined, anchorX: undefined, anchorY: undefined })}><Icon name="reset" size={12} />Reset frame</button>
+            {row('cropL', 'vw-s-cropL')}
+            {row('cropR', 'vw-s-cropR')}
+            {row('cropT', 'vw-s-cropT')}
+            {row('cropB', 'vw-s-cropB')}
+            <button type="button" className="btn sm vw-reset-transform" onClick={() => set({ fit: undefined, scale: undefined, offX: undefined, offY: undefined, cropL: undefined, cropR: undefined, cropT: undefined, cropB: undefined, rotation: undefined, anchorX: undefined, anchorY: undefined, keyframes: clip.keyframes?.volume ? { volume: clip.keyframes.volume } : undefined })}><Icon name="reset" size={12} />Reset frame</button>
           </>
         )}
         {clip.kind === 'audio' && (
           <>
-            <div className="vw-field">
-              <label>Volume <em>{pct(clip.volume ?? 1)}</em></label>
-              <Slider className="vw-s-vol" min={0} max={1} step={0.05} value={clip.volume ?? 1} onChange={(v) => set({ volume: v })} />
-            </div>
+            {row('volume', 'vw-s-vol')}
             <Switch checked={!clip.muted} onChange={(on) => set({ muted: !on })} label="Sound on" />
           </>
         )}
-        {clip.kind !== 'audio' && !isFootage && (
+        {clip.kind !== 'audio' && !isFootage && !clip.compound && (
           <>
-            <div className="vw-field">
-              <label>Position X <em>{pct(clip.offX ?? 0)}</em></label>
-              <Slider className="vw-s-x" min={-1} max={1} step={0.005} value={clip.offX ?? 0} onChange={(v) => set({ offX: v })} />
-            </div>
-            <div className="vw-field">
-              <label>Position Y <em>{pct(clip.offY ?? 0)}</em></label>
-              <Slider className="vw-s-y" min={-1} max={1} step={0.005} value={clip.offY ?? 0} onChange={(v) => set({ offY: v })} />
-            </div>
+            {row('x', 'vw-s-x')}
+            {row('y', 'vw-s-y')}
           </>
         )}
-        {clip.kind !== 'audio' && (
-          <div className="vw-field">
-            <label>Rotation <em>{Math.round(clip.rotation ?? 0)}°</em></label>
-            <Slider className="vw-s-rot" min={-180} max={180} step={1} value={clip.rotation ?? 0} onChange={(v) => set({ rotation: v || undefined })} />
-          </div>
-        )}
-        {clip.kind !== 'audio' && (
-          <div className="vw-field">
-            <label>Opacity <em>{pct(clip.opacity ?? 1)}</em></label>
-            <Slider className="vw-s-opacity" min={0} max={1} step={0.05} value={clip.opacity ?? 1} onChange={(v) => set({ opacity: v })} />
-          </div>
-        )}
+        {clip.kind !== 'audio' && !clip.compound && row('rotation', 'vw-s-rot', (v) => `${Math.round(v)}°`)}
+        {clip.kind !== 'audio' && (clip.compound
+          ? <div className="vw-field"><label>Opacity <em>{pct(clip.opacity ?? 1)}</em></label><Slider className="vw-s-opacity" min={0} max={1} step={0.05} value={clip.opacity ?? 1} onChange={(v) => set({ opacity: v })} /></div>
+          : row('opacity', 'vw-s-opacity'))}
+        {timed && <SpeedSection clip={clip} locked={locked} flash={flash} />}
         {linkedWith && (
           <div className="vw-linked">
             <Icon name="link" size={12} />
-            <span>Linked to {linkedWith.kind === 'audio' ? `its sound on ${linkedWith.trackId.toUpperCase()}` : `its footage on ${linkedWith.trackId.toUpperCase()}`}: they move, trim and split together.</span>
+            <span>Linked to {linkedWith.kind === 'audio' ? `its sound on ${linkedWith.trackId.toUpperCase()}` : `its footage on ${linkedWith.trackId.toUpperCase()}`}: they move, trim, split and change speed together.</span>
             <button type="button" className="btn xs vw-unlink" onClick={onUnlink}>Unlink</button>
+          </div>
+        )}
+        {clip.groupId && (
+          <div className="vw-linked">
+            <Icon name="grid" size={12} />
+            <span>In a group: it moves and deletes with the others.</span>
+            <button type="button" className="btn xs vw-ungroup" onClick={() => { getState().selectClip(clip.id); getState().ungroupSelected() }}>Ungroup</button>
           </div>
         )}
         <div className="vw-metrics">
           <span>Start {formatShortTime(clip.start)}</span>
           <span>Length {clip.duration.toFixed(1)} s</span>
-          {(clip.kind === 'video' || clip.kind === 'audio') && !clip.still && <span>From {clip.in.toFixed(1)} s of the file</span>}
+          {(clip.kind === 'video' || clip.kind === 'audio') && !clip.still && !clip.compound && <span>From {clip.in.toFixed(1)} s of the file</span>}
         </div>
       </div>
     </div>
@@ -1205,7 +1400,7 @@ if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof w
       stats: () => previewEngine().stats(),
       scrubLatencies: () => previewEngine().scrubLatencies.slice(),
       still: async (t: number) => {
-        const r = await renderPreviewStill(getState().project, t)
+        const r = await renderPreviewStill(playable(view()), t)
         // raw RGBA as base64 (a data URL read off a Blob: fast for 8 MB)
         const url: string = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsDataURL(new Blob([r.pixels as unknown as BlobPart])) })
         return { width: r.width, height: r.height, base64: url.slice(url.indexOf(',') + 1) }

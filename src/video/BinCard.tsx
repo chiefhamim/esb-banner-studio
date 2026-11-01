@@ -130,7 +130,9 @@ export const BinCard = memo(function BinCard({ asset, onAdd, onRelink, onRemove 
   const copy = m?.storage === 'copy'
   const lines = factsLines(asset, m)
   return (
-    <div className={`vw-media-card vw-bin-card${asset.missing ? ' missing' : ''}${isFound ? ' found' : ''}`} data-asset={asset.type} data-proxy={asset.type === 'video' ? m?.proxy ?? 'none' : undefined}>
+    <div className={`vw-media-card vw-bin-card${asset.missing ? ' missing' : ''}${isFound ? ' found' : ''}`} data-asset={asset.type} data-proxy={asset.type === 'video' ? m?.proxy ?? 'none' : undefined}
+      // drag onto a timeline lane: placed there by the edit mode (overwrite or insert)
+      draggable={!asset.missing} onDragStart={(e) => { e.dataTransfer.setData('application/x-esb-asset', asset.id); e.dataTransfer.effectAllowed = 'copy' }}>
       {thumb}
       <div className="vw-media-info">
         <div className="vw-media-title" data-tip={`${asset.path ?? asset.name}${copy ? ' · copied into the project folder (media/)' : ''}`}>{asset.name}</div>

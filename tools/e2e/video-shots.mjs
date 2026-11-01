@@ -357,6 +357,113 @@ const STATES = {
     await page.click('.menu .menu-item:has-text("Remove track")')
     return { note: 'V3 and its clip removed (Ctrl+Z brings it back)' }
   },
+  // ---- Phase 2 — Part A: pro editing
+  'tools-menu': async (page) => {
+    await seedTimeline(page)
+    await page.click('.vw-tool-menu')
+    await page.waitForSelector('.menu .menu-item:has-text("Slide")')
+    await waitAnimations(page)
+    return {}
+  },
+  markers: async (page) => {
+    await seedTimeline(page, { playhead: 3 })
+    await page.evaluate(() => {
+      const st = window.__videoStore.getState()
+      for (const t of [1.5, 5, 8.2]) st.addMarker(t)
+      const ms = window.__videoStore.getState().project.markers
+      st.updateMarker(ms[0].id, { name: 'Sample marker' })
+      st.updateMarker(ms[1].id, { name: 'Second sample marker', color: '#22c55e' })
+      st.setRangeIn(6.5); st.setRangeOut(9.5)
+    })
+    await page.click('.vw-markers-btn')
+    await page.waitForSelector('.vw-marker-list .vw-ml-row')
+    await waitAnimations(page)
+    return {}
+  },
+  'keyframe-lane': async (page) => {
+    await seedTimeline(page, { playhead: 2, select: 'shot-v1' })
+    await page.evaluate(() => {
+      const st = window.__videoStore.getState()
+      const c = st.project.clips.find((x) => x.id === 'shot-v1')
+      st.updateClip({ ...c, keyframes: { scale: [{ t: 0, v: 1 }, { t: 2, v: 1.3, ease: 'easeInOut' }, { t: 5, v: 1.1 }], x: [{ t: 0, v: 0 }, { t: 4, v: 0.12, ease: 'bezier', bezier: [0.25, 0.1, 0.25, 1] }] } })
+      st.selectClip('shot-v1')
+    })
+    await page.waitForSelector('.vw-kf-lane .vw-kf-key')
+    return {}
+  },
+  'ease-menu': async (page) => {
+    await STATES['keyframe-lane'](page)
+    await page.locator('.vw-kf-lane .vw-kf-key').nth(1).click({ button: 'right' })
+    await page.waitForSelector('.vw-ease-menu')
+    await waitAnimations(page)
+    return {}
+  },
+  'curve-editor': async (page) => {
+    await STATES['keyframe-lane'](page)
+    await page.locator('.vw-kf-lane .vw-kf-key').nth(1).click({ button: 'right' })
+    await page.click('.vw-ease-menu .menu-item:has-text("Custom curve")')
+    await page.waitForSelector('.vw-bezier-svg')
+    await waitAnimations(page)
+    return {}
+  },
+  'speed-panel': async (page) => {
+    await seedTimeline(page, { playhead: 1.5, select: 'shot-v1', extra: 'linked' })
+    await page.evaluate(() => {
+      const st = window.__videoStore.getState()
+      for (const c of st.project.clips) if (c.linkId === 'link-shot') st.updateClip({ ...st.project.clips.find((x) => x.id === c.id), srcDuration: 8 })
+      st.selectClip('shot-v1')
+    })
+    await page.waitForSelector('.vw-speed')
+    await page.click('.vw-speed-chips button:has-text("2×")')
+    await page.click('.vw-freeze')
+    await page.locator('.vw-speed').scrollIntoViewIfNeeded()
+    return { note: 'footage at 2× with a 2 s freeze at the playhead; its sound follows' }
+  },
+  'speed-ramp': async (page) => {
+    await STATES['speed-panel'](page)
+    await page.click('.vw-ramp-menu')
+    await page.click('.menu .menu-item:has-text("Hero moment")')
+    await page.waitForSelector('.vw-ramp-svg')
+    await page.locator('.vw-ramp').scrollIntoViewIfNeeded()
+    return {}
+  },
+  'compound-open': async (page) => {
+    await seedTimeline(page, { playhead: 1 })
+    await page.evaluate(() => {
+      const st = window.__videoStore.getState()
+      st.selectClips(['shot-ov-lt', 'shot-cap', 'shot-ov-hl'])
+      st.compoundSelected()
+      const id = window.__videoStore.getState().selectedClipId
+      window.__videoStore.getState().openCompound(id)
+    })
+    await page.waitForSelector('.vw-compound-bar')
+    return {}
+  },
+  'compound-clip': async (page) => {
+    await seedTimeline(page, { playhead: 1 })
+    await page.evaluate(() => { const st = window.__videoStore.getState(); st.selectClips(['shot-ov-lt', 'shot-cap', 'shot-ov-hl']); st.compoundSelected() })
+    return {}
+  },
+  'multi-select': async (page) => {
+    await seedTimeline(page, { playhead: 1, extra: 'linked' })
+    await page.evaluate(() => window.__videoStore.getState().selectClips(['shot-ov-lt', 'shot-v1']))
+    return {}
+  },
+  'shortcuts-sheet': async (page) => {
+    await seedTimeline(page)
+    await page.click('.vw-keys-btn')
+    await page.waitForSelector('.dialog .vw-keys')
+    await waitAnimations(page)
+    return {}
+  },
+  'paste-attributes': async (page) => {
+    await seedTimeline(page, { select: 'shot-v1' })
+    await page.evaluate(() => { const st = window.__videoStore.getState(); st.copySelected(); st.selectClips(['shot-v1-still']) })
+    await page.keyboard.press('Control+Alt+v')
+    await page.waitForSelector('.dialog .vw-paste-attrs')
+    await waitAnimations(page)
+    return {}
+  },
 }
 
 /** The timeline's geometry: every track header level with its lane (±1 px), the ruler on screen. */

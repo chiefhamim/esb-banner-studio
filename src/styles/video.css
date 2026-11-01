@@ -209,3 +209,137 @@
 /* the bin's tabs while the inspector holds their place (narrow windows): no tab reads as selected */
 .vw-tabs-none .pill-slide { opacity: 0; }
 .vw-tabs-none button.on { color: var(--text-2); font-weight: inherit; }
+
+/* ---------------------------------------------------------------- Phase 2 — Part A: pro editing */
+/* toolbar: tools, magnet, markers, shortcuts */
+.vw-tool-menu { gap: 6px; min-width: 96px; justify-content: flex-start; }
+.vw-tool-menu .chev { margin-left: auto; }
+.vw-tool-menu.on { color: var(--text); background: var(--fill-active); }
+.ibtn.vw-magnet.on, .ibtn.vw-magnet.active { color: var(--sel-ink, var(--text)); background: var(--sel, var(--fill-active)); }
+.vw-markers-btn { gap: 6px; }
+.vw-markers-btn.open { background: var(--fill-active); }
+.vw-count { min-width: 18px; height: 18px; padding: 0 5px; font: 700 10.5px/18px var(--ui); font-variant-numeric: tabular-nums; text-align: center; color: var(--text); background: var(--fill-active); border-radius: var(--r-pill); }
+.vw-sb-tool { white-space: nowrap; }
+@media (max-width: 1100px) { .vw-markers-btn .vw-lbl { display: none; } .vw-sb-tool { display: none; } }
+@media (max-width: 980px) { .vw-tl-tools-left .vw-delete { width: 32px; padding: 0; justify-content: center; } .vw-tl-tools-left .vw-delete .vw-del-lbl { display: none; } }
+
+/* the compound breadcrumb above the toolbar */
+.vw-compound-bar { flex: none; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; font: 500 12px/16px var(--ui); color: var(--text-2); background: color-mix(in srgb, var(--sel, #3b82f6) 14%, var(--side)); border-bottom: 1px solid var(--card-line); overflow: hidden; white-space: nowrap; }
+.vw-compound-bar .vw-cb-back { gap: 4px; }
+.vw-cb-crumb { padding: 2px 6px; font: inherit; color: var(--text-2); background: none; border: 0; border-radius: var(--r-1); cursor: pointer; }
+.vw-cb-crumb:hover { color: var(--text); background: var(--fill-hover); }
+.vw-cb-step { display: inline-flex; align-items: center; gap: 4px; color: var(--text-3); }
+.vw-cb-step b { font-weight: 700; color: var(--text); }
+.vw-cb-note { margin-left: auto; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+@media (max-width: 1100px) { .vw-cb-note { display: none; } }
+
+/* clips: the rest of a multi-selection, linked partners of the selection, compound clips, speed tag */
+.vw-clip-block.selected.also { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3), 0 0 0 2px var(--bg-0), 0 0 0 3px color-mix(in srgb, var(--ink) 70%, transparent); }
+.vw-clip-block.linked-sel { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28), 0 0 0 1px var(--bg-0), 0 0 0 2px color-mix(in srgb, var(--ink) 45%, transparent); }
+.vw-clip-block.compound { background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0 2px, transparent 2px 10px), linear-gradient(rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.22)); }
+.vw-clip-speed { font-style: normal; font-weight: 700; margin-right: 2px; opacity: 0.85; }
+.vw-lanes-container.tool-slip .vw-clip-block, .vw-lanes-container.tool-slide .vw-clip-block { cursor: ew-resize; }
+.vw-lanes-container.tool-roll .vw-trim-handle, .vw-lanes-container.tool-ripple .vw-trim-handle { cursor: col-resize; }
+.vw-lanes-container.dropping { outline: 2px dashed color-mix(in srgb, var(--ink) 40%, transparent); outline-offset: -2px; }
+
+/* markers and the in/out range on the ruler */
+.vw-marker { position: absolute; top: 0; bottom: 0; z-index: 3; display: flex; align-items: flex-start; gap: 3px; padding: 0; margin-left: -1px; background: none; border: 0; border-left: 2px solid var(--mk); cursor: grab; color: var(--text); }
+.vw-marker i { display: block; width: 9px; height: 8px; margin-top: 2px; background: var(--mk); clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.vw-marker span { max-width: 120px; margin-top: 12px; padding: 0 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 10px/13px var(--ui); color: var(--text); background: color-mix(in srgb, var(--mk) 28%, var(--side)); border-radius: 3px; }
+.vw-marker:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.vw-range-band { position: absolute; top: 0; bottom: 0; z-index: 1; background: color-mix(in srgb, var(--ink) 14%, transparent); pointer-events: none; }
+.vw-range-edge { position: absolute; top: 0; bottom: 0; z-index: 2; width: 0; border-left: 2px solid var(--text-2); pointer-events: none; }
+.vw-range-edge::after { content: ''; position: absolute; bottom: 0; width: 6px; height: 6px; border-bottom: 2px solid var(--text-2); }
+.vw-range-edge.in::after { left: 0; border-left: 0; }
+.vw-range-edge.out::after { right: 0; }
+
+/* the markers list */
+.vw-markers-pop { padding: 8px; }
+.vw-marker-list { display: flex; flex-direction: column; gap: 4px; width: 320px; }
+.vw-ml-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px 4px; font: 700 10.5px/16px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+.vw-ml-add { gap: 4px; letter-spacing: 0; text-transform: none; }
+.vw-ml-add kbd { margin-left: 2px; }
+.vw-ml-empty, .vw-ml-foot { margin: 2px 2px 0; font: 500 11.5px/16px var(--ui); color: var(--text-3); }
+.vw-ml-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto auto 28px; align-items: center; gap: 6px; }
+.vw-ml-dot { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2); }
+.vw-ml-dot:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.vw-ml-name { min-width: 0; height: 28px; padding: 0 8px; font: 500 12.5px/1 var(--ui); color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); }
+.vw-ml-name:focus { outline: 0; box-shadow: 0 0 0 2px var(--focus-ring); }
+.vw-ml-name::placeholder { color: var(--text-3); }
+.vw-ml-time { height: 28px; padding: 0 6px; font: 600 12px/28px var(--ui); color: var(--text); background: var(--fill); border: 0; border-radius: var(--r-2); cursor: pointer; }
+.vw-ml-time:hover { background: var(--fill-hover); }
+.vw-ml-frame { font: 500 11px/16px var(--ui); color: var(--text-3); min-width: 22px; text-align: right; }
+
+/* the keyframe lane under the selected clip (same height as its header cell, so every track below stays level) */
+.vw-kf-head, .vw-kf-lane { height: 30px; flex: none; box-sizing: border-box; }
+.vw-track-head.vw-kf-head { display: flex; align-items: center; gap: 6px; padding: 0 6px 0 22px; background: color-mix(in srgb, var(--side) 70%, var(--bg-0)); }
+.vw-kf-head .vw-diamond { color: var(--text-3); }
+.vw-kf-head .vw-kf-prop { height: 24px; min-width: 0; max-width: 128px; padding: 0 6px; gap: 4px; font-size: 11.5px; }
+.vw-kf-lane { position: relative; min-width: 100%; background: color-mix(in srgb, var(--bg-0) 82%, var(--side)); border-bottom: 1px solid var(--card-line); }
+.vw-kf-span { position: absolute; top: 3px; bottom: 3px; background: color-mix(in srgb, var(--ink) 7%, transparent); border-radius: 4px; pointer-events: none; }
+.vw-kf-curve { display: block; overflow: visible; }
+.vw-kf-curve polyline { fill: none; stroke: color-mix(in srgb, var(--ink) 45%, transparent); stroke-width: 1.5; }
+.vw-kf-key { position: absolute; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; padding: 0; background: none; border: 0; cursor: grab; z-index: 2; }
+.vw-kf-key::before { content: ''; position: absolute; inset: 2px; background: var(--text); transform: rotate(45deg); border-radius: 2px; box-shadow: 0 0 0 1.5px var(--bg-0); }
+.vw-kf-key.ease-easeIn::before, .vw-kf-key.ease-easeOut::before, .vw-kf-key.ease-easeInOut::before { border-radius: 50%; transform: none; inset: 2.5px; }
+.vw-kf-key.ease-bezier::before { background: #f5c26b; }
+.vw-kf-key:hover::before, .vw-kf-key:focus-visible::before { background: var(--sel, #3b82f6); }
+.vw-kf-key:focus-visible { outline: 0; }
+
+/* the diamond: inspector toggle and lane header */
+.vw-diamond { display: inline-block; width: 8px; height: 8px; background: currentColor; transform: rotate(45deg); border-radius: 1.5px; flex: none; }
+.vw-prop label { justify-content: flex-start; align-items: center; }
+.vw-prop label em { margin-left: auto; }
+.vw-kf-toggle { display: inline-grid; place-items: center; width: 22px; height: 22px; margin: -3px 0 -3px -4px; padding: 0; color: var(--text-3); background: none; border: 0; border-radius: var(--r-1); cursor: pointer; }
+.vw-kf-toggle .vw-diamond { width: 7px; height: 7px; background: none; box-shadow: inset 0 0 0 1.5px currentColor; }
+.vw-kf-toggle:hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
+.vw-kf-toggle.between { color: var(--text-2); }
+.vw-kf-toggle.on { color: var(--text); }
+.vw-kf-toggle.on .vw-diamond { background: currentColor; }
+.vw-kf-toggle:disabled { opacity: 0.4; cursor: default; }
+.vw-kf-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.vw-prop.animated label { color: var(--text); }
+
+/* the ease menu and the custom-curve editor */
+.vw-curve-pop { padding: 10px; }
+.vw-bezier { display: flex; flex-direction: column; gap: 8px; }
+.vw-bezier-head { display: flex; justify-content: space-between; gap: 12px; font: 700 10.5px/16px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+.vw-bezier-head .mono { letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--text-2); }
+.vw-bezier-svg { display: block; margin: 0 auto; touch-action: none; user-select: none; }
+.vw-bz-box { fill: var(--field); stroke: var(--card-line); }
+.vw-bz-diag { stroke: var(--card-line); stroke-dasharray: 3 3; }
+.vw-bz-arm { stroke: var(--text-3); stroke-width: 1.5; }
+.vw-bz-curve { fill: none; stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; }
+.vw-bz-handle { fill: var(--bg-0); stroke: var(--text); stroke-width: 2; cursor: grab; }
+.vw-bz-handle:hover { fill: var(--sel, #3b82f6); }
+.vw-bezier-presets { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* speed */
+.vw-speed { display: flex; flex-direction: column; gap: 8px; }
+.vw-speed .vw-subhead { margin-bottom: 0; }
+.vw-speed-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.vw-inspector .vw-speed-input, .vw-speed-input { flex: none; width: 72px; height: 28px; padding: 0 8px; font: 600 13px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); }
+.vw-speed-input:focus { outline: 0; box-shadow: 0 0 0 2px var(--focus-ring); }
+.vw-speed-input:disabled { color: var(--text-2); }
+.vw-speed-chips { display: flex; gap: 2px; }
+.vw-speed-chips .btn.on { color: var(--text); background: var(--fill-active); }
+.vw-ramp-menu, .vw-freeze { gap: 4px; }
+.vw-ramp { display: flex; flex-direction: column; gap: 4px; }
+.vw-ramp-svg { display: block; width: 100%; height: auto; background: var(--field); border-radius: var(--r-2); touch-action: none; user-select: none; }
+.vw-ramp-grid { stroke: var(--card-line); }
+.vw-ramp-grid.one { stroke: var(--text-3); stroke-dasharray: 3 3; }
+.vw-ramp-label { font: 600 9px var(--ui); fill: var(--text-3); text-anchor: end; }
+.vw-ramp-curve { fill: none; stroke: var(--text); stroke-width: 2; stroke-linejoin: round; }
+.vw-ramp-pt { fill: var(--bg-0); stroke: var(--text); stroke-width: 2; cursor: grab; }
+.vw-ramp-pt:hover { fill: var(--sel, #3b82f6); }
+.vw-freezes { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.vw-freezes li { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 2px 2px 2px 8px; font: 500 12px/16px var(--ui); color: var(--text-2); background: var(--fill); border-radius: var(--r-2); }
+.vw-speed-sum { margin-top: 0; }
+
+/* compound actions, multi-selection note, paste attributes */
+.vw-compound-actions { display: flex; flex-direction: column; gap: 8px; }
+.vw-btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.vw-btn-row .btn { gap: 6px; }
+.vw-multi-hint { display: flex; gap: 6px; align-items: flex-start; }
+.vw-multi-hint svg { flex: none; margin-top: 2px; }
+.vw-paste-attrs { display: flex; flex-direction: column; gap: 8px; }

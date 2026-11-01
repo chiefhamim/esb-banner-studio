@@ -563,3 +563,126 @@ Review findings on the decode engine, compositor and playback, plus the lead's s
 - Preview frames are scaled with the cheap bilinear filter ('low'); a 4K source on a small monitor can alias slightly
   in the preview (the export always decodes full size).
 - Scrub of three 1 s-GOP 1080p originals at once is still p95 200 ms without proxies (one layer: 40 ms).
+
+
+## Phase 2 — Part A: editing operations, keyframes, speed (2026-11-02, branch `video-p2-edit`)
+
+Built from `video-pro` 18ee407 (Phase 1 passed) in parallel with Part B (effects rendering, and PLAYING speed and
+keyframes in the engine) on `video-p2-fx`. This part owns the model, the edit operations and the UI; the engine reads
+keyframes and speed through the contract below, so on this branch alone keyframes and speed are edited, saved, undone
+and laid out on the timeline, but the monitor and the export do not apply them yet (see "Before the merge").
+
+### Contract for Part B (pure, JSDoc'd, unit-tested)
+- `src/video/keyframes.ts` — `sampleProp(clip, prop, tLocal, fallback): number`. Keys live at
+  `clip.keyframes[prop] = { t, v, ease?, bezier? }[]`, `t` = seconds from the clip's start on the timeline. `ease`
+  shapes the segment to the next key: `linear | easeIn | easeOut | easeInOut | bezier` (+ `bezier: [x1, y1, x2, y2]`),
+  or the four numbers directly; the hyphenated Phase 1 spellings read the same. Exact at a key, held before the first
+  and after the last; any property name works (`fx.<effectId>.<param>` too). Named props `x y scale rotation opacity
+  cropL cropR cropT cropB volume` map to the clip fields `offX offY scale rotation opacity crop* volume` (`PROP_FIELD`).
+- `src/video/speed.ts` — `sourceTimeAt(clip, tLocal): number` = ABSOLUTE source seconds (includes `in`; exactly
+  `in + tLocal` for a clip with no speed fields); `clipDurationFor(clip)` = the timeline length that plays `[in, out]`;
+  `audioRateAt(clip, tLocal): number` = |rate| (0 inside a freeze); `clip.preservePitch` (default true);
+  `audioPlaybackAt` returns `{ rate, reverse, preservePitch }`. Model: `clip.speed` = a constant 0.1–10 or
+  `{ ramp: Keyframe[] }` (speed over clip-local time, eased, integrated through a cached 1 ms table); `clip.freezes =
+  [{ at, dur }]` (clip-local; the picture holds and the clip grows by `dur`); `clip.reverse` (plays `out` → `in`).
+  `speed` is never negative or 0 (reverse and freeze have their own fields).
+
+### What changed
+**Edit operations (`timeline.ts`, all pure; every gesture is one undo step in the store).** Ripple delete (every
+track moves up by the gap, so linked footage and sound stay in sync; refused when a clip that would move is linked to
+one on a locked track), ripple trim (the left edge keeps the start, the right edge the first frame; later clips
+follow), roll (`rollEdit`: the cut between two touching clips moves, total length unchanged), slip (in/out move;
+timeline place and keyframes unchanged; limited by the file), slide (the clip moves; the neighbour before ends later
+and the one after starts later by the same amount, their total unchanged), insert / overwrite (`insertClips` splits
+the target tracks at the point and pushes every track; `overwriteClips` clears what is under; linked partners are cut
+the same way), lift / extract of the in–out range (I/O) or the selection, `magnetize` (the main footage track closes
+its gaps; a crossfade overlap stays; applied after each edit and at the end of a drag, so a drag can reorder), markers
+(add / name / colour / move / remove / jump, saved), groups (`groupId`: move and delete as one; links still trim
+together), compound clips (`compound: { tracks, clips }`, a nested timeline; `flattenCompounds` gives the monitor, the
+sound and the export its inside at its place and window; `compoundView` / `writeCompoundView` open and edit it in
+place; `breakCompound`), copy / paste (insert or overwrite) and paste attributes (transform, crop, opacity, volume,
+speed, keyframes). Trims and splits are speed-aware through one `subClip` (source in/out follow speed, freezes and
+direction; keyframes, ramps and freezes are cut so the kept part looks the same). Phase 0 lock/link rules kept: a lock
+protects its clips through links and groups.
+
+**Store (`videoStore.ts`).** `project` stays the root (what is saved; tests can still set it), `compoundPath` is the
+open compound, `viewOf(s)` the timeline being edited (memoised). New state: `tool`, `editMode`, `rate` (J/K/L),
+`range` (I/O), `selectedIds` (Shift/Ctrl+click), `clipboard`, and actions for all of the above. Undo with a compound
+open falls back to the deepest part of the path that still exists.
+
+**UI (`VideoWorkspace.tsx`, new `TimelinePro.tsx`, `video.css`).** Toolbar: tool menu (Select V, Ripple B, Roll N,
+Slip Y, Slide U, plus Overwrite / Insert for drops and pastes), magnetic main track (Ctrl+M), Markers (count; list with
+name, colour, jump, delete), shortcuts sheet (? or the keyboard button). Ruler: marker flags (drag = move, click =
+jump, double-click = name) and the in–out band. Clips: multi-selection, the selection's linked partners outlined,
+group / compound / speed tags (`2×`, `ramp`, `◂` reverse); double-click (or Enter) opens a compound with a breadcrumb
+(Esc closes); bin items drag onto a lane (insert or overwrite). Inspector: a ◆ beside every keyframable property (adds
+or removes a key at the playhead; an animated slider shows and sets the value at the playhead); a keyframe lane under
+the selected clip while it has keys (property filter; drag a ◆ to move, click = playhead there, right-click or Enter =
+ease menu, Custom curve… = a cubic-bezier editor with presets, Del removes, double-click adds); Speed (0.1–10× field,
+0.5/1/2/4× chips, ramp presets Speed up / Slow down / Hero moment / Bullet / Montage with an editable log-scale curve,
+Freeze frame at the playhead, Reverse, Keep the voice's pitch; the linked sound follows and later clips move). J/K/L
+shuttle: L 1× → 2× → 4× (2× and 4× silent: the sound engine plays 1× only), J backwards as an exact-frame scrub, K
+stops. The monitor, preview sound and export get `flattenCompounds(view)` (cached per project), so compound clips
+play and export now.
+
+### Files
+- New: `src/video/keyframes.ts`, `src/video/speed.ts`, `src/video/TimelinePro.tsx`, `tools/unit/video-p2-edit.test.ts`.
+- Changed: `src/video/timeline.ts` (types `freezes`, `reverse`, `preservePitch`, `groupId`, `compound`, project
+  `markers`, `magnetic`; speed-aware trims/split; compound-aware save, relink, missing media and migration; the ops),
+  `src/video/videoStore.ts`, `src/video/VideoWorkspace.tsx`, `src/video/BinCard.tsx` (draggable: one attribute),
+  `src/styles/video.css` (appended block), `tools/e2e/video-test.mjs`, `tools/e2e/video-shots.mjs`,
+  `tools/audit/text-fit-audit.mjs`. No engine file touched. No new dependencies.
+
+### Acceptance (measured 2026-11-02)
+| Test | Result |
+|---|---|
+| Unit: every edit op (`video-p2-edit.test.ts`, 32 tests) | PASS — ripple delete keeps linked A/V in sync and closes the gap on every track (c 10 → 5, title 12 → 7); ripple trim ±; roll keeps total length (a+b = 10 s, end unchanged); slip keeps start 5 / length 5 (in 10 → 13); slide keeps the neighbours' total (a 5 → 6, c 5 → 4) and the timeline end; insert/overwrite/lift/extract; magnetize; markers; groups; compounds (flattened layers equal the original at 4 times); paste attributes; store: one undo step per ripple-trim drag, magnetic close in the same step, compound open/edit/close/undo, J/K/L, copy/insert-paste |
+| `sampleProp` exact at keys and eases mid-way | PASS — exact at 3 keys; mid-segment linear 50, ease-in 31.5357, ease-out 68.4643, ease-in-out 50 (12.9162 at ¼), bezier(.25,.1,.25,1) 51.3315 at 0.3 — CSS cubic-bezier reference values (independently computed) |
+| `sourceTimeAt`: 2×, ramp, freeze, reverse | PASS — 2× of 10 s = 5 s long, t 2.5 → 5; ramp 1×→3× over 4 s plays 8 s (t 2 → 3.0, t 1 → 1.25, ±1e-4), presets monotone and end exactly at `out`; freeze 2 s at 3 s → 12 s long, t 3–5 hold source 3, t 12 → 10; reverse 2× of [2, 8] = 3 s, t 0 → 8, 1 → 6, 3 → 2; trims/splits of 2× and reversed clips keep the mapping |
+| Export: keyframed move at exact pixel positions at three times (`video-test.mjs`) | PENDING-MERGE (written against the contract; it turns into a real check by itself once an engine file calls `sampleProp`). Geometry validated now: the unanimated picture spans x 720–1199 exactly (480 px, centred); after the merge it must start at 432 / 720 / 1008 (±2 px) at 0.5 / 1.0 / 1.5 s |
+| Export: 2× clip plays its source twice as fast | PENDING-MERGE (same switch on `sourceTimeAt`); the 2× clip of a 2 s file is already 1 s on the timeline (export 4.0 s: PASS) |
+
+### Checks
+- `npm run lint`: 0 errors (warnings only, existing kinds).
+- `npm test`: 955 passed (80 files; +32 in `video-p2-edit.test.ts`; every earlier test unchanged and passing).
+- `npm run build`: ok.
+- `npm run test:video` (`ESB_PORT_OFFSET=40`): 70 PASS, 0 FAIL, 2 PENDING-MERGE (above). New UI checks: B picks
+  Ripple; Shift+Del ripple-deletes a linked pair in one undo step (next pair 4 → 2 s on V1 and A1); M drops a marker
+  at the playhead; the Scale ◆ adds `{ t: 1, v: 1 }` and the keyframe lane appears; Ctrl+Alt+G makes one compound
+  (4 clips, 4 s); double-click opens it in place; Esc closes it. Engine suite unchanged.
+- `npm run test:electron` (`ESB_PORT_OFFSET=40`): exit 0, 66 PASS, 0 FAIL (the known intermittent sign-out check did
+  not occur this run).
+- `node tools/audit/text-fit-audit.mjs`: 0 text-fit problems (new steps: tools menu, markers list with a long name,
+  speed ramp, keyframe lane, shortcuts sheet; no Video step skipped). `center-audit`: 0 (the narrow Delete button was
+  1 finding until its label was hidden as an element, not by font-size 0).
+- Screens: `OUT=tools/out/p2-edit PORT=5292 node tools/e2e/video-shots.mjs` — 276 shots (light/dark × 900/1366/1920),
+  0 n/a, 0 timeline-geometry problems; one timeout (`markers`, light 900) passed on a rerun and was replaced. New
+  states: `tools-menu`, `markers`, `keyframe-lane`, `ease-menu`, `curve-editor`, `speed-panel`, `speed-ramp`,
+  `compound-open`, `compound-clip`, `multi-select`, `shortcuts-sheet`, `paste-attributes`. Found by looking and fixed:
+  marker ids collided within one millisecond (all three markers renamed together), a selector returning a new array
+  looped Paste attributes, the speed field stretched full width, ramp labels sat on the curve's end points.
+
+### Before the merge (for the lead)
+- Part B's adapter (`engine/animation.ts` on `video-p2-fx`, read only) matches this contract: absolute
+  `sourceTimeAt` (it probes for this), `audioRateAt` as a number (changed here to match), `clip.reverse`,
+  `clip.preservePitch`. One gap on its side: its `isPlainSpeed` looks at `speed` and `reverse` only, so a clip with
+  only `freezes` takes the 1:1 fast path; it must also test `freezes?.length`.
+- Both branches change `VideoWorkspace.tsx` and `timeline.ts`. Here the monitor, playback, sound, still and export get
+  `playable(viewOf(state))` (compounds flattened; the open compound shown on its own) instead of `state.project`;
+  Part B's edits to those spots must be re-applied on top. In `timeline.ts` both add `Clip` fields and lines in
+  `migrateTimeline` (Part B: effects, blend mode, adjustment; here: compound) — adjacent, not overlapping in meaning.
+- The two PENDING-MERGE lines in `video-test.mjs` switch on by themselves after the merge.
+- The engine never sees `compound`: it always gets flattened projects (clip ids `compoundId/innerId`).
+
+### Known gaps
+- On this branch alone the preview and the export ignore keyframes and speed (Part B plays them). A retimed clip
+  already has its new length, so before the merge a 2× clip shows the first half of its span at 1×.
+- 2× / 4× shuttle is silent; J (backwards) shows exact frames as a scrub would, not smooth reverse playback.
+- A compound's own transform and keyframes are not applied to its inside (its opacity and volume are); speed on a
+  compound is not offered.
+- A keyframe segment cut by a trim or split keeps the earlier key's ease shape for the rest of that segment (exact for
+  linear).
+- Insert / ripple refuse (with a status note) rather than pull a linked pair apart when a locked track is involved.
+
+### Next step
+Merge with Part B, see the two PENDING-MERGE checks pass, then Phase 3 (text and titles).
