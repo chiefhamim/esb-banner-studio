@@ -192,6 +192,33 @@ const tabState = (label, seed = true) => async (page) => {
   await clickTab(page, label)
   return {}
 }
+/** The bin with Phase 1 metadata (src/video/BinCard.tsx): wait for the media pipeline to read the real facts of the
+ * imported files, then seed the proxy / folder / found-again state through the dev handle `window.__videoMeta`. The
+ * footage is presented as a 4K file (the synthetic clip is 1280×720) so the proxy rows read as they would. */
+async function seedBin(page, { extra = null, video = {}, folder = false, found = false, uhd = true } = {}) {
+  await seedTimeline(page, { extra })
+  await page.waitForFunction(() => {
+    const st = window.__videoStore.getState()
+    return st.mediaAssets.filter((a) => a.url && !a.missing && a.type !== 'image').every((a) => window.__videoMedia?.meta(a.id)?.analyzedUrl === a.url)
+  }, null, { timeout: 15000 }).catch(() => {})
+  const ok = await page.evaluate(({ video, folder, found, uhd }) => {
+    if (!window.__videoMeta) return false
+    const vs = window.__videoStore
+    const vid = vs.getState().mediaAssets.find((x) => x.type === 'video')
+    if (!vid) return false
+    if (uhd) vs.setState((s) => ({ mediaAssets: s.mediaAssets.map((x) => (x.id === vid.id ? { ...x, name: 'sample-4k.mp4', width: 3840, height: 2160, size: 1.86e9 } : x)) }))
+    window.__videoMeta.setState((s) => ({
+      folder: folder ? { id: '0'.repeat(32), path: 'C:\Users\Editor\Pictures\ESB Banners\Video\Sample project.esbvideo' } : s.folder,
+      byId: { ...s.byId, [vid.id]: { ...s.byId[vid.id], analyzedUrl: vid.url || 'x', ...video } },
+      found: found ? { [vid.id]: { path: 'C:\Footage\day2\sample-4k.mp4', name: 'sample-4k.mp4', size: 1, mtimeMs: 0, url: '' } } : {},
+    }))
+    return true
+  }, { video, folder, found, uhd })
+  if (!ok) na('window.__videoMeta dev handle missing')
+  await clickTab(page, 'Media')
+  return {}
+}
+
 const STATES = {
   empty: async (page) => {
     const newBtn = page.locator('.vw-header button', { hasText: /^\s*New( project)?\s*$/i })
@@ -227,6 +254,14 @@ const STATES = {
   'inspector-overlay': async (page) => { await seedTimeline(page, { select: 'shot-ov-lt' }); if (!(await page.locator('.vw-inspector').count())) na('no inspector shown'); return {} },
   'inspector-audio': async (page) => { await seedTimeline(page, { select: 'shot-a1' }); if (!(await page.locator('.vw-inspector').count())) na('no inspector shown'); return {} },
   'tab-media': tabState('Media'),
+  // Phase 1 bin states (metadata line, proxy badge + progress, missing / found again, link-or-copy on import)
+  'bin-normal': async (page) => seedBin(page, { uhd: false }),
+  'bin-proxy-pending': async (page) => seedBin(page, { folder: true, video: { codec: 'avc1.640033', fps: 29.97, keyframeInterval: 2, proxyNeeded: true, proxy: 'pending', proxyProgress: 0.42 } }),
+  'bin-proxy-ready': async (page) => seedBin(page, { folder: true, video: { codec: 'hvc1.1.6.L153', fps: 25, keyframeInterval: 1, proxyNeeded: true, proxy: 'ready', proxyUrl: 'esb-media://p/x/proxies/x.mp4', storage: 'copy', file: 'media/sample-4k.mp4' } }),
+  'bin-proxy-failed': async (page) => seedBin(page, { video: { codec: 'avc1.640033', fps: 30, keyframeInterval: 3, proxyNeeded: true, proxy: 'failed', proxyError: 'This file cannot be converted here' } }),
+  'bin-proxy-cancelled': async (page) => seedBin(page, { video: { codec: 'avc1.640033', fps: 30, keyframeInterval: 3, proxyNeeded: true, proxy: 'none', proxyCancelled: true } }),
+  'bin-missing': async (page) => seedBin(page, { extra: 'missing', uhd: false }),
+  'bin-missing-found': async (page) => seedBin(page, { extra: 'missing', uhd: false, found: true }),
   'tab-overlays': tabState('Overlays'),
   'tab-captions': tabState('Captions'),
   'tab-audio': tabState('Audio'),

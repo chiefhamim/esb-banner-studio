@@ -1,31 +1,87 @@
 // Video projects on disk: save, open, and the autosave that brings back unsaved work after a crash.
 //
-// Desktop: a project is saved as a .esbvideo file (the dialog suggests Pictures/ESB Banners/Video) through main, and
-// autosave writes a snapshot to userData/video-autosave every 10 s while there are unsaved changes (temp file +
-// rename, last 5 kept, electron/video-media.cjs). Browser: the project downloads as a file, and snapshots go to
-// localStorage (footage from the browser's file picker cannot come back after a reload; the snapshot keeps the edit).
+// Desktop (Phase 1): a project is a `.esbvideo` FOLDER (Pictures/ESB Banners/Video/<name>.esbvideo/, made by main's
+// save dialog) holding project.json (schema in projectFolder.ts), media/ (copies, when the editor chose Copy),
+// proxies/, cache/, autosave/ and renders/. Autosave writes a snapshot every 10 s while there are unsaved changes —
+// into the folder's autosave/ when there is one, else userData/video-autosave (temp file + rename, last 5 kept,
+// electron/video-media.cjs). A Phase 0 single-file `.esbvideo` still opens and saves in place; Save as (Ctrl+Shift+S)
+// turns it into a folder. Browser: the project downloads as a file and snapshots go to localStorage (footage from the
+// browser's file picker cannot come back after a reload; the snapshot keeps the edit).
 
 import type { MediaAsset, VideoProject } from './timeline'
-import { deserializeVideoProject, relinkClips, serializeVideoProject } from './timeline'
-import { probeMedia, resolveAssets, videoBridge } from './media'
+import { relinkClips, serializeVideoProject } from './timeline'
+import type { AssetFacts, ProjectSettings } from './projectFolder'
+import { buildProjectDoc, DEFAULT_SETTINGS, parseProjectText, relInMedia } from './projectFolder'
+import type { FolderRef, MediaEntry } from './media'
+import { currentFolder, metaFor, probeMedia, resolveAssets, useMediaMeta, videoBridge } from './media'
+import { clearProxyQueue, recheckProxies, startMediaPipeline } from './proxies'
 import { useVideoStore } from './videoStore'
 import { downloadVideoBlob } from './exportVideo'
 
 export const AUTOSAVE_MS = 10_000
 const LS_KEY = 'esb-banner-studio/video-autosave/v1'
 
-export interface Snapshot { at: number; text: string; id?: string }
+export interface Snapshot { at: number; text: string; id?: string; folder?: FolderRef }
 
 /** The project id a snapshot's text carries (snapshots are cleared per project). */
-const idOf = (text: string): string | undefined => { try { return JSON.parse(text)?.id } catch { return undefined } }
+const idOf = (text: string): string | undefined => {
+  try { const j = JSON.parse(text); return j?.timeline?.id ?? j?.id } catch { return undefined }
+}
 
 /** Has nothing worth keeping: no clips, nothing in the bin. */
 const isBlank = (p: VideoProject, bin: MediaAsset[]) => p.clips.length === 0 && bin.length === 0
 
+// ---------------------------------------------------------------- the folder on the desk
+
+/** A different project was put on the desk by someone else (New, a story build): it has no folder and no facts yet. */
+let adopting = false
+let watching = false
+function watchDesk() {
+  if (watching) return
+  watching = true
+  useVideoStore.subscribe((s, prev) => {
+    if (s.generation === prev.generation || adopting) return
+    clearProxyQueue()
+    useMediaMeta.setState({ folder: null, settings: { ...DEFAULT_SETTINGS }, byId: {}, found: {} })
+  })
+}
+watchDesk()
+
+/** Facts for every bin entry as they go into project.json: a file inside the folder's media/ is a copy. */
+function factsForSave(bin: MediaAsset[], folder: FolderRef | null): Record<string, AssetFacts> {
+  const out: Record<string, AssetFacts> = {}
+  for (const a of bin) {
+    const m = metaFor(a.id) ?? {}
+    const file = folder ? relInMedia(folder.path, a.path) : undefined
+    out[a.id] = { hash: m.hash, codec: m.codec, fps: m.fps, keyframeInterval: m.keyframeInterval, storage: file ? 'copy' : 'reference', file }
+  }
+  return out
+}
+
+/** The desk's project as current-schema text (with the folder it belongs to, for a snapshot). */
+function projectText(withFolder: boolean): string {
+  const s = useVideoStore.getState()
+  const { folder, settings } = useMediaMeta.getState()
+  const text = buildProjectDoc(s.project, s.mediaAssets, factsForSave(s.mediaAssets, folder), settings)
+  if (!withFolder || !folder) return text
+  const j = JSON.parse(text)
+  j.folder = folder
+  return JSON.stringify(j)
+}
+
+/** Change a project setting (import mode, proxies); it is saved with the project. */
+export function setProjectSettings(patch: Partial<ProjectSettings>) {
+  useMediaMeta.setState((s) => ({ settings: { ...s.settings, ...patch } }))
+  useVideoStore.setState((s) => ({ dirty: true, rev: s.rev + 1 }))
+  if (patch.proxies) recheckProxies()
+}
+
+// ---------------------------------------------------------------- autosave
+
 /** Write a snapshot. Throws when it could not be kept, so the desk never says "autosaved" for a write that failed. */
 export async function writeSnapshot(text: string): Promise<number> {
   const b = videoBridge()
-  if (b?.videoAutosave) return (await b.videoAutosave(text)).at
+  if (b?.videoAutosave) return (await b.videoAutosave(text, currentFolder()?.id ?? null)).at
   const at = Date.now()
   let list: Snapshot[] = []
   try { list = (JSON.parse(localStorage.getItem(LS_KEY) || '[]') as Snapshot[]).filter((s) => s && typeof s.text === 'string') } catch { list = [] }
@@ -39,6 +95,7 @@ export async function writeSnapshot(text: string): Promise<number> {
   }
 }
 
+/** The newest snapshot of any project (userData and every known project folder's autosave/). */
 export async function latestSnapshot(): Promise<Snapshot | null> {
   const b = videoBridge()
   if (b?.videoAutosaveLatest) return b.videoAutosaveLatest()
@@ -52,9 +109,9 @@ export async function latestSnapshot(): Promise<Snapshot | null> {
 
 /** Remove one project's snapshots (by id), or all of them. Saving a project clears only its own, so the unsaved work
  * of another project (one replaced by Open, say) can still be restored. */
-export async function clearSnapshots(projectId?: string) {
+export async function clearSnapshots(projectId?: string, folderId: string | null = currentFolder()?.id ?? null) {
   const b = videoBridge()
-  if (b?.videoAutosaveClear) { await b.videoAutosaveClear(projectId); return }
+  if (b?.videoAutosaveClear) { await b.videoAutosaveClear(projectId, folderId); return }
   try {
     if (projectId == null) { localStorage.removeItem(LS_KEY); return }
     const list: Snapshot[] = JSON.parse(localStorage.getItem(LS_KEY) || '[]')
@@ -65,8 +122,9 @@ export async function clearSnapshots(projectId?: string) {
 
 /** A summary of a snapshot for the restore card (name, clips, when). */
 export function describeSnapshot(s: Snapshot): { name: string; clips: number; at: number; projectId: string } | null {
-  const p = deserializeVideoProject(s.text)
-  return p ? { name: p.name, clips: p.clips.length, at: s.at, projectId: p.id } : null
+  let p: ReturnType<typeof parseProjectText> = null
+  try { p = parseProjectText(s.text) } catch { p = null }
+  return p ? { name: p.project.name, clips: p.project.clips.length, at: s.at, projectId: p.project.id } : null
 }
 
 let lastRev = -1
@@ -84,7 +142,7 @@ export async function autosaveNow(): Promise<boolean> {
   const rev = s.rev
   let at: number
   try {
-    at = await writeSnapshot(serializeVideoProject(s.project, s.mediaAssets))
+    at = await writeSnapshot(projectText(true))
   } catch (e) {
     const why = (e as Error).message || 'the snapshot could not be written'
     listeners.forEach((fn) => fn(null, why))
@@ -96,31 +154,67 @@ export async function autosaveNow(): Promise<boolean> {
   return true
 }
 
-/** Autosave every 10 s while the Video desk is open; once more when it closes. Returns the stop function. */
+/** Autosave every 10 s while the Video desk is open; once more when it closes. Also starts the media pipeline (facts
+ * and proxies). Returns the stop function. */
 export function startAutosave(): () => void {
+  startMediaPipeline()
   lastRev = useVideoStore.getState().rev // what is on screen when the desk opens is not new work
   const timer = setInterval(() => { void autosaveNow().catch(() => {}) }, AUTOSAVE_MS)
   return () => { clearInterval(timer); void autosaveNow().catch(() => {}) }
 }
 
-/** Open a project's text: find its media again (desktop), point the clips at them, and put it on the desk. Returns the
- * number of media files that are missing (the bin shows them with Relink). */
+// ---------------------------------------------------------------- open
+
 let loadSeq = 0
 
-/** Open a project's text: find its media again (desktop), point the clips at them, and put it on the desk. Returns the
- * number of media files that are missing (the bin shows them with Relink). When two opens overlap only the newest
+/** Find a project's media again: references through main's registry (Phase 0 rule: only files this app imported),
+ * the folder's own copies (media/<name>) through the folder the editor opened. */
+async function resolveAll(assets: MediaAsset[], facts: Record<string, AssetFacts>, folder: FolderRef | null): Promise<MediaAsset[]> {
+  const b = videoBridge()
+  const copies = folder && b?.videoFolderResolve ? assets.filter((a) => facts[a.id]?.storage === 'copy' && facts[a.id]?.file) : []
+  const copyIds = new Set(copies.map((a) => a.id))
+  const refs = await resolveAssets(assets.filter((a) => !copyIds.has(a.id)))
+  const byId = new Map(refs.map((a) => [a.id, a]))
+  if (copies.length && folder && b?.videoFolderResolve) {
+    const res = await b.videoFolderResolve(folder.id, copies.map((a) => facts[a.id].file!))
+    copies.forEach((a, i) => {
+      const r = res[i]
+      byId.set(a.id, r && !r.missing && r.url ? { ...a, url: r.url, path: r.path, size: r.size ?? a.size, mtimeMs: r.mtimeMs ?? a.mtimeMs, missing: false, thumbnailUrl: a.type === 'image' ? r.url : a.thumbnailUrl } : { ...a, url: '', missing: true })
+    })
+  }
+  return assets.map((a) => byId.get(a.id) ?? a)
+}
+
+/** Open a project's text (v1 single file, v2 folder project.json, or a snapshot of either): find its media again
+ * (desktop), point the clips at them, and put it on the desk. Returns the number of media files that are missing (the
+ * bin shows them with Relink, and Relink all when they were found by hash). When two opens overlap only the newest
  * lands: an older answer that arrives late is dropped (`stale`). */
-export async function loadProjectText(text: string, opts: { path: string | null; dirty: boolean }): Promise<{ ok: boolean; missing: number; stale?: boolean }> {
+export async function loadProjectText(text: string, opts: { path: string | null; dirty: boolean; folder?: FolderRef | null }): Promise<{ ok: boolean; missing: number; stale?: boolean; error?: string }> {
   const seq = ++loadSeq
-  const parsed = deserializeVideoProject(text)
+  let parsed: ReturnType<typeof parseProjectText>
+  try { parsed = parseProjectText(text) } catch (e) { return { ok: false, missing: 0, error: (e as Error).message } }
   if (!parsed) return { ok: false, missing: 0 }
-  const assets = await resolveAssets(parsed.mediaAssets ?? [])
+  // a snapshot of a folder project names its folder; main checks the id on every use
+  let folder = opts.folder ?? null
+  if (opts.folder === undefined) {
+    try { const f = JSON.parse(text)?.folder; if (f && typeof f.id === 'string' && /^[0-9a-f]{32}$/.test(f.id) && typeof f.path === 'string') folder = { id: f.id, path: f.path } } catch { /* none */ }
+  }
+  const assets = await resolveAll(parsed.project.mediaAssets ?? [], parsed.facts, folder)
   if (seq !== loadSeq) return { ok: false, missing: 0, stale: true }
-  const project = relinkClips({ ...parsed, mediaAssets: undefined }, assets)
-  useVideoStore.getState().loadProject(project, { assets, path: opts.path, dirty: opts.dirty })
+  const project = relinkClips({ ...parsed.project, mediaAssets: undefined }, assets)
+  clearProxyQueue()
+  adopting = true
+  try {
+    useVideoStore.getState().loadProject(project, { assets, path: folder ? folder.path : opts.path, dirty: opts.dirty })
+  } finally {
+    adopting = false
+  }
+  useMediaMeta.setState({ folder, settings: parsed.settings, byId: Object.fromEntries(Object.entries(parsed.facts).map(([id, f]) => [id, { ...f }])), found: {} })
   lastRev = useVideoStore.getState().rev
   void refreshThumbnails(useVideoStore.getState().generation)
-  return { ok: true, missing: assets.filter((a) => a.missing).length }
+  const missing = assets.filter((a) => a.missing).length
+  if (missing) void findMissingMedia()
+  return { ok: true, missing }
 }
 
 /** Thumbnails are not saved with a project; make them again for the footage that is there. Stops as soon as another
@@ -136,26 +230,94 @@ async function refreshThumbnails(generation: number) {
   }
 }
 
-/** Save: the same file again when the project has one, else ask where. Returns where it went (null: cancelled). */
+// ---------------------------------------------------------------- relink by hash
+
+/** Look for every missing file by size + quick hash (in the project's media/, and next to where each file was when
+ * this app imported it). What is found waits in `useMediaMeta().found` for Relink all. Returns how many were found. */
+export async function findMissingMedia(): Promise<number> {
+  const b = videoBridge()
+  if (!b?.videoRelinkSearch) return 0
+  const generation = useVideoStore.getState().generation
+  const items = useVideoStore.getState().mediaAssets
+    .filter((a) => a.missing)
+    .map((a) => ({ id: a.id, path: a.path, size: a.size, hash: metaFor(a.id)?.hash ?? '' }))
+    .filter((i) => i.hash && i.size > 0)
+  if (!items.length) return 0
+  let res: { id: string; entry: MediaEntry }[] = []
+  try { res = await b.videoRelinkSearch(currentFolder()?.id ?? null, items) } catch { return 0 }
+  if (useVideoStore.getState().generation !== generation) return 0
+  const found = Object.fromEntries(res.map((r) => [r.id, r.entry]))
+  useMediaMeta.setState({ found })
+  return res.length
+}
+
+/** Relink every missing file that was found by hash, in one step. Returns how many were relinked. */
+export async function relinkAllFound(): Promise<number> {
+  const { found } = useMediaMeta.getState()
+  const st = useVideoStore.getState()
+  let n = 0
+  for (const [id, e] of Object.entries(found)) {
+    const a = st.mediaAssets.find((x) => x.id === id)
+    if (!a || !a.missing) continue
+    const p = a.type === 'image' ? null : await probeMedia(e.url, a.type).catch(() => null)
+    useVideoStore.getState().relinkAsset(id, { url: e.url, path: e.path, size: e.size, mtimeMs: e.mtimeMs, thumbnailUrl: a.type === 'image' ? e.url : p?.thumbnailUrl ?? a.thumbnailUrl })
+    n++
+  }
+  useMediaMeta.setState({ found: {} })
+  return n
+}
+
+// ---------------------------------------------------------------- save
+
+/** Save: into the project's folder when it has one; a Phase 0 single file in place; otherwise (or with Save as) make
+ * a project folder in main's dialog first. Returns where it went (null: cancelled). */
 export async function saveProject(saveAs = false): Promise<string | null> {
   const s = useVideoStore.getState()
   // the revision written: an edit made while the save dialog was open keeps the project marked unsaved (and its
   // snapshots, which hold that edit)
   const rev = s.rev
   const projectId = s.project.id
-  const text = serializeVideoProject(s.project, s.mediaAssets)
   const b = videoBridge()
-  const done = async (where: string | null) => {
+  const done = async (where: string | null, folderId: string | null) => {
     useVideoStore.getState().markSaved(where, rev)
-    if (useVideoStore.getState().rev === rev) await clearSnapshots(projectId)
+    if (useVideoStore.getState().rev === rev) await clearSnapshots(projectId, folderId)
+  }
+  if (b?.videoFolderSave && b.videoFolderCreate) {
+    const folder = currentFolder()
+    if (folder && !saveAs) {
+      await b.videoFolderSave(folder.id, projectText(false))
+      await done(folder.path, folder.id)
+      return folder.path
+    }
+    if (!folder && s.projectPath && !saveAs && b.videoSaveProject) {
+      // a Phase 0 single-file project stays one (older builds can still open it); Save as makes it a folder
+      const where = await b.videoSaveProject(s.project.name || 'video', serializeVideoProject(s.project, s.mediaAssets), s.projectPath)
+      if (where) await done(where, null)
+      return where
+    }
+    const made = await b.videoFolderCreate(s.project.name || 'video')
+    if (!made) return null
+    const before = currentFolder()
+    useMediaMeta.setState({ folder: made })
+    try {
+      await b.videoFolderSave(made.id, projectText(false))
+    } catch (e) {
+      useMediaMeta.setState({ folder: before })
+      throw e
+    }
+    // the old place's snapshots (userData, or the folder it was saved from) belong to this project too
+    await clearSnapshots(projectId, before?.id ?? null)
+    await done(made.path, made.id)
+    recheckProxies()
+    return made.path
   }
   if (b?.videoSaveProject) {
-    const where = await b.videoSaveProject(s.project.name || 'video', text, saveAs ? null : s.projectPath)
-    if (where) await done(where)
+    const where = await b.videoSaveProject(s.project.name || 'video', serializeVideoProject(s.project, s.mediaAssets), saveAs ? null : s.projectPath)
+    if (where) await done(where, null)
     return where
   }
   const filename = `${(s.project.name || 'video').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'video'}.esbvideo`
-  downloadVideoBlob(new Blob([text], { type: 'application/json' }), filename)
-  await done(null)
+  downloadVideoBlob(new Blob([projectText(false)], { type: 'application/json' }), filename)
+  await done(null, null)
   return filename
 }

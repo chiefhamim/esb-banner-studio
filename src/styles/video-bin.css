@@ -1,0 +1,35 @@
+/* Video desk — media bin metadata (Phase 1, src/video/BinCard.tsx). Every class is prefixed vw-bin-. */
+.vw-bin-card { align-items: flex-start; }
+.vw-bin-card .vw-media-actions { align-self: center; }
+.vw-bin-card .vw-media-info { display: flex; flex-direction: column; gap: 2px; }
+.vw-bin-meta { font-size: 11px; line-height: 15px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+/* the facts wrap to a second line rather than cutting the size or the frame rate (the 312 px bin) */
+.vw-media-meta.vw-bin-meta { white-space: normal; text-overflow: clip; overflow: visible; overflow-wrap: anywhere; }
+.vw-bin-found { color: var(--text-2); }
+.vw-bin-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 18px; margin-top: 1px; }
+.vw-bin-tags:empty { display: none; }
+
+.vw-bin-proxy, .vw-bin-tag {
+  display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px;
+  font: 600 10.5px/18px var(--font-ui); letter-spacing: var(--track-chip, .05em); text-transform: uppercase;
+  color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-1); white-space: nowrap;
+}
+button.vw-bin-proxy { cursor: pointer; }
+button.vw-bin-proxy:hover { color: var(--text); background: var(--fill-hover); }
+.vw-bin-proxy.ready { color: var(--success); background: var(--success-soft); }
+.vw-bin-proxy.failed { color: var(--danger); background: var(--danger-soft); }
+.vw-bin-proxy.pending { padding-right: 2px; color: var(--text); }
+.vw-bin-proxy-label { min-width: 62px; }
+.vw-bin-bar { position: relative; width: 56px; height: 4px; overflow: hidden; background: var(--fill-active, var(--fill-hover)); border-radius: 2px; }
+.vw-bin-bar > span { position: absolute; inset: 0 auto 0 0; background: var(--text-2); border-radius: 2px; transition: width .2s linear; }
+.vw-bin-proxy-x { display: grid; place-items: center; width: 16px; height: 16px; padding: 0; color: var(--text-3); background: transparent; border: 0; border-radius: 3px; cursor: pointer; }
+.vw-bin-proxy-x:hover { color: var(--text); background: var(--fill-hover); }
+
+.vw-bin-missing { align-items: center; }
+.vw-bin-missing-text { flex: 1 1 auto; min-width: 0; }
+.vw-bin-missing .btn.vw-bin-relink-all { flex: none; height: 28px; }
+
+.vw-bin-import-mode { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+.vw-bin-import-label { font-size: 11.5px; color: var(--text-3); }
+
+@media (prefers-reduced-motion: reduce) { .vw-bin-bar > span { transition: none; } }

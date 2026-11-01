@@ -154,3 +154,57 @@ restore card, the New confirm (after its open animation), missing media with Rel
 - Two clips of one file at different points share one `<video>` / `<audio>` element in the preview (the first active clip drives it). Phase 1's decode engine gives each clip its own reader.
 - Text typed in the inspector is one undo step per keystroke (drags and sliders are gestures).
 - P7, as above.
+
+---
+
+## Phase 1 — Part A: project folder, media IO, proxies (2026-11-01, branch `video-p1-io`)
+
+Part B (decode engine, WebGL2 compositor, timeline v2, waveforms, filmstrips, preview) is built in parallel on its own branch; this part gives it the files.
+
+### What changed
+**Project folder.** Save (first time, or Save as) makes `<Pictures>/ESB Banners/Video/<name>.esbvideo/` in main's own dialog: `project.json`, `media/`, `proxies/`, `cache/`, `autosave/`, `renders/` (`electron/video-project.cjs`). `project.json` is schema v2 (`src/video/projectFolder.ts`): `format`, `version`, `savedAt`, `settings` (import mode, proxies on/off), `media[]` (storage `reference` or `copy`, path or `media/<name>`, size, mtime, quick hash, codec, fps, key-frame interval…) and `timeline` = exactly what `serializeVideoProject` writes minus its bin (Part B owns its shape and its migrations). Migrations run step by step (`MIGRATIONS[1]`: the Phase 0 single file → v2); a newer schema is refused, not half-read. A Phase 0 single-file `.esbvideo` still opens and saves in place; Ctrl+Shift+S turns it into a folder. Open takes a folder's `project.json` (Windows' file dialog cannot pick a folder and a file at once). Autosave of a folder project goes to its `autosave/` (temp + rename, last 5); the restore card offers the newest snapshot of userData and every known folder, and a restored snapshot knows its folder, so Save writes back without a dialog. Export suggests the folder's `renders/`.
+
+**Import: link or copy.** With a folder open, the bin shows *On import: Link | Copy* (saved in settings). Copy is done by main (`.copying` + rename, the same file reused, another file of that name gets `name (2).ext`, free-space check). Copies are resolved through the folder the editor opened, so a moved project folder still plays its own media.
+
+**Security.** The renderer names a folder only by an opaque id main handed out (created or opened in main's dialog; `userData/video-folders.json`, at most 200), and a file in it only as `<media|proxies|renders>/<name>`; every such path is resolved to its real location (junctions and symlinks followed) and refused unless it is still inside the folder's real location. `..`, `%2F`, data streams (`clip.mp4:x`), device names, trailing dots, UNC and device roots are refused; a `media/` junction to another folder is refused. `cache/` and `autosave/` are never served by the protocol. Relink search outside the project happens only next to a file this app imported before (the registry), so a crafted project cannot make main scan or approve anything else.
+
+**Relink by hash.** Every file gets a quick hash in main (size + first/middle/last 64 KB). When files are missing on open, main looks in the project's `media/` and, for files this app imported before, their old folder and its sibling folders (one level, at most 40 folders and 20,000 entries, same size first, links not followed). The bin says "N files are missing. It was / N of M were found again" with **Relink all**.
+
+**Background proxies.** Every bin entry's facts are read (`proxies.ts`: hash from main; codec and fps from packet stats, key-frame interval from key packets, metadata only). Footage over 1080p or with key frames more than 1 s apart gets a proxy: 540 px on the short side, H.264, a key frame every 0.5 s, sound kept, made by mediabunny's `Conversion` in a dedicated worker (`proxyWorker.ts`), streamed piece by piece to main (`esb:video-proxy-*`, `.partial` renamed when it checks out), one at a time, with progress and cancel, named `proxies/<hash>.mp4` (or the app's library `userData/video-library` before the project has a folder; 20 GB cap there). On open a finished proxy is found again at once; a half-made one is deleted and redone. Exports never read proxies.
+
+**Contract for Part B (`src/video/media.ts`, JSDoc there).**
+- `previewUrlFor(assetId: string): string` — the ready proxy's `esb-media://p/<folder>/proxies/<hash>.mp4`, else the original's URL ('' when missing).
+- `exportUrlFor(assetId: string): string` — always the original ('' when missing).
+- `onProxyReady(cb: (assetId: string) => void): () => void`.
+- `readCache(key: string): Promise<Uint8Array | null>` and `writeCache(key: string, bytes: Uint8Array): Promise<void>` — the project's `cache/` (the library when there is no folder; memory in the browser); key `[a-z0-9-]{1,80}`, at most 32 MB each, 1 GB per folder; past the cap a write is refused (nothing evicted).
+- `mediaInfo(assetId)` → `{ codec, fps, width, height, duration, hasAudio, sizeBytes, keyframeInterval, proxy: 'none' | 'pending' | 'ready' | 'failed', missing }`.
+- Phase 0 exports unchanged (`inputFor`, `probeMedia`, `assetFromEntry`, `resolveAssets`, …).
+
+**Bin UI** (`src/video/BinCard.tsx`, `src/styles/video-bin.css`, classes `vw-bin-*`; the row keeps `vw-media-*` for the tests): facts line (length · codec · fps · picture size · sound · file size; wraps rather than cuts), proxy badge (Proxy n % with a bar and stop · Proxy ✓ · Proxy failed → try again · Make proxy after a cancel), *In project* for copies, Not found / found again, Relink all.
+
+### Files
+- New: `electron/video-project.cjs`, `src/video/projectFolder.ts`, `src/video/proxies.ts`, `src/video/proxyWorker.ts`, `src/video/BinCard.tsx`, `src/styles/video-bin.css`, `tools/unit/video-project.test.ts`.
+- Changed: `electron/video-media.cjs` (`esb-media://p/…` route; the snapshot tag reads `timeline.id`), `electron/main.cjs` and `electron/preload.cjs` (Video IPC only), `src/video/media.ts`, `src/video/projectIO.ts`, `tools/e2e/video-electron-test.mjs`, `tools/e2e/video-shots.mjs` (7 bin states), `tools/fixtures/video/make-fixtures.mjs` (`--4k`; the committed speech fixture is no longer remade when only `--4k` or `--long` is asked).
+- Outside the listed scope: `src/video/VideoWorkspace.tsx` — the bin rows come from `BinCard` (the old `MediaCard` removed), imports pass the link/copy option and report refused files, Open passes the folder, a manual Relink resets the storage. No new dependencies.
+
+### Measured (2026-11-01, this PC, `npm run test:electron`)
+| Check | Result |
+|---|---|
+| 4K fixture (3840×2160, 30 fps, 4 s, 3 s GOP, 8.4 MB) → proxy | import → proxy ready 5.5–5.7 s; worker 4.4–4.9 s; 960×540 H.264, 8 key frames, max gap 0.500 s, 250 KB |
+| mediaInfo of the fixture | avc, 30 fps, 3840×2160, key-frame interval 3 s (from packets), proxy ready |
+| Preview vs export URL | `esb-media://p/<id>/proxies/<hash>.mp4` vs `esb-media://m/<id>` |
+| Export reads the original | 1920×1080; centre-crop sharpness (mean abs Laplacian): export 2.79, original → 1080p 2.36, proxy → 1080p 1.06 |
+| Restart | proxy deleted while closed → pending on open → cancel leaves no `.partial` → Make proxy → ready; proxy present → ready in 77–125 ms, not remade |
+| Relink by hash | renamed file in the same folder found; Relink all → the footage plays |
+
+### Checks
+- `npm run lint`: 0 errors. `npm run build`: ok. `npm test`: 864 passed (75 files; +24 in `video-project.test.ts`: confinement incl. traversal, UNC, junction, ADS and device names, the protocol route, copy, quick hash, relink by hash, cache caps, proxy rules, v1 → v2 migration with the timeline unchanged, the v2 round trip, hostile records, a newer schema refused).
+- `npm run test:video`: all PASS. `npm run test:electron`: 65 PASS, 0 FAIL (Phase 0 checks adapted to the folder: project.json, autosave in the folder, Relink all).
+- Screens: `tools/out/p1-io/` (`bin-normal`, `bin-proxy-pending`, `bin-proxy-ready`, `bin-proxy-failed`, `bin-proxy-cancelled`, `bin-missing`, `bin-missing-found`; light/dark × 900/1366/1920), inspected.
+
+### Known gaps
+- The Phase 0 preview still plays `clip.sourceUrl` (the original): switching the monitor to `previewUrlFor` is Part B's engine.
+- Save as into a new folder keeps media copied into the old folder as references (absolute path); they are not copied again.
+- Relink search does not look next to the project folder itself, nor outside the project for a project from another PC (the registry is empty there): those use Relink by hand.
+- One proxy is made at a time; a proxy made before the project has a folder stays in the app's library (it is found from there, not moved).
+- `text-fit` and `center` audits were not re-run for the new bin states (screens inspected by eye).
