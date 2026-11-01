@@ -139,6 +139,9 @@ function validateJobSpec(rawSpec) {
         name: typeof m.name === 'string' ? m.name.slice(0, 120) : undefined,
         org: typeof m.org === 'string' ? m.org.slice(0, 120) : undefined,
         key: typeof m.key === 'string' ? m.key.slice(0, 100) : undefined,
+        // a designed letter's per-recipient words ({name}, …), already cut to one-line strings by validateMail;
+        // dropping them here sent every campaign copy with the fallback ("Dear Reader") while tests used the name
+        ...(v.vars && Object.keys(v.vars).length ? { vars: v.vars } : {}),
       })
     } catch (err) {
       rejected.push({ index: i, error: err.message || 'Validation error' })

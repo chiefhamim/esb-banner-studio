@@ -380,6 +380,8 @@ export function ReviewSendDialog() {
     ? 'Second reading: ' + secondReading.badNotes[0]
     : !attachOk
     ? 'Attachment is mentioned in letter but no file is attached'
+    : !why && ready.length > 0 && willBeSentCount === 0
+    ? (c.subject.length > 78 ? `Every contact is held in Needs you: the subject is ${c.subject.length} characters (the limit is 78). Shorten it, or approve them in Review.` : 'Every contact is held in Needs you. Approve them in Review, or fix what is flagged.')
     : why
 
   const go = () => {

@@ -141,6 +141,13 @@ export async function startBatch(mode: 'first' | 'followup' = 'first', startAt?:
       startAt,
     })
   } catch (e) { s.addLog('error', (e as Error).message); return }
+  if (!spec.messages.length) {
+    // everyone ready is waiting in Needs you (a flag such as a long subject applies to each of them): say so plainly
+    s.addLog('warn', mode === 'first'
+      ? 'Nothing to send yet: every ready contact is waiting in Needs you (Review tab). Fix the flagged item, e.g. shorten a subject over 78 characters, or approve them there.'
+      : 'Nobody is due a follow-up yet')
+    return
+  }
 
   s.patch({
     status: startAt ? 'scheduled' : 'sending',

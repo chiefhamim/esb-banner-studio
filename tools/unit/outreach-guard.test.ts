@@ -6,6 +6,20 @@ const guard = require('../../electron/outreach-guard.cjs')
 
 describe('outreach-guard: IPC boundary argument validation (§1.7, Appendix A)', () => {
   describe('validateJobSpec', () => {
+    it('keeps a designed letter\'s per-recipient words (vars) on each message', () => {
+      const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+      const res = guard.validateJobSpec({
+        campaignId: 'cmp-design', kind: 'first',
+        shared: { design: { html: '<p>Dear {name|Reader},</p><img src="cid:esb-d1">', images: [{ cid: 'esb-d1', dataUrl: png }] } },
+        messages: [
+          { to: 'rahim@example.com', subject: 'S', body: 'Dear {name|Reader},', vars: { name: 'Rahim Uddin' } },
+          { to: 'noname@example.com', subject: 'S', body: 'Dear {name|Reader},' },
+        ],
+      })
+      expect(res.ok).toBe(true)
+      expect(res.cleaned.messages[0].vars).toEqual({ name: 'Rahim Uddin' })
+      expect(res.cleaned.messages[1].vars).toBeUndefined()
+    })
     it('accepts valid job spec and normalizes fields', () => {
       const spec = {
         campaignId: 'cmp-100',
