@@ -153,6 +153,10 @@ export interface AutopilotSettings {
   aiReadsReply: boolean
   autoResume: boolean
   legacyBackfilled?: boolean
+  /** The Sender dialog's old pacing copy was adopted once (outreach-settings.cjs migratePacingFromMailer). */
+  pacingMigrated?: boolean
+  /** When the account-wide settings (outreach-settings.cjs SHARED_KEYS) last changed, on any PC (ms). */
+  sharedUpdatedAt?: number
   dryRun?: boolean
 }
 
@@ -187,6 +191,8 @@ export interface JobSnapshot {
   status: 'queued' | 'running' | 'waiting' | 'paused' | 'done' | 'stopped'
   why?: 'window' | 'cap' | 'ramp' | 'gap' | 'domain' | 'offline' | 'quota' | 'schedule' | 'held' | null
   until?: number | null
+  /** What exactly the wait is for (engine job.wait): the organisation and its limit/spacing, the gap range, the hours. */
+  wait?: JobWait | null
   reason?: 'user' | 'all' | 'auth' | 'circuit' | 'quit' | 'content' | null
   dry: boolean
   total: number
@@ -263,8 +269,31 @@ export interface OutreachStats {
   jobs: JobSnapshot[]
 }
 
+/** The detail behind JobSnapshot.why, set by electron/outreach-engine.cjs. Every field optional. */
+export interface JobWait {
+  /** why 'domain': the organisation (domain) and whether it hit its daily limit or its spacing. */
+  domain?: string | null
+  kind?: 'limit' | 'spacing' | null
+  count?: number | null
+  max?: number
+  /** why 'domain': the spacing per organisation; why 'gap': the gap chosen after the last email. */
+  gapSec?: number
+  /** why 'gap': the pacing and the editor's range. */
+  pace?: 'auto' | 'manual'
+  minSec?: number
+  maxSec?: number
+  /** why 'window': the sending hours. */
+  from?: string
+  to?: string
+  tz?: string
+  /** why 'cap': today's limit (after warm-up) and how many went in the last 24 h. */
+  limit?: number
+  sent?: number
+  ramp?: boolean
+}
+
 export type OutreachPush =
-  | { kind: 'progress'; jobId: string; campaignId: string; status: string; why?: string; until?: number; reason?: string; sent: number; total: number; failed: number; current?: string; nextAt?: number | null }
+  | { kind: 'progress'; jobId: string; campaignId: string; status: string; why?: string; until?: number; wait?: JobWait | null; reason?: string; sent: number; total: number; failed: number; current?: string; nextAt?: number | null }
   | { kind: 'event'; event: OutreachEvent }
   | { kind: 'inbox'; result: EsbInboxResult }
 

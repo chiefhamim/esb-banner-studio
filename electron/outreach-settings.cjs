@@ -6,6 +6,11 @@ const path = require('node:path')
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 
+// The settings that belong to the sending ACCOUNT, not to one PC: both office PCs send from the same Gmail address,
+// so its hours, daily limit, gaps, per-organisation limits and cooldown must be the same on both (cloud sync carries
+// them, src/outreach/cloudSync.ts). Tray sending, the assistant's autonomy and reading replies stay per PC.
+const SHARED_KEYS = ['window', 'dailyLimit', 'ramp', 'pace', 'minDelaySec', 'maxDelaySec', 'domainMaxPerDay', 'domainMinGapSec', 'contactCooldownDays']
+
 const DEFAULT_SETTINGS = {
   window: {
     enabled: true,
@@ -51,7 +56,7 @@ function isValidTimeZone(tz) {
  * @param {object} currentSettings
  * @returns {{ valid: boolean, error?: string, field?: string, cleaned?: object }}
  */
-function validateSettings(input, currentSettings = DEFAULT_SETTINGS) {
+function validateSettings(input, currentSettings = DEFAULT_SETTINGS, opts = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { valid: false, error: 'Settings input must be an object', field: 'root' }
   }
@@ -73,6 +78,8 @@ function validateSettings(input, currentSettings = DEFAULT_SETTINGS) {
     'aiReadsReply',
     'autoResume',
     'legacyBackfilled',
+    'pacingMigrated',
+    'sharedUpdatedAt',
   ]
 
   for (const k of allowedKeys) {
@@ -254,6 +261,22 @@ function validateSettings(input, currentSettings = DEFAULT_SETTINGS) {
   if (safe.legacyBackfilled !== undefined) {
     result.legacyBackfilled = !!safe.legacyBackfilled
   }
+  // one-time "adopt the Sender dialog's gaps" marker (migratePacingFromMailer)
+  if (safe.pacingMigrated !== undefined) {
+    result.pacingMigrated = !!safe.pacingMigrated
+  }
+
+  // when the settings every PC shares (SHARED_KEYS) last changed: set by the caller when the values come from another
+  // PC (cloud sync), else stamped now — but only if one of them really changed, so re-saving the same dialog never
+  // makes this PC's copy look newer than another PC's real change
+  if (safe.sharedUpdatedAt !== undefined) {
+    if (!Number.isFinite(safe.sharedUpdatedAt) || safe.sharedUpdatedAt < 0) {
+      return { valid: false, error: 'sharedUpdatedAt must be a time in ms', field: 'sharedUpdatedAt' }
+    }
+    result.sharedUpdatedAt = Math.round(safe.sharedUpdatedAt)
+  } else if (opts.stamp === true && SHARED_KEYS.some((k) => JSON.stringify(result[k]) !== JSON.stringify(currentSettings[k]))) {
+    result.sharedUpdatedAt = Date.now()
+  }
 
   return { valid: true, cleaned: result }
 }
@@ -305,7 +328,7 @@ function createSettingsManager(options = {}) {
   }
 
   function save(partial) {
-    const res = validateSettings(partial, currentSettings)
+    const res = validateSettings(partial, currentSettings, { stamp: true })
     if (!res.valid) {
       return { ok: false, error: res.error || 'Validation failed', field: res.field }
     }
@@ -338,7 +361,78 @@ function createSettingsManager(options = {}) {
   }
 }
 
+/**
+ * One-time move of the pacing the editor typed in the Sender dialog into the Autopilot settings.
+ *
+ * Until 2026-11-01 the Sender dialog saved "Emails a day" and "Wait at least / at most" to outreach-smtp.json, which
+ * the engine never read; the engine used outreach-autopilot.json, whose gaps no screen could edit (the Autopilot
+ * dialog only linked to the Sender dialog). So the Sender dialog's numbers are the editor's intent, and they are
+ * adopted when they differ — if the smtp file is newer than the autopilot file, or if the autopilot values are still
+ * the untouched defaults (an Autopilot save rewrites the whole file, so its time alone says nothing about the gaps).
+ * Adopted gaps also mean pace 'manual' ("Fixed gap"): the editor asked for exactly that range. Runs once
+ * (pacingMigrated), logs a settings.migrated event, never touches outreach-smtp.json.
+ *
+ * @returns {{ migrated: boolean, from?: object, to?: object, reason?: string }}
+ */
+function migratePacingFromMailer({ settings, smtpFile, events = null, fsImpl = fs }) {
+  const cur = settings.get()
+  if (cur.pacingMigrated) return { migrated: false, reason: 'already' }
+  let smtp = null
+  let smtpMtime = 0
+  let autoMtime = 0
+  try {
+    smtp = JSON.parse(fsImpl.readFileSync(smtpFile, 'utf8'))
+    smtpMtime = fsImpl.statSync(smtpFile).mtimeMs
+  } catch {
+    smtp = null
+  }
+  try {
+    autoMtime = fsImpl.statSync(path.join(path.dirname(smtpFile), 'outreach-autopilot.json')).mtimeMs
+  } catch {
+    autoMtime = 0
+  }
+  const done = (res) => {
+    settings.save({ pacingMigrated: true })
+    return res
+  }
+  if (!smtp || typeof smtp !== 'object') return done({ migrated: false, reason: 'no-smtp' })
+
+  const patch = {}
+  const from = {}
+  const smtpNewer = smtpMtime > autoMtime
+  const okDelay = (v) => Number.isInteger(v) && v >= 30 && v <= 3600
+  if (okDelay(smtp.minDelaySec) && okDelay(smtp.maxDelaySec) && smtp.maxDelaySec >= smtp.minDelaySec &&
+      (smtp.minDelaySec !== cur.minDelaySec || smtp.maxDelaySec !== cur.maxDelaySec)) {
+    const untouched = cur.minDelaySec === DEFAULT_SETTINGS.minDelaySec && cur.maxDelaySec === DEFAULT_SETTINGS.maxDelaySec
+    if (smtpNewer || untouched) {
+      from.minDelaySec = cur.minDelaySec
+      from.maxDelaySec = cur.maxDelaySec
+      from.pace = cur.pace
+      patch.minDelaySec = smtp.minDelaySec
+      patch.maxDelaySec = smtp.maxDelaySec
+      patch.pace = 'manual'
+    }
+  }
+  if (Number.isInteger(smtp.dailyLimit) && smtp.dailyLimit >= 10 && smtp.dailyLimit <= 500 && smtp.dailyLimit !== cur.dailyLimit) {
+    if (smtpNewer || cur.dailyLimit === DEFAULT_SETTINGS.dailyLimit) {
+      from.dailyLimit = cur.dailyLimit
+      patch.dailyLimit = smtp.dailyLimit
+    }
+  }
+  if (!Object.keys(patch).length) return done({ migrated: false, reason: 'same' })
+  const r = settings.save({ ...patch, pacingMigrated: true })
+  if (!r.ok) return done({ migrated: false, reason: r.error })
+  if (events && typeof events.append === 'function') {
+    try {
+      events.append({ type: 'settings.migrated', what: 'pacing', from, to: patch, source: 'outreach-smtp.json' })
+    } catch {}
+  }
+  return { migrated: true, from, to: patch }
+}
+
 module.exports = {
+  SHARED_KEYS,
+  migratePacingFromMailer,
   createSettingsManager,
   validateSettings,
   DEFAULT_SETTINGS,

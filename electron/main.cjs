@@ -11,7 +11,7 @@ const { pathToFileURL } = require('node:url')
 const dns = require('node:dns')
 const { createEventLog } = require('./outreach-events.cjs')
 const { createJobStore } = require('./outreach-jobs.cjs')
-const { createSettingsManager } = require('./outreach-settings.cjs')
+const { createSettingsManager, migratePacingFromMailer } = require('./outreach-settings.cjs')
 const { createEngine } = require('./outreach-engine.cjs')
 const { createTray } = require('./outreach-tray.cjs')
 const outreachGuard = require('./outreach-guard.cjs')
@@ -423,7 +423,7 @@ let mailer = null
 // open/click tracking switches itself on only once esbpowerline.com answers on /api/o and /r (outreach-tracking.cjs)
 let trackingGate = null
 const outreachTracking = () => (trackingGate ??= require('./outreach-tracking.cjs').createTrackingGate({ env: process.env }))
-const outreachMailer = () => (mailer ??= require('./mailer.cjs').createMailer({ dir: app.getPath('userData'), safeStorage: require('electron').safeStorage, nodemailer: require('nodemailer'), tracking: outreachTracking() }))
+const outreachMailer = () => (mailer ??= require('./mailer.cjs').createMailer({ dir: app.getPath('userData'), safeStorage: require('electron').safeStorage, nodemailer: require('nodemailer'), tracking: outreachTracking(), pacing: () => (outreachSettings ? outreachSettings.get() : null) }))
 // pcLabel: this computer's name, shown on other PCs as "Sending from …" (the shared send lock); tracking: whether the
 // site's open/click endpoints were live at the last check
 ipcMain.handle('esb:outreach-status', () => ({ ...outreachMailer().status(), pcLabel: require('node:os').hostname().slice(0, 60), tracking: outreachTracking().status() }))
@@ -500,6 +500,9 @@ ipcMain.handle('esb:outreach-settings-save', (_e, rawS) => {
   const r = outreachSettings.save(rawS)
   // new sending hours / limits apply to a batch that is already waiting, not only to the next one
   if (r && r.ok && outreachEngineInstance && typeof outreachEngineInstance.settingsChanged === 'function') outreachEngineInstance.settingsChanged()
+  // the renderer replaces its copy with r.settings: keep the dry-run flag on it, or a save during a test run turned
+  // cloud sync back on for simulated sends (cloudSync testRun reads settings.dryRun)
+  if (r && r.ok && r.settings) return { ...r, settings: { ...r.settings, dryRun: !!(process.env.ESB_OUTREACH_DRYRUN || process.env.ESB_DRYRUN) } }
   return r
 })
 let dnsCheckerInstance = null
@@ -624,6 +627,13 @@ app.whenReady().then(() => {
   outreachEvents = createEventLog({ dir: userData, onAppend: (ev) => { if (LIVE.has(ev.type)) pushToWindow('esb:outreach-push', { kind: 'event', event: ev }) } })
   outreachJobs = createJobStore({ dir: userData })
   outreachSettings = createSettingsManager({ dir: userData })
+  // the Sender dialog's gaps / daily limit used to live only in outreach-smtp.json, which the engine never read —
+  // adopt them once (outreach-settings.cjs migratePacingFromMailer); from now on the Autopilot settings are the one copy
+  try {
+    migratePacingFromMailer({ settings: outreachSettings, smtpFile: path.join(userData, 'outreach-smtp.json'), events: outreachEvents })
+  } catch (e) {
+    console.warn('Pacing migration warning:', e)
+  }
 
   // Legacy back-fill (§1.8f)
   const currentCfg = outreachSettings.get()

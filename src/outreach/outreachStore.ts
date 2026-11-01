@@ -25,6 +25,11 @@ const LEGACY_CONFIG = 'esb-banner-studio/outreach-config'
 
 export const uid = (p: string) => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 
+/** The desk's own preferences every PC should share (cloud sync, outreach_settings row 'desk'): signatures, saved
+ *  templates, the house prompt and the letterhead look. */
+export const DESK_KEYS = ['signatures', 'templates', 'housePrompt', 'footerLine', 'headerBg', 'footerBg', 'stripeColors', 'fontFamily'] as const
+export type DeskKey = (typeof DESK_KEYS)[number]
+
 interface Saved {
   campaigns: Campaign[]
   activeId: string | null
@@ -241,7 +246,7 @@ interface OutreachState extends Saved {
   addLog: (level: LogEntry['level'], text: string) => void
   /** cloudSync.ts only: lay the shared copy over this PC's — merged campaigns, lists that arrived, addresses that
    *  opted out or bounced elsewhere — save, and re-read the open campaign's list or design if they just arrived. */
-  cloudApply: (p: { campaigns?: Campaign[]; lists?: ListMeta[]; optOut?: string[]; bouncedAddrs?: Record<string, string>; reload?: { contacts?: boolean; design?: boolean } }) => Promise<void>
+  cloudApply: (p: { campaigns?: Campaign[]; lists?: ListMeta[]; optOut?: string[]; bouncedAddrs?: Record<string, string>; approved?: string[]; desk?: Partial<Pick<Saved, DeskKey>>; reload?: { contacts?: boolean; design?: boolean } }) => Promise<void>
 }
 
 /** The sheet's contacts with what the editor and the ledgers know laid over them. A contact whose overlay did not
@@ -618,6 +623,8 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
       if (p.lists) next.lists = p.lists
       if (p.optOut) next.optOut = p.optOut
       if (p.bouncedAddrs) next.bouncedAddrs = p.bouncedAddrs
+      if (p.approved) next.approved = p.approved
+      if (p.desk) Object.assign(next, p.desk)
       if (p.campaigns && get().activeId && !p.campaigns.some((c) => c.id === get().activeId)) next.activeId = p.campaigns[0]?.id ?? null
       set(next)
       persist()

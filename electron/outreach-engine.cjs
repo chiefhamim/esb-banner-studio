@@ -79,6 +79,18 @@ function createEngine(deps = {}) {
     return n
   }
 
+  // when the daily limit has room again: the (sent - cap + 1)-th oldest send of the last 24 h turns 24 h old
+  // (a settings change wakes the wait at once — settingsChanged)
+  function capFreesAt(now, sent, cap) {
+    const fallback = now + 3600 * 1000
+    if (!events || typeof events.read !== 'function') return fallback
+    const res = events.read({ types: ['send.ok'], from: now - DAY_MS, limit: 100000, includeDry: dryRun })
+    const ts = (res.events || []).map((e) => e.t).filter(Number.isFinite).sort((a, b) => a - b)
+    const k = Math.max(0, sent - cap)
+    const at = ts[k] !== undefined ? ts[k] + DAY_MS : fallback
+    return Math.max(now + 1000, at)
+  }
+
   // Count distinct calendar days with send.ok
   function countSendDays() {
     if (!events || typeof events.read !== 'function') return 1
@@ -126,6 +138,34 @@ function createEngine(deps = {}) {
     })
   }
 
+  // After a restart the per-organisation counts and the time of the last send came back empty, so every restart
+  // reset the "3 a day per organisation" limit and skipped the gap before the next email. Both are rebuilt from the
+  // event log (the single source of truth): every send.ok of the last 24 h — from this PC or merged from another
+  // (remote), real ones only unless this is a dry run — replayed through recordDomainSend in time order, so the
+  // counts and their reset times (24 h after the first send to that organisation) are exactly what they were.
+  function rebuildFromLog() {
+    if (!events || typeof events.read !== 'function') return
+    const now = clock()
+    const res = events.read({ types: ['send.ok'], from: now - DAY_MS, limit: 100000, includeDry: dryRun })
+    const list = (res.events || []).filter((e) => Number.isFinite(e.t) && e.t <= now).sort((a, b) => a.t - b.t)
+    domainStats.clear()
+    for (const e of list) {
+      recordDomainSend(domainOf(e.email || ''), e.t)
+      if (e.t > lastSendAt) lastSendAt = e.t
+    }
+    cleanDomainStats(now)
+  }
+
+  // the gap before the next email, always inside the editor's "wait at least / at most" (Autopilot settings and the
+  // Sender dialog edit the same two numbers). 'manual' = a random gap between them; 'auto' = spread over the hours
+  // left in the window, but never outside them (outreach-schedule.cjs autoGap).
+  function chooseGapSec(cfg, now, win, room) {
+    const minG = Number.isFinite(cfg.minDelaySec) && cfg.minDelaySec > 0 ? cfg.minDelaySec : 180
+    const maxG = Number.isFinite(cfg.maxDelaySec) && cfg.maxDelaySec >= minG ? cfg.maxDelaySec : Math.max(minG, 480)
+    if (cfg.pace === 'manual') return Math.round(minG + rnd() * (maxG - minG))
+    return autoGap(secondsLeftInWindow(now, win), room, rnd, { minSec: minG, maxSec: maxG })
+  }
+
   function pushProgress(job) {
     if (!job) return
     const sentCount = (job.state.sent && job.state.sent.length) || 0
@@ -136,6 +176,8 @@ function createEngine(deps = {}) {
       status: job.status,
       why: job.why || undefined,
       until: job.until || undefined,
+      // what exactly it waits for (organisation + limit / spacing, the gap range, the hours) — the desk words it
+      wait: job.wait || null,
       reason: job.reason || undefined,
       sent: sentCount,
       total: job.total,
@@ -247,6 +289,7 @@ function createEngine(deps = {}) {
       job.status = 'waiting'
       job.why = 'window'
       job.until = ws.opensAt || now + 3600 * 1000
+      job.wait = { from: win.from, to: win.to, tz: win.tz }
       jobs.saveState(job)
       pushProgress(job)
       const waitMs = Math.max(1000, Math.round((job.until - now) / speed))
@@ -263,25 +306,18 @@ function createEngine(deps = {}) {
     if (room <= 0) {
       job.status = 'waiting'
       job.why = 'cap'
-      // Oldest send in last 24h + 24h
-      job.until = now + 3600 * 1000 // Retry in an hour
+      // room comes back when the oldest send that is over the limit turns 24 h old (at most an hour's re-check)
+      job.until = capFreesAt(now, sent24h, effectiveCap)
+      job.wait = { limit: effectiveCap, sent: sent24h, ramp: cfg.ramp !== false && effectiveCap < (cfg.dailyLimit || 100) }
       jobs.saveState(job)
       pushProgress(job)
-      activeTimer = setTimer(tick, Math.max(1000, Math.round(3600 * 1000 / speed)))
+      activeTimer = setTimer(tick, Math.max(1000, Math.round((job.until - now) / speed)))
       return
     }
 
     // 4. Gap check
-    const isAutoPace = cfg.pace !== 'manual'
-    let requiredGapSec = 60
-    if (isAutoPace) {
-      const spanSec = secondsLeftInWindow(now, win)
-      requiredGapSec = autoGap(spanSec, room, rnd)
-    } else {
-      const minG = cfg.minDelaySec || 180
-      const maxG = cfg.maxDelaySec || 480
-      requiredGapSec = Math.round(minG + rnd() * (maxG - minG))
-    }
+    const requiredGapSec = chooseGapSec(cfg, now, win, room)
+    const gapWait = { pace: cfg.pace === 'manual' ? 'manual' : 'auto', minSec: cfg.minDelaySec, maxSec: cfg.maxDelaySec }
 
     const elapsedSinceLastSendMs = now - lastSendAt
     const effectiveGapMs = Math.round((requiredGapSec * 1000) / speed)
@@ -299,6 +335,7 @@ function createEngine(deps = {}) {
       job.status = 'waiting'
       job.why = 'gap'
       job.until = lastSendAt + effectiveGapMs
+      job.wait = { ...gapWait, gapSec: requiredGapSec }
       jobs.saveState(job)
       pushProgress(job)
       const waitMs = Math.max(50, Math.round(job.until - now))
@@ -335,6 +372,7 @@ function createEngine(deps = {}) {
         job.status = 'waiting'
         job.why = 'domain'
         job.until = now + 60000
+        job.wait = null
         jobs.saveState(job)
         pushProgress(job)
         activeTimer = setTimer(tick, Math.max(1000, Math.round(60000 / speed)))
@@ -367,6 +405,13 @@ function createEngine(deps = {}) {
       job.status = 'waiting'
       job.why = 'domain'
       job.until = pick.earliestAt
+      job.wait = {
+        domain: pick.domain || null,
+        kind: pick.kind || null,
+        count: pick.count ?? null,
+        max: cfg.domainMaxPerDay ?? 3,
+        gapSec: cfg.domainMinGapSec ?? 20 * 60,
+      }
       jobs.saveState(job)
       pushProgress(job)
       const waitMs = Math.max(1000, Math.round((pick.earliestAt - now) / speed))
@@ -431,6 +476,7 @@ function createEngine(deps = {}) {
     job.status = 'running'
     job.why = null
     job.until = null
+    job.wait = null
     if (!job.startedAt) job.startedAt = now
     jobs.saveState(job)
     pushProgress(job)
@@ -642,6 +688,7 @@ function createEngine(deps = {}) {
       job.status = 'waiting'
       job.why = 'gap'
       job.until = clock() + nextWaitMs
+      job.wait = { ...gapWait, gapSec: requiredGapSec }
       job.gapKey = `${cfg.pace}|${cfg.minDelaySec}|${cfg.maxDelaySec}`
       jobs.saveState(job)
       pushProgress(job)
@@ -689,6 +736,7 @@ function createEngine(deps = {}) {
     if (isRunning) return
     isRunning = true
     events.append({ type: 'engine.start', clean: true, dry: dryRun })
+    rebuildFromLog()
 
     // Load jobs & reconcile with newer events
     jobs.load()
@@ -897,6 +945,7 @@ function createEngine(deps = {}) {
       status: j.status,
       why: j.why,
       until: j.until,
+      wait: j.wait || null,
       reason: j.reason,
       dry: j.dry,
       total: j.total,
@@ -950,17 +999,18 @@ function createEngine(deps = {}) {
     events.append({ type: 'engine.quit', clean: !!clean, dry: dryRun })
   }
 
-  // Autopilot settings were saved (sending hours, days, daily limit, pacing): a batch asleep until the OLD window
-  // opening, the old daily-limit reset or the old gap must re-check now, not at its stale time. Only those holds are
+  // Autopilot settings were saved (sending hours, days, daily limit, pacing, per-organisation limits): a batch asleep
+  // until the OLD window opening, the old daily-limit reset, the old gap or the old organisation spacing must re-check now, not at its stale time. Only those holds are
   // cleared — the next tick re-applies the new settings and waits again if it still may not send. Paused, stopped and
   // Gmail-quota/offline waits are untouched.
   function settingsChanged() {
     let woke = false
     for (const j of jobs.list()) {
-      if (j.status === 'waiting' && (j.why === 'window' || j.why === 'cap' || j.why === 'gap')) {
+      if (j.status === 'waiting' && (j.why === 'window' || j.why === 'cap' || j.why === 'gap' || j.why === 'domain')) {
         j.status = 'queued'
         j.why = null
         j.until = null
+        j.wait = null
         j.gapKey = undefined
         jobs.saveState(j, { force: true })
         pushProgress(j)

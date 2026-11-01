@@ -24,10 +24,25 @@ const DOW = [
   { day: 6, label: 'Sat' },
 ]
 
+/** The form starts from the engine's saved settings — never from defaults that a Save would then write over them. */
 export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
+  const initial = useEngineStore((x) => x.settings)
   const ui = useOutreachUi()
-  const engine = useEngineStore()
-  const initial = engine.settings
+  useEffect(() => {
+    if (!initial) void engineClient.settings()
+  }, [initial])
+  if (!initial) {
+    return (
+      <Dialog title="Autopilot settings" kicker="OUTREACH" width={640} onClose={() => (onClose ? onClose() : ui.set({ sheet: null }))}>
+        <p className="or-muted">Reading the saved settings…</p>
+      </Dialog>
+    )
+  }
+  return <AutopilotForm initial={initial} onClose={onClose} />
+}
+
+function AutopilotForm({ initial, onClose }: { initial: AutopilotSettings; onClose?: () => void }) {
+  const ui = useOutreachUi()
 
   const [winEnabled, setWinEnabled] = useState(initial?.window?.enabled ?? true)
   const [days, setDays] = useState<number[]>(initial?.window?.days ?? [0, 1, 2, 3, 4])
@@ -38,6 +53,10 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
   const [isOtherTz, setIsOtherTz] = useState(!TIMEZONES.some((x) => x.value === (initial?.window?.tz ?? 'Asia/Dhaka')))
 
   const [pace, setPace] = useState<'auto' | 'manual'>(initial?.pace ?? 'auto')
+  // the gap between emails and the daily limit: the same numbers the Sender dialog edits (one copy, in the engine)
+  const [minMin, setMinMin] = useState(Math.round(((initial?.minDelaySec ?? 180) / 60) * 10) / 10)
+  const [maxMin, setMaxMin] = useState(Math.round(((initial?.maxDelaySec ?? 480) / 60) * 10) / 10)
+  const [dailyLimit, setDailyLimit] = useState(initial?.dailyLimit ?? 100)
   const [warmupRamp, setWarmupRamp] = useState(initial?.ramp ?? true)
   const [domainMax, setDomainMax] = useState(initial?.domainMaxPerDay ?? 3)
   const [domainGapMin, setDomainGapMin] = useState(Math.round((initial?.domainMinGapSec ?? 1200) / 60))
@@ -48,12 +67,6 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!initial) {
-      void engineClient.settings()
-    }
-  }, [initial])
 
   const close = () => {
     if (onClose) onClose()
@@ -90,6 +103,22 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
       return
     }
 
+    const minDelaySec = Math.round(Number(minMin) * 60)
+    const maxDelaySec = Math.round(Number(maxMin) * 60)
+    if (!(minDelaySec >= 30 && minDelaySec <= 3600)) {
+      setError('“Wait at least” must be between 0.5 and 60 minutes.')
+      return
+    }
+    if (!(maxDelaySec >= minDelaySec && maxDelaySec <= 3600)) {
+      setError('“Wait at most” must be at least “Wait at least” and at most 60 minutes.')
+      return
+    }
+    const limit = Math.round(Number(dailyLimit))
+    if (!(limit >= 10 && limit <= 500)) {
+      setError('Emails a day must be between 10 and 500.')
+      return
+    }
+
     setSaving(true)
     const patch: Partial<AutopilotSettings> = {
       window: {
@@ -100,9 +129,13 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
         tz: effectiveTz || 'Asia/Dhaka',
       },
       pace,
+      minDelaySec,
+      maxDelaySec,
+      dailyLimit: limit,
       ramp: warmupRamp,
       domainMaxPerDay: Math.max(1, Math.min(50, Number(domainMax) || 3)),
-      domainMinGapSec: Math.max(0, Math.min(240, Number(domainGapMin) || 20)) * 60,
+      // 0 is a real choice (no spacing per organisation) — `|| 20` turned it back into 20
+      domainMinGapSec: Math.max(0, Math.min(240, Number.isFinite(Number(domainGapMin)) ? Math.round(Number(domainGapMin)) : 20)) * 60,
       contactCooldownDays: Math.max(7, Math.min(365, Number(cooldownDays) || 30)),
       traySending,
       aiAutonomy: autonomy,
@@ -133,6 +166,9 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
       setTz('Asia/Dhaka')
       setIsOtherTz(false)
       setPace('auto')
+      setMinMin(3)
+      setMaxMin(8)
+      setDailyLimit(100)
       setWarmupRamp(true)
       setDomainMax(3)
       setDomainGapMin(20)
@@ -183,6 +219,9 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
             onChange={setWinEnabled}
             label="Only send in a time window"
           />
+          {!winEnabled && (
+            <p className="or-any-hour" role="status">Off: emails go out at any hour, also at night and on weekends.</p>
+          )}
 
           {winEnabled && (
             <div className="stack" style={{ gap: 10, marginTop: 10 }}>
@@ -267,30 +306,27 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
             value={pace}
             onChange={setPace}
             options={[
-              { value: 'auto', label: 'Automatic' },
-              { value: 'manual', label: 'My own gaps' },
+              { value: 'manual', label: 'Fixed gap' },
+              { value: 'auto', label: 'Spread over the hours' },
             ]}
           />
-          {pace === 'auto' ? (
-            <p className="or-muted" style={{ marginTop: 6 }}>
-              Spreads today’s emails evenly across the window.
-            </p>
-          ) : (
-            <div style={{ marginTop: 8 }}>
-              <p className="or-muted">Uses the min/max gaps configured in your sender account.</p>
-              <button
-                type="button"
-                className="btn xs or-link-btn"
-                style={{ marginTop: 4 }}
-                onClick={() => {
-                  close()
-                  ui.set({ sheet: 'sender' })
-                }}
-              >
-                Set the gaps in the sender account →
-              </button>
-            </div>
-          )}
+          <div className="or-grid3" style={{ marginTop: 10 }}>
+            <Field label="Wait at least (min)">
+              <input className="input" type="number" min={0.5} max={60} step={0.5} value={minMin} onChange={(e) => setMinMin(Number(e.target.value))} />
+            </Field>
+            <Field label="Wait at most (min)">
+              <input className="input" type="number" min={0.5} max={60} step={0.5} value={maxMin} onChange={(e) => setMaxMin(Number(e.target.value))} />
+            </Field>
+            <Field label="Emails a day">
+              <input className="input" type="number" min={10} max={500} value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} />
+            </Field>
+          </div>
+          <p className="or-muted" style={{ marginTop: 6 }}>
+            {pace === 'manual'
+              ? `Each email waits a random ${minMin}–${maxMin} min after the one before.`
+              : `Spreads today’s emails across the sending hours, but never closer than ${minMin} min or further apart than ${maxMin} min.`}{' '}
+            Emails to the same organisation also follow the spacing below. The Sender dialog shows the same numbers.
+          </p>
         </section>
 
         <section className="or-dialog-section">

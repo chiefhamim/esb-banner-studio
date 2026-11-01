@@ -212,16 +212,32 @@ async function padQrPng() {
  * `tracking` (electron/outreach-tracking.cjs createTrackingGate) says whether the site's open/click endpoints are live;
  * without it, or while they are not, letters go out exactly as before and carry no key.
  */
-function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), render = renderer, tracking = null, newKey = null }) {
+/**
+ * `pacing` (optional) returns the Autopilot settings (electron/outreach-settings.cjs) — the ONE place the daily limit
+ * and the gap between emails live. When given, the mailer's own copy in outreach-smtp.json is ignored for both: the
+ * daily cap below uses pacing().dailyLimit and status() reports the engine's numbers, so every screen shows what the
+ * engine actually does. The mailer keeps only its own 30 s floor between two sends.
+ */
+function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), render = renderer, tracking = null, newKey = null, pacing = null }) {
   const settingsFile = path.join(dir, 'outreach-smtp.json')
   const ledgerFile = path.join(dir, 'outreach-ledger.json')
   const read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return fallback } }
   // write a temp file and rename it, so a crash mid-write never leaves half a ledger
   const write = (f, v) => { const tmp = f + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(v)); fs.renameSync(tmp, f) }
   const ledger = () => { const l = read(ledgerFile, []); return Array.isArray(l) ? l : [] }
+  const withPacing = (saved) => {
+    if (!saved || typeof pacing !== 'function') return saved
+    let p = null
+    try { p = pacing() } catch { p = null }
+    if (!p) return saved
+    const out = { ...saved }
+    if (Number.isInteger(p.dailyLimit) && p.dailyLimit >= 1 && p.dailyLimit <= MAX_DAILY) out.dailyLimit = p.dailyLimit
+    if (Number.isFinite(p.minDelaySec) && Number.isFinite(p.maxDelaySec)) { out.minDelaySec = p.minDelaySec; out.maxDelaySec = p.maxDelaySec }
+    return out
+  }
 
   function status() {
-    const saved = read(settingsFile, null)
+    const saved = withPacing(read(settingsFile, null))
     const now = clock()
     const l = ledger()
     const recent = l.filter((e) => e.kind !== 'test' && now - e.t < DAY)
@@ -299,7 +315,7 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     const saved = read(settingsFile, null)
     if (!saved || !saved.password) return { ok: false, error: 'Save the sender account and app password first' }
     const l = ledger()
-    const gate = ledgerCheck(l, clock(), saved, mail)
+    const gate = ledgerCheck(l, clock(), withPacing(saved), mail)
     if (!gate.ok) return { ok: false, error: gate.reason, nextAt: gate.nextAt, duplicate: !!gate.duplicate }
     try {
       const { renderEmail, renderDesigned } = await render()

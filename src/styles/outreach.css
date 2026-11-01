@@ -613,6 +613,17 @@
 .or-link-btn:hover {
   color: var(--text);
 }
+/* "Only send in a time window" is off (AutopilotCard AnyHourWarning) */
+.or-any-hour {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+  margin: 6px 0 0; padding: 5px 8px; border-radius: 6px;
+  font-size: 12px; line-height: 16px;
+  color: var(--warning); background: var(--warning-soft);
+}
+.or-any-hour .or-link-btn { color: var(--warning); font-weight: 600; }
+.or-any-hour .or-link-btn:hover { color: var(--text); }
+/* the Send footer's "why it waits" line */
+.or-wait-why { display: block; width: 100%; font-size: 11.5px; color: var(--text-2); }
 
 
 /* ---------------------------------------------------------------- Banner row & Autopilot pill */

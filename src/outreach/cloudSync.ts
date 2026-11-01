@@ -10,14 +10,20 @@
 //   runs, released when it stops or finishes. A lock whose heartbeat is older than 10 minutes may be taken over.
 // - Before a batch starts, the campaign's shared sends are entered in this PC's own ledger (esb:outreach-mark-sent),
 //   so the main process refuses a repeat even if this PC's copy of the campaign were stale.
+// - The account's Autopilot settings (hours, daily limit, gaps, per-organisation limits, cooldown) are the same on
+//   every PC: one row in outreach_settings, last change wins by its sharedUpdatedAt (outreach-settings.cjs SHARED_KEYS).
+//   Until that table exists (website migration proposal 0025) settings stay per PC and nothing else is affected.
+// - Light by design: a campaign's whole `data` is downloaded only when its server updated_at differs from the one this
+//   PC last saw (its own pushes included), the poll runs every 60 s only while the window is in front or a batch is
+//   active (else every 5 min), and Supabase Realtime (cloudRealtime.ts) pokes a pull the moment another PC writes.
 // Nothing here logs a token, a password or a contact row.
 
 import { SUPABASE_ANON_KEY, SUPABASE_URL, ensureFreshSession, getStoredStaffSession } from '../editorial/siteApi'
-import { useOutreachStore } from './outreachStore'
+import { DESK_KEYS, useOutreachStore } from './outreachStore'
 import { useEngineStore } from './engineStore'
 import { engineClient } from './engineClient'
 import { STALE_SECONDS, lockBlock, useCloud, type CloudState, type LockInfo } from './cloudStore'
-import { applySendRows, foldEvents, keyIndex, mergeCampaign, rowSig, sendRowsFor, testSendId, type EventRow, type SendRow } from './cloudMerge'
+import { addressRows, applySendRows, foldEvents, keyIndex, mergeCampaign, rowSig, sendRowsFor, testSendId, type EventRow, type SendRow } from './cloudMerge'
 import { idbGet, idbSet } from './idb'
 import { ask } from './outreachUi'
 import type { Campaign, ListMeta } from './types'
@@ -25,10 +31,17 @@ import type { Engagement } from './outcome'
 import type { DesignLetter } from './design'
 import type { Sheet } from './directory'
 import { fmtDateTime } from '../ui/time'
+import { createRealtime, type RealtimeHandle } from './cloudRealtime'
+import type { AutopilotSettings } from '../esb'
 
 const LS = 'esb-banner-studio/outreach/cloud'
 const PC_KEY = 'esb-banner-studio/outreach/pc'
 const PULL_EVERY = 60_000
+/** Window in the background, nothing sending: a pull every 5 minutes is plenty (Realtime pokes the rest). */
+const PULL_IDLE = 5 * 60_000
+/** The account-wide Autopilot settings (electron/outreach-settings.cjs SHARED_KEYS — keep the two lists in step). */
+export const SHARED_SETTINGS = ['window', 'dailyLimit', 'ramp', 'pace', 'minDelaySec', 'maxDelaySec', 'domainMaxPerDay', 'domainMinGapSec', 'contactCooldownDays'] as const
+const SETTINGS_ID = 'autopilot'
 const PUSH_DELAY = 4_000
 const HEARTBEAT_EVERY = 60_000
 /** Cursors look back this far, so a row written by a PC whose clock runs a little slow is not skipped. */
@@ -54,8 +67,17 @@ interface Book {
   sendsAt: string
   /** Test sends waiting to be pushed. */
   tests: SendRow[]
+  /** campaign id -> the server's updated_at this PC last saw or wrote: `data` is fetched only when it differs. */
+  seen: Record<string, string>
+  /** outreach_settings: the sharedUpdatedAt last pulled/pushed, and when the table was last found missing. */
+  settingsAt: number
+  settingsMissingAt: number
+  /** When this PC last changed a shared desk preference (signatures, templates, house prompt, letterhead look) or an
+   *  approval, and the stamp of the 'desk' row last pulled/pushed. */
+  deskChangedAt: number
+  deskAt: number
 }
-const emptyBook = (): Book => ({ synced: {}, lists: {}, designs: {}, deleted: [], campaignsAt: '1970-01-01T00:00:00Z', sendsAt: '1970-01-01T00:00:00Z', tests: [] })
+const emptyBook = (): Book => ({ synced: {}, lists: {}, designs: {}, deleted: [], campaignsAt: '1970-01-01T00:00:00Z', sendsAt: '1970-01-01T00:00:00Z', tests: [], seen: {}, settingsAt: 0, settingsMissingAt: 0, deskChangedAt: 0, deskAt: 0 })
 let book: Book = (() => { try { return { ...emptyBook(), ...(JSON.parse(localStorage.getItem(LS) || 'null') ?? {}) } } catch { return emptyBook() } })()
 const saveBook = () => { try { localStorage.setItem(LS, JSON.stringify(book)) } catch { /* storage full: sync redoes the work */ } }
 
@@ -195,19 +217,76 @@ async function applySends(rows: SendRow[]) {
 
 // ------------------------------------------------------------------ pull
 async function pullCampaigns() {
-  const rows = await getAll<{ id: string; data: Campaign; updated_at: string }>(`outreach_campaigns?select=id,data,updated_at&updated_at=gt.${encodeURIComponent(isoBack(book.campaignsAt))}&order=updated_at.asc`, 200)
-  for (const r of rows) book.campaignsAt = maxIso(book.campaignsAt, r.updated_at)
+  // one small request: every campaign's id and updated_at. A row is downloaded whole only when its updated_at is not
+  // the one this PC last saw. Before, the 10-minute look-back re-downloaded the sending campaign (a few hundred KB
+  // with its per-address maps) on every 60 s pull, the PC's own pushes included.
+  const heads = await getAll<{ id: string; updated_at: string }>('outreach_campaigns?select=id,updated_at&order=updated_at.asc', 1000)
+  const want = heads.filter((h) => !book.deleted.includes(h.id) && Date.parse(book.seen[h.id] ?? '') !== Date.parse(h.updated_at)).map((h) => h.id)
+  const rows: { id: string; data: Campaign; updated_at: string }[] = []
+  for (let i = 0; i < want.length; i += 20) {
+    const ids = want.slice(i, i + 20).map((id) => `"${id.replace(/"/g, '')}"`).join(',')
+    rows.push(...((await rest<{ id: string; data: Campaign; updated_at: string }[]>(`outreach_campaigns?id=in.(${encodeURIComponent(ids)})&select=id,data,updated_at`)) ?? []))
+  }
+  for (const r of rows) { book.campaignsAt = maxIso(book.campaignsAt, r.updated_at); book.seen[r.id] = r.updated_at }
   const fresh = await applyCampaigns(rows)
   // a campaign first seen now: all its sends, which the incremental cursor may already have passed
   for (const id of fresh) await applySends(await getAll<SendRow>(`outreach_sends?campaign_id=eq.${encodeURIComponent(id)}&select=*&order=at.asc`))
   // deleted on another PC: gone from the cloud although this PC synced it, and not changed here since
-  const ids = new Set((await getAll<{ id: string }>('outreach_campaigns?select=id')).map((r) => r.id))
+  const ids = new Set(heads.map((r) => r.id))
+  for (const id of Object.keys(book.seen)) if (!ids.has(id)) delete book.seen[id]
   const st = useOutreachStore.getState()
   const gone = st.campaigns.filter((c) => book.synced[c.id] && !ids.has(c.id) && (c.updatedAt ?? 0) <= book.synced[c.id] && !runningHere(c.id) && c.id !== st.activeId)
   if (gone.length) {
     applying = true
     try { await st.cloudApply({ campaigns: st.campaigns.filter((c) => !gone.includes(c)) }) } finally { applying = false }
     for (const c of gone) { delete book.synced[c.id]; st.addLog('info', `${c.name} was deleted on another PC`) }
+  }
+}
+
+// ------------------------------------------------------------------ account-wide Autopilot settings
+type SettingsRow = { id: string; data: Partial<AutopilotSettings> & { sharedUpdatedAt?: number }; updated_at?: string }
+const SETTINGS_RETRY = 30 * 60_000
+const settingsTableMissing = () => book.settingsMissingAt > 0 && Date.now() - book.settingsMissingAt < SETTINGS_RETRY
+
+/** The shared part of this PC's settings. */
+export function sharedOf(s: AutopilotSettings | null | undefined): Partial<AutopilotSettings> | null {
+  if (!s) return null
+  const out: Record<string, unknown> = {}
+  for (const k of SHARED_SETTINGS) out[k] = (s as unknown as Record<string, unknown>)[k]
+  return out as Partial<AutopilotSettings>
+}
+
+/**
+ * Pull, then push, the one settings row. Newer sharedUpdatedAt wins; a remote win is saved through the engine like a
+ * dialog save (validated in main; waiting batches re-check at once), keeping the remote stamp so it does not bounce.
+ * The table missing (proposal 0025 not applied) is remembered for 30 min and changes no status.
+ */
+async function syncSettings(userId?: string) {
+  if (settingsTableMissing()) return
+  try {
+    const local = useEngineStore.getState().settings ?? (await engineClient.settings())
+    const localAt = local?.sharedUpdatedAt ?? 0
+    const [row] = (await rest<SettingsRow[]>(`outreach_settings?id=eq.${SETTINGS_ID}&select=id,data,updated_at`)) ?? []
+    const remoteAt = Number(row?.data?.sharedUpdatedAt) || 0
+    book.settingsMissingAt = 0
+    if (row && remoteAt > localAt) {
+      const patch: Record<string, unknown> = { sharedUpdatedAt: remoteAt }
+      for (const k of SHARED_SETTINGS) if (row.data[k] !== undefined) patch[k] = row.data[k]
+      const r = await engineClient.saveSettings(patch as Partial<AutopilotSettings>)
+      if (r.ok) {
+        book.settingsAt = remoteAt
+        useOutreachStore.getState().addLog('info', 'Autopilot settings updated from another PC')
+      }
+      return
+    }
+    if (local && localAt > remoteAt) {
+      await upsert('outreach_settings', [{ id: SETTINGS_ID, data: { ...sharedOf(local), sharedUpdatedAt: localAt }, updated_at: new Date().toISOString(), updated_by: userId ?? null }])
+      book.settingsAt = localAt
+      rt?.expectEcho()
+    }
+  } catch (e) {
+    if (e instanceof CloudError && e.kind === 'not-setup') { book.settingsMissingAt = Date.now(); return }
+    throw e
   }
 }
 
@@ -260,6 +339,51 @@ async function pullEvents(campaignId: string) {
   useCloud.getState().set({ engagement: { ...useCloud.getState().engagement, [campaignId]: byEmail } })
 }
 
+// ------------------------------------------------------------------ shared desk preferences + approvals
+type DeskRow = { id: string; data: Record<string, unknown> & { deskUpdatedAt?: number; approved?: string[] } }
+
+/**
+ * Row 'desk' of outreach_settings: signatures, templates, house prompt and letterhead look (newest change wins, by
+ * deskUpdatedAt) and the approvals made by hand (a union: an approval made on either PC holds on both; un-approving
+ * does not travel, which errs on the side of not sending). Missing table: skipped like the settings row.
+ */
+async function syncDesk(userId?: string) {
+  if (settingsTableMissing()) return
+  try {
+    const st = useOutreachStore.getState()
+    const [row] = (await rest<DeskRow[]>('outreach_settings?id=eq.desk&select=id,data')) ?? []
+    const remoteAt = Number(row?.data?.deskUpdatedAt) || 0
+    const remoteApproved = Array.isArray(row?.data?.approved) ? (row!.data.approved as unknown[]).filter((x): x is string => typeof x === 'string') : []
+    const have = new Set(st.approved)
+    const newApprovals = remoteApproved.filter((e) => !have.has(e))
+    const deskWins = !!row && remoteAt > Math.max(book.deskChangedAt, book.deskAt)
+    if (newApprovals.length || deskWins) {
+      const desk: Record<string, unknown> = {}
+      if (deskWins) for (const k of DESK_KEYS) if (row!.data[k] !== undefined) desk[k] = row!.data[k]
+      applying = true
+      try {
+        await st.cloudApply({ ...(newApprovals.length ? { approved: [...st.approved, ...newApprovals] } : {}), ...(deskWins ? { desk: desk as never } : {}) })
+      } finally { applying = false }
+      if (deskWins) book.deskAt = remoteAt
+    }
+    // push when this PC changed something since the row it last saw, or holds approvals the row lacks
+    const now = useOutreachStore.getState()
+    const remoteSet = new Set(remoteApproved)
+    const missing = now.approved.some((e) => !remoteSet.has(e))
+    // (no row yet: this PC's desk goes up with stamp 1, so any real change made elsewhere still wins)
+    if (!row || book.deskChangedAt > Math.max(remoteAt, book.deskAt) || missing) {
+      const stamp = Math.max(1, book.deskChangedAt, remoteAt)
+      const data: Record<string, unknown> = { deskUpdatedAt: stamp, approved: [...new Set([...remoteApproved, ...now.approved])] }
+      for (const k of DESK_KEYS) data[k] = (now as unknown as Record<string, unknown>)[k]
+      await upsert('outreach_settings', [{ id: 'desk', data, updated_at: new Date().toISOString(), updated_by: userId ?? null }])
+      book.deskAt = stamp
+    }
+  } catch (e) {
+    if (e instanceof CloudError && e.kind === 'not-setup') { book.settingsMissingAt = Date.now(); return }
+    throw e
+  }
+}
+
 // ------------------------------------------------------------------ push
 async function pushCampaigns(userId?: string) {
   const st = useOutreachStore.getState()
@@ -272,8 +396,10 @@ async function pushCampaigns(userId?: string) {
   const dirty = st.campaigns.filter((c) => (c.updatedAt ?? 0) > (book.synced[c.id] ?? -1))
   for (let i = 0; i < dirty.length; i += 20) {
     const part = dirty.slice(i, i + 20)
-    await upsert('outreach_campaigns', part.map((c) => ({ id: c.id, data: c, updated_at: new Date().toISOString(), updated_by: userId ?? null })))
-    for (const c of part) book.synced[c.id] = c.updatedAt ?? 0
+    const at = new Date().toISOString()
+    await upsert('outreach_campaigns', part.map((c) => ({ id: c.id, data: c, updated_at: at, updated_by: userId ?? null })))
+    // the server keeps the updated_at sent, so the next pull knows this version and does not download it back
+    for (const c of part) { book.synced[c.id] = c.updatedAt ?? 0; book.seen[c.id] = at }
   }
   // the list and the designed letter each campaign uses, once
   for (const c of st.campaigns) {
@@ -299,6 +425,13 @@ async function pushSends() {
   const own: { row: SendRow; sig: string }[] = []
   const foreign: { row: Omit<SendRow, 'pc' | 'message_key' | 'message_id'>; sig: string }[] = []
   const now = new Date().toISOString()
+  // address-wide opt-outs first (a row per address, no campaign), then every campaign's per-address facts
+  for (const r of addressRows(optOut, pcTag())) {
+    const sig = rowSig(r)
+    if (s[r.id] === sig) continue
+    const { foreign: _f, ...rest } = { ...r, foreign: false }
+    own.push({ row: { ...rest, updated_at: now } as SendRow, sig })
+  }
   for (const c of st.campaigns) {
     for (const r of sendRowsFor(c, optOut, pcTag())) {
       const sig = rowSig(r)
@@ -314,6 +447,7 @@ async function pushSends() {
       const part = rows.slice(i, i + 500)
       await upsert('outreach_sends', part.map((x) => x.row))
       for (const x of part) s[x.row.id] = x.sig
+      rt?.expectEcho()
     }
   }
   if (tests.length) { book.tests = []; saveBook() }
@@ -324,6 +458,8 @@ async function pushSends() {
 // ------------------------------------------------------------------ the cycle
 let running: Promise<void> | null = null
 let again = false
+let lastPull = 0
+let rt: RealtimeHandle | null = null
 
 /** One sync: pull (unless only pushing), then push. Never throws; the outcome is in useCloud. */
 export function syncNow(opts: { pull?: boolean } = {}): Promise<void> {
@@ -342,10 +478,14 @@ export function syncNow(opts: { pull?: boolean } = {}): Promise<void> {
       }
       await pushCampaigns(t.userId)
       await pushSends()
+      await syncSettings(t.userId)
+      await syncDesk(t.userId)
       const active = useOutreachStore.getState().activeId
       if (active && opts.pull !== false) { await pullEvents(active); await readLock(active) }
       saveBook()
+      if (opts.pull !== false) lastPull = Date.now()
       cloud.set({ state: 'ok', lastSync: Date.now(), error: null })
+      void rt?.ensure()
     } catch (e) {
       const err = e instanceof CloudError ? e : new CloudError((e as Error)?.message || 'Sync failed', 'error')
       saveBook()
@@ -466,6 +606,10 @@ export function startCloudSync() {
       for (const c of prev.campaigns) if (!now.has(c.id) && book.synced[c.id] !== undefined && !book.deleted.includes(c.id)) { book.deleted.push(c.id); saveBook() }
       schedulePush()
     } else if (s.optOut !== prev.optOut || s.lists !== prev.lists) schedulePush()
+    if (s.approved !== prev.approved || DESK_KEYS.some((k) => s[k] !== prev[k])) {
+      if (DESK_KEYS.some((k) => s[k] !== prev[k])) { book.deskChangedAt = Date.now(); saveBook() }
+      schedulePush()
+    }
     if (s.activeId !== prev.activeId && s.activeId) {
       const id = s.activeId
       void (async () => {
@@ -489,9 +633,33 @@ export function startCloudSync() {
   window.addEventListener('esb-session', () => void syncNow())
   window.addEventListener('focus', () => void syncNow())
   window.addEventListener('online', () => void syncNow())
-  setInterval(() => void syncNow(), PULL_EVERY)
+  // Realtime: another PC's send / open / lock / settings change pulls here at once (cloudRealtime.ts); it never
+  // carries data itself, so the poll below stays the fallback
+  rt = createRealtime({
+    url: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+    token: async () => (testRun() ? null : (await token().catch(() => null))?.token ?? null),
+    onPoke: () => void syncNow(),
+  })
+  setInterval(() => { if (pollDue(Date.now())) void syncNow() }, 15_000)
   setInterval(() => void heartbeat(), HEARTBEAT_EVERY)
   setTimeout(() => void syncNow(), 3000)
+}
+
+/**
+ * How often to pull: every 60 s while a batch is active here or the window is in front; every 5 min in the background
+ * with nothing to send. With Realtime confirmed live (another PC's sends, opens, locks and settings arrive as pokes)
+ * the front pace eases to 2 min: campaign edits are the only thing it does not poke.
+ */
+export function pollEvery(o: { visible: boolean; activeJob: boolean; live: boolean }): number {
+  if (o.activeJob) return PULL_EVERY
+  if (o.visible) return o.live ? 2 * PULL_EVERY : PULL_EVERY
+  return PULL_IDLE
+}
+function pollDue(now: number): boolean {
+  const visible = typeof document === 'undefined' || document.visibilityState === 'visible'
+  const activeJob = useEngineStore.getState().jobs.some((j) => ['queued', 'running', 'waiting'].includes(j.status))
+  return now - lastPull >= pollEvery({ visible, activeJob, live: !!rt?.live() }) - 1_000
 }
 
 /** For tests and the dev console only. */

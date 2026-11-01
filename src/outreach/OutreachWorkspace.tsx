@@ -239,7 +239,7 @@ export function OutreachWorkspace() {
           type="button"
           className={'sb-cms or-sb-autopilot ' + (desc.status === 'problem' ? 'off' : 'on')}
           onClick={() => ui.set({ desk: 'activity' })}
-          data-tip={`Autopilot — ${desc.sentence}. Click to open full Activity`}
+          data-tip={`Autopilot — ${desc.reason ? `${desc.nextInText ?? 'Waiting'} — ${desc.reason}` : desc.sentence}. Click to open full Activity`}
         >
           <span className="sb-k">Autopilot</span>
           <span className="sb-pill">
@@ -248,7 +248,7 @@ export function OutreachWorkspace() {
               {desc.status === 'sending' || (desc.status === 'waiting' && job?.why === 'gap')
                 ? `Sending ${job?.sent ?? 0}/${job?.total ?? 0}${desc.nextInText ? ` · ${desc.nextInText.replace('Next in ', '')}` : ''}`
                 : desc.status === 'waiting'
-                ? (job?.why === 'window' ? `Waiting · opens ${fmtDay(job.until || Date.now(), settings?.window?.tz)}` : desc.sentence)
+                ? (job?.why === 'window' ? `Waiting · opens ${fmtDay(job.until || Date.now(), settings?.window?.tz)}` : job?.why === 'domain' && job.wait?.domain && desc.nextInText ? `${desc.nextInText} · ${job.wait.domain} ${job.wait.kind === 'limit' ? 'daily limit' : 'spacing'}` : desc.sentence)
                 : desc.status === 'paused'
                 ? 'Paused'
                 : 'Idle'}

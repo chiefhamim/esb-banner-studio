@@ -71,6 +71,55 @@ export function fmtMinutes(ms: number): string {
   return `${m} min`
 }
 
+/** "1–2 min" / "45 s–2 min" / "20 min": a pacing range as the editor typed it. */
+export function fmtGapRange(lo?: number, hi?: number): string {
+  const one = (sec: number) => (sec >= 60 ? `${Math.round((sec / 60) * 10) / 10}` : `${sec} s`)
+  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return ''
+  const a = lo as number, b = hi as number
+  if (a >= 60 && b >= 60) return a === b ? `${one(a)} min` : `${one(a)}–${one(b)} min`
+  if (a === b) return `${a} s`
+  return `${one(a)}${a >= 60 ? ' min' : ''}–${one(b)}${b >= 60 ? ' min' : ''}`
+}
+
+/**
+ * Why the engine is holding a batch, in words, from JobSnapshot.why + .wait (electron/outreach-engine.cjs):
+ * "desco.gov.bd: 20-min spacing per organisation", "desco.gov.bd had 3 today (limit 3 per organisation)",
+ * "gap 1–2 min", "outside sending hours (09:00–17:00)". Null when it is not waiting.
+ */
+export function waitReason(job: Pick<JobSnapshot, 'status' | 'why' | 'wait'> | null | undefined): string | null {
+  if (!job || job.status !== 'waiting' || !job.why) return null
+  const w = job.wait || {}
+  switch (job.why) {
+    case 'domain': {
+      const org = w.domain || 'Same organisation'
+      if (w.kind === 'limit') return `${org} had ${w.count ?? w.max ?? 3} today (limit ${w.max ?? 3} per organisation)`
+      if (w.kind === 'spacing') return `${org}: ${Math.max(1, Math.round((w.gapSec ?? 1200) / 60))}-min spacing per organisation`
+      return 'every remaining organisation was just emailed — checking again in a minute'
+    }
+    case 'gap': {
+      const r = fmtGapRange(w.minSec, w.maxSec)
+      if (!r) return 'gap between emails'
+      return w.pace === 'auto' ? `spread over the sending hours, ${r} apart` : `gap ${r}`
+    }
+    case 'window':
+      return w.from && w.to ? `outside sending hours (${fmtWallClock(w.from)}–${fmtWallClock(w.to)})` : 'outside sending hours'
+    case 'cap':
+      return w.limit !== undefined
+        ? `${w.sent ?? w.limit} sent in 24 h — ${w.ramp ? `warm-up limit ${w.limit} today` : `daily limit ${w.limit}`}`
+        : 'daily limit reached'
+    case 'quota':
+      return 'Gmail asked to slow down'
+    case 'offline':
+      return 'offline — trying again every minute'
+    case 'schedule':
+      return 'scheduled start'
+    case 'held':
+      return 'all remaining contacts are held'
+    default:
+      return null
+  }
+}
+
 export interface RunDescription {
   status: 'idle' | 'sending' | 'waiting' | 'paused' | 'done' | 'stopped' | 'problem'
   label: string
@@ -81,6 +130,8 @@ export interface RunDescription {
   percent: number
   nextInText?: string
   etaText?: string
+  /** waitReason(): what exactly it waits for. */
+  reason?: string
 }
 
 export function describeRun(
@@ -169,6 +220,7 @@ export function describeRun(
       countText,
       percent,
       nextInText: job.until ? `Next in ${fmtCountdown(job.until - now)}` : undefined,
+      reason: waitReason(job) ?? undefined,
     }
   }
 

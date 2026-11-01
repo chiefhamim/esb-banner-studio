@@ -142,14 +142,26 @@ function rampCap(dailyLimit = 100, sendDays = 1, ramp = true) {
   return Math.min(dailyLimit, rampAllowed)
 }
 
-function autoGap(spanSec, room, rnd = Math.random) {
+/**
+ * Automatic pacing: spread the room left today across the time left in the window, jittered ±30 %.
+ * With `bounds` ({ minSec, maxSec } = the editor's "wait at least / at most"), the result is always inside them:
+ * automatic pacing never sends closer together than the editor's shortest gap and never waits longer than the
+ * longest one (a long window with little room left therefore sends at the longest gap and finishes early, rather
+ * than stretching past what the editor asked for). Without bounds: the old 60 s .. 1,800 s clamp.
+ */
+function autoGap(spanSec, room, rnd = Math.random, bounds = null) {
   const effectiveRoom = Math.max(1, room)
   const span = Math.max(60, spanSec)
   const rawGap = span / effectiveRoom
   const clamped = Math.max(60, Math.min(1800, rawGap))
   const factor = 0.7 + (rnd() * 0.6) // 0.7 .. 1.3
   const jittered = clamped * factor
-  return Math.max(60, Math.round(jittered))
+  const lo = bounds && Number.isFinite(bounds.minSec) && bounds.minSec > 0 ? bounds.minSec : 60
+  const hi = bounds && Number.isFinite(bounds.maxSec) && bounds.maxSec >= lo ? bounds.maxSec : Infinity
+  if (!bounds) return Math.max(60, Math.round(jittered))
+  // inside the editor's range: rawGap picks the point, the jitter keeps it from looking machine-made
+  const target = Math.max(lo, Math.min(hi, rawGap))
+  return Math.round(Math.max(lo, Math.min(hi, target * factor)))
 }
 
 function domainOf(email) {
@@ -174,7 +186,7 @@ function isWebmail(domain) {
  *   domainMinGapSec?: number,
  *   heldSet?: Set<number>
  * }} cfg
- * @returns {{ index: number, email: string, domain: string } | { waiting: 'domain', earliestAt: number } | null}
+ * @returns {{ index: number, email: string, domain: string } | { waiting: 'domain', earliestAt: number, domain?: string, kind?: 'limit' | 'spacing', count?: number } | null}
  */
 function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
   const maxPerDay = cfg.domainMaxPerDay ?? 3
@@ -183,6 +195,7 @@ function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
   const sentSet = sentIndexes instanceof Set ? sentIndexes : new Set(sentIndexes)
 
   let earliestDomainFreeAt = Infinity
+  let earliestInfo = null // { domain, kind: 'limit' | 'spacing', count }
   let foundAnyQueued = false
 
   for (let i = 0; i < messages.length; i++) {
@@ -209,6 +222,7 @@ function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
       const resetTime = st.resetAt || (now + 24 * 3600 * 1000)
       if (resetTime < earliestDomainFreeAt) {
         earliestDomainFreeAt = resetTime
+        earliestInfo = { domain: dom, kind: 'limit', count: st.countToday }
       }
       continue
     }
@@ -219,6 +233,7 @@ function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
     } else {
       if (nextAllowedAt < earliestDomainFreeAt) {
         earliestDomainFreeAt = nextAllowedAt
+        earliestInfo = { domain: dom, kind: 'spacing', count: st.countToday }
       }
     }
   }
@@ -228,7 +243,7 @@ function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
   }
 
   if (Number.isFinite(earliestDomainFreeAt)) {
-    return { waiting: 'domain', earliestAt: earliestDomainFreeAt }
+    return { waiting: 'domain', earliestAt: earliestDomainFreeAt, ...(earliestInfo || {}) }
   }
 
   return null
