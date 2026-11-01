@@ -66,9 +66,10 @@
 .or-running { font-variant-numeric: tabular-nums; }
 /* the header gives up space in order — the campaign's count, its chip, the sender's word, the AI's word — and never
    pushes Send off the edge (the window's minimum is 900 px) */
-@media (max-width: 1280px) { .or-head .or-camp-chip .dpc-tag { display: none; } .or-head .ed-account-label { display: none; } }
-@media (max-width: 1100px) { .or-head .or-camp-chip { display: none; } .or-head .ed-ai-chip .ed-ai-label { display: none; } .or-head .ed-ai-chip { padding: 0 9px; } }
-@media (max-width: 1000px) { .or-head .mb-item { padding-left: 8px; padding-right: 8px; } }
+/* container queries on the header itself (as Editorial's do), and `.topbar.or-head` so studio.css, which loads later, cannot win */
+@container topbar (max-width: 1280px) { .topbar.or-head .or-camp-chip .dpc-tag, .topbar.or-head .ed-account-label { display: none; } }
+@container topbar (max-width: 1100px) { .topbar.or-head .or-camp-chip, .topbar.or-head .ed-ai-chip .ed-ai-label { display: none; } .topbar.or-head .ed-ai-chip { padding: 0 9px; min-width: 0; } }
+@container topbar (max-width: 1000px) { .topbar.or-head .mb-item { padding-left: 8px; padding-right: 8px; min-width: 0; } .topbar.or-head .or-desk-seg .seg-label { display: none; } .topbar.or-head .or-desk-seg button { padding: 0 10px; } .topbar.or-head { gap: 6px; } }
 
 .or-log { grid-area: log; max-height: 180px; overflow-y: auto; padding: 8px 16px; background: var(--side); border-bottom: 1px solid var(--card-line); font-size: 12px; line-height: 18px; }
 .or-log-line { display: flex; gap: 10px; }
@@ -128,7 +129,7 @@
 .or-left-head .select { width: 100%; }
 .or-new { flex-direction: row; }
 .or-new .btn { flex: 1; justify-content: center; }
-.or-file { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.or-file { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
 .or-file-icon { display: grid; place-items: center; flex: none; width: 32px; height: 32px; color: var(--text-2); background: var(--card); border-radius: var(--r-2); box-shadow: var(--card-shadow); }
 .or-file-text { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; }
 .or-file-text b, .or-file-text span { overflow-wrap: anywhere; white-space: normal; }
@@ -1028,3 +1029,49 @@
 @media (prefers-reduced-motion: reduce) {
   .or-test-btn.is-sending .or-plane .icon, .or-test-btn.is-sent .or-plane .icon, .or-test-btn.is-failed, .or-test-btn.is-sending::after { animation: none; }
 }
+
+/* ---------------------------------------------------------------- narrow windows (900 px minimum) */
+/* the file name keeps its place beside the icon; the buttons take the row below */
+.or-file-text { flex: 1 1 0; }
+/* a flag group's title and its "Approve all" button wrap instead of cutting the button */
+.or-flag-group-head { flex-wrap: wrap; gap: 6px 8px; }
+.or-flag-group-title { flex: 1 1 120px; min-width: 0; flex-wrap: wrap; }
+.or-flag-group-title b { overflow-wrap: anywhere; }
+.or-flag-group-head .btn { flex: none; white-space: nowrap; }
+.or-flag-row { flex-wrap: wrap; }
+.or-row-main .or-row-mail { overflow-wrap: break-word; }
+
+/* ---------------------------------------------------------------- left column in a narrow window (about 225 px wide) */
+@media (max-width: 1180px) {
+  .or-left-head { gap: 6px; padding: 8px 10px 10px; }
+  .or-left-head .or-file-icon { display: none; }
+  .or-left-head .or-file-text > span { font-size: 11px; }
+  /* Check addresses takes the row; Replace/Import shrinks to its icon beside it */
+  .or-left-head .or-file > div:last-child { flex-wrap: nowrap !important; }
+  .or-left-head .or-file > div:last-child .btn:first-child { flex: 1 1 auto; min-width: 0; justify-content: center; }
+  .or-left-head .or-btn-lbl { display: none; }
+  .or-left-head .or-file > div:last-child .btn:last-child { flex: none; width: 32px; padding: 0; justify-content: center; }
+  .or-filter { gap: 4px; }
+  .or-list { padding: 8px 4px 8px 8px; }
+  /* a row: name and state chip on one line, the rest below at full width, the organisation held to two lines */
+  .or-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; row-gap: 1px; align-items: start; padding: 8px 10px; }
+  .or-row-main { display: contents; }
+  .or-row-main > b { grid-column: 1; }
+  .or-row > .or-chip { grid-column: 2; grid-row: 1; margin-top: 0; }
+  .or-row-main > span { grid-column: 1 / -1; }
+  .or-row-main .or-row-org { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+}
+
+/* With a real list the head (file, sheet, group, purpose, address check, approve, search, filters) is ~480 px tall,
+   which left the contact list a 30 px slit in a short or narrow window. There the whole tab scrolls as one, so the
+   head scrolls away and the contacts get the column. */
+@media (max-width: 1180px), (max-height: 900px) {
+  .or-left > .or-tab { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+  .or-left > .or-tab > .or-left-head { flex: none; }
+  .or-left > .or-tab > .or-list { flex: 1 0 auto; min-height: auto; overflow: visible; }
+}
+
+/* "Approve all that pass checks (N)" fills its bar and wraps its words instead of spilling out of it */
+.or-bulk-approve-bar { flex-wrap: wrap; }
+.or-bulk-approve-bar .btn.sm.or-bulk-approve-btn { flex: 1 1 100%; min-width: 0; height: auto; min-height: 32px; padding: 6px 10px; justify-content: center; white-space: normal; text-align: center; line-height: 16px; }
+.or-bulk-approve-bar .or-bulk-approve-btn > svg { flex: none; }

@@ -135,14 +135,14 @@ export function ContactsTab() {
               <b title={listMeta?.fileName}>{listMeta?.fileName ?? 'No list loaded'}</b>
               <span>{s.contacts.length ? `${inAud.length} of ${s.contacts.length} in the audience · ${counts.ready} ready` : 'Excel (.xlsx) or CSV with an Email column'}</span>
             </div>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: '1 0 100%' }}>
               {s.contacts.length > 0 && (
                 <button type="button" className="btn sm" onClick={() => void s.checkAddresses()} disabled={!idle || !!s.checkingAddresses?.active} data-tip="Check mail servers and disposable domains via DNS (no email sent)">
                   <Icon name="search" size={13} /><span>Check addresses</span>
                 </button>
               )}
               <button type="button" className="btn sm" onClick={pick} disabled={!idle} data-tip={!idle ? 'Stop the batch to load another list' : 'Load a mailing list from this computer'}>
-                <Icon name="upload" size={13} /><span>{listMeta ? 'Replace' : 'Import'}</span>
+                <Icon name="upload" size={13} /><span className="or-btn-lbl">{listMeta ? 'Replace' : 'Import'}</span>
               </button>
             </div>
           </div>
@@ -202,7 +202,7 @@ export function ContactsTab() {
         )}
 <label className="or-search">
               <Icon name="search" size={13} />
-              <input type="search" placeholder="Search name, organisation, email" value={s.query} onChange={(e) => s.setQuery(e.target.value)} aria-label="Search contacts" />
+              <input type="search" placeholder="Search contacts" value={s.query} onChange={(e) => s.setQuery(e.target.value)} aria-label="Search contacts" />
             </label>
             {/* a row of chips that wraps, not a six-way segmented control: the counts change length and six segments
                 squeezed to 300 px left the labels touching each other and the edges */}
@@ -244,8 +244,8 @@ export function ContactsTab() {
             <button key={r.c.id} type="button" role="option" aria-selected={on} className={'or-row st-' + st.st + (on ? ' on' : '')} onClick={() => s.setActiveContact(r.c.id)}>
               <span className="or-row-main">
                 <b>{r.c.personName || r.c.email}</b>
-                <span>{[r.c.designation, r.c.organization].filter(Boolean).join(' · ') || 'No designation or organisation in the sheet'}</span>
-                {r.c.personName && <span className="or-row-mail">{r.c.email}</span>}
+                <span className="or-row-org" title={[r.c.designation, r.c.organization].filter(Boolean).join(' · ')}>{[r.c.designation, r.c.organization].filter(Boolean).join(' · ') || 'No designation or organisation in the sheet'}</span>
+                {r.c.personName && <span className="or-row-mail">{r.c.email.split('@')[0]}<wbr />@{r.c.email.split('@').slice(1).join('@')}</span>}
               </span>
               <span className={'or-chip st-' + st.st} data-tip={st.tip}>{st.text}</span>
             </button>

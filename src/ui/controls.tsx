@@ -413,7 +413,7 @@ export function Seg<T extends string | number>({ value, options, onChange, class
       {thumb}
       {options.map((o) => (
         <button key={String(o.value)} type="button" className={o.value === value ? 'on' : ''} data-tip={o.tip} onClick={() => onChange(o.value)}>
-          {o.icon && <Icon name={o.icon} size={14} />}{o.label}
+          {o.icon && <Icon name={o.icon} size={14} />}{o.label != null && <span className="seg-label">{o.label}</span>}
         </button>
       ))}
     </div>
