@@ -37,7 +37,7 @@ export function clipGain(project: Pick<VideoProject, 'tracks'>, c: Clip): number
 
 /** What changes the scheduled sound (any change restarts it; a volume change only moves a gain). */
 export function audioSignature(project: VideoProject): string {
-  return audibleClips(project).map((c) => `${c.id}|${c.sourceUrl}|${c.start}|${c.duration}|${c.in}|${JSON.stringify(c.speed ?? 1)}|${(c as { reverse?: boolean }).reverse ? 1 : 0}|${(c as { preservePitch?: boolean }).preservePitch === false ? 0 : 1}|${c.keyframes?.volume ? JSON.stringify(c.keyframes.volume) : ''}`).join(';')
+  return audibleClips(project).map((c) => `${c.id}|${c.sourceUrl}|${c.start}|${c.duration}|${c.in}|${JSON.stringify(c.speed ?? 1)}|${JSON.stringify((c as { freezes?: unknown }).freezes ?? null)}|${(c as { reverse?: boolean }).reverse ? 1 : 0}|${(c as { preservePitch?: boolean }).preservePitch === false ? 0 : 1}|${c.keyframes?.volume ? JSON.stringify(c.keyframes.volume) : ''}`).join(';')
 }
 
 interface Running { stop(): void; gain: GainNode; clip: Clip }

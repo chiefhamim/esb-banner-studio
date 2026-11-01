@@ -8,7 +8,7 @@ import {
 } from '../../src/video/timeline'
 import type { Clip, VideoProject } from '../../src/video/timeline'
 import { applyEase, cubicBezier, cutKeyframes, keyAt, moveKey, removeKey, sampleProp, setKey, setKeyEase, toggleKey, valueAt } from '../../src/video/keyframes'
-import { audioPlaybackAt, audioRateAt, clipDurationFor, progressAt, sourceTimeAt, withConstantSpeed, withFreeze, withRampPreset, withReverse, withoutFreeze } from '../../src/video/speed'
+import { REVERSE_EPS, audioPlaybackAt, audioRateAt, clipDurationFor, progressAt, sourceTimeAt, withConstantSpeed, withFreeze, withRampPreset, withReverse, withoutFreeze } from '../../src/video/speed'
 import { useVideoStore, viewOf } from '../../src/video/videoStore'
 
 const clip = (o: Partial<Clip> & Pick<Clip, 'id' | 'trackId' | 'kind'>): Clip => ({ title: o.id, start: 0, duration: 5, in: 0, out: 5, color: '#000', ...o })
@@ -321,7 +321,14 @@ describe('speed: sourceTimeAt and clipDurationFor (the contract for the engine)'
   it('reverse plays the span from out back to in, at its speed', () => {
     const c = withConstantSpeed(withReverse(src({ in: 2, out: 8, duration: 6 }), true), 2)
     expect(c.duration).toBe(3)
-    expect([sourceTimeAt(c, 0), sourceTimeAt(c, 1), sourceTimeAt(c, 3)]).toEqual([8, 6, 2])
+    // out − P(t) − 1 ms (inside the span), clamped to `in` at the end
+    expect([sourceTimeAt(c, 0), sourceTimeAt(c, 1), sourceTimeAt(c, 3)]).toEqual([8 - REVERSE_EPS, 6 - REVERSE_EPS, 2])
+    // frame k of the reversed clip shows source frame N−1−k (30 fps, span [2, 8] = 180 frames at 2× = 90 timeline frames)
+    const fps = 30
+    const frame = (s: number) => Math.floor((s - 2) * fps + 1e-3)
+    expect([frame(sourceTimeAt(c, 0)), frame(sourceTimeAt(c, 1 / fps)), frame(sourceTimeAt(c, 89 / fps))]).toEqual([179, 177, 1])
+    const r1 = withReverse(src({ in: 0, out: 4, duration: 4 }), true)
+    for (const k of [0, 1, 60, 119]) expect(Math.floor(sourceTimeAt(r1, k / fps) * fps + 1e-3)).toBe(119 - k)
     expect(audioRateAt(c, 1)).toBe(2)
     expect(audioPlaybackAt({ ...c, preservePitch: false }, 1)).toEqual({ rate: 2, reverse: true, preservePitch: false })
   })
@@ -335,7 +342,7 @@ describe('speed: sourceTimeAt and clipDurationFor (the contract for the engine)'
     expect([t.out, t.duration]).toEqual([30, 15]) // the file is 30 s: 20 s more source = 10 s more at 2×
     const r = { ...createDefaultTimeline(), clips: [withReverse(src({ in: 4, out: 10, duration: 6 }), true)] }
     const rl = get(trimClipLeft(r, 's', 1), 's')
-    expect([rl.in, rl.out, sourceTimeAt(rl, 0)]).toEqual([4, 9, 9])
+    expect([rl.in, rl.out, sourceTimeAt(rl, 0)]).toEqual([4, 9, 9 - REVERSE_EPS])
   })
 
   it('retiming a clip retimes its linked sound and moves later clips', () => {

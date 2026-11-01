@@ -104,7 +104,8 @@ export function cubicBezier([x1, y1, x2, y2]: [number, number, number, number], 
 
 // ---------------------------------------------------------------- speed
 
-/** Reverse shows the frame just before the span's end first (frame N−1−k at timeline frame k). */
+/** Reverse shows the frame just before the span's end first (frame N−1−k at timeline frame k); the fallback uses the
+ * same ε as speed.ts. */
 const REV_EPS = 1e-3
 const MIN_RATE = 0.1
 const MAX_RATE = 10
@@ -178,30 +179,14 @@ function offsetFallback(c: Clip, t: number): number {
 
 const spanOf = (c: Clip) => { const a = c.in || 0; const b = c.out > a ? c.out : a + c.duration; return [a, b] as const }
 
-/** Is Part A's sourceTimeAt absolute (includes clip.in) or relative to it? Probed once with a 1× clip at in = 5. */
-let partAbsolute: boolean | null = null
-function partIsAbsolute(): boolean {
-  if (partAbsolute == null) {
-    try {
-      const probe = { id: 'probe', trackId: 'v1', title: '', kind: 'video', start: 0, duration: 5, in: 5, out: 10, color: '' } as Clip
-      partAbsolute = Math.abs(partSource!(probe, 0) - 5) < 1e-3
-    } catch { partAbsolute = true }
-  }
-  return partAbsolute
-}
-
-/** Source seconds of the file shown at clip-local time `tLocal` (≥ 0, inside the clip's source span). */
+/** Source seconds of the file shown at clip-local time `tLocal` (≥ 0, inside the clip's source span). Part A's
+ * speed.ts is absolute and already lands a reversed clip inside its span (frame k shows source frame N−1−k). */
 export function sourceTimeAt(c: Clip, tLocal: number): number {
   const [a, b] = spanOf(c)
   if (isPlainSpeed(c)) return Math.max(0, a + tLocal)
   let s: number | null = null
   if (partSource) {
-    try {
-      const v = partSource(c, tLocal)
-      // a reversed clip's source time is `out − P(t)`: at t = 0 that is the span's end, the first frame AFTER it; one
-      // millisecond less shows frame N−1−k at timeline frame k (the frame-exact reverse the export test checks)
-      if (Number.isFinite(v)) s = (partIsAbsolute() ? v : a + v) - (reversed(c) ? REV_EPS : 0)
-    } catch { /* fall back */ }
+    try { const v = partSource(c, tLocal); if (Number.isFinite(v)) s = v } catch { /* fall back */ }
   }
   if (s == null) {
     const off = offsetFallback(c, tLocal)

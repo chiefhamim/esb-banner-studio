@@ -9,6 +9,7 @@ import { filmstripFor, onFilmstrip, tileRect } from './filmstrip'
 import { levelFor, onPeaks, peaksFor } from './peaks'
 import type { Peaks } from './peaks'
 import { previewUrl } from './mediaSource'
+import { audioRateAt, isPlainSpeed, sourceTimeAt } from './animation'
 
 /** Space at the top of a clip block for its name; the picture or waveform goes under it. */
 const TITLE_BAND = 16
@@ -93,7 +94,8 @@ export function attachLaneCanvas(canvas: HTMLCanvasElement, scroller: HTMLElemen
           if (f.image) {
             const tw = bh * (f.tileW / f.tileH)
             for (let k = Math.max(0, Math.floor((visL - x0) / tw)); x0 + k * tw < visR; k++) {
-              const st = (clip.in || 0) + (k * tw) / zoom
+              // the frame the clip shows at the tile's left edge (speed, ramps, freezes and reverse as played)
+              const st = sourceTimeAt(clip, (k * tw) / zoom)
               const i = Math.min(f.count - 1, Math.floor(st / f.step))
               if (i >= f.ready) continue
               const tr = tileRect(f, i)
@@ -162,12 +164,23 @@ function drawWave(ctx: CanvasRenderingContext2D, peaks: Peaks, clip: Clip, x0: n
   const step = 1 / dpr
   const zoom = pxPerSecDevice / dpr
   let any = false
+  const plain = isPlainSpeed(clip)
   for (let x = visL; x < visR; x += step) {
-    const t0 = (clip.in || 0) + (x - x0) / zoom
-    const t1 = t0 + step / zoom
+    let t0: number
+    let t1: number
+    if (plain) { t0 = (clip.in || 0) + (x - x0) / zoom; t1 = t0 + step / zoom }
+    else {
+      // retimed: the source heard over this pixel (reverse reads it backwards; a freeze is silent)
+      const la = (x - x0) / zoom
+      if (audioRateAt(clip, la) === 0) continue
+      const a = sourceTimeAt(clip, la)
+      const b = sourceTimeAt(clip, la + step / zoom)
+      t0 = Math.min(a, b)
+      t1 = Math.max(a, b)
+    }
     let i0 = Math.floor(t0 * rate)
     let i1 = Math.max(i0 + 1, Math.ceil(t1 * rate))
-    if (i0 >= bins) break
+    if (i0 >= bins) { if (plain) break; continue }
     i0 = Math.max(0, i0)
     i1 = Math.min(bins, i1)
     let peak = 0

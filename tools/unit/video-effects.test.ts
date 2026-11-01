@@ -141,9 +141,9 @@ describe('effect list validation', () => {
   })
 })
 
-describe('keyframe adapter (fallback until Part A’s keyframes.ts is merged)', () => {
+describe('keyframe adapter (Part A’s keyframes.ts and speed.ts, merged)', () => {
   it('reports which side is live', () => {
-    expect(['part-a', 'fallback']).toContain(animationSource.keyframes)
+    expect(animationSource).toEqual({ keyframes: 'part-a', speed: 'part-a' })
   })
   it('linear, ease and bezier between keys; holds outside them', () => {
     const k = [{ t: 0, v: 0 }, { t: 2, v: 10 }]

@@ -807,3 +807,48 @@ position/rotation for it. Styles in `src/styles/video-fx.css`.
 Merge with Part A, then rerun `npm run test:video` against Part A's speed.ts and keyframes.ts (the fx suite sets
 `reverse`, `speed` and `keyframes` in Part A's shapes).
 
+## Phase 2 — merge of Part A and Part B (2026-11-02, branch `video-pro`)
+
+`video-p2-edit` then `video-p2-fx` merged with `--no-ff` onto 18ee407.
+
+### Conflicts and how they were resolved
+- `src/video/timeline.ts`: the `Clip` type keeps Part A's speed/freeze/reverse/pitch/keyframes/group/compound fields and
+  Part B's `blendMode` and `adjustment`; `migrateTimeline` keeps both Part A's compound cleaning (recursive, so effects
+  inside a compound are sanitised too) and Part B's effect / blend / adjustment cleaning.
+- `src/video/VideoWorkspace.tsx`: Part A's call sites stay (`playable(viewOf(state))` for monitor, playback, sound, still
+  and export). Inspector: COMPOUND / ADJUSTMENT header; position and rotation hidden for both; compound opacity slider
+  as Part A had it; Effects and Colour sections mounted after Opacity for every visual clip except a compound (it is
+  flattened into its clips, so it has no pixels of its own); Speed section after them. Adjustment layer card and the
+  `animationSource` dev handle as Part B added them.
+- `tools/e2e/video-shots.mjs`: both sets of states. `docs/VIDEO_PRO_PROGRESS.md`: both sections. `package.json` merged
+  cleanly (`test:video` = video-test, video-engine-test, video-fx-test; Part A added no suite).
+
+### Integration fixes
+- **Reverse, fixed at the source.** `speed.ts sourceTimeAt` for a reversed clip is now `max(in, out − P(t) − REVERSE_EPS)`
+  (1 ms): `out − P(0)` was the start of the first frame after the span. Convention (documented in speed.ts): frame k of
+  a reversed clip shows source frame N−1−k. `sourceTimeUnclamped` (trims, splits) stays exact. Part B's adapter no
+  longer subtracts anything and no longer probes for absolute vs relative times (Part A's is absolute by contract);
+  its fallback keeps the same ε. Part A's tests updated (8 − ε, 6 − ε, 2; frame-index checks 179/177/1 at 2× and
+  119 − k at 1×); Part B's reverse export test still reads 120 frames 119 → 0.
+- **Compounds.** The engine still only gets flattened projects. `flattenCompounds` keeps inner clips' `effects`,
+  `blendMode` and `adjustment`; a compound's opacity/volume now also scale an inner clip's opacity/volume KEYFRAMES
+  (keys win over the plain field when sampled, so before this a compound at 50 % did nothing to an inside clip that
+  animated its opacity). Unit-tested in `tools/unit/video-p2-merge.test.ts`.
+- **Freeze-only clips.** Part B's `isPlainSpeed` tests `freezes`; covered by a unit test and a new export check (a clip
+  with only a 1 s freeze shows red inside the hold and green after it). The preview sound's schedule key now includes
+  `freezes`, so adding/removing a freeze reschedules the sound.
+- **Lane filmstrips and waveforms** map through `sourceTimeAt` (a 2× clip's strip shows the frames it plays, a reversed
+  clip's runs backwards, a freeze is silent on the waveform); plain clips keep the old fast path.
+- The two PENDING-MERGE checks in `video-test.mjs` are now unconditional checks, plus one asserting the engine's
+  `animationSource` is `part-a` for both models.
+
+### Checks (2026-11-02)
+- Keyframed move: left edge 432 / 720 / 1008 px at 0.5 / 1.0 / 1.5 s (right edge 911 / 1199 / 1487) — exact. 2× export:
+  pixel at 0.6 s = [0, 214, 0] (green, source 1.2 s). Freeze-only: [253, 23, 0] in the hold, [0, 214, 0] after.
+- `npm run test:video` (`ESB_PORT_OFFSET=40`): 90 PASS, 0 FAIL, 0 PENDING; 2 NOTEs are the Phase 1 4K30 / 10 × 1080p
+  drop notes documented above (skipped draws while the GPU is busy).
+
+### Known gaps
+- An adjustment layer or blend mode inside a compound acts on everything below it on the flattened timeline,
+  including the parent's clips under the compound (an NLE would composite the compound first). A compound's own
+  transform, keyframes and effects are not applied (opacity and volume are).

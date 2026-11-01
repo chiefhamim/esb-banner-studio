@@ -172,14 +172,12 @@ try {
   const quiet = level(L, 0.1, 0.7), tone = level(L, 1.2, 1.5)
   check('A1 tone starts where its clip starts', (quiet === -999 || quiet < -60) && tone > -30, `before ${quiet} dB, during ${tone} dB`)
   fs.rmSync(L, { force: true })
-  // 5b. Phase 2: a keyframed move lands at the exact pixel positions at three times, and a 2× clip plays its source
-  // twice as fast. Keyframes and speed are applied by the engine (Part B, src/video/engine/*) through the contract in
-  // src/video/keyframes.ts / speed.ts; before that engine is merged these two checks are reported PENDING-MERGE.
+  // 5b. Phase 2: a keyframed move lands at the exact pixel positions at three times, a 2× clip plays its source
+  // twice as fast, and a clip with only a freeze frame holds its picture. The engine (src/video/engine/animation.ts)
+  // must be reading Part A's src/video/keyframes.ts and speed.ts, not its own fallbacks.
   await page.evaluate(() => { window.__layersProject = window.__videoStore.getState().project })
-  const engineDir = path.join(root, 'src/video/engine')
-  const engineReads = (name) => fs.readdirSync(engineDir).some((f) => f.endsWith('.ts') && fs.readFileSync(path.join(engineDir, f), 'utf8').includes(name))
-  const engineKeyframes = engineReads('sampleProp')
-  const engineSpeed = engineReads('sourceTimeAt')
+  const animSrc = await page.evaluate(() => window.__videoEngine?.animationSource?.() ?? null)
+  check('The engine reads keyframes.ts and speed.ts (not its fallbacks)', animSrc?.keyframes === 'part-a' && animSrc?.speed === 'part-a', JSON.stringify(animSrc))
   /** The first and last lit pixel of row y (r+g+b over 150) in the frame at t. */
   const litSpan = (file, t, y) => {
     const row = spawnSync('ffmpeg', ['-v', 'error', '-ss', String(t), '-i', file, '-frames:v', '1', '-vf', `format=rgb24,crop=1920:1:0:${y}`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']).stdout
@@ -191,9 +189,11 @@ try {
     const st = window.__videoStore.getState()
     const vid = st.mediaAssets.find((x) => x.name === 'red-green-2s.mp4')
     // a quarter-size picture (fit, 25 %) moved from 30 % left of centre to 30 % right of it over 2 s, linear
-    window.__videoStore.setState({ project: { ...st.project, bug: false, duration: 5, clips: [
+    window.__videoStore.setState({ project: { ...st.project, bug: false, duration: 8, clips: [
       { id: 'kf', trackId: 'v1', title: 'kf', kind: 'video', start: 0, duration: 2, in: 0, out: 2, color: '#2563eb', sourceUrl: vid.url, mediaAssetId: vid.id, srcDuration: 2, fit: 'fit', scale: 0.25, offX: 0, keyframes: { x: [{ t: 0, v: -0.3 }, { t: 2, v: 0.3 }] } },
       { id: 'fast', trackId: 'v1', title: 'fast', kind: 'video', start: 3, duration: 1, in: 0, out: 2, color: '#2563eb', sourceUrl: vid.url, mediaAssetId: vid.id, srcDuration: 2, speed: 2 },
+      // a freeze and nothing else: local 0.5–1.5 s holds source 0.5 s (red); a 1:1 mapping would show 1.2 s (green)
+      { id: 'frz', trackId: 'v1', title: 'frz', kind: 'video', start: 4, duration: 3, in: 0, out: 2, color: '#2563eb', sourceUrl: vid.url, mediaAssetId: vid.id, srcDuration: 2, freezes: [{ at: 0.5, dur: 1 }] },
     ] } })
   })
   const kfx = await exportOnce()
@@ -201,12 +201,13 @@ try {
   const want = [[0.5, 432], [1, 720], [1.5, 1008]]
   const got = want.map(([t]) => litSpan(kfx.file, t + 0.001, 540))
   const kfOk = got.every(([a, b], i) => Math.abs(a - want[i][1]) <= 2 && Math.abs(b - (want[i][1] + 479)) <= 2)
-  if (engineKeyframes) check('ACCEPT a keyframed move exports to the exact pixel positions at three times (±2 px)', kfOk, JSON.stringify({ want: want.map((w) => w[1]), got }))
-  else console.log(`PENDING-MERGE keyframed move export: the engine (Part B) does not read keyframes on this branch yet; picture spans now ${JSON.stringify(got)}, after the merge they must start at ${want.map((w) => w[1]).join(' / ')} ±2 px`)
+  check('ACCEPT a keyframed move exports to the exact pixel positions at three times (±2 px)', kfOk, JSON.stringify({ want: want.map((w) => w[1]), got }))
   const fastPx = pixelAt(kfx.file, 3.6, 960, 540) // 0.6 s into a 2× clip = source 1.2 s: green
-  if (engineSpeed) check('ACCEPT a 2× clip plays its source twice as fast (green at 0.6 s = source 1.2 s)', near(fastPx, [0, 255, 0], 80), JSON.stringify(fastPx))
-  else console.log(`PENDING-MERGE 2× speed export: the engine (Part B) does not map source time through speed.ts on this branch yet; pixel now ${JSON.stringify(fastPx)}, after the merge it must be green`)
-  check('A 2× clip of a 2 s file is 1 s on the timeline (the export runs 4 s)', Math.abs(Number(probe(kfx.file).format.duration) - 4) < 0.1, String(probe(kfx.file).format.duration))
+  check('ACCEPT a 2× clip plays its source twice as fast (green at 0.6 s = source 1.2 s)', near(fastPx, [0, 255, 0], 80), JSON.stringify(fastPx))
+  const frzPx = pixelAt(kfx.file, 5.2, 960, 540) // 1.2 s into the clip, inside its freeze at 0.5 s: red
+  const frzAfter = pixelAt(kfx.file, 6.2, 960, 540) // 2.2 s in = source 1.2 s after the 1 s hold: green
+  check('A freeze-only clip holds its picture in the export (red in the freeze, green after it)', near(frzPx, [255, 0, 0], 80) && near(frzAfter, [0, 255, 0], 80), JSON.stringify({ frzPx, frzAfter }))
+  check('A 2× clip of a 2 s file is 1 s on the timeline (the export runs 7 s with the frozen clip)', Math.abs(Number(probe(kfx.file).format.duration) - 7) < 0.1, String(probe(kfx.file).format.duration))
   fs.rmSync(kfx.file, { force: true })
 
   // 5c. Phase 2 editing through the UI: tools, ripple delete, markers, a keyframe diamond, a compound opened in place

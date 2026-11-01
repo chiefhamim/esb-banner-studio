@@ -1298,11 +1298,20 @@ export function flattenCompounds(project: VideoProject): VideoProject {
         ...c, id: pre + c.id, trackId: pre + c.trackId,
         linkId: c.linkId ? pre + c.linkId : undefined, groupId: undefined,
         ...(c.kind === 'audio' ? { volume: (c.volume ?? 1) * (X.volume ?? 1) } : { opacity: (c.opacity ?? 1) * (X.opacity ?? 1) }),
+        ...scaledKeys(c, c.kind === 'audio' ? 'volume' : 'opacity', c.kind === 'audio' ? X.volume ?? 1 : X.opacity ?? 1),
       })
     }
   }
   tracks = [...tracks, ...extraAudio]
   return { ...project, tracks, clips }
+}
+
+/** An inner clip's keyed opacity or volume times the compound's own (keys win over the plain field when sampled, so
+ * without this a compound's opacity/volume would not reach an inside clip that animates it). */
+function scaledKeys(c: Clip, prop: 'opacity' | 'volume', k: number): Partial<Clip> {
+  const keys = c.keyframes?.[prop]
+  if (!keys?.length || k === 1) return {}
+  return { keyframes: { ...c.keyframes, [prop]: keys.map((x) => ({ ...x, v: x.v * k })) } }
 }
 
 /** The timeline being edited at a compound path (ids of compound clips, outermost first): the root for []. Undefined

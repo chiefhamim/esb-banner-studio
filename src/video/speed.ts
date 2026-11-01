@@ -7,8 +7,12 @@
 // timeline seconds) hold the picture for `dur` seconds: the speed is 0 there. `clip.reverse` plays the span from `out`
 // back to `in`. The source time at clip-local time t is
 //
-//     forward:  in  + P(t)        reverse:  out − P(t)        P(t) = ∫₀ᵗ speed(τ) · (τ not in a freeze) dτ
+//     forward:  in  + P(t)        reverse:  out − P(t) − ε    P(t) = ∫₀ᵗ speed(τ) · (τ not in a freeze) dτ
 //
+// Reverse convention: frame k of a reversed clip shows source frame N−1−k (N = frames in the span). `out − P(t)` at
+// t = 0 is the span's end, which is the START of the first frame AFTER the span, so the reverse mapping is moved one
+// millisecond earlier (ε = REVERSE_EPS: well inside any frame up to 1000 fps, and larger than the frame lookup's own
+// 1e-3-frame tolerance), clamped to `in`. Edits (trims, splits) use the exact `sourceTimeUnclamped`, never ε.
 // and the clip's timeline length is the D with P(D) = out − in (`clipDurationFor`). A clip with none of these fields
 // maps exactly as before (in + t), so every Phase 0/1 project plays and exports unchanged.
 
@@ -17,6 +21,8 @@ import { sampleKeys } from './keyframes'
 
 export const SPEED_MIN = 0.1
 export const SPEED_MAX = 10
+/** Seconds a reversed clip's source time sits before `out − P(t)`, so it lands inside the span (see the header). */
+export const REVERSE_EPS = 1e-3
 
 /** A freeze frame: from clip-local timeline second `at`, the picture holds for `dur` seconds. */
 export interface Freeze { at: number; dur: number }
@@ -131,12 +137,13 @@ export function progressAt(clip: Pick<Clip, 'speed' | 'freezes' | 'duration'>, t
  * @param clip    the clip: `in`, `out`, `speed` (constant or `{ ramp }`), `freezes`, `reverse`, `duration`
  * @param tLocal  seconds from the clip's start on the timeline (timeline time − clip.start), clamped to the clip
  * @returns seconds in the source file (absolute, i.e. including `in`), never below 0. Forward: in + P(t); reverse:
- *          out − P(t). Without speed fields this is exactly `in + tLocal`.
+ *          max(in, out − P(t) − REVERSE_EPS), so frame k of a reversed clip shows source frame N−1−k. Without speed
+ *          fields this is exactly `in + tLocal`.
  */
 export function sourceTimeAt(clip: Timed, tLocal: number): number {
   const t = Math.max(0, Math.min(clip.duration > 0 ? clip.duration : tLocal, tLocal))
   const p = isRetimed(clip) ? progressAt(clip, t) : t
-  const src = clip.reverse ? clip.out - p : (clip.in || 0) + p
+  const src = clip.reverse ? Math.max(clip.in || 0, clip.out - p - REVERSE_EPS) : (clip.in || 0) + p
   return Math.max(0, src)
 }
 
