@@ -4,11 +4,11 @@ contextBridge.exposeInMainWorld('esb', {
   saveImage: (name, bytes, dir) => ipcRenderer.invoke('esb:save-image', name, bytes, dir),
   saveVideo: (name, bytes) => ipcRenderer.invoke('esb:save-video', name, bytes),
   // Video desk. Dropped files: the path is read here from the File object itself (page script cannot hand over a path)
-  videoImport: () => ipcRenderer.invoke('esb:video-import'),
-  videoImportDropped: (files) => {
+  videoImport: (opts) => ipcRenderer.invoke('esb:video-import', opts),
+  videoImportDropped: (files, opts) => {
     const paths = []
     for (const f of Array.from(files || []).slice(0, 200)) { try { const p = webUtils.getPathForFile(f); if (p) paths.push(p) } catch { /* not a dropped file */ } }
-    return ipcRenderer.invoke('esb:video-import-dropped', paths)
+    return ipcRenderer.invoke('esb:video-import-dropped', paths, opts)
   },
   videoRelink: (name) => ipcRenderer.invoke('esb:video-relink', name),
   videoResolve: (paths) => ipcRenderer.invoke('esb:video-resolve', paths),
@@ -16,12 +16,24 @@ contextBridge.exposeInMainWorld('esb', {
   videoStoreTake: (name, bytes) => ipcRenderer.invoke('esb:video-store-take', name, bytes),
   videoSaveProject: (name, text, existing) => ipcRenderer.invoke('esb:video-save-project', name, text, existing),
   videoOpenProject: () => ipcRenderer.invoke('esb:video-open-project'),
-  videoAutosave: (text) => ipcRenderer.invoke('esb:video-autosave', text),
+  videoAutosave: (text, folderId) => ipcRenderer.invoke('esb:video-autosave', text, folderId),
   videoAutosaveLatest: () => ipcRenderer.invoke('esb:video-autosave-latest'),
-  videoAutosaveClear: (projectId) => ipcRenderer.invoke('esb:video-autosave-clear', projectId),
-  videoExportBegin: (name, kind) => ipcRenderer.invoke('esb:video-export-begin', name, kind),
+  videoAutosaveClear: (projectId, folderId) => ipcRenderer.invoke('esb:video-autosave-clear', projectId, folderId),
+  videoExportBegin: (name, kind, folderId) => ipcRenderer.invoke('esb:video-export-begin', name, kind, folderId),
   videoExportWrite: (id, position, bytes) => ipcRenderer.invoke('esb:video-export-write', id, position, bytes),
   videoExportEnd: (id, ok) => ipcRenderer.invoke('esb:video-export-end', id, ok),
+  // Video desk, Phase 1: project folders (named by the opaque id main handed out), relink by hash, proxies, cache
+  videoFolderCreate: (name) => ipcRenderer.invoke('esb:video-folder-create', name),
+  videoFolderSave: (folderId, text) => ipcRenderer.invoke('esb:video-folder-save', folderId, text),
+  videoFolderResolve: (folderId, files) => ipcRenderer.invoke('esb:video-folder-resolve', folderId, files),
+  videoMediaFacts: (urls) => ipcRenderer.invoke('esb:video-media-facts', urls),
+  videoRelinkSearch: (folderId, items) => ipcRenderer.invoke('esb:video-relink-search', folderId, items),
+  videoProxyStatus: (folderId, hashes) => ipcRenderer.invoke('esb:video-proxy-status', folderId, hashes),
+  videoProxyBegin: (folderId, hash) => ipcRenderer.invoke('esb:video-proxy-begin', folderId, hash),
+  videoProxyWrite: (id, position, bytes) => ipcRenderer.invoke('esb:video-proxy-write', id, position, bytes),
+  videoProxyEnd: (id, ok) => ipcRenderer.invoke('esb:video-proxy-end', id, ok),
+  videoCacheRead: (folderId, key) => ipcRenderer.invoke('esb:video-cache-read', folderId, key),
+  videoCacheWrite: (folderId, key, bytes) => ipcRenderer.invoke('esb:video-cache-write', folderId, key, bytes),
   pickFolder: () => ipcRenderer.invoke('esb:pick-folder'),
   reveal: (p) => ipcRenderer.invoke('esb:reveal', p),
   saveProject: (name, text, existing) => ipcRenderer.invoke('esb:save-project', name, text, existing),

@@ -6,28 +6,46 @@
 // project keeps the paths, and reopening it asks main for fresh URLs (or reports the file missing, for relinking).
 // Browser (dev server, tests): files come from an <input type=file> as object URLs and live for the session only.
 
-import { ALL_FORMATS, BlobSource, Input, UrlSource } from 'mediabunny'
+import { ALL_FORMATS, BlobSource, EncodedPacketSink, Input, UrlSource } from 'mediabunny'
+import type { InputVideoTrack } from 'mediabunny'
+import { create } from 'zustand'
 import type { MediaAsset } from './timeline'
+import type { AssetFacts, ImportMode, ProjectSettings } from './projectFolder'
+import { DEFAULT_SETTINGS } from './projectFolder'
+import { useVideoStore } from './videoStore'
 
-export interface MediaEntry { path: string; name: string; size: number; mtimeMs: number; url: string }
+export interface MediaEntry { path: string; name: string; size: number; mtimeMs: number; url: string; /** media/<name> when it was copied into the project folder */ file?: string; /** set instead of the rest when main could not take the file */ error?: string }
+export interface FolderRef { id: string; path: string }
 export interface ResolvedEntry { path: string; url?: string; size?: number; mtimeMs?: number; missing?: boolean }
 
 export interface VideoBridge {
-  videoImport?: () => Promise<MediaEntry[]>
-  videoImportDropped?: (files: File[]) => Promise<MediaEntry[]>
+  videoImport?: (opts?: { mode: ImportMode; folderId: string | null }) => Promise<MediaEntry[]>
+  videoImportDropped?: (files: File[], opts?: { mode: ImportMode; folderId: string | null }) => Promise<MediaEntry[]>
   videoRelink?: (name: string) => Promise<MediaEntry | null>
   videoResolve?: (paths: string[]) => Promise<ResolvedEntry[]>
   videoStoreStill?: (name: string, bytes: Uint8Array) => Promise<MediaEntry | null>
   videoStoreTake?: (name: string, bytes: Uint8Array) => Promise<MediaEntry | null>
   videoSaveProject?: (name: string, text: string, existing: string | null) => Promise<string | null>
-  videoOpenProject?: () => Promise<{ path: string; text: string } | null>
-  videoAutosave?: (text: string) => Promise<{ ok: boolean; at: number }>
-  videoAutosaveLatest?: () => Promise<{ at: number; text: string } | null>
-  videoAutosaveClear?: (projectId?: string) => Promise<boolean>
-  videoExportBegin?: (name: string, kind: 'mp4' | 'webm') => Promise<{ id: string; path: string } | null>
+  videoOpenProject?: () => Promise<{ path: string; text: string; folder?: FolderRef } | null>
+  videoAutosave?: (text: string, folderId?: string | null) => Promise<{ ok: boolean; at: number }>
+  videoAutosaveLatest?: () => Promise<{ at: number; text: string; folder?: FolderRef } | null>
+  videoAutosaveClear?: (projectId?: string, folderId?: string | null) => Promise<boolean>
+  videoExportBegin?: (name: string, kind: 'mp4' | 'webm', folderId?: string | null) => Promise<{ id: string; path: string } | null>
   videoExportWrite?: (id: string, position: number, bytes: Uint8Array) => Promise<boolean>
   videoExportEnd?: (id: string, ok: boolean) => Promise<string | null>
   reveal?: (p: string) => Promise<unknown>
+  // Phase 1: project folders, relink by hash, proxies, cache (electron/video-project.cjs)
+  videoFolderCreate?: (name: string) => Promise<FolderRef | null>
+  videoFolderSave?: (folderId: string, text: string) => Promise<string>
+  videoFolderResolve?: (folderId: string, files: string[]) => Promise<(MediaEntry & { missing?: boolean })[]>
+  videoMediaFacts?: (urls: string[]) => Promise<{ url: string; size?: number; mtimeMs?: number; hash?: string; missing?: boolean }[]>
+  videoRelinkSearch?: (folderId: string | null, items: { id: string; path?: string; size: number; hash: string }[]) => Promise<{ id: string; entry: MediaEntry }[]>
+  videoProxyStatus?: (folderId: string | null, hashes: string[]) => Promise<Record<string, string>>
+  videoProxyBegin?: (folderId: string | null, hash: string) => Promise<{ id: string }>
+  videoProxyWrite?: (id: string, position: number, bytes: Uint8Array) => Promise<boolean>
+  videoProxyEnd?: (id: string, ok: boolean) => Promise<{ url: string } | null>
+  videoCacheRead?: (folderId: string | null, key: string) => Promise<Uint8Array | null>
+  videoCacheWrite?: (folderId: string | null, key: string, bytes: Uint8Array) => Promise<boolean>
 }
 
 export const videoBridge = (): VideoBridge | undefined => (typeof window !== 'undefined' ? (window as unknown as { esb?: VideoBridge }).esb : undefined)
@@ -174,9 +192,12 @@ export const PROBE_CONCURRENCY = 4
 /** A bin entry for a file main approved (desktop) — probed for length, size and sound. `type` overrides the kind read
  * from the extension (a voiceover take is a .webm that holds sound only). */
 export async function assetFromEntry(e: MediaEntry, generated = false, type: MediaAsset['type'] | null = kindOf(e.name)): Promise<MediaAsset | null> {
+  if (e.error || !e.url) { importErrors.push(`${e.name}: ${e.error ?? 'not imported'}`); return null }
   if (!type) return null
   const p = await probeMedia(e.url, type)
-  return { id: newAssetId(), name: e.name, type, url: e.url, path: e.path, size: e.size, mtimeMs: e.mtimeMs, duration: p.duration, width: p.width, height: p.height, hasAudio: p.hasAudio, thumbnailUrl: p.thumbnailUrl, generated }
+  const id = newAssetId()
+  patchMeta(id, { storage: e.file ? 'copy' : 'reference', file: e.file })
+  return { id, name: e.name, type, url: e.url, path: e.path, size: e.size, mtimeMs: e.mtimeMs, duration: p.duration, width: p.width, height: p.height, hasAudio: p.hasAudio, thumbnailUrl: p.thumbnailUrl, generated }
 }
 
 /** Keep a recorded voiceover: in the desktop app main writes it to userData/video-takes and it is recorded by path
@@ -224,3 +245,232 @@ export async function resolveAssets(assets: MediaAsset[]): Promise<MediaAsset[]>
     return { ...a, url: r.url, size: r.size ?? a.size, mtimeMs: r.mtimeMs ?? a.mtimeMs, missing: false, thumbnailUrl: a.type === 'image' ? r.url : a.thumbnailUrl }
   })
 }
+
+// ================================================================ Phase 1: facts, proxies, cache — the public contract
+//
+// The Video desk's other modules (the decode engine, the compositor, waveforms and filmstrips) read media through the
+// functions below and never build esb-media URLs themselves:
+//   previewUrlFor(id)  what the monitor should decode (a ready 540p proxy, else the original)
+//   exportUrlFor(id)   what an export must decode (always the original)
+//   onProxyReady(cb)   a proxy became ready (swap readers for that asset)
+//   readCache / writeCache   key → bytes in the project's cache/ folder (waveforms, filmstrips)
+//   mediaInfo(id)      codec, fps, size, duration, key frame interval, proxy and missing state
+
+export type ProxyState = 'none' | 'pending' | 'ready' | 'failed'
+
+/** What the desk knows about one bin entry beyond the MediaAsset itself (kept per asset id; saved in project.json). */
+export interface AssetMeta extends AssetFacts {
+  /** The URL the facts were read from (they are read again when the asset is relinked to another file). */
+  analyzedUrl?: string
+  /** The source is heavy (over 1080p, or key frames more than 1 s apart): a proxy is wanted. */
+  proxyNeeded?: boolean
+  proxy?: ProxyState
+  /** 0..1 while pending and running. */
+  proxyProgress?: number
+  proxyUrl?: string
+  proxyError?: string
+  /** The editor cancelled it: not made again by itself. */
+  proxyCancelled?: boolean
+  /** How long the last proxy took to make, in ms. */
+  proxyMs?: number
+}
+
+interface MediaMetaState {
+  /** The project folder on the desk (desktop), or null (an unsaved project or a Phase 0 single file). */
+  folder: FolderRef | null
+  settings: ProjectSettings
+  byId: Record<string, AssetMeta>
+  /** Missing files found again by size + hash, ready for one-click Relink all (asset id → the file found). */
+  found: Record<string, MediaEntry>
+}
+
+export const useMediaMeta = create<MediaMetaState>(() => ({ folder: null, settings: { ...DEFAULT_SETTINGS }, byId: {}, found: {} }))
+
+/** Merge facts into one asset's meta. */
+export function patchMeta(id: string, patch: Partial<AssetMeta>) {
+  useMediaMeta.setState((s) => ({ byId: { ...s.byId, [id]: { ...s.byId[id], ...patch } } }))
+}
+export const metaFor = (id: string): AssetMeta | undefined => useMediaMeta.getState().byId[id]
+export const currentFolder = () => useMediaMeta.getState().folder
+
+/** Errors from the last import (files main could not take, e.g. a copy that ran out of space), read and cleared once. */
+const importErrors: string[] = []
+export const takeImportErrors = () => importErrors.splice(0, importErrors.length)
+
+/** Import options for main: reference by path, or copy into the open project folder. */
+export function importOptions(): { mode: ImportMode; folderId: string | null } {
+  const { folder, settings } = useMediaMeta.getState()
+  return { mode: folder && settings.importMode === 'copy' ? 'copy' : 'reference', folderId: folder?.id ?? null }
+}
+
+const assetById = (id: string): MediaAsset | undefined => useVideoStore.getState().mediaAssets.find((a) => a.id === id)
+
+/**
+ * The URL the preview should decode for a bin entry: its proxy's `esb-media://p/…/proxies/<hash>.mp4` when one is
+ * ready, else the original file's URL. Empty string for an unknown or missing entry. Never use it for export.
+ */
+export function previewUrlFor(assetId: string): string {
+  const a = assetById(assetId)
+  if (!a || a.missing) return ''
+  const m = metaFor(assetId)
+  return m?.proxy === 'ready' && m.proxyUrl ? m.proxyUrl : a.url
+}
+
+/** The URL an export must decode for a bin entry: always the original file (never a proxy). Empty when missing. */
+export function exportUrlFor(assetId: string): string {
+  const a = assetById(assetId)
+  return a && !a.missing ? a.url : ''
+}
+
+const proxyListeners = new Set<(assetId: string) => void>()
+/** Call `cb(assetId)` whenever a proxy becomes ready (the preview can then swap to `previewUrlFor`). Returns the
+ * unsubscribe function. */
+export function onProxyReady(cb: (assetId: string) => void): () => void {
+  proxyListeners.add(cb)
+  return () => { proxyListeners.delete(cb) }
+}
+/** Mark a proxy ready and tell the listeners (used by the proxy queue). */
+export function proxyBecameReady(assetId: string, url: string, ms?: number) {
+  patchMeta(assetId, { proxy: 'ready', proxyUrl: url, proxyProgress: 1, proxyError: undefined, ...(ms != null ? { proxyMs: ms } : {}) })
+  for (const cb of [...proxyListeners]) { try { cb(assetId) } catch { /* a listener's own error */ } }
+}
+
+export interface MediaInfo {
+  codec: string | null
+  fps: number | null
+  width: number | null
+  height: number | null
+  duration: number
+  hasAudio: boolean
+  sizeBytes: number
+  /** Longest key-frame gap measured near the start (s), or null when unknown (pictures, sound, not read yet). */
+  keyframeInterval: number | null
+  proxy: ProxyState
+  missing: boolean
+}
+
+/** What is known about a bin entry, for the bin and the engine. Null for an unknown id. */
+export function mediaInfo(assetId: string): MediaInfo | null {
+  const a = assetById(assetId)
+  if (!a) return null
+  const m = metaFor(assetId) ?? {}
+  return {
+    codec: m.codec ?? null,
+    fps: m.fps ?? null,
+    width: a.width ?? null,
+    height: a.height ?? null,
+    duration: a.duration,
+    hasAudio: !!a.hasAudio,
+    sizeBytes: a.size,
+    keyframeInterval: m.keyframeInterval ?? null,
+    proxy: m.proxy ?? 'none',
+    missing: !!a.missing,
+  }
+}
+
+// ---------------------------------------------------------------- cache/
+
+export const CACHE_KEY_RE = /^[a-z0-9-]{1,80}$/
+export const CACHE_MAX_ENTRY = 32 * 1024 * 1024
+/** The browser keeps the cache in memory for the session, at most this much in all. */
+const MEMORY_CACHE_MAX = 256 * 1024 * 1024
+const memoryCache = new Map<string, Uint8Array>()
+let memoryBytes = 0
+
+function checkKey(key: string) {
+  if (typeof key !== 'string' || !CACHE_KEY_RE.test(key)) throw new Error('Cache keys are 1 to 80 characters of a-z, 0-9 and -')
+}
+
+/**
+ * Read a cache entry (waveform peaks, filmstrip frames…) from the project's cache/ folder — the app's own library
+ * when the project has no folder yet; memory in the browser. Null when there is none.
+ */
+export async function readCache(key: string): Promise<Uint8Array | null> {
+  checkKey(key)
+  const b = videoBridge()
+  if (b?.videoCacheRead) return (await b.videoCacheRead(currentFolder()?.id ?? null, key)) ?? null
+  return memoryCache.get(key) ?? null
+}
+
+/**
+ * Keep a cache entry (at most 32 MB) under `key` ([a-z0-9-]{1,80}). Rejects when the key is bad, the entry too large
+ * or the cache full (1 GB per folder); nothing is evicted, so the caller simply recomputes next time.
+ */
+export async function writeCache(key: string, bytes: Uint8Array): Promise<void> {
+  checkKey(key)
+  if (!(bytes instanceof Uint8Array) || bytes.length > CACHE_MAX_ENTRY) throw new Error('Cache entries are at most 32 MB')
+  const b = videoBridge()
+  if (b?.videoCacheWrite) { await b.videoCacheWrite(currentFolder()?.id ?? null, key, bytes); return }
+  const old = memoryCache.get(key)?.length ?? 0
+  if (memoryBytes - old + bytes.length > MEMORY_CACHE_MAX) throw new Error('The session cache is full')
+  memoryCache.set(key, bytes.slice())
+  memoryBytes += bytes.length - old
+}
+
+// ---------------------------------------------------------------- reading a file's facts
+
+/** Over 1080p by picture size (either side past 1920 × 1080, in either orientation). */
+export const isOver1080p = (w?: number, h?: number) => !!w && !!h && (Math.max(w, h) > 1920 || Math.min(w, h) > 1080)
+/** Key frames further apart than this make scrubbing slow: such footage gets a proxy. */
+export const LONG_GOP_SECONDS = 1
+
+/** Footage that should be edited on a proxy: over 1080p, or with key frames more than 1 s apart. */
+export function wantsProxy(a: Pick<MediaAsset, 'type' | 'width' | 'height' | 'missing'>, m: Pick<AssetMeta, 'keyframeInterval'>): boolean {
+  if (a.type !== 'video' || a.missing) return false
+  return isOver1080p(a.width, a.height) || (m.keyframeInterval ?? 0) > LONG_GOP_SECONDS
+}
+
+/** The proxy's picture size: 540 on the short side, the long side in proportion, both even. */
+export function proxySize(w: number, h: number): { width: number; height: number } {
+  const even = (n: number) => Math.max(2, Math.round(n / 2) * 2)
+  return w >= h ? { width: even((540 * w) / h), height: 540 } : { width: 540, height: even((540 * h) / w) }
+}
+
+/** The longest gap between key frames near the start of a track (up to 12 gaps or 30 s), from packet metadata only
+ * (no decoding). A track with a single key frame has an interval of its whole length. */
+export async function keyframeIntervalOf(track: InputVideoTrack): Promise<number | undefined> {
+  const sink = new EncodedPacketSink(track)
+  const opts = { metadataOnly: true }
+  let k = await sink.getFirstKeyPacket(opts)
+  if (!k) return undefined
+  const first = k.timestamp
+  let prev = first
+  let gap = 0
+  let n = 0
+  while (n < 12 && prev - first < 30) {
+    const next = await sink.getNextKeyPacket(k, opts)
+    if (!next) break
+    gap = Math.max(gap, next.timestamp - prev)
+    prev = next.timestamp
+    k = next
+    n++
+  }
+  if (n === 0) {
+    const d = await track.computeDuration()
+    return Number.isFinite(d) ? d - first : undefined
+  }
+  return gap
+}
+
+/** Codec, frame rate and key-frame interval of a file's video track (packet metadata; nothing is decoded). */
+export async function analyzeMedia(url: string): Promise<Pick<AssetFacts, 'codec' | 'fps' | 'keyframeInterval'>> {
+  const input = inputFor(url)
+  try {
+    const v = await input.getPrimaryVideoTrack()
+    const out: Pick<AssetFacts, 'codec' | 'fps' | 'keyframeInterval'> = {}
+    if (!v) {
+      const a = await input.getPrimaryAudioTrack()
+      if (a?.codec) out.codec = a.codec
+      return out
+    }
+    if (v.codec) out.codec = v.codec
+    try { const st = await v.computePacketStats(120); if (st.averagePacketRate > 0) out.fps = Math.round(st.averagePacketRate * 100) / 100 } catch { /* unknown */ }
+    try { const k = await keyframeIntervalOf(v); if (k != null) out.keyframeInterval = Math.round(k * 1000) / 1000 } catch { /* unknown */ }
+    return out
+  } finally {
+    input.dispose()
+  }
+}
+
+// dev server only: the shot harness seeds bin states through this handle (like window.__videoStore)
+if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') Object.assign(window, { __videoMeta: useMediaMeta })

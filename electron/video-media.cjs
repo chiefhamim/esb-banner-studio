@@ -128,10 +128,21 @@ function parseRange(header, size) {
 }
 
 /** Answer one esb-media:// request: only GET/HEAD, only an approved id, with byte ranges. */
-async function serveMedia(request, registry, { devUrl } = {}) {
+async function serveMedia(request, registry, { devUrl, folderFile } = {}) {
   const url = new URL(request.url)
-  const id = url.hostname === 'm' ? url.pathname.replace(/^\//, '') : ''
-  const p = registry.pathFor(id)
+  let p = null
+  if (url.hostname === 'm') p = registry.pathFor(url.pathname.replace(/^\//, ''))
+  else if (url.hostname === 'p' && typeof folderFile === 'function') {
+    // esb-media://p/<folder id | u>/<subfolder>/<file>: a file inside a project folder (or the app's own library),
+    // confined to that folder's real location by the caller (electron/video-project.cjs confinedFile)
+    const m = /^\/([0-9a-f]{32}|u)\/([^/]+)\/([^/]+)$/.exec(url.pathname)
+    if (m) {
+      let rel = null
+      try { rel = decodeURIComponent(m[2]) + '/' + decodeURIComponent(m[3]) } catch { rel = null }
+      const f = rel ? folderFile(m[1], rel) : null
+      p = f && isMediaPath(f) ? f : null
+    }
+  }
   // CORS for the app's own page only (never '*')
   const origin = allowedOrigin(request.headers.get('origin'), devUrl)
   const cors = { 'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges', 'Cross-Origin-Resource-Policy': 'same-site', Vary: 'Origin' }
@@ -270,7 +281,8 @@ const listSnaps = (dir) => {
 function writeSnapshot(dir, text, now = Date.now()) {
   if (typeof text !== 'string' || !text.length || text.length > MAX_SNAPSHOT) throw new Error('Bad snapshot')
   const j = JSON.parse(text) // only a project (JSON) is kept
-  const tag = projectTag(j && j.id)
+  // a Phase 1 project.json snapshot keeps its id in `timeline`
+  const tag = projectTag(j && (j.id ?? (j.timeline && j.timeline.id)))
   fs.mkdirSync(dir, { recursive: true })
   const name = `snap-${String(now).padStart(15, '0')}-${tag}.json`
   const tmp = path.join(dir, name + '.tmp')
@@ -309,7 +321,7 @@ function clearSnapshots(dir, projectId) {
       if (tag !== null) {
         let t = m[1] || ''
         // an older snapshot without a tag in its name: read its id
-        if (!t) { try { t = projectTag(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).id) } catch { continue } }
+        if (!t) { try { const j = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); t = projectTag(j.id ?? (j.timeline && j.timeline.id)) } catch { continue } }
         if (t !== tag) continue
       }
       fs.rmSync(path.join(dir, f), { force: true })

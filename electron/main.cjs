@@ -16,6 +16,7 @@ const { createEngine } = require('./outreach-engine.cjs')
 const { createTray } = require('./outreach-tray.cjs')
 const outreachGuard = require('./outreach-guard.cjs')
 const videoMedia = require('./video-media.cjs')
+const videoProject = require('./video-project.cjs')
 
 // The Video desk's media protocol (esb-media://m/<id>, electron/video-media.cjs). Registered before the app is ready so
 // <video>, fetch and the decoder can stream from it with range requests; served on the editor's session only.
@@ -123,8 +124,8 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); return { action: 'deny' } })  // only web links ever leave the app (never file:, ms-settings:, custom schemes)
   win.webContents.on('will-navigate', (e, url) => { if (!guard.isAppUrl(url, APP_URLS)) e.preventDefault() })
   // a video export streams from this window: if it crashes or reloads mid-render, close and remove the half file
-  win.webContents.on('render-process-gone', () => { videoExports.abortActive() })
-  win.webContents.on('did-start-navigation', (_e, _url, isInPlace, isMainFrame) => { if (isMainFrame && !isInPlace) videoExports.abortActive() })
+  win.webContents.on('render-process-gone', () => { videoExports.abortActive(); videoProxyWriter.abortActive() })
+  win.webContents.on('did-start-navigation', (_e, _url, isInPlace, isMainFrame) => { if (isMainFrame && !isInPlace) { videoExports.abortActive(); videoProxyWriter.abortActive() } })
 
   // S3: Install permission handlers: only microphone (media) for app origin, deny everything else
   const ses = win.webContents.session
@@ -296,15 +297,15 @@ const MEDIA_FILTERS = [
   { name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] },
 ]
 const videoEntries = (paths) => paths.map((p) => { try { return videoMedia.entryFor(videoRegistry, p) } catch { return null } }).filter(Boolean)
-ipcMain.handle('esb:video-import', async () => {
+ipcMain.handle('esb:video-import', async (_e, opts) => {
   const r = await dialog.showOpenDialog(win, { title: 'Import media', properties: ['openFile', 'multiSelections'], filters: MEDIA_FILTERS })
   if (r.canceled || !r.filePaths.length) return []
-  return videoEntries(r.filePaths.slice(0, 200))
+  return importEntries(r.filePaths.slice(0, 200), opts)
 })
-ipcMain.handle('esb:video-import-dropped', (_e, paths) => {
+ipcMain.handle('esb:video-import-dropped', (_e, paths, opts) => {
   // sent by the preload from dropped File objects (webUtils.getPathForFile); page script cannot pass a string here
   if (!Array.isArray(paths)) return []
-  return videoEntries(paths.filter(videoMedia.isMediaPath).slice(0, 200))
+  return importEntries(paths.filter(videoMedia.isMediaPath).slice(0, 200), opts)
 })
 ipcMain.handle('esb:video-relink', async (_e, name) => {
   const r = await dialog.showOpenDialog(win, { title: `Find ${String(name || 'the missing file').slice(0, 120)}`, properties: ['openFile'], filters: MEDIA_FILTERS })
@@ -354,9 +355,21 @@ ipcMain.handle('esb:video-save-project', async (_e, name, text, existingPath) =>
 ipcMain.handle('esb:video-open-project', async () => {
   const dir = path.join(defaultDir(), 'Video')
   fs.mkdirSync(dir, { recursive: true })
-  const r = await dialog.showOpenDialog(win, { title: 'Open video project', defaultPath: dir, properties: ['openFile'], filters: [{ name: 'ESB video project', extensions: ['esbvideo'] }] })
+  // a project folder is opened by its project.json (Windows' file dialog cannot pick a folder and a file at once)
+  const r = await dialog.showOpenDialog(win, { title: 'Open video project', defaultPath: dir, properties: ['openFile'], filters: [{ name: 'ESB video project', extensions: ['esbvideo', 'json'] }] })
   if (r.canceled || !r.filePaths[0]) return null
   const filePath = r.filePaths[0]
+  let asFolder = null
+  if (path.basename(filePath).toLowerCase() === videoProject.PROJECT_FILE) asFolder = path.dirname(filePath)
+  else { try { if (fs.statSync(filePath).isDirectory()) asFolder = filePath } catch { /* not there */ } }
+  if (asFolder) {
+    if (!videoProject.isProjectFolderPath(asFolder)) throw new Error('project.json must be inside a .esbvideo project folder')
+    const text = await videoProject.readProjectJson(asFolder)
+    const id = videoFolders.add(asFolder)
+    if (!id) throw new Error('Not a local project folder')
+    try { videoProject.cleanPartials(videoProject.confinedDir(asFolder, 'proxies')) } catch { /* read-only */ }
+    return { path: path.resolve(asFolder), text, folder: { id, path: path.resolve(asFolder) } }
+  }
   if (!videoMedia.isVideoProjectPath(filePath) || videoMedia.isNetworkOrDevicePath(filePath)) throw new Error('Not a local .esbvideo project')
   if ((await fs.promises.stat(filePath)).size > 25 * 1024 * 1024) throw new Error('Project file too large')
   const text = await fs.promises.readFile(filePath, 'utf8')
@@ -365,19 +378,193 @@ ipcMain.handle('esb:video-open-project', async () => {
   fsScope.allowFile(filePath)
   return { path: filePath, text }
 })
-ipcMain.handle('esb:video-autosave', (_e, text) => videoMedia.writeSnapshot(videoAutosaveDir(), text))
-ipcMain.handle('esb:video-autosave-latest', () => videoMedia.latestSnapshot(videoAutosaveDir()))
-ipcMain.handle('esb:video-autosave-clear', (_e, projectId) => videoMedia.clearSnapshots(videoAutosaveDir(), typeof projectId === 'string' ? projectId : undefined))
-ipcMain.handle('esb:video-export-begin', async (_e, name, kind) => {
+// a project folder's snapshots go to its own autosave/; the rest to userData. The restore card offers the newest of all.
+ipcMain.handle('esb:video-autosave', (_e, text, fid) => {
+  const root = typeof fid === 'string' && fid !== videoProject.LIBRARY_KEY ? folderRoot(fid) : null
+  return videoMedia.writeSnapshot(root ? videoProject.confinedDir(root, 'autosave') : videoAutosaveDir(), text)
+})
+ipcMain.handle('esb:video-autosave-latest', () => {
+  let best = videoMedia.latestSnapshot(videoAutosaveDir())
+  for (const dir of videoFolders.list().slice(-50)) {
+    let snap = null
+    try { snap = videoMedia.latestSnapshot(path.join(dir, 'autosave')) } catch { snap = null }
+    if (snap && (!best || snap.at > best.at)) {
+      const id = videoProject.folderId(dir)
+      if (folderRoot(id)) best = { ...snap, folder: { id, path: dir } }
+    }
+  }
+  return best
+})
+ipcMain.handle('esb:video-autosave-clear', (_e, projectId, fid) => {
+  const id = typeof projectId === 'string' ? projectId : undefined
+  const root = typeof fid === 'string' && fid !== videoProject.LIBRARY_KEY ? folderRoot(fid) : null
+  if (root) { try { videoMedia.clearSnapshots(videoProject.confinedDir(root, 'autosave'), id) } catch { /* no folder */ } }
+  return videoMedia.clearSnapshots(videoAutosaveDir(), id)
+})
+ipcMain.handle('esb:video-export-begin', async (_e, name, kind, fid) => {
   const k = kind === 'webm' ? 'webm' : 'mp4'
   const safe = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '') + '.' + k
   fs.mkdirSync(defaultDir(), { recursive: true })
-  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(defaultDir(), safe), filters: [{ name: k === 'mp4' ? 'MP4 video' : 'WebM video', extensions: [k] }] })
+  // a project folder suggests its own renders/ (the editor may still choose anywhere)
+  let where = defaultDir()
+  const root = typeof fid === 'string' && fid !== videoProject.LIBRARY_KEY ? folderRoot(fid) : null
+  if (root) { try { where = videoProject.confinedDir(root, 'renders') } catch { /* keep the default */ } }
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(where, safe), filters: [{ name: k === 'mp4' ? 'MP4 video' : 'WebM video', extensions: [k] }] })
   if (r.canceled || !r.filePath) return null
   const target = r.filePath.toLowerCase().endsWith('.' + k) ? r.filePath : r.filePath + '.' + k
   fsScope.allowFile(target)
   fsScope.assertAllowed(target, 'export video target')
   return videoExports.begin(target)
+})
+// ---------------------------------------------------------------- Video desk, Phase 1: project folders, proxies, cache
+// A folder is known by an opaque id once the editor created it (Save) or opened its project.json in main's own dialog
+// (`videoFolders`, kept across launches). The renderer names files inside it only as `<subfolder>/<name>`, resolved and
+// confined to the folder's real location (electron/video-project.cjs). Proxies and cache entries of a project that has
+// no folder yet go to the app's own library (userData/video-library, key 'u').
+let videoFolders = null
+const videoProxyWriter = videoMedia.createExportWriter()
+const videoCache = videoProject.createCacheStore()
+const LIBRARY_PROXY_CAP = 20 * 1024 * 1024 * 1024
+const libraryRoot = () => { const d = path.join(app.getPath('userData'), 'video-library'); fs.mkdirSync(d, { recursive: true }); return d }
+const folderRoot = (fid) => (fid === videoProject.LIBRARY_KEY ? libraryRoot() : videoFolders ? videoFolders.pathFor(fid) : null)
+/** The folder a call works in: a known project folder by id, or the app's library when none is given. */
+const workRoot = (fid) => {
+  if (fid == null) return { key: videoProject.LIBRARY_KEY, root: libraryRoot() }
+  const root = folderRoot(fid)
+  if (!root) throw new Error('Unknown project folder')
+  return { key: fid, root }
+}
+const projectRoot = (fid) => (typeof fid === 'string' && fid !== videoProject.LIBRARY_KEY ? folderRoot(fid) : null)
+const folderFile = (key, rel) => { const root = folderRoot(key); return root ? videoProject.confinedFile(root, rel) : null }
+/** Entries for imported files; with { mode: 'copy', folderId } each is first copied into the folder's media/. */
+async function importEntries(paths, opts) {
+  const copy = !!opts && opts.mode === 'copy'
+  const root = copy ? projectRoot(opts.folderId) : null
+  if (copy && !root) throw new Error('Copying needs a saved project folder')
+  const out = []
+  for (const p of paths) {
+    try {
+      const src = root ? await videoProject.copyIntoMedia(root, p) : p
+      const e = videoMedia.entryFor(videoRegistry, src)
+      if (e) out.push(root ? { ...e, file: 'media/' + path.basename(src) } : e)
+    } catch (err) {
+      out.push({ error: String((err && err.message) || err).slice(0, 300), name: path.basename(String(p)) })
+    }
+  }
+  return out
+}
+ipcMain.handle('esb:video-folder-create', async (_e, name) => {
+  const dir = path.join(defaultDir(), 'Video')
+  fs.mkdirSync(dir, { recursive: true })
+  const stem = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '')
+  const r = await dialog.showSaveDialog(win, { title: 'Save video project folder', defaultPath: path.join(dir, stem + '.esbvideo'), buttonLabel: 'Create project', filters: [{ name: 'ESB video project folder', extensions: ['esbvideo'] }] })
+  if (r.canceled || !r.filePath) return null
+  const target = /\.esbvideo$/i.test(r.filePath) ? r.filePath : r.filePath + '.esbvideo'
+  const made = videoProject.createProjectFolder(target)
+  const id = videoFolders.add(made)
+  if (!id) throw new Error('Could not create the project folder')
+  return { id, path: made }
+})
+ipcMain.handle('esb:video-folder-save', (_e, fid, text) => {
+  const root = projectRoot(fid)
+  if (!root) throw new Error('Unknown project folder')
+  videoProject.writeProjectJson(root, text)
+  return root
+})
+ipcMain.handle('esb:video-folder-resolve', (_e, fid, files) => {
+  // the project's own copies (media/<name>): the folder was opened by the editor, so its media play
+  const root = projectRoot(fid)
+  if (!root || !Array.isArray(files)) return []
+  const only = new Set(['media'])
+  return files.slice(0, 2000).map((rel) => {
+    const f = videoProject.confinedFile(root, rel, only)
+    let e = null
+    if (f) { try { e = videoMedia.entryFor(videoRegistry, f) } catch { e = null } }
+    return e ? { ...e, file: rel } : { file: String(rel).slice(0, 200), missing: true }
+  })
+})
+/** The file behind an esb-media URL this process handed out, or null. */
+function pathForMediaUrl(u) {
+  let url
+  try { url = new URL(String(u)) } catch { return null }
+  if (url.protocol !== 'esb-media:') return null
+  if (url.hostname === 'm') return videoRegistry.pathFor(url.pathname.slice(1))
+  const m = /^\/([0-9a-f]{32}|u)\/([^/]+)\/([^/]+)$/.exec(url.pathname)
+  if (url.hostname !== 'p' || !m) return null
+  try { return folderFile(m[1], decodeURIComponent(m[2]) + '/' + decodeURIComponent(m[3])) } catch { return null }
+}
+ipcMain.handle('esb:video-media-facts', async (_e, urls) => {
+  // size, modified time and quick hash (for relinking) of files the renderer already plays
+  if (!Array.isArray(urls)) return []
+  const out = []
+  for (const u of urls.slice(0, 500)) {
+    const p = pathForMediaUrl(u)
+    if (!p) { out.push({ url: String(u).slice(0, 300), missing: true }); continue }
+    try {
+      const st = await fs.promises.stat(p)
+      out.push({ url: u, size: st.size, mtimeMs: Math.round(st.mtimeMs), hash: await videoProject.quickHash(p) })
+    } catch { out.push({ url: u, missing: true }) }
+  }
+  return out
+})
+ipcMain.handle('esb:video-relink-search', async (_e, fid, items) => {
+  // missing files found again by size + quick hash in the project's media/ and, for files this app imported before,
+  // the folder they were in and its sibling folders (video-project.cjs relinkDirs)
+  if (!Array.isArray(items)) return []
+  const root = projectRoot(fid)
+  const list = items.slice(0, 500).filter((i) => i && typeof i.id === 'string' && i.id.length < 200)
+  const dirs = []
+  for (const i of list) {
+    const original = typeof i.path === 'string' ? i.path : ''
+    for (const d of await videoProject.relinkDirs({ root, original, approved: videoMedia.isMediaPath(original) && videoRegistry.has(original) })) dirs.push(d)
+  }
+  const unique = [...new Map(dirs.map((d) => [d.toLowerCase(), d])).values()].slice(0, 200)
+  const found = await videoProject.findByHash(list, unique)
+  const out = []
+  for (const [id, p] of found) { try { const e = videoMedia.entryFor(videoRegistry, p); if (e) out.push({ id, entry: e }) } catch { /* gone */ } }
+  return out
+})
+ipcMain.handle('esb:video-proxy-status', (_e, fid, hashes) => {
+  if (!Array.isArray(hashes)) return {}
+  const out = {}
+  const roots = []
+  const r = projectRoot(fid)
+  if (r) roots.push([fid, r])
+  roots.push([videoProject.LIBRARY_KEY, libraryRoot()])
+  for (const h of hashes.slice(0, 2000)) {
+    const name = videoProject.proxyName(h)
+    if (!name) continue
+    for (const [key, root] of roots) if (videoProject.proxyReady(root, h)) { out[h] = videoProject.folderUrl(key, 'proxies/' + name); break }
+  }
+  return out
+})
+let proxyJob = null
+ipcMain.handle('esb:video-proxy-begin', (_e, fid, hash) => {
+  const name = videoProject.proxyName(hash)
+  if (!name) throw new Error('Bad proxy name')
+  const { key, root } = workRoot(fid)
+  if (key === videoProject.LIBRARY_KEY && videoProject.dirBytes(videoProject.confinedDir(root, 'proxies')) > LIBRARY_PROXY_CAP) throw new Error('The app’s proxy library is full (20 GB). Save the project as a folder to keep its proxies there.')
+  const target = videoProject.confinedTarget(root, 'proxies', name)
+  const job = videoProxyWriter.begin(target, { minFree: 1024 * 1024 * 1024 })
+  proxyJob = { id: job.id, key, name }
+  return { id: job.id }
+})
+ipcMain.handle('esb:video-proxy-write', (_e, id, position, bytes) => videoProxyWriter.write(id, position, bytes))
+ipcMain.handle('esb:video-proxy-end', (_e, id, ok) => {
+  const j = proxyJob && proxyJob.id === id ? proxyJob : null
+  const done = videoProxyWriter.end(id, ok === true)
+  if (j) proxyJob = null
+  if (!j || !done || path.basename(done) !== j.name) return null
+  return { url: videoProject.folderUrl(j.key, 'proxies/' + j.name) }
+})
+ipcMain.handle('esb:video-cache-read', (_e, fid, key) => {
+  const { root } = workRoot(fid)
+  return videoCache.read(videoProject.confinedDir(root, 'cache'), key)
+})
+ipcMain.handle('esb:video-cache-write', async (_e, fid, key, bytes) => {
+  const { root } = workRoot(fid)
+  await videoCache.write(videoProject.confinedDir(root, 'cache'), key, bytes)
+  return true
 })
 ipcMain.handle('esb:video-export-write', (_e, id, position, bytes) => videoExports.write(id, position, bytes))
 ipcMain.handle('esb:video-export-end', (_e, id, ok) => videoExports.end(id, ok === true))
@@ -727,8 +914,10 @@ app.whenReady().then(() => {
 
   const userData = app.getPath('userData')
   videoRegistry = videoMedia.createMediaRegistry({ file: path.join(userData, 'video-media.json') })
+  videoFolders = videoProject.createFolderRegistry({ file: path.join(userData, 'video-folders.json') })
+  try { videoProject.cleanPartials(videoProject.confinedDir(libraryRoot(), 'proxies')) } catch { /* first run */ }
   // the editor's session only (the CMS window has its own partition, so it cannot read the editor's media)
-  protocol.handle('esb-media', (request) => videoMedia.serveMedia(request, videoRegistry, { devUrl: DEV_URL }))
+  protocol.handle('esb-media', (request) => videoMedia.serveMedia(request, videoRegistry, { devUrl: DEV_URL, folderFile }))
   // the send results the desk projects onto its campaigns go to the window as they happen (engineClient.ts applyEvents);
   // without this the list only caught up at the next launch
   const LIVE = new Set(['send.ok', 'send.fail', 'send.skip', 'reply', 'bounce', 'optout'])

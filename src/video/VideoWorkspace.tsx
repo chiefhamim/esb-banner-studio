@@ -9,7 +9,9 @@ import { useVideoStore } from './videoStore'
 import { OVERLAY_LABELS, dropCachedMedia, getCachedVideo, peekCachedVideo, pruneMediaCache, renderCompositeFrame } from './compositor'
 import { ExportSheet } from './ExportSheet'
 import { StoryVideoPanel } from './StoryVideoPanel'
-import { PROBE_CONCURRENCY, assetFromEntry, assetFromFile, hasDiskMedia, keepTake, mapLimit, probeMedia, videoBridge } from './media'
+import { PROBE_CONCURRENCY, assetFromEntry, assetFromFile, hasDiskMedia, importOptions, keepTake, mapLimit, patchMeta, probeMedia, takeImportErrors, videoBridge } from './media'
+import type { FolderRef } from './media'
+import { BinCard, BinImportMode, BinMissingBar } from './BinCard'
 import { clearSnapshots, describeSnapshot, latestSnapshot, loadProjectText, onAutosaved, saveProject, startAutosave } from './projectIO'
 import type { Snapshot } from './projectIO'
 import { fmtTime, useClockFormat } from '../ui/time'
@@ -428,14 +430,16 @@ export function VideoWorkspace() {
   const addAssets = (assets: (MediaAsset | null)[]) => {
     const ok = assets.filter((a): a is MediaAsset => !!a)
     ok.forEach(addMediaAsset)
-    if (ok.length) { setActiveTab('media'); selectClip(null); flash(`Imported ${ok.length} file${ok.length === 1 ? '' : 's'}`) }
+    const errors = takeImportErrors()
+    if (ok.length) { setActiveTab('media'); selectClip(null); flash(`Imported ${ok.length} file${ok.length === 1 ? '' : 's'}${errors.length ? ` · ${errors.length} not: ${errors[0]}` : ''}`) }
+    else if (errors.length) flash(`Not imported: ${errors[0]}`)
     return ok
   }
   const importFromDialog = async () => {
     const b = videoBridge()
     if (!b?.videoImport) { fileInputRef.current?.click(); return }
     setImporting(true)
-    try { addAssets(await mapLimit(await b.videoImport(), PROBE_CONCURRENCY, (e) => assetFromEntry(e))) } finally { setImporting(false) }
+    try { addAssets(await mapLimit(await b.videoImport(importOptions()), PROBE_CONCURRENCY, (e) => assetFromEntry(e))) } catch (e) { flash('Could not import: ' + String((e as Error).message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')) } finally { setImporting(false) }
   }
   const importFiles = async (files: FileList | File[] | null) => {
     if (!files || !files.length) return
@@ -443,7 +447,7 @@ export function VideoWorkspace() {
     try {
       const b = videoBridge()
       // desktop: a dropped file is recorded by its real path (the preload reads it from the File), so it survives a restart
-      if (b?.videoImportDropped) addAssets(await mapLimit(await b.videoImportDropped(Array.from(files)), PROBE_CONCURRENCY, (e) => assetFromEntry(e)))
+      if (b?.videoImportDropped) addAssets(await mapLimit(await b.videoImportDropped(Array.from(files), importOptions()), PROBE_CONCURRENCY, (e) => assetFromEntry(e)))
       else addAssets(await mapLimit(Array.from(files), PROBE_CONCURRENCY, assetFromFile))
     } finally {
       setImporting(false)
@@ -464,6 +468,7 @@ export function VideoWorkspace() {
     const p = await probeMedia(e.url, asset.type)
     if (asset.url) dropCachedMedia(asset.url)
     relinkAsset(asset.id, { url: e.url, path: e.path, size: e.size, mtimeMs: e.mtimeMs, name: e.name, duration: p.duration || asset.duration, width: p.width ?? asset.width, height: p.height ?? asset.height, hasAudio: p.hasAudio ?? asset.hasAudio, thumbnailUrl: asset.type === 'image' ? e.url : p.thumbnailUrl })
+    patchMeta(asset.id, { storage: 'reference', file: undefined })
     flash(`Relinked ${e.name}`)
   }
 
@@ -524,12 +529,12 @@ export function VideoWorkspace() {
   const openNow = async () => {
     const b = videoBridge()
     if (!b?.videoOpenProject) { projectInputRef.current?.click(); return }
-    let r: { path: string; text: string } | null = null
+    let r: { path: string; text: string; folder?: FolderRef } | null = null
     try { r = await b.videoOpenProject() } catch (e) { flash('Could not open: ' + String((e as Error).message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')); return }
     if (!r) return
-    const res = await loadProjectText(r.text, { path: r.path, dirty: false })
+    const res = await loadProjectText(r.text, { path: r.path, dirty: false, folder: r.folder ?? null })
     if (res.stale) return
-    if (!res.ok) { flash('That file is not a video project.'); return }
+    if (!res.ok) { flash(res.error ?? 'That file is not a video project.'); return }
     setRestore(null)
     flash(res.missing ? `Opened. ${res.missing} media file${res.missing === 1 ? ' is' : 's are'} missing — relink in Media.` : 'Project opened')
   }
@@ -662,10 +667,9 @@ export function VideoWorkspace() {
                     <p>{importing ? 'Reading files…' : 'Import media'}</p>
                     <span>Click or drop video, audio or pictures · MP4, MOV, WebM, MP3, WAV, PNG, JPG</span>
                   </button>
-                  {missingAssets.length > 0 && (
-                    <div className="vw-missing" role="status"><Icon name="alert" size={14} /><span>{missingAssets.length} file{missingAssets.length === 1 ? ' is' : 's are'} missing. Relink {missingAssets.length === 1 ? 'it' : 'them'} to play and export.</span></div>
-                  )}
-                  {binAssets.map((asset) => <MediaCard key={asset.id} asset={asset} onAdd={addAssetToTimeline} onRelink={relink} onRemove={removeMediaAsset} />)}
+                  <BinImportMode />
+                  <BinMissingBar missing={missingAssets.length} onRelinked={(n) => flash(`Relinked ${n} file${n === 1 ? '' : 's'}`)} />
+                  {binAssets.map((asset) => <BinCard key={asset.id} asset={asset} onAdd={addAssetToTimeline} onRelink={relink} onRemove={removeMediaAsset} />)}
                   {!hasDiskMedia() && binAssets.length > 0 && <p className="vw-bin-note"><Icon name="info" size={12} />Browser preview: files last this session only.</p>}
                 </div>
               )}
@@ -838,41 +842,6 @@ export function VideoWorkspace() {
     </div>
   )
 }
-
-/** One bin row: picture or icon, name and facts, and its actions in one aligned group. */
-const MediaCard = memo(function MediaCard({ asset, onAdd, onRelink, onRemove }: { asset: MediaAsset; onAdd: (a: MediaAsset, as?: 'auto' | 'overlay') => void; onRelink: (a: MediaAsset) => void; onRemove: (id: string) => void }) {
-  const thumb = asset.thumbnailUrl && !asset.missing
-    ? <img src={asset.thumbnailUrl} alt="" className="vw-media-thumb" crossOrigin={/^(blob:|data:)/.test(asset.thumbnailUrl) ? undefined : 'anonymous'} />
-    : <div className={`vw-media-thumb vw-thumb-icon${asset.missing ? ' missing' : ''}`}><Icon name={asset.missing ? 'alert' : asset.type === 'audio' ? 'volume' : asset.type === 'image' ? 'image' : 'video'} size={18} /></div>
-  return (
-    <div className={`vw-media-card${asset.missing ? ' missing' : ''}`} data-asset={asset.type}>
-      {thumb}
-      <div className="vw-media-info">
-        <div className="vw-media-title" data-tip={`${asset.path ?? asset.name}${asset.type === 'video' && asset.width ? ` · ${asset.width}×${asset.height}` : ''}`}>{asset.name}</div>
-        <div className="vw-media-meta mono">
-          {/* one text line, short enough for the 312 px bin; footage's picture size is in the tooltip */}
-          {asset.missing ? <span className="vw-miss-word">Not found{asset.removed ? ' · used by clips' : ''}</span> : [
-            asset.duration > 0 ? formatShortTime(asset.duration) : '',
-            asset.type === 'image' && asset.width && asset.height ? `${asset.width}×${asset.height}` : '',
-            asset.type === 'video' && asset.hasAudio !== undefined ? (asset.hasAudio ? 'sound' : 'no sound') : '',
-            `${(asset.size / (1024 * 1024)).toFixed(1)} MB`,
-          ].filter(Boolean).join(' · ')}
-        </div>
-      </div>
-      <div className="vw-media-actions">
-        {asset.missing ? (
-          <button type="button" className="btn xs vw-relink" onClick={() => onRelink(asset)} data-tip="Find the file on this PC"><Icon name="search" size={12} />Relink</button>
-        ) : (
-          <>
-            {asset.type === 'image' && <IconButton icon="layers" size={14} className="vw-act vw-add-overlay" tip="Add as an overlay on V2 (over the footage)" onClick={() => onAdd(asset, 'overlay')} />}
-            <IconButton icon="plus" size={14} className="vw-act vw-add" tip={asset.type === 'image' ? 'Add to V1 as a full-frame still' : asset.type === 'video' ? (asset.hasAudio ? 'Add to V1, with its sound on A1' : 'Add to V1') : 'Add to A1'} onClick={() => onAdd(asset)} />
-          </>
-        )}
-        {!asset.removed && <IconButton icon="trash" size={14} className="vw-act vw-remove" tip="Remove from the bin (Ctrl+Z brings it back)" onClick={() => onRemove(asset.id)} />}
-      </div>
-    </div>
-  )
-})
 
 /** Rows for one track's clips: clips that overlap in time get their own row (greedy, by start), so stacked
  * overlays are all visible on the lane. */
