@@ -398,15 +398,19 @@ try {
       window.__videoStore.getState().play()
       await new Promise((r) => setTimeout(r, 1200))
       swapped = true
-      media.proxyBecameReady(g.id, purl)
+      // the real path: a proxy is trusted only when it was made from the hash read from the asset's current URL
+      // (C3). The browser has no main process to hash files, so the test supplies that hash itself.
+      media.patchMeta(g.id, { hash: 'c4-test-hash', hashUrl: g.url, analyzedUrl: g.url })
+      media.proxyBecameReady(g.id, purl, undefined, 'c4-test-hash')
+      const preview = media.previewUrlFor(g.id) === purl ? 'proxy' : 'original'
       await new Promise((r) => setTimeout(r, 6500))
       window.__videoStore.getState().pause()
       eng.lookup = orig
-      return { draws, blank, afterSwap, decoders: [...eng.decoders.keys()].map((u) => (u === purl ? 'proxy' : u === g.url ? 'original' : 'other')), shown: eng.shownUrl.get('px') === purl ? 'proxy' : 'original' }
+      return { draws, blank, afterSwap, decoders: [...eng.decoders.keys()].map((u) => (u === purl ? 'proxy' : u === g.url ? 'original' : 'other')), shown: eng.shownUrl.get('px') === purl ? 'proxy' : 'original', preview }
     }, { g, purl: conv.goldenProxy })
     results.proxySwap = swap
-    check('C4 a proxy ready mid-playback: no blank frame, the clip moves to the proxy and the original’s decoder is released', swap.blank === 0 && swap.afterSwap > 100 && swap.shown === 'proxy' && !swap.decoders.includes('original'), JSON.stringify(swap))
-    await page.evaluate(async (id) => { const media = await import('/src/video/media.ts'); media.patchMeta(id, { proxy: undefined, proxyUrl: undefined }) }, g.id)
+    check('C4 a proxy ready mid-playback: no blank frame, the clip moves to the proxy and the original’s decoder is released', swap.blank === 0 && swap.afterSwap > 100 && swap.shown === 'proxy' && swap.preview === 'proxy' && !swap.decoders.includes('original'), JSON.stringify(swap))
+    await page.evaluate(async (id) => { const media = await import('/src/video/media.ts'); media.patchMeta(id, { proxy: undefined, proxyUrl: undefined, proxyHash: undefined, hash: undefined, hashUrl: undefined }) }, g.id)
   }
 
   // ---------------------------------------------------------------- fix round P1: 4K and many layers without proxies
