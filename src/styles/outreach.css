@@ -505,7 +505,8 @@
 .or-file-chip .or-file-open:hover { color: inherit; background: var(--fill-hover); }
 .or-file-open .or-file-name { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 /* the New menu: a compact card, each item's hint on its own lines under the name, shown in full, not a long strip */
-.menu.or-new-menu { width: 264px; max-width: 264px; }
+/* the New menu hangs exactly under the full-width New button (MenuButton matchWidth), not a fixed 264 px */
+.menu.or-new-menu { box-sizing: border-box; }
 .menu.or-new-menu .menu-item { height: auto; min-height: 44px; align-items: flex-start; padding-top: 7px; padding-bottom: 7px; line-height: 18px; }
 .menu.or-new-menu .menu-item .icon, .menu.or-new-menu .menu-item > svg { margin-top: 2px; }
 .menu.or-new-menu .mi-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
@@ -925,3 +926,105 @@
 .or-dg-subject > b { min-width: 0; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
 .or-dg-count { font-size: 12px; line-height: 16px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 @media (max-width: 1000px) { .or-dg { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── Outreach Assistant (AssistantDialog.tsx) — theme tokens only. The old inline styles fell back to hard-coded
+   light colours (#f7f7f8 bubble, rgba(0,0,0,.03) bars) that do not exist in dark mode: a white slab with unreadable
+   text. One quiet row for autonomy, one pane for the conversation, prompts as a 2 × 2 set of suggestion buttons. */
+.or-asst { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; } /* the body's 4 px top sat the row on the header rule */
+.or-asst-mode { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 12px; background: var(--field); border-radius: var(--r-3); }
+.or-asst-mode-ico { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-2); color: var(--text-2); background: var(--card); box-shadow: 0 0 0 1px var(--line-2); }
+.or-asst-mode-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.or-asst-mode-txt b { font-size: 13px; font-weight: 600; color: var(--text); }
+.or-asst-mode-txt span { font-size: 12px; line-height: 16px; color: var(--text-3); }
+.or-asst-mode .seg-ctl { flex: none; }
+
+.or-asst-pane { height: 340px; border-radius: var(--r-3); background: var(--field); }
+.or-asst-chat { overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 16px; scrollbar-gutter: stable; }
+.or-asst-chat.is-empty { justify-content: center; }
+.or-asst-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; padding: 16px; }
+.or-asst-hero { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 4px; border-radius: 12px; color: var(--text); background: var(--card); box-shadow: 0 0 0 1px var(--line-2), 0 4px 12px -6px rgba(0, 0, 0, .25); }
+.or-asst-empty h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); }
+.or-asst-empty p { margin: 0 0 10px; max-width: 420px; font-size: 13px; line-height: 19px; color: var(--text-3); }
+.or-asst-prompts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: 520px; }
+.or-asst-prompt { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 14px; font: 500 13px/1 var(--font-ui); text-align: left; color: var(--text); background: var(--card); border: 0; border-radius: var(--r-2); box-shadow: 0 0 0 1px var(--line-2); cursor: pointer; transition: background-color var(--t-1) var(--ease), box-shadow var(--t-2) var(--ease), transform var(--t-2) var(--spring); }
+.or-asst-prompt .icon { flex: none; color: var(--text-3); transition: color var(--t-1) var(--ease); }
+.or-asst-prompt span { min-width: 0; overflow-wrap: anywhere; }
+.or-asst-prompt:hover { background: var(--field-hover); box-shadow: 0 0 0 1px var(--line-3), 0 4px 12px -8px rgba(0, 0, 0, .3); }
+.or-asst-prompt:hover .icon { color: var(--text); }
+.or-asst-prompt:active { transform: scale(.98); }
+.or-asst-prompt:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+.or-asst-msg { display: flex; align-items: flex-start; gap: 8px; max-width: 88%; }
+.or-asst-msg.user { align-self: flex-end; }
+.or-asst-msg.assistant { align-self: flex-start; }
+.or-asst-av { flex: none; display: grid; place-items: center; width: 26px; height: 26px; margin-top: 2px; border-radius: 8px; color: var(--text-2); background: var(--card); box-shadow: 0 0 0 1px var(--line-2); }
+.or-asst-bubble { min-width: 0; padding: 10px 14px; font-size: 13px; line-height: 19px; border-radius: 12px; }
+.or-asst-msg.assistant .or-asst-bubble { color: var(--text); background: var(--card); box-shadow: 0 0 0 1px var(--line-2); border-top-left-radius: 4px; }
+.or-asst-msg.user .or-asst-bubble { color: var(--on-ink); background: var(--ink); border-top-right-radius: 4px; }
+.or-asst-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.or-asst-bubble.thinking { display: flex; align-items: center; gap: 4px; padding: 14px 16px; }
+.or-asst-bubble.thinking i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); animation: or-asst-dot 1.1s infinite ease-in-out; }
+.or-asst-bubble.thinking i:nth-child(2) { animation-delay: .15s; }
+.or-asst-bubble.thinking i:nth-child(3) { animation-delay: .3s; }
+@keyframes or-asst-dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+.or-asst-label { font-size: 11px; font-weight: 700; letter-spacing: var(--track-chip); text-transform: uppercase; color: var(--text-3); }
+.or-asst-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-2); }
+.or-asst-act { display: flex; flex-direction: column; gap: 6px; padding: 6px 6px 6px 10px; border-radius: var(--r-2); background: var(--field); }
+.or-asst-act-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.or-asst-act-row > .icon { flex: none; color: var(--text-2); }
+.or-asst-act-name { flex: 1; min-width: 0; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+.or-asst-risk { flex: none; height: 18px; padding: 0 6px; font: 700 10px/18px var(--font-ui); font-style: normal; letter-spacing: var(--track-chip); text-transform: uppercase; border-radius: var(--r-1); color: var(--text-2); background: var(--fill); }
+.or-asst-risk.read { color: var(--success); background: var(--success-soft); }
+.or-asst-risk.confirm { color: var(--warning); background: var(--warning-soft); }
+.or-asst-risk.danger { color: var(--danger); background: var(--danger-soft); }
+.or-asst-act-do { flex: none; display: flex; align-items: center; gap: 4px; }
+.or-asst-state { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 12px; font-weight: 600; }
+.or-asst-state.good { color: var(--success); }
+.or-asst-state.bad { color: var(--danger); }
+.or-asst-err { margin: 0; font-size: 12px; line-height: 16px; color: var(--danger); }
+.or-asst-result { display: grid; gap: 2px; margin: 0; padding: 8px 10px; border-radius: var(--r-2); background: var(--card); box-shadow: 0 0 0 1px var(--line-2); }
+.or-asst-result > div { display: flex; gap: 12px; font-size: 12px; line-height: 18px; }
+.or-asst-result dt { flex: none; min-width: 130px; color: var(--text-3); }
+.or-asst-result dd { margin: 0; flex: 1; min-width: 0; color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+.or-asst-input { display: flex; gap: 8px; align-items: center; margin: 0; }
+.or-asst-input .input { flex: 1; height: 36px; }
+.or-asst-input .btn { height: 36px; }
+
+.or-asst-recent { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; max-height: 170px; overflow-y: auto; border-radius: var(--r-3); background: var(--field); }
+.or-asst-recent ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.or-asst-recent li { display: flex; align-items: baseline; gap: 12px; padding: 4px 0; font-size: 12px; line-height: 16px; color: var(--text); border-top: 1px solid var(--line-1); }
+.or-asst-recent li:first-child { border-top: 0; }
+.or-asst-recent li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.or-asst-recent time { flex: none; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.or-asst-none { margin: 0; font-size: 12px; color: var(--text-3); }
+.or-asst-foot { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.or-asst-count { margin-left: 2px; min-width: 18px; height: 18px; padding: 0 5px; font: 600 11px/18px var(--font-ui); font-style: normal; text-align: center; border-radius: var(--r-pill); color: var(--text-2); background: var(--fill); }
+@media (prefers-reduced-motion: reduce) { .or-asst-bubble.thinking i { animation: none; opacity: .6; } .or-asst-prompt:active { transform: none; } }
+
+/* Send test: the paper plane takes off while the message is on its way (up-right out of the button, back in from the
+   lower left), then the button settles green with a tick for ~3 s, or red with the reason beside it. */
+.or-test-btn { position: relative; overflow: hidden; transition: background-color 260ms var(--ease), color 260ms var(--ease), box-shadow 260ms var(--ease); }
+.or-test-btn .or-plane { position: relative; display: inline-grid; place-items: center; width: 14px; height: 14px; }
+.or-test-btn.is-sending:disabled { opacity: 1; cursor: progress; }
+.or-test-btn.is-sending .or-plane .icon { animation: or-plane-fly 900ms cubic-bezier(.5, 0, .5, 1) infinite; }
+@keyframes or-plane-fly {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  40% { transform: translate(16px, -14px) rotate(-8deg) scale(.85); opacity: 0; }
+  41% { transform: translate(-16px, 14px) rotate(-8deg) scale(.85); opacity: 0; }
+  75% { transform: translate(-2px, 2px) rotate(0deg) scale(1); opacity: 1; }
+  100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+}
+.or-test-btn.is-sending::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 40%; border-radius: 2px; background: currentColor; opacity: .35; animation: or-plane-trail 900ms cubic-bezier(.5, 0, .5, 1) infinite; }
+@keyframes or-plane-trail { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+/* specificity above studio.css's .btn:not(.primary):not(.ghost):not(.ai-btn) fill */
+.or-test .btn.or-test-btn.is-sent:not(.primary):not(.ghost), .or-test .btn.or-test-btn.is-sent:not(.primary):not(.ghost):hover, :root[data-theme=dark] .or-test .btn.or-test-btn.is-sent:not(.primary):not(.ghost) { color: #fff; background: var(--success); box-shadow: 0 0 0 1px var(--success), 0 4px 14px -6px var(--success); }
+.or-test-btn.is-sent .or-plane .icon { animation: or-plane-land 420ms cubic-bezier(.16, 1, .3, 1); }
+@keyframes or-plane-land { 0% { transform: scale(.2) rotate(-30deg); opacity: 0; } 60% { transform: scale(1.25) rotate(0); opacity: 1; } 100% { transform: scale(1); } }
+.or-test .btn.or-test-btn.is-failed:not(.primary):not(.ghost), .or-test .btn.or-test-btn.is-failed:not(.primary):not(.ghost):hover, :root[data-theme=dark] .or-test .btn.or-test-btn.is-failed:not(.primary):not(.ghost) { color: #fff; background: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+.or-test-btn.is-failed { animation: or-plane-shake 360ms cubic-bezier(.36, .07, .19, .97); }
+@keyframes or-plane-shake { 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .or-test-btn.is-sending .or-plane .icon, .or-test-btn.is-sent .or-plane .icon, .or-test-btn.is-failed, .or-test-btn.is-sending::after { animation: none; }
+}

@@ -7,7 +7,6 @@ import { useOutreachStore } from './outreachStore'
 import { useOutreachUi } from './outreachUi'
 import { engineClient } from './engineClient'
 import { askAssistant, applyAssistantAction, type AssistantActionItem } from './operator'
-import type { CommandRisk } from './commands'
 
 interface MessageItem {
   id: string
@@ -37,17 +36,57 @@ function commandIcon(cmd: string): IconName {
   return 'sparkle'
 }
 
-function riskColor(risk: CommandRisk): string {
-  switch (risk) {
-    case 'read':
-      return 'var(--color-good, #2e7d32)'
-    case 'safe':
-      return 'var(--color-primary, #1976d2)'
-    case 'confirm':
-      return 'var(--color-warn, #e65100)'
-    case 'danger':
-      return 'var(--color-bad, #c62828)'
+const AUTONOMY_NOTE: Record<'suggest' | 'confirm' | 'auto-safe', string> = {
+  suggest: 'Actions are shown as advice. Nothing runs on its own.',
+  confirm: 'Actions are listed for you to apply one by one.',
+  'auto-safe': 'Look-ups and safe actions run at once; anything bigger waits for you.',
+}
+
+const PROMPTS: Array<{ q: string; icon: IconName }> = [
+  { q: 'What is today’s schedule?', icon: 'clock' },
+  { q: 'Why were contacts skipped?', icon: 'info' },
+  { q: 'Show campaign summary', icon: 'chart' },
+  { q: 'Pause all sending', icon: 'pause' },
+]
+
+/** camelCase key -> "Camel case" */
+function human(k: string): string {
+  const w = k.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase()
+  return w.charAt(0).toUpperCase() + w.slice(1)
+}
+
+function fmt(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—'
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No'
+  if (typeof v === 'number') return v.toLocaleString()
+  if (typeof v === 'string') return v
+  if (Array.isArray(v)) return v.length ? v.map(fmt).join(', ') : 'None'
+  return Object.entries(v as Record<string, unknown>).map(([k, x]) => `${human(k)}: ${fmt(x)}`).join(' · ')
+}
+
+/** What a read command returned, as plain rows (before, Apply only said "Applied" and the answer was dropped). */
+function ResultView({ result }: { result: unknown }) {
+  if (result === undefined || result === null) return null
+  if (typeof result !== 'object') return <div className="or-asst-result"><span>{fmt(result)}</span></div>
+  const rows: Array<[string, unknown]> = []
+  // internal ids (campaignId, activeCampaignId…) mean nothing to the editor; the name beside them says it
+  for (const [k, v] of Object.entries(result as Record<string, unknown>).filter(([k]) => !/(^id|Id)$/.test(k))) {
+    if (Array.isArray(v) && v.length && typeof v[0] === 'object') {
+      v.slice(0, 12).forEach((item, i) => {
+        const o = item as Record<string, unknown>
+        const name = String(o.name ?? o.label ?? o.id ?? `${human(k)} ${i + 1}`)
+        const rest = Object.fromEntries(Object.entries(o).filter(([kk]) => !['name', 'label'].includes(kk) && !/(^id|Id)$/.test(kk)))
+        rows.push([name, rest])
+      })
+      if (v.length > 12) rows.push(['…', `${v.length - 12} more`])
+    } else rows.push([human(k), v])
   }
+  if (!rows.length) return null
+  return (
+    <dl className="or-asst-result">
+      {rows.map(([k, v], i) => <div key={i}><dt>{k}</dt><dd>{fmt(v)}</dd></div>)}
+    </dl>
+  )
 }
 
 export function AssistantDialog({ onClose }: { onClose: () => void }) {
@@ -177,6 +216,8 @@ export function AssistantDialog({ onClose }: { onClose: () => void }) {
     )
   }
 
+  const empty = messages.length === 1 && !busy
+
   return (
     <Dialog
       title="Outreach Assistant"
@@ -184,44 +225,26 @@ export function AssistantDialog({ onClose }: { onClose: () => void }) {
       width={740}
       onClose={onClose}
       footer={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <button
-            type="button"
-            className="or-link-btn"
-            onClick={() => setShowRecent((prev) => !prev)}
-            style={{ fontSize: 12 }}
-          >
-            {showRecent ? 'Hide recent actions' : `Recent assistant actions (${recentActions.length})`}
+        <div className="or-asst-foot">
+          <button type="button" className="btn ghost sm" aria-expanded={showRecent} onClick={() => setShowRecent((prev) => !prev)}>
+            <Icon name="activity" size={13} />
+            <span>{showRecent ? 'Hide recent actions' : 'Recent actions'}</span>
+            {!showRecent && recentActions.length > 0 && <em className="or-asst-count">{recentActions.length}</em>}
           </button>
-          <button type="button" className="btn" onClick={onClose}>
-            Done
-          </button>
+          <button type="button" className="btn" onClick={onClose}>Done</button>
         </div>
       }
     >
-      <div className="or-assistant-dialog stack" style={{ gap: 14 }}>
-        {/* Autonomy Setting Bar */}
-        <div
-          className="or-assistant-topbar"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '8px 12px',
-            background: 'var(--chip-bg, rgba(0,0,0,0.03))',
-            borderRadius: 6,
-            border: '1px solid var(--border)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Icon name="sliders" size={14} />
-            <span style={{ fontSize: 12, fontWeight: 600 }}>Autonomy:</span>
+      <div className="or-asst">
+        <div className="or-asst-mode">
+          <span className="or-asst-mode-ico"><Icon name="sliders" size={15} /></span>
+          <div className="or-asst-mode-txt">
+            <b>Autonomy</b>
+            <span>{AUTONOMY_NOTE[autonomy]}</span>
           </div>
           <Seg<'suggest' | 'confirm' | 'auto-safe'>
             value={autonomy}
-            onChange={(val) => {
-              void engineClient.saveSettings({ aiAutonomy: val })
-            }}
+            onChange={(val) => { void engineClient.saveSettings({ aiAutonomy: val }) }}
             options={[
               { value: 'suggest', label: 'Suggest', tip: 'Actions shown as advice; nothing runs automatically' },
               { value: 'confirm', label: 'Ask me first', tip: 'Actions listed for approval before running' },
@@ -230,284 +253,110 @@ export function AssistantDialog({ onClose }: { onClose: () => void }) {
           />
         </div>
 
-        {/* AI Off Banner */}
         {!aiAvailable ? (
-          <div
-            className="or-ai-off-card"
-            style={{
-              padding: 24,
-              textAlign: 'center',
-              background: 'var(--card-bg)',
-              border: '1px dashed var(--border)',
-              borderRadius: 8,
-              margin: '16px 0',
-            }}
-          >
-            <Icon name="sparkle" size={28} className="or-muted" />
-            <h3 style={{ margin: '12px 0 6px 0', fontSize: 15 }}>Connect an AI to use the assistant.</h3>
-            <p className="or-muted" style={{ margin: '0 0 16px 0', fontSize: 13 }}>
-              The assistant can answer questions about your campaigns, calculate deliverability plans, and execute safe actions.
-            </p>
-            <button
-              type="button"
-              className="btn primary"
-              onClick={() => {
-                onClose()
-                ui.set({ sheet: 'ai' })
-              }}
-            >
-              Connect AI
+          <div className="or-asst-pane or-asst-empty">
+            <span className="or-asst-hero"><Icon name="sparkle" size={20} /></span>
+            <h3>Connect an AI to use the assistant</h3>
+            <p>It answers questions about your campaigns, works out sending plans and can run safe actions for you.</p>
+            <button type="button" className="btn primary" onClick={() => { onClose(); ui.set({ sheet: 'ai' }) }}>
+              <Icon name="link" size={13} /><span>Connect AI</span>
             </button>
           </div>
         ) : (
           <>
-            {/* Conversation Flow */}
-            <div
-              className="or-assistant-chat"
-              style={{
-                height: 340,
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-                padding: '8px 4px',
-              }}
-            >
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`or-chat-bubble ${m.role}`}
-                  style={{
-                    alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                    maxWidth: '85%',
-                    padding: '10px 14px',
-                    borderRadius: 8,
-                    background:
-                      m.role === 'user'
-                        ? 'var(--color-primary, #1976d2)'
-                        : 'var(--card-bg, #f7f7f8)',
-                    color: m.role === 'user' ? '#fff' : 'inherit',
-                    border: m.role === 'assistant' ? '1px solid var(--border)' : 'none',
-                    fontSize: 13,
-                    lineHeight: 1.45,
-                  }}
-                >
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
-
-                  {/* Recommended Action Rows */}
-                  {m.actions && m.actions.length > 0 && (
-                    <div
-                      className="or-assistant-actions stack"
-                      style={{
-                        marginTop: 10,
-                        paddingTop: 8,
-                        borderTop: '1px solid var(--border)',
-                        gap: 8,
-                      }}
-                    >
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)' }}>
-                        Recommended Actions:
-                      </span>
-                      {m.actions.map((act) => (
-                        <div
-                          key={act.id}
-                          className="or-action-row"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 8,
-                            padding: '6px 8px',
-                            background: 'var(--bg, #fff)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 6,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                            <Icon name={commandIcon(act.command)} size={14} />
-                            <span style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {act.describe}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 700,
-                                padding: '1px 5px',
-                                borderRadius: 4,
-                                textTransform: 'uppercase',
-                                background: 'rgba(0,0,0,0.06)',
-                                color: riskColor(act.risk),
-                              }}
-                            >
-                              {act.risk}
-                            </span>
+            <div className={'or-asst-pane or-asst-chat' + (empty ? ' is-empty' : '')} aria-live="polite">
+              {empty ? (
+                <div className="or-asst-empty">
+                  <span className="or-asst-hero"><Icon name="sparkle" size={20} /></span>
+                  <h3>What would you like to know?</h3>
+                  <p>Ask about sending, schedules or skipped contacts, or start with one of these.</p>
+                  <div className="or-asst-prompts">
+                    {PROMPTS.map((p) => (
+                      <button key={p.q} type="button" className="or-asst-prompt" onClick={() => void handleSend(p.q)}>
+                        <Icon name={p.icon} size={14} /><span>{p.q}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {messages.slice(1).map((m) => (
+                    <div key={m.id} className={'or-asst-msg ' + m.role}>
+                      {m.role === 'assistant' && <span className="or-asst-av"><Icon name="sparkle" size={13} /></span>}
+                      <div className="or-asst-bubble">
+                        <div className="or-asst-text">{m.text}</div>
+                        {m.actions && m.actions.length > 0 && (
+                          <div className="or-asst-actions">
+                            <span className="or-asst-label">Recommended actions</span>
+                            {m.actions.map((act) => (
+                              <div key={act.id} className={'or-asst-act st-' + act.status}>
+                                <div className="or-asst-act-row">
+                                  <Icon name={commandIcon(act.command)} size={14} />
+                                  <span className="or-asst-act-name">{act.describe}</span>
+                                  <em className={'or-asst-risk ' + act.risk}>{act.risk}</em>
+                                  <div className="or-asst-act-do">
+                                    {act.status === 'proposed' && (
+                                      <>
+                                        <button type="button" className="btn sm primary" onClick={() => void handleApply(m.id, act)}>Apply</button>
+                                        <button type="button" className="btn sm ghost" onClick={() => handleDismiss(m.id, act.id)}>Dismiss</button>
+                                      </>
+                                    )}
+                                    {act.status === 'executed' && <span className="or-asst-state good"><Icon name="check" size={12} />Done</span>}
+                                    {act.status === 'refused' && <span className="or-asst-state bad">Refused</span>}
+                                    {act.status === 'failed' && <span className="or-asst-state bad">Failed</span>}
+                                  </div>
+                                </div>
+                                {act.status === 'executed' && <ResultView result={act.result} />}
+                                {(act.status === 'refused' || act.status === 'failed') && act.error && <p className="or-asst-err">{act.error}</p>}
+                              </div>
+                            ))}
                           </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {act.status === 'proposed' && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn xs primary"
-                                  onClick={() => void handleApply(m.id, act)}
-                                >
-                                  Apply
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn xs"
-                                  onClick={() => handleDismiss(m.id, act.id)}
-                                >
-                                  Dismiss
-                                </button>
-                              </>
-                            )}
-                            {act.status === 'executed' && (
-                              <span style={{ fontSize: 11, color: 'var(--color-good, #2e7d32)', fontWeight: 600 }}>
-                                <Icon name="check" size={12} /> Applied
-                              </span>
-                            )}
-                            {act.status === 'refused' && (
-                              <span
-                                style={{ fontSize: 11, color: 'var(--color-bad, #c62828)' }}
-                                title={act.error}
-                              >
-                                Refused
-                              </span>
-                            )}
-                            {act.status === 'failed' && (
-                              <span
-                                style={{ fontSize: 11, color: 'var(--color-bad, #c62828)' }}
-                                title={act.error}
-                              >
-                                Failed
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {busy && (
+                    <div className="or-asst-msg assistant">
+                      <span className="or-asst-av"><Icon name="sparkle" size={13} /></span>
+                      <div className="or-asst-bubble thinking" role="status" aria-label="The assistant is thinking"><i /><i /><i /></div>
                     </div>
                   )}
-                </div>
-              ))}
-              {busy && (
-                <div
-                  className="or-chat-bubble assistant"
-                  style={{
-                    alignSelf: 'flex-start',
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    background: 'var(--card-bg, #f7f7f8)',
-                    border: '1px solid var(--border)',
-                    fontSize: 12,
-                    color: 'var(--text-3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
-                >
-                  <Icon name="refresh" size={12} className="spin" />
-                  <span>The assistant is thinking</span>
-                </div>
+                </>
               )}
               <div ref={chatBottomRef} />
             </div>
 
-            {/* Quick Prompts (if only welcome message) */}
-            {messages.length === 1 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '-4px 0 4px 0' }}>
-                {[
-                  'What is today’s schedule?',
-                  'Why were contacts skipped?',
-                  'Pause all sending',
-                  'Show campaign summary',
-                ].map((sugg) => (
-                  <button
-                    key={sugg}
-                    type="button"
-                    className="or-chip"
-                    onClick={() => void handleSend(sugg)}
-                    style={{ cursor: 'pointer', fontSize: 11 }}
-                  >
-                    {sugg}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Single Input Line */}
-            <div className="or-assistant-input-row" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <form className="or-asst-input" onSubmit={(e) => { e.preventDefault(); void handleSend() }}>
               <input
                 ref={inputRef}
                 type="text"
                 className="input"
-                placeholder="Ask the assistant (e.g. 'What is the schedule?', 'Pause sending')"
+                placeholder="Ask the assistant — e.g. “What is the schedule?” or “Pause sending”"
                 value={input}
                 disabled={busy}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void handleSend()
-                  }
-                }}
-                style={{ flex: 1 }}
               />
-              <button
-                type="button"
-                className="btn primary"
-                disabled={busy || !input.trim()}
-                onClick={() => void handleSend()}
-              >
-                <Icon name="send" size={13} />
-                <span>Send</span>
+              <button type="submit" className="btn primary" disabled={busy || !input.trim()}>
+                <Icon name="send" size={13} /><span>Send</span>
               </button>
-            </div>
+            </form>
           </>
         )}
 
-        {/* Collapsible Recent Actions Section */}
         {showRecent && (
-          <div
-            className="or-recent-actions-panel"
-            style={{
-              padding: 10,
-              background: 'var(--chip-bg, rgba(0,0,0,0.02))',
-              border: '1px solid var(--border)',
-              borderRadius: 6,
-              maxHeight: 160,
-              overflowY: 'auto',
-            }}
-          >
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>
-              Recent Assistant Audit Log (last 20 events):
-            </div>
+          <div className="or-asst-recent">
+            <span className="or-asst-label">Recent assistant actions</span>
             {recentActions.length === 0 ? (
-              <p className="or-muted" style={{ fontSize: 12, margin: 0 }}>
-                No assistant actions logged yet.
-              </p>
+              <p className="or-asst-none">No assistant actions logged yet.</p>
             ) : (
-              <div className="stack" style={{ gap: 4 }}>
+              <ul>
                 {recentActions.map((ev) => (
-                  <div
-                    key={ev.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      fontSize: 11,
-                      padding: '2px 0',
-                    }}
-                  >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                      {ev.text}
-                    </span>
-                    <span style={{ fontSize: 10, color: 'var(--text-3)', marginLeft: 8 }}>
-                      {new Date(ev.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
+                  <li key={ev.id}>
+                    <span>{ev.text}</span>
+                    <time>{new Date(ev.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
           </div>
         )}

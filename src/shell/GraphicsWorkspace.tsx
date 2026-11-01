@@ -129,6 +129,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   const snap = useStore((s) => s.snap)
   const tool = useStore((s) => s.tool)
   const rulers = useStore((s) => s.rulers)
+  const canvasGrid = useStore((s) => s.canvasGrid)
   const cropGuides = useStore((s) => s.cropGuides)
   const showDimensions = useStore((s) => s.showDimensions)
   const theme = useStore((s) => s.theme)
@@ -268,6 +269,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       if (mod && k === '-') { e.preventDefault(); zoomBy(0.8); return }
       if (mod && k === 'a') { e.preventDefault(); st.selectAll(); return }
       if (mod && k === 'd') { e.preventDefault(); st.duplicateSelected(); return }
+      if (mod && e.key === "'") { e.preventDefault(); st.setCanvasGrid(!st.canvasGrid); return } // Ctrl+' = show grid (Photoshop/Illustrator convention)
       if (mod && (e.key === ']' || e.key === '[' || e.key === '}' || e.key === '{') && st.selectedId) {
         e.preventDefault()
         const up = e.key === ']' || e.key === '}'
@@ -416,6 +418,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       { divider: true },
       { label: 'Facebook preview', shortcut: 'P', checked: showPreview, onClick: () => setShowPreview(!showPreview) },
       { label: 'Rulers', checked: rulers, onClick: () => st().setRulers(!rulers) },
+      { label: 'Canvas grid', shortcut: "Ctrl+'", checked: canvasGrid, onClick: () => st().setCanvasGrid(!canvasGrid) },
       { label: 'Snap to edges, centres & guides', checked: snap, onClick: () => st().setSnap(!snap) },
       { label: 'Crop guides (how Facebook trims)', checked: cropGuides, onClick: () => st().setCropGuides(!cropGuides) },
       { label: 'Element dimensions', shortcut: 'D', checked: showDimensions, onClick: () => {
@@ -499,6 +502,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
         <IconButton icon="image" tip="Add image layer" tipPos="right" size={16} onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setImgMenu({ x: r.right + 8, y: r.top }) }} />
         <div className="grow" />
         <IconButton icon="ruler" tip="Rulers & guides" tipPos="right" size={16} className="toggle" active={rulers} onClick={() => st().setRulers(!rulers)} />
+        <IconButton icon="dotgrid" tip="Canvas grid (Ctrl+')" tipPos="right" size={16} className="toggle" active={canvasGrid} onClick={() => st().setCanvasGrid(!canvasGrid)} />
         <IconButton icon="magnet" tip="Snap to edges, centres & guides" tipPos="right" size={16} className="toggle" active={snap} onClick={() => st().setSnap(!snap)} />
         <IconButton icon="crop" tip="Crop guides — see how Facebook trims this banner" tipPos="right" size={16} className="toggle" active={cropGuides} onClick={() => st().setCropGuides(!cropGuides)} />
         <IconButton icon="dimension" tip="Element dimensions — toggle accurate size badges (D)" tipPos="right" size={16} className="toggle" active={showDimensions} onClick={() => {

@@ -44,6 +44,8 @@ interface State {
   tool: 'select' | 'hand'
   theme: 'dark' | 'light'
   rulers: boolean
+  /** dot grid behind the artboard (View → Canvas grid); remembered across launches */
+  canvasGrid: boolean
   cropGuides: boolean
   showDimensions: boolean
   zoom: 'fit' | number
@@ -70,6 +72,7 @@ interface State {
   setTool: (t: 'select' | 'hand') => void
   setTheme: (t: 'dark' | 'light') => void
   setRulers: (v: boolean) => void
+  setCanvasGrid: (v: boolean) => void
   setCropGuides: (v: boolean) => void
   setShowDimensions: (v: boolean) => void
   setZoom: (z: 'fit' | number) => void
@@ -234,6 +237,7 @@ export const useStore = create<State>((set, get) => {
       return t
     })(),
     rulers: false,
+    canvasGrid: (() => { try { return localStorage.getItem('esb-banner-studio/canvas-grid') !== 'off' } catch { return true } })(),
     cropGuides: false,
     showDimensions: false,
     zoom: 'fit',
@@ -272,6 +276,10 @@ export const useStore = create<State>((set, get) => {
       set({ theme })
     },
     setRulers: (rulers) => set({ rulers }),
+    setCanvasGrid: (canvasGrid) => {
+      try { localStorage.setItem('esb-banner-studio/canvas-grid', canvasGrid ? 'on' : 'off') } catch { /* ignore */ }
+      set({ canvasGrid })
+    },
     setCropGuides: (cropGuides) => set({ cropGuides }),
     setShowDimensions: (showDimensions) => set({ showDimensions }),
     setZoom: (zoom) => set({ zoom }),

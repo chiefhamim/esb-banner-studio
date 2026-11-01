@@ -14,8 +14,10 @@ type Anchor = { el: HTMLElement } | { x: number; y: number }
 /** Open popovers, oldest first. A click inside a popover opened *from* another one (a dropdown inside the calendar) is "inside" both. */
 const popStack: (HTMLElement | null)[] = []
 
-export function Popover({ anchor, onClose, children, align = 'start', gap = 6, className = '', minWidth }: {
+export function Popover({ anchor, onClose, children, align = 'start', gap = 6, className = '', minWidth, matchWidth }: {
   anchor: Anchor; onClose: () => void; children: ReactNode; align?: 'start' | 'center' | 'end'; gap?: number; className?: string; minWidth?: number
+  /** the popover takes exactly its anchor's width (a menu that hangs under a full-width button) */
+  matchWidth?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
@@ -23,6 +25,7 @@ export function Popover({ anchor, onClose, children, align = 'start', gap = 6, c
   useLayoutEffect(() => {
     const pop = ref.current
     if (!pop) return
+    if (matchWidth && 'el' in anchor) { const w = anchor.el.getBoundingClientRect().width + 'px'; pop.style.width = w; pop.style.minWidth = w; pop.style.maxWidth = w }
     const pw = pop.offsetWidth, ph = pop.offsetHeight
     let left: number, top: number
     if ('el' in anchor) {
@@ -35,7 +38,7 @@ export function Popover({ anchor, onClose, children, align = 'start', gap = 6, c
       const room = Math.min(540, up ? above : below)
       pop.style.maxHeight = Math.max(96, room) + 'px'
       top = up ? r.top - gap - Math.min(ph, room) : r.bottom + gap
-      if (minWidth === undefined) pop.style.minWidth = r.width + 'px'
+      if (minWidth === undefined && !matchWidth) pop.style.minWidth = r.width + 'px'
     } else {
       left = align === 'center' ? Math.round(anchor.x - pw / 2) : align === 'end' ? anchor.x - pw : anchor.x
       top = anchor.y
@@ -43,7 +46,7 @@ export function Popover({ anchor, onClose, children, align = 'start', gap = 6, c
     }
     left = clamp(left, 8, window.innerWidth - pw - 8)
     setPos({ left, top })
-  }, [anchor, align, gap, minWidth])
+  }, [anchor, align, gap, minWidth, matchWidth])
 
   // register once per popover (mount / unmount) so re-renders never reshuffle the stack order
   useEffect(() => {
@@ -239,7 +242,7 @@ export function MenuBar({ menus }: { menus: MenuDef[] }) {
   )
 }
 
-export function MenuButton({ label, icon, items, align = 'start', className = '', menuClassName = '', title }: { label?: string; icon?: IconName; items: MenuEntry[]; align?: 'start' | 'center' | 'end'; className?: string; menuClassName?: string; title?: string }) {
+export function MenuButton({ label, icon, items, align = 'start', className = '', menuClassName = '', title, matchWidth }: { label?: string; icon?: IconName; items: MenuEntry[]; align?: 'start' | 'center' | 'end'; className?: string; menuClassName?: string; title?: string; matchWidth?: boolean }) {
   const btn = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
@@ -248,7 +251,7 @@ export function MenuButton({ label, icon, items, align = 'start', className = ''
       <button ref={btn} type="button" title={title} className={'btn ' + className + (open ? ' open' : '')} onClick={() => setOpen((o) => !o)}>
         {icon && <Icon name={icon} size={15} />}{label}<Icon name="chevDown" size={13} className="chev" />
       </button>
-      {open && btn.current && <Popover anchor={{ el: btn.current }} onClose={close} align={align} className={'menu ' + menuClassName} minWidth={210}><MenuList items={items} onDone={close} /></Popover>}
+      {open && btn.current && <Popover anchor={{ el: btn.current }} onClose={close} align={align} className={'menu ' + menuClassName} minWidth={matchWidth ? undefined : 210} matchWidth={matchWidth}><MenuList items={items} onDone={close} /></Popover>}
     </>
   )
 }

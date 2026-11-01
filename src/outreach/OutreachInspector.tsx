@@ -134,21 +134,26 @@ function SendTab() {
           <input type="email" className="or-input" placeholder="your@address" value={testTo} onChange={(e) => setTestTo(e.target.value)} aria-label="Test address" />
           <button
             type="button"
-            className={'btn' + (testing ? ' sending' : '')}
+            className={'btn or-test-btn' + (testing ? ' is-sending' : testResult ? (testResult.ok ? ' is-sent' : ' is-failed') : '')}
             disabled={!desktop || !ready || testing || !c || !/^\S+@\S+\.\S+$/.test(testTo)}
+            aria-live="polite"
             onClick={async () => {
               if (testResultTimer.current) clearTimeout(testResultTimer.current)
               setTestResult(null)
               setTesting(true)
-              const r = await sendTest(testTo.trim(), active)
+              // The plane gets at least one full flight (900 ms), so a fast server does not make the animation blink.
+              const [r] = await Promise.all([sendTest(testTo.trim(), active), new Promise((res) => setTimeout(res, 900))])
               setTesting(false)
               setTestResult({ ok: r.ok, msg: r.ok ? 'Sent' : r.error })
-              testResultTimer.current = setTimeout(() => setTestResult(null), 5000)
+              testResultTimer.current = setTimeout(() => setTestResult(null), r.ok ? 3200 : 6000)
             }}
           >
-            <Icon name={testing ? 'refresh' : testResult?.ok ? 'check' : 'send'} size={13} className={testing ? 'spin' : ''} /><span>{testing ? 'Sending' : 'Send test'}</span>
+            <span className="or-plane" aria-hidden>
+              {testResult?.ok && !testing ? <Icon name="check" size={13} /> : testResult && !testing ? <Icon name="alert" size={13} /> : <Icon name="send" size={13} />}
+            </span>
+            <span>{testing ? 'Sending' : testResult ? (testResult.ok ? 'Sent' : 'Not sent') : 'Send test'}</span>
           </button>
-          {testResult && <span className={'or-chip ' + (testResult.ok ? 'good' : 'bad')} role="status">{testResult.ok ? <Icon name="check" size={12} /> : <Icon name="info" size={12} />}<span>{testResult.msg}</span></span>}
+          {testResult && !testResult.ok && <span className="or-chip bad" role="status"><Icon name="info" size={12} /><span>{testResult.msg}</span></span>}
         </div>
       </section>
     </>

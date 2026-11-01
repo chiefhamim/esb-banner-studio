@@ -171,6 +171,11 @@
 .pnl-body .cat:hover { background: var(--field-hover); box-shadow: none; }
 .pnl-body .cat.on { background: color-mix(in srgb, var(--c) 10%, var(--card)); box-shadow: 0 0 0 1.5px var(--c); }
 .pnl-body .cat-ico { width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0; }
+/* The chosen category keeps its filled tile while the pointer is still on it. A later hover rule (App.css) painted the
+   tile pale under a white icon, so the icon vanished right after the click and came back when the pointer left. */
+.pnl-body .cat.on .cat-ico, .pnl-body .cat.on:hover .cat-ico { background: var(--c); color: #fff; transform: none; }
+:root[data-theme=dark] .pnl-body .cat.on .cat-ico, :root[data-theme=dark] .pnl-body .cat.on:hover .cat-ico { color: #0d0d0f; }
+.pnl-body .cat-ico { transition: background-color var(--t-1) linear, color var(--t-1) linear; }
 .pnl-body .cat-txt { min-width: 0; flex: 1 1 auto; }
 .pnl-body .cat-txt b { display: block; overflow: visible; -webkit-line-clamp: unset; line-clamp: unset; -webkit-box-orient: unset; font-size: 12px; line-height: 15px; white-space: normal; word-break: normal; overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; }
 
@@ -646,6 +651,10 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 .ai-settings[data-provider=openrouter] .ai-provider-seg .pill-slide { background: #6467f2 !important; }
 
 .stage-scroll.fits { overflow: hidden; }
+/* Canvas grid: a denser 12 px dot field (it was 24 px), slightly softer so twice the dots do not read as noise.
+   View → Canvas grid / the dot-grid button in the tool rail turns it off (.no-grid). */
+.stage-scroll { background-image: radial-gradient(color-mix(in srgb, var(--line-3) 80%, transparent) .9px, transparent 1.1px); background-size: 12px 12px; }
+.stage-area.no-grid .stage-scroll { background-image: none; }
 
 /* Editorial AI chip: a pill. No key yet = a gradient outline inviting you to add one; key saved = filled with the provider's own colours. */
 @media (max-width: 1180px) { .ed-ai-chip .ed-ai-label { display: none; } .ed-ai-chip { padding: 0 9px; } }
@@ -1817,6 +1826,13 @@ label.switch:active i { filter: brightness(.94); }
 .switch input:checked + i::after,
 .tgl[aria-checked="true"]::after {
   transform: translateX(16px) !important;
+}
+/* The small switches (Elements list rows and section heads, .tgl.sm) are 28–30 px with a 12–14 px knob: their "on"
+   travel is 12 px. The 16 px !important above pushed the knob 4 px past the end of the track. */
+.tgl.sm[aria-checked="true"]::after,
+.el-row .tgl[aria-checked="true"]::after,
+.el-group .tgl[aria-checked="true"]::after {
+  transform: translateX(12px) !important;
 }
 .pill-slide.ready {
   transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1),

@@ -176,6 +176,7 @@ export function Stage({ base }: { base: Assets }) {
   const snapOn = useStore((s) => s.snap)
   const tool = useStore((s) => s.tool)
   const rulers = useStore((s) => s.rulers)
+  const canvasGrid = useStore((s) => s.canvasGrid)
   const zoom = useStore((s) => s.zoom)
   const theme = useStore((s) => s.theme)
   const cropGuides = useStore((s) => s.cropGuides)
@@ -1022,7 +1023,7 @@ export function Stage({ base }: { base: Assets }) {
   }
 
   return (
-    <div ref={areaRef} className={'stage-area' + (rulers ? ' with-rulers' : '')}>
+    <div ref={areaRef} className={'stage-area' + (rulers ? ' with-rulers' : '') + (canvasGrid ? '' : ' no-grid')}>
       {rulers && (
         <>
           <div className="ruler-corner" title="Rulers: drag from a ruler to create a guide" />

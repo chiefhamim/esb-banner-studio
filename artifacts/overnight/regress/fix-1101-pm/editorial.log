@@ -1,0 +1,83 @@
+
+> esb-banner-studio@1.6.9 test:editorial
+> node tools/e2e/editorial-test.mjs
+
+PASS Editorial Desk workspace opened 
+PASS Live site connection telemetry pill displayed 
+PASS Unreachable link shows a specific intake error blocked.invalid could not be reached
+Proxy HTTP 502
+Try again
+Paste the text ins
+PASS "Paste the text instead" switches to the paste tab 
+PASS Link intake: extraction report shows method, language and counts Page markup · Bengali · 4 paragraphs · 2 photos
+PASS Link intake: source pane holds the Bengali headline from the page 
+PASS Link intake: fact chips are deduplicated 
+PASS Only the Banner and "Before you publish" start open in the sidebar, only the story in the source column {"right":["ed-image","ed-side-publish"],"left":["ed-src-body"]}
+PASS Left column preserves original Bengali headline 
+PASS Draft headline populated in English (no Bengali overwrite) 
+PASS Extraction report shows method, language and counts 
+PASS Draft body populated in English 
+PASS Centre is the CMS editor: Headline & deck panel, then a standalone Story panel {"head":true,"story":true,"nested":false,"breaker":0,"details":0}
+PASS Banner line-break strip is gone from the editor 
+PASS Header carries the workspace switcher; no rail, no logo {"sw":1,"rail":0,"logo":0,"on":"editorial"}
+PASS Opening a section closes the other one in that column ed-organize,ed-image
+PASS View → Dark switches the theme from the Editorial desk 
+PASS View → Bengali font changes the source column typeface {"family":"\"Noto Serif Bengali\", \"Hind Siliguri\", \"ESB Sans\", Inter, system-ui, -apple-system, \"Segoe UI\", sans-serif, \"ESB Sans\", Inter, system-ui, -apple-system, \"Segoe UI\", sans-serif","loaded":true}
+PASS Dragging the sidebar edge widens it 340 → 405
+PASS Story → SEO holds the slug with the /articles/ prefix 
+PASS SEO suggests keyphrases from the story, with no amounts Petrobangla and BAPEX · Sylhet gas field · national grid · development wells · MMCFD gas
+PASS SEO: keyphrase, built title in the Google preview, and the checks run {"kp":"Petrobangla and BAPEX","title":"Petrobangla and BAPEX: Petrobangla to drill two new wells","serp":"Petrobangla and BAPEX: Petrobangla to drill two new wells","checks":17,"titleCheck":"seo-check good"}
+PASS Story → Preview shows the esbpowerline.com article page 
+PASS The article hero is the rendered 16:9 Web banner {"src":"blob:","w":960,"h":540}
+PASS Switched to Graphics workspace 
+PASS Graphics offers the way back to the Editorial desk 
+PASS Banner headline updated from Editorial Draft 
+PASS Banner Website / Facebook share one segmented control with level edges {"isSeg":true,"thumb":true,"tops":1,"bottoms":1,"n":2}
+PASS Official esbpowerline.com website replica rendered 
+PASS Site preview uses the site theme and headline font {"theme":"theme-white light","h1":"Official: Two New Wells to Add 30 MMCFD Gas to Grid for Tk 592 Crore","h1Font":"\"Space Grotesk\", \"Space Grotesk\", system-ui, sans-serif","cells":10,"active":"Fossil Fuels & Commodities","bg":"rgb(248, 250, 252)"}
+PASS Site preview binds the draft headline and desk ribbon Fossil Fuels & Commodities
+PASS Site preview switches to the Midnight theme 
+PASS Facebook feed replica rendered 
+PASS Outputs shows the live banner 
+PASS Typing the headline updates the banner live 
+PASS Editing the banner updates the draft headline 
+PASS A hand-picked category survives Send to Banner 
+PASS Adding a photo makes it the featured photo 
+PASS Featured image preview draws the photo 
+PASS Dragging the featured image reframes the banner photo 0 → 1
+PASS Edit in Graphics opens on the Photos tab with the photo selected {"tab":"Photos","sel":"photos"}
+PASS A tone edit made in Graphics shows in the Editorial image panel 
+PASS At 1366 px the editor keeps a readable centre with both sidebars {"over":0,"center":714,"side":340,"src":312}
+PASS Sign-in sheet: real email/password fields, no bypass option {"bypass":false,"emailType":"email","pwAuto":"current-password"}
+PASS Typing the password while the desk re-renders keeps focus in the password field {"email":"","pw":"abc def"}
+PASS A wrong password gets the site's wording 
+PASS Signed in: name and role come from the site profile; the password is not stored {"name":"Desk Editor","badges":"Editor"}
+PASS Connection check: each link reported as it answered; a refused table is a failure, upload is desktop-only {"site":"ok","auth":"ok","session":"ok","role":"ok","articles":"fail","upload":"skip","ai-gemini":"skip"}
+PASS AI settings: Gemini, Claude, OpenAI, OpenRouter; the model menu is in front of the dialog; Esc closes the menu, not the dialog {"provs":["Gemini","Claude","OpenAI","OpenRouter"],"front":true,"stillOpen":1}
+PASS AI settings saved per provider; the chosen provider is the active one {"provider":"openai"}
+PASS SEO uses its own provider: with no Gemini key the job stays off and OpenAI is not called 
+PASS "Write with AI" and the header chip carry the chosen company's colour 
+PASS SEO by AI: the site name is stripped, a too-short description and a dated slug are rebuilt by the site rules {"t":"Sylhet gas field: two new wells","d":"Petrobangla and BAPEX have taken the initiative to drill two new development wells under the Sylhet gas field.","s":"sylhet-gas-field-petrobangla-drill-two-new-wells","k":"Sylhet gas field, BAPEX, Petrobangla, Sunday"}
+PASS Social: the article URL from the slug is shown, X / LinkedIn / Telegram end with it, Facebook carries none — guessed site links replaced {"shownUrl":"https://esbpowerline.com/articles/sylhet-gas-field-petrobangla-drill-two-new-wells","x":"Two new wells. https://esbpowerline.com/articles/sylhet-gas-field-petrobangla-drill-two-new-wells","fb":"Two new wells for Sylhet. Read more:"}
+PASS Publish from the browser preview: never a blob: link as the article image, and the result says why {"msg":"Published on esbpowerline.com. The browser preview cannot upload the banner and the photo is a local file, so no image was attached — add one in the CMS. The browser preview cannot refresh the site; the pages update within 15 minutes. Saved, but the public page did not answer yet — it can ta
+PASS New story keeps the last one: launcher lists it as Published ["Petrobangla to drill two new wells in Sylhet gas field Published Pasted text · just now"]
+PASS Stories tab: two stories, the one on the desk marked [{"on":true,"t":"Translated translated translated translated"},{"on":false,"t":"Petrobangla to drill two new wells in Sylhet gas field"}]
+PASS Switching restores that story's draft and re-syncs the banner {"head":"Petrobangla to drill two new wells in Sylhet gas field","banner":"Petrobangla to drill two new wells in Sylhet gas field"}
+PASS A failed import does not duplicate the story on the desk 2
+PASS The queue and the edit survive a reload {"head":"Petrobangla to drill two new wells in Sylhet gas field (edited)","n":2}
+PASS Publishing fires esb:story-published and the library harvests the story with its slug (D9 end-to-end) [{"kind":"stat","slug":"sylhet-gas-field-petrobangla-drill-two-new-wells","url":"https://esbpowerline.com/articles/sylhet-gas-field-petrobangla-drill-two-new-wells"},{"kind":"stat","slug":"sylhet-gas-field-petrobangla-drill-two-new-wells","url":"https://esbpowerline.com/articles/sylhet-gas-field-petrobangla-drill-two-new-wells"}]
+PASS Library tab opens on an honest empty state with "Harvest from this story" {"on":"Library","empty":"Nothing harvested yet","btn":true}
+PASS Harvest from this story: the fixture story's figures are added, each row with its provenance {"stats":[["৫৯২ কোটি টাকা",5920000000,"BDT"],["৩০ এমএমসিএফডি",30,"MMCFD"]],"rows":2,"prov":["from Petrobangla to drill two new wells in Sylhet gas field (edited) · /articles/sylhet-gas-field-petrobangla-drill-two-new-wells · original text","from Petrobangla to drill two new wells in Sylhet gas field (edited) · /articles/sylhet-gas-field-petrobangla-drill-two-new-wells · original text"],"note":"2 added."}
+PASS Harvesting the same story again adds nothing 2
+PASS A dry-run publish event harvests nothing 
+PASS esb:story-published harvests the story with its slug and URL; the quote keeps its named speaker {"slug":"w1-test-wells","url":"https://esbpowerline.com/articles/w1-test-wells","speaker":"Test Speaker","title":"managing director of BAPEX","storyId":"smvx2qonvm22xw","cat":"03","statsSlugged":true,"note":"Published story harvested: 1 added · 2 already here.","prov":"from Petrobangla to drill two new wells in Sylhet gas field (edited) · /articles/w1-test-wells"}
+PASS Search narrows the list (text, then Bengali digits) and clearing it restores all {"allRows":3,"bnRows":2}
+PASS All · Quotes · Stats filters by kind {"kq":["quote"],"ks":["stat","stat"]}
+PASS The speaker/org filter narrows to that organisation ["“We will finish the two wells before the winter demand peak”"]
+PASS "Use as quote banner" fills a Quote card verbatim with the speaker and switches to Graphics {"cardType":"quote","quoteText":"We will finish the two wells before the winter demand peak","speakerName":"Test Speaker","speakerTitle":"managing director of BAPEX","ws":"graphics"}
+PASS "Use as stat banner" fills a Stats card with the figure as written, a label from its sentence and the story as source {"cardType":"stat","statNumber":"৫৯২ কোটি টাকা","statLabel":"দুটি নতুন কূপ খনন করবে পেট্রোবাংলা","statNote":"Source: Petrobangla to drill two new wells in Sylhet gas field (edited)","statDelta":"","ws":"graphics"}
+PASS Remove (then confirm) takes an entry out of the library 
+PASS Speaker registry: seeded from the desk orgs; title, name and org edit; Add speaker adds ["BERC","BPDB","Petrobangla","Titas Gas","PGCB","DPDC","DESCO","Test Speaker"]
+PASS Speaker edits and the library survive a reload {"title":"Energy regulator","name":"Synthetic Spokesperson Two","org":"BPDB","n":2}
+PASS Removing a speaker takes it out of the registry 
+exit=0

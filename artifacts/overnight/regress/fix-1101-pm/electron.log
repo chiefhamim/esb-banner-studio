@@ -1,0 +1,36 @@
+PASS preload bridge exposed
+PASS native save writes file C:\Users\hamim\Pictures\ESB Banners\esb-test-probe.png
+PASS file name is sanitised to the chosen folder
+PASS a save into the temp directory is refused
+PASS forged read-project path rejected
+PASS forged save-image dir rejected
+PASS SSRF 127.0.0.1 rejected
+PASS SSRF 169.254.169.254 rejected
+PASS site session cookie written to the site profile only ["sb-sxgokpmrbgdndstygapc-auth-token=base64-eyJhY secure"]
+PASS CMS window opened on esbpowerline.com ["esbpowerline.com — CMS","file:///C:/Users/hamim/esb-banner-studio/dist/index.html"]
+PASS malformed session cookies are refused
+PASS banner upload IPC refuses bad sessions, types and bytes ["Not signed in to esbpowerline.com.","Only JPEG, PNG or WebP banners are uploaded.","The banner file is not the image type it claims to be."]
+PASS upload probe needs a session
+PASS the old any-file / any-config mail bridge is gone 
+PASS outreach status answers from the main process {"configured":false,"hasPassword":false,"encryption":true,"settings":null,"sent24h":0,"imapHost":"","sentTo":[]}
+PASS outreach send refuses a disk path, two recipients, and anything before an account is saved [{"ok":false,"error":"Attachments are sent as data, never as a path on disk"},{"ok":false,"error":"Recipient must be one plain email address"},{"ok":false,"error":"Save the sender account and app password first"}]
+PASS mail-server check answers "no account" instead of pretending to be signed in {"ok":false,"error":"No sender account saved","at":1793491974714}
+PASS inbox check answers "no account" before one is saved, and reads nothing {"ok":false,"error":"No sender account saved","at":1793491974762}
+PASS sender settings validated in main; the app password is encrypted or refused, never stored or returned in clear {"badHost":"SMTP server must be a host name such as smtp.gmail.com","saved":true}
+PASS new outreach autopilot bridge functions exist
+PASS outreachJobs returns empty array on fresh profile
+PASS outreachSettings returns §4.7 defaults
+PASS hostile outreachJobSubmit (>20,000 messages) is refused Cannot submit more than 20,000 messages in one job
+PASS signing out clears the site session
+PASS native menu removed (Alt cannot pop it up)
+PASS window title is ESB AI Studio: ESB AI Studio
+PASS stage canvas rendered
+PASS switched to Home workspace
+PASS Home picture covers the screen at every phase of its drift, even with a saved offset 0.0 px
+PASS switched to Editorial workspace
+PASS switched to Video workspace
+PASS switched to Outreach workspace
+PASS switched back to Graphics workspace
+PASS no console errors 
+PASS Home → Quit closes the app
+exit=0
