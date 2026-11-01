@@ -122,6 +122,9 @@ function createWindow() {
   // never navigate the editor away from itself; open links in the default browser
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); return { action: 'deny' } })  // only web links ever leave the app (never file:, ms-settings:, custom schemes)
   win.webContents.on('will-navigate', (e, url) => { if (!guard.isAppUrl(url, APP_URLS)) e.preventDefault() })
+  // a video export streams from this window: if it crashes or reloads mid-render, close and remove the half file
+  win.webContents.on('render-process-gone', () => { videoExports.abortActive() })
+  win.webContents.on('did-start-navigation', (_e, _url, isInPlace, isMainFrame) => { if (isMainFrame && !isInPlace) videoExports.abortActive() })
 
   // S3: Install permission handlers: only microphone (media) for app origin, deny everything else
   const ses = win.webContents.session
@@ -280,8 +283,9 @@ ipcMain.handle('esb:save-video', async (_e, name, bytes) => {
 })
 
 // ---------------------------------------------------------------- Video desk: media by path, projects, autosave, export
-// Every path here comes from a dialog main itself showed, a drop the preload resolved from a File, a still the app
-// rendered, or a project the editor opened; the renderer only ever receives opaque esb-media:// URLs for them.
+// A file is approved (put in the registry) only when it comes from a dialog main itself showed, a drop the preload
+// resolved from a File, or a still / voiceover take main wrote into userData. Opening a project approves nothing.
+// The renderer plays approved files through opaque esb-media:// URLs; naming a path back never grants a read.
 let videoRegistry = null
 const videoExports = videoMedia.createExportWriter()
 const videoAutosaveDir = () => path.join(app.getPath('userData'), 'video-autosave')
@@ -312,12 +316,17 @@ ipcMain.handle('esb:video-store-still', (_e, name, bytes) => {
   // a banner or photo the app rendered for Story → video, kept in userData so a saved story video finds it again
   if (!guard.isImageBytes(bytes) || bytes.length > 50 * 1024 * 1024) throw new Error('Not a PNG, JPEG or WebP image')
   const ext = bytes[0] === 0x89 ? 'png' : bytes[0] === 0xff ? 'jpg' : 'webp'
-  const dir = path.join(app.getPath('userData'), 'video-stills')
-  fs.mkdirSync(dir, { recursive: true })
-  const hash = require('node:crypto').createHash('sha256').update(bytes).digest('hex').slice(0, 24)
-  const stem = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '').slice(0, 60)
-  const file = path.join(dir, `${stem}-${hash}.${ext}`)
-  if (!fs.existsSync(file)) fs.writeFileSync(file, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length))
+  const stem = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '')
+  const file = videoMedia.storeGenerated(path.join(app.getPath('userData'), 'video-stills'), stem, ext, bytes, videoMedia.STILLS_CAP)
+  return videoEntries([file])[0] || null
+})
+ipcMain.handle('esb:video-store-take', (_e, name, bytes) => {
+  // a voiceover recorded on the desk: written to userData/video-takes so a saved or autosaved video keeps it
+  if (!(bytes instanceof Uint8Array) || bytes.length === 0 || bytes.length > videoMedia.MAX_TAKE_BYTES) throw new Error('Bad voiceover take')
+  const ext = videoMedia.audioTakeKind(bytes)
+  if (!ext) throw new Error('Not a WebM, Ogg, WAV or M4A recording')
+  const stem = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '')
+  const file = videoMedia.storeGenerated(path.join(app.getPath('userData'), 'video-takes'), stem, ext, bytes, videoMedia.TAKES_CAP)
   return videoEntries([file])[0] || null
 })
 ipcMain.handle('esb:video-save-project', async (_e, name, text, existingPath) => {
@@ -345,20 +354,20 @@ ipcMain.handle('esb:video-save-project', async (_e, name, text, existingPath) =>
 ipcMain.handle('esb:video-open-project', async () => {
   const dir = path.join(defaultDir(), 'Video')
   fs.mkdirSync(dir, { recursive: true })
-  const r = await dialog.showOpenDialog(win, { title: 'Open video project', defaultPath: dir, properties: ['openFile'], filters: [{ name: 'ESB video project', extensions: ['esbvideo', 'json'] }] })
+  const r = await dialog.showOpenDialog(win, { title: 'Open video project', defaultPath: dir, properties: ['openFile'], filters: [{ name: 'ESB video project', extensions: ['esbvideo'] }] })
   if (r.canceled || !r.filePaths[0]) return null
   const filePath = r.filePaths[0]
-  if (fs.statSync(filePath).size > 25 * 1024 * 1024) throw new Error('Project file too large')
-  const text = fs.readFileSync(filePath, 'utf8')
-  // the editor chose this project: the media it lists (existing files with media extensions) may be played
-  for (const p of videoMedia.projectMediaPaths(text)) videoRegistry.add(p)
-  const isVideoProject = /\.esbvideo$/i.test(filePath)
-  if (isVideoProject) fsScope.allowFile(filePath)
-  return { path: isVideoProject ? filePath : null, text }
+  if (!videoMedia.isVideoProjectPath(filePath) || videoMedia.isNetworkOrDevicePath(filePath)) throw new Error('Not a local .esbvideo project')
+  if ((await fs.promises.stat(filePath)).size > 25 * 1024 * 1024) throw new Error('Project file too large')
+  const text = await fs.promises.readFile(filePath, 'utf8')
+  // opening a project approves none of the media it lists: files this app imported are already in the registry and
+  // play; anything else (a project from another PC, or a crafted one) comes back missing and is relinked by hand
+  fsScope.allowFile(filePath)
+  return { path: filePath, text }
 })
 ipcMain.handle('esb:video-autosave', (_e, text) => videoMedia.writeSnapshot(videoAutosaveDir(), text))
 ipcMain.handle('esb:video-autosave-latest', () => videoMedia.latestSnapshot(videoAutosaveDir()))
-ipcMain.handle('esb:video-autosave-clear', () => videoMedia.clearSnapshots(videoAutosaveDir()))
+ipcMain.handle('esb:video-autosave-clear', (_e, projectId) => videoMedia.clearSnapshots(videoAutosaveDir(), typeof projectId === 'string' ? projectId : undefined))
 ipcMain.handle('esb:video-export-begin', async (_e, name, kind) => {
   const k = kind === 'webm' ? 'webm' : 'mp4'
   const safe = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '') + '.' + k
@@ -719,7 +728,7 @@ app.whenReady().then(() => {
   const userData = app.getPath('userData')
   videoRegistry = videoMedia.createMediaRegistry({ file: path.join(userData, 'video-media.json') })
   // the editor's session only (the CMS window has its own partition, so it cannot read the editor's media)
-  protocol.handle('esb-media', (request) => videoMedia.serveMedia(request, videoRegistry))
+  protocol.handle('esb-media', (request) => videoMedia.serveMedia(request, videoRegistry, { devUrl: DEV_URL }))
   // the send results the desk projects onto its campaigns go to the window as they happen (engineClient.ts applyEvents);
   // without this the list only caught up at the next launch
   const LIVE = new Set(['send.ok', 'send.fail', 'send.skip', 'reply', 'bounce', 'optout'])
@@ -807,6 +816,7 @@ app.on('before-quit', () => {
 })
 
 app.on('will-quit', () => {
+  try { videoRegistry?.flush() } catch {}
   if (syncChild) {
     try { syncChild.kill() } catch {}
   }

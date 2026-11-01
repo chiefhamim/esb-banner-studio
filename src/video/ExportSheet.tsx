@@ -17,7 +17,10 @@ const DRAFT_SECONDS = 10
 
 const mb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 
-export function ExportSheet({ project, onClose }: { project: VideoProject; onClose: () => void }) {
+/** Progress reaches React at most this often (every frame re-rendered the sheet and the desk under it). */
+const PROGRESS_MS = 100
+
+export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoProject; onClose: () => void; onShowMedia?: () => void }) {
   const setExporting = useVideoStore((s) => s.setExporting)
   const [container, setContainer] = useState<ExportContainer>('mp4')
   const [length, setLength] = useState<'full' | 'draft'>('full')
@@ -25,9 +28,10 @@ export function ExportSheet({ project, onClose }: { project: VideoProject; onClo
   const [step, setStep] = useState<'setup' | 'running' | 'done' | 'error'>('setup')
   const [frames, setFrames] = useState({ cur: 0, total: 1 })
   const [startedAt, setStartedAt] = useState(0)
-  const [result, setResult] = useState<(ExportResult & { savedTo: string | null }) | null>(null)
+  const [result, setResult] = useState<(ExportResult & { savedTo: string | null; chosen: string | null }) | null>(null)
   const [error, setError] = useState('')
   const abort = useRef<AbortController | null>(null)
+  const lastTick = useRef(0)
 
   useEffect(() => {
     let live = true
@@ -40,7 +44,11 @@ export function ExportSheet({ project, onClose }: { project: VideoProject; onClo
   const audio = useMemo(() => audibleClips(project), [project])
   const blocked = useMemo(() => exportBlocker(project), [project])
   const empties = useMemo(() => emptyTextClips(project), [project])
-  const duration = exportDuration(project, length === 'draft' ? DRAFT_SECONDS : undefined)
+  const end = contentEnd(project)
+  // a draft is offered only when the video is longer than the draft
+  const draftable = end > DRAFT_SECONDS + 0.05
+  const useDraft = length === 'draft' && draftable
+  const duration = exportDuration(project, useDraft ? DRAFT_SECONDS : undefined)
   const busy = step === 'running'
   const kind: ExportContainer = container === 'mp4' && support?.mp4 !== false ? 'mp4' : 'webm'
 
@@ -49,7 +57,11 @@ export function ExportSheet({ project, onClose }: { project: VideoProject; onClo
     // desktop: choose the place first, then the render streams into it
     let job: { id: string; path: string } | null = null
     if (b?.videoExportBegin && b.videoExportWrite && b.videoExportEnd) {
-      job = await b.videoExportBegin(exportFilename(project, kind), kind)
+      try { job = await b.videoExportBegin(exportFilename(project, kind), kind) } catch (e) {
+        setError(String((e as Error).message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+        setStep('error')
+        return
+      }
       if (!job) return
     }
     abort.current = new AbortController()
@@ -60,16 +72,20 @@ export function ExportSheet({ project, onClose }: { project: VideoProject; onClo
     const id = job?.id
     try {
       const writable = job && id ? new WritableStream<{ type: 'write'; data: Uint8Array; position: number }>({ write: async (chunk) => { await b!.videoExportWrite!(id, chunk.position, chunk.data) } }) : undefined
+      lastTick.current = 0
       const res = await exportTimelineVideo(project, (cur, total) => {
+        const now = performance.now()
+        if (cur < total && now - lastTick.current < PROGRESS_MS) return
+        lastTick.current = now
         setFrames({ cur, total })
         setExporting(true, Math.round((cur / total) * 100))
-      }, { container: kind, maxDuration: length === 'draft' ? DRAFT_SECONDS : undefined, signal: abort.current.signal, writable })
+      }, { container: kind, maxDuration: useDraft ? DRAFT_SECONDS : undefined, signal: abort.current.signal, writable })
       let savedTo: string | null = null
       if (id) {
         savedTo = await b!.videoExportEnd!(id, true)
         if (!savedTo) throw new Error('The file could not be finished on disk.')
       } else if (res.blob) downloadVideoBlob(res.blob, res.filename)
-      setResult({ ...res, savedTo })
+      setResult({ ...res, savedTo, chosen: job?.path ?? null })
       setStep('done')
     } catch (err) {
       if (id) await b!.videoExportEnd!(id, false).catch(() => null)
@@ -84,7 +100,6 @@ export function ExportSheet({ project, onClose }: { project: VideoProject; onClo
   const elapsed = (performance.now() - startedAt) / 1000
   const left = frames.cur > 5 ? (elapsed / frames.cur) * (frames.total - frames.cur) : null
   const pct = Math.round((frames.cur / Math.max(1, frames.total)) * 100)
-  const end = contentEnd(project)
 
   return (
     <Dialog title="Export video" kicker="RENDER" onClose={() => !busy && onClose()} width={520}>
@@ -97,7 +112,9 @@ export function ExportSheet({ project, onClose }: { project: VideoProject; onClo
             </div>
             <div className="vx-row">
               <span className="vx-label">Length</span>
-              <Seg<'full' | 'draft'> value={length} onChange={setLength} options={[{ value: 'full', label: `Full · ${formatShortTime(end)}` }, { value: 'draft', label: `${DRAFT_SECONDS}s draft` }]} />
+              {draftable
+                ? <Seg<'full' | 'draft'> value={length} onChange={setLength} options={[{ value: 'full', label: `Full · ${formatShortTime(end)}` }, { value: 'draft', label: `First ${DRAFT_SECONDS} s` }]} />
+                : <span className="vx-value">{formatShortTime(end)} · the whole video</span>}
             </div>
             <dl className="vx-facts">
               <div><dt>Frame</dt><dd>{project.width} × {project.height} · {project.fps} fps</dd></div>
@@ -105,11 +122,16 @@ export function ExportSheet({ project, onClose }: { project: VideoProject; onClo
               <div><dt>Sound</dt><dd>{audio.length ? `${audio.length} clip${audio.length === 1 ? '' : 's'} mixed${support?.audio ? ` · ${support.audio === 'aac' ? 'AAC' : 'Opus'}` : ''}` : 'Silent — nothing on the audio track'}</dd></div>
               <div><dt>ESB bug</dt><dd>{project.bug !== false ? 'On (top right)' : 'Off'}</dd></div>
             </dl>
-            {blocked && <div className="signin-error vx-blocked" role="alert"><Icon name="info" size={14} /><span>{blocked}</span></div>}
+            {blocked && (
+              <div className="signin-error vx-blocked" role="alert">
+                <Icon name="info" size={14} /><span>{blocked}</span>
+                {onShowMedia && /media/i.test(blocked) && !/empty/i.test(blocked) && <button type="button" className="btn sm vx-show-media" onClick={onShowMedia}>Show missing files</button>}
+              </div>
+            )}
             {!blocked && empties.length > 0 && <p className="vx-note">{empties.length} title{empties.length === 1 ? '' : 's'} with nothing typed in {empties.length === 1 ? 'is' : 'are'} left out of the file.</p>}
             {container === 'mp4' && support && !support.mp4 && <p className="vx-note">This system has no H.264 encoder; the file will be WebM.</p>}
             <div className="vx-actions">
-              <button type="button" className="btn" onClick={onClose}>Cancel</button>
+              <button type="button" className="btn ghost vx-cancel-setup" onClick={onClose}>Cancel</button>
               <button type="button" className="btn primary vx-go" onClick={() => void run()} disabled={!support || !!blocked}>
                 <Icon name="download" size={14} /><span>Export {kind === 'mp4' ? 'MP4' : 'WebM'}</span>
               </button>
@@ -136,6 +158,9 @@ export function ExportSheet({ project, onClose }: { project: VideoProject; onClo
             <div className="vw-success-icon"><Icon name="check" size={24} /></div>
             <h4>Video exported</h4>
             <p className="mono vx-file">{result.savedTo ?? result.filename}</p>
+            {result.savedTo && result.chosen && result.savedTo !== result.chosen && (
+              <p className="vx-note vx-renamed">The file you chose was in use (open in a player?), so the video was saved under this name instead.</p>
+            )}
             <dl className="vx-facts">
               <div><dt>File</dt><dd>{result.container.toUpperCase()} · {mb(result.size)}</dd></div>
               <div><dt>Length</dt><dd>{formatShortTime(result.duration)}</dd></div>

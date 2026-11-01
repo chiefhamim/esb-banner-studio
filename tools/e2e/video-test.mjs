@@ -7,6 +7,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { launchBrowser } from '../launch-browser.mjs'
 import { portOffset } from '../port-offset.mjs'
+import { measure } from './video-playback-measure.mjs'
 
 const PORT = 5195 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
@@ -56,6 +57,14 @@ try {
   check('No fabricated names or figures on the desk', !/Rezwanul|MMCFD|16,500|Chairman/.test(deskText))
   check('Timecode reads zero', (await page.textContent('.vw-timecode'))?.trim() === '00:00:00:00')
   check('Monitor canvas rendered', (await page.locator('.vw-canvas').count()) === 1)
+  check('Split is disabled with nothing on the timeline', await page.locator('.vw-split').isDisabled())
+
+  // 1b. Playback keeps real time: the playhead after 3 s of play is 3.0 s (wall clock), even with 60 clips on the desk
+  for (const n of [0, 60]) {
+    const m = await measure(page, n)
+    check(`Playback keeps real time with ${n} clips (playhead after 3 s ≈ the time that passed, ±0.1 s)`, Math.abs(m.playhead - m.wall) <= 0.1 && Math.abs(m.playhead - 3) <= 0.1, JSON.stringify(m))
+  }
+  await page.evaluate(() => { const st = window.__videoStore.getState(); st.loadProject({ ...st.project, clips: [] }); st.seek(0) })
 
   // 2. Overlay presets start empty; their labels show in the editor only
   await page.click('.vw-bin-panel .side-tabs button:has-text("Overlays")')
@@ -85,10 +94,36 @@ try {
   await page.click('.vw-clip-block[data-clip-kind="audio"]')
   check('Inspector: linked sound has volume, a sound switch and Unlink', (await page.locator('.vw-s-vol').count()) === 1 && (await page.locator('.vw-unlink').count()) === 1)
 
+  // P3: dragging a clip across many pointer moves is ONE undo step; a slider drag likewise
+  {
+    const before = await page.evaluate(() => window.__videoStore.getState().history.length)
+    const box = await page.locator('.vw-clip-block[data-clip-kind="video"]').boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    for (let k = 1; k <= 25; k++) await page.mouse.move(box.x + box.width / 2 + k * 4, box.y + box.height / 2)
+    await page.mouse.up()
+    const after = await page.evaluate(() => { const s = window.__videoStore.getState(); return { h: s.history.length, starts: s.project.clips.map((c) => c.start) } })
+    check('A drag of 25 pointer moves is one undo step (the linked pair moved together)', after.h === before + 1 && after.starts.every((t) => t > 2), JSON.stringify({ before, ...after }))
+    await page.keyboard.press('Control+z')
+    const undone = await page.evaluate(() => window.__videoStore.getState().project.clips.map((c) => c.start))
+    check('One undo puts the dragged pair back', undone.every((t) => t === 0), JSON.stringify(undone))
+    await page.click('.vw-clip-block[data-clip-kind="audio"]')
+    const h0 = await page.evaluate(() => window.__videoStore.getState().history.length)
+    const sl = await page.locator('.vw-s-vol').boundingBox()
+    await page.mouse.move(sl.x + sl.width - 4, sl.y + sl.height / 2)
+    await page.mouse.down()
+    for (let k = 1; k <= 15; k++) await page.mouse.move(sl.x + sl.width - 4 - k * 8, sl.y + sl.height / 2)
+    await page.mouse.up()
+    const vol = await page.evaluate(() => { const s = window.__videoStore.getState(); return { h: s.history.length, v: s.project.clips.find((c) => c.kind === 'audio').volume } })
+    check('A volume slider drag is one undo step', vol.h === h0 + 1 && vol.v < 0.8, JSON.stringify({ h0, ...vol }))
+    await page.keyboard.press('Escape')
+    await page.evaluate(() => window.__videoStore.getState().undo())
+  }
+
   const exportOnce = async (length) => {
     await page.click('.vw-header-actions button:has-text("Export")')
     await page.waitForSelector('.vx')
-    if (length) await page.click(`.vx-row .seg-ctl button:has-text("${length}")`)
+    if (length) await page.click(`.vx-row .seg-ctl button:has-text("${length === 'draft' ? 'First' : length}")`)
     const [download] = await Promise.all([page.waitForEvent('download', { timeout: 300000 }), page.click('.vx-go')])
     const file = await download.path()
     await page.waitForSelector('.vw-export-success')
@@ -193,7 +228,10 @@ try {
   await page.waitForFunction((n) => window.__videoStore.getState().project.clips.length === n, savedClips)
   check('Restore brings back the last state', (await page.evaluate(() => window.__videoStore.getState().project.name)).startsWith('Synthetic test headline'))
 
-  // 10. New asks first when there is unsaved work, then empties the desk
+  // 10. Open and New ask first when there is unsaved work; New then empties the desk
+  await page.click('.vw-open')
+  check('Open with unsaved work asks first', (await page.locator('.dialog[aria-label="Open another video?"]').count()) === 1)
+  await page.click('.dialog[aria-label="Open another video?"] button:has-text("Cancel")')
   await page.click('.vw-new')
   await page.waitForSelector('.dialog[aria-label="Start a new video?"]')
   await page.click('.vw-confirm-new')

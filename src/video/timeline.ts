@@ -23,8 +23,11 @@ export interface MediaAsset {
   hasAudio?: boolean
   /** The file could not be found when the project was opened: clips using it show "Media offline" until relinked. */
   missing?: boolean
-  /** Made by the app (a rendered banner or photo for Story → video), not imported by the editor. */
+  /** Made by the app (a rendered banner or photo for Story → video, a recorded voiceover), not imported by the editor. */
   generated?: boolean
+  /** Taken out of the bin by the editor, but kept (hidden) while a clip on the timeline or in the undo history still
+   * plays it, so the project file can still find the file and Relink still works. Undo brings it back to the bin. */
+  removed?: boolean
 }
 
 export interface Track {
@@ -181,6 +184,16 @@ export function linkedIds(project: VideoProject, clipId: string): Set<string> {
   return ids
 }
 
+/** The clip, or any clip linked to it, sits on a locked track. A lock protects every clip on it, so an edit that
+ * would move, trim, split or delete a locked clip through its linked partner is refused as a whole (the pair is never
+ * split up silently); Unlink first to edit one side alone. */
+export function groupLocked(project: VideoProject, clipId: string): boolean {
+  const locked = new Set(project.tracks.filter((t) => t.locked).map((t) => t.id))
+  if (!locked.size) return false
+  const ids = linkedIds(project, clipId)
+  return project.clips.some((c) => ids.has(c.id) && locked.has(c.trackId))
+}
+
 /** Detach a video clip from its own audio (both stay on the timeline, each edited on its own). */
 export function unlinkClip(project: VideoProject, clipId: string): VideoProject {
   const c = project.clips.find((x) => x.id === clipId)
@@ -263,7 +276,7 @@ export function addClip(timeline: VideoProject, clip: Clip): VideoProject {
 
 export function moveClip(timeline: VideoProject, clipId: string, newStart: number, newTrackId?: string): VideoProject {
   const target = timeline.clips.find((c) => c.id === clipId)
-  if (!target) return timeline
+  if (!target || groupLocked(timeline, clipId)) return timeline
   const group = linkedIds(timeline, clipId)
   // a linked pair moves together; the earliest of them may not go before 0
   const minStart = Math.min(...timeline.clips.filter((c) => group.has(c.id)).map((c) => c.start))
@@ -296,7 +309,7 @@ export function trimClip(timeline: VideoProject, clipId: string, newStart: numbe
 
 export function splitClip(timeline: VideoProject, clipId: string, atTime: number): VideoProject {
   const target = timeline.clips.find((c) => c.id === clipId)
-  if (!target) return timeline
+  if (!target || groupLocked(timeline, clipId)) return timeline
   if (atTime <= target.start || atTime >= target.start + target.duration) return timeline
   const group = linkedIds(timeline, clipId)
   const stamp = Date.now().toString(36)
@@ -313,6 +326,7 @@ export function splitClip(timeline: VideoProject, clipId: string, atTime: number
 }
 
 export function deleteClip(timeline: VideoProject, clipId: string): VideoProject {
+  if (groupLocked(timeline, clipId)) return timeline
   const group = linkedIds(timeline, clipId)
   return { ...timeline, clips: timeline.clips.filter((c) => !group.has(c.id)) }
 }
@@ -338,7 +352,7 @@ export function snapTime(time: number, timeline: VideoProject, threshold = 0.25)
 
 export function trimClipLeft(timeline: VideoProject, clipId: string, deltaSeconds: number): VideoProject {
   const target = timeline.clips.find((c) => c.id === clipId)
-  if (!target) return timeline
+  if (!target || groupLocked(timeline, clipId)) return timeline
   const group = linkedIds(timeline, clipId)
   const members = timeline.clips.filter((c) => group.has(c.id))
   // one delta for the whole linked pair, limited so none of them goes before 0 s, under 0.2 s, or before its source start
@@ -354,7 +368,7 @@ export function trimClipLeft(timeline: VideoProject, clipId: string, deltaSecond
 
 export function trimClipRight(timeline: VideoProject, clipId: string, deltaSeconds: number): VideoProject {
   const target = timeline.clips.find((c) => c.id === clipId)
-  if (!target) return timeline
+  if (!target || groupLocked(timeline, clipId)) return timeline
   const group = linkedIds(timeline, clipId)
   const members = timeline.clips.filter((c) => group.has(c.id))
   // footage and sound cannot run past the end of their file
@@ -378,7 +392,9 @@ export const PROJECT_VERSION = 2
 /** The project as a file. Media are kept by their real file path (with size and modified time, to notice a changed or
  * moved file); object URLs and media-protocol URLs are dropped, since they mean nothing after a restart. */
 export function serializeVideoProject(project: VideoProject, bin: MediaAsset[] = project.mediaAssets ?? []): string {
-  const assets = bin.map((a) => ({
+  // an item taken out of the bin is still saved while a clip uses it (so the clip can find its file again)
+  const used = new Set(project.clips.map((c) => c.mediaAssetId).filter(Boolean))
+  const assets = bin.filter((a) => !a.removed || used.has(a.id)).map((a) => ({
     id: a.id,
     name: a.name,
     type: a.type,
@@ -390,6 +406,7 @@ export function serializeVideoProject(project: VideoProject, bin: MediaAsset[] =
     mtimeMs: a.mtimeMs,
     hasAudio: a.hasAudio,
     generated: a.generated,
+    removed: a.removed || undefined,
     url: isRuntimeUrl(a.url) ? '' : a.url,
   }))
   const clips = project.clips.map((c) => ({

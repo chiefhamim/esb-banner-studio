@@ -23,12 +23,10 @@
 .vw-restore-card .vw-start-icon { color: #131316; background: #f5c26b; }
 
 /* ---------------------------------------------------------------- the bin */
-/* the bin's list keeps room for at least a few rows when the inspector is open; the inspector scrolls inside itself */
-.vw-bin-content { min-height: 168px; }
-.vw-inspector { flex: 0 1 auto; max-height: min(52%, 480px); overflow-y: auto; scrollbar-gutter: stable; }
 .vw-dropzone { width: 100%; cursor: pointer; font: inherit; color: inherit; }
 .vw-dropzone:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-.vw-bin-note { margin: 0 0 8px; font-size: 11.5px; line-height: 16px; color: var(--text-3); }
+.vw-bin-note { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 11.5px; line-height: 16px; color: var(--text-3); }
+.vw-bin-note svg { flex: none; }
 .vw-missing { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; padding: 8px 10px; font-size: 12px; line-height: 17px; color: var(--text); background: var(--warning-soft); border-radius: var(--r-2); }
 .vw-missing svg { flex: none; margin-top: 1px; color: var(--warning); }
 .vw-media-card { display: flex; align-items: center; }
@@ -36,26 +34,53 @@
 /* one line of facts: they shorten from the end instead of leaving "MB" alone on a second line */
 .vw-media-meta { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
-.vw-media-actions { display: flex; flex: none; gap: 4px; }
+.vw-media-actions { display: flex; flex: none; align-items: center; gap: 4px; }
+/* every bin action is a 28 px box with a visible fill, in one aligned group at the row's end */
+.vw-media-actions .ibtn.vw-act { width: 28px; height: 28px; color: var(--text-2); background: var(--fill); border-radius: 6px; }
+.vw-media-actions .ibtn.vw-act:hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
+.vw-media-actions .btn.vw-relink { height: 28px; }
+.vw-thumb-icon { display: grid; place-items: center; color: var(--text-3); }
+.vw-thumb-icon.missing { color: var(--warning); background: var(--warning-soft); }
 .vw-media-card .btn.xs { gap: 4px; }
-.vw-media-card.missing .vw-media-thumb { font-size: 9px; font-weight: 700; letter-spacing: var(--track-chip); color: var(--warning); background: var(--warning-soft); }
 .vw-miss-word { color: var(--warning); font-weight: 600; }
 .vw-bug-row { margin: 2px 0 10px; padding: 8px 12px; background: var(--card); border-radius: var(--r-3); box-shadow: var(--card-shadow); }
-.vw-tag.headline { --tag: #dc2626; } .vw-tag.card { --tag: #7c3aed; }
+.vw-tag[data-tag="lower-third"] { --tag: #10b981; } .vw-tag[data-tag="headline"] { --tag: #dc2626; } .vw-tag[data-tag="card"] { --tag: #7c3aed; }
+.vw-tag[data-tag="breaking"] { --tag: #ef4444; } .vw-tag[data-tag="logo"] { --tag: #0ea5e9; } .vw-tag[data-tag="caption"] { --tag: #f59e0b; } .vw-tag[data-tag="voice"] { --tag: #8b5cf6; }
+.vw-preset-intro { margin: 0 2px 8px; font-size: 11.5px; line-height: 16px; color: var(--text-3); }
+.vw-preset-list .vw-preset-card { padding: 8px 12px 10px; }
+.vw-preset-list .vw-preset-header { margin-bottom: 2px; }
+.vw-preset-list .vw-preset-desc { margin: 0; }
+/* a fade at the foot of the bin while more is below */
+.vw-bin-content[data-more]::after { content: ''; position: sticky; bottom: -10px; display: block; height: 28px; margin: -28px -8px -10px; background: linear-gradient(transparent, var(--side)); pointer-events: none; }
 .vw-caption-input { width: 100%; margin: 6px 0 4px; padding: 8px 10px; resize: vertical; font: 400 13px/1.6 var(--ui); color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); }
 .vw-caption-input:hover { background: var(--field-hover); }
 .vw-caption-input:focus { outline: 0; box-shadow: 0 0 0 2px var(--focus-ring); }
 .vw-caption-input:lang(bn), .vw-caption-input { font-family: var(--ui), "Hind Siliguri", sans-serif; }
 
-/* ---------------------------------------------------------------- inspector */
+/* ---------------------------------------------------------------- inspector
+   Wide windows (≥ 1180 px): its own column right of the monitor, as Graphics' Inspector sits right of the artboard,
+   so the bin keeps its full height. Narrower: it takes the bin's place in the left column (a tab or the close button
+   goes back), because a third column would squeeze the monitor below a usable size. */
+.vw-inspector-panel { display: flex; flex-direction: column; flex: none; width: 296px; min-height: 0; background: var(--side); border-left: 1px solid var(--card-line); }
+.vw-inspector-panel .vw-inspector { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; border-top: 0; padding: 12px 10px 16px 14px; }
+.vw-inspector-host .vw-inspector { padding: 2px 0 8px; background: transparent; border-top: 0; }
+.vw-inspector-head { display: flex; align-items: center; justify-content: space-between; }
+.vw-inspector-actions { display: flex; gap: 4px; }
+.vw-inspector-actions .ibtn { width: 28px; height: 28px; border-radius: 6px; color: var(--text-2); }
+.vw-inspector-actions .ibtn:hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
+.vw-inspector-body { gap: 12px; }
+.vw-subhead { margin: 4px 0 -4px; font: 600 10.5px/16px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+.vw-locked-hint { display: flex; gap: 6px; align-items: flex-start; }
+.vw-locked-hint svg { flex: none; margin-top: 2px; }
+.video-workspace .slider::-webkit-slider-runnable-track { background: linear-gradient(90deg, var(--text-2) var(--p), var(--fill-active) var(--p)); }
+.video-workspace .slider::-webkit-slider-thumb { border-color: var(--text-2); }
+.vw-sb-save.failed { color: var(--warning); }
 .vw-field label { display: flex; justify-content: space-between; gap: 8px; }
 .vw-field label em { font-style: normal; font-variant-numeric: tabular-nums; color: var(--text-3); }
 .vw-field textarea { width: 100%; padding: 8px 10px; resize: vertical; font: 400 13px/1.55 var(--ui), "Hind Siliguri", sans-serif; color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); }
 .vw-field textarea:focus { outline: 0; box-shadow: 0 0 0 2px var(--focus-ring); }
 .vw-field input::placeholder, .vw-field textarea::placeholder { color: var(--text-3); }
 .vw-field-row { flex-direction: row; align-items: center; justify-content: space-between; }
-.vw-field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
-.vw-field-pair .vw-field label { font-size: 11.5px; }
 .vw-hint { margin: -2px 0 0; font-size: 11.5px; line-height: 16px; color: var(--text-3); }
 .vw-reset-transform { align-self: flex-start; gap: 6px; }
 .vw-linked { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 10px; font-size: 11.5px; line-height: 16px; color: var(--text-2); background: var(--fill); border-radius: var(--r-2); }
@@ -71,7 +96,12 @@
 .vw-track-lane.locked { background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--text) 5%, transparent) 0 6px, transparent 6px 12px); }
 
 /* ---------------------------------------------------------------- export sheet and dialogs */
-.vx-blocked { margin: 0; }
+.vx-blocked { margin: 0; flex-wrap: wrap; }
+.vx-blocked .vx-show-media { margin-left: auto; }
+.vx-value { font-size: 12.5px; color: var(--text); font-variant-numeric: tabular-nums; }
+.vx-actions .btn.ghost { color: var(--text-2); font-weight: 500; }
+.vx-actions .btn.ghost:hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
+.vx-actions .btn.primary { font-weight: 600; }
 .vw-confirm-body { margin: 0; font-size: 13px; line-height: 19px; color: var(--text-2); }
 
 /* ---------------------------------------------------------------- header: the aspect is a short label ("16:9"), New joins Open/Save */
@@ -81,3 +111,16 @@
 .vw-clip-block.stacked { top: calc(4px + var(--row) * (40px / var(--rows))); bottom: auto; height: calc(40px / var(--rows) - 2px); padding-top: 0; padding-bottom: 0; }
 .vw-clip-block.stacked .vw-clip-duration { display: none; }
 .vw-media-actions .ibtn { width: 26px; height: 26px; }
+
+/* the timeline's Split / Delete are quiet tools, like the header's; disabled reads disabled */
+.vw-tl-tools-left .btn.subtle { gap: 6px; }
+/* the playhead moves by transform (no layout per frame) */
+.vw-playhead-line { will-change: transform; }
+/* the clip's name keeps clear of its trim grips */
+.vw-clip-block { padding: 0 14px; }
+.vw-clip-block .vw-clip-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the start card keeps a margin from the monitor's edges at 900 px */
+@media (max-width: 1100px) { .vw-start { padding: 16px 20px; } .vw-start-card { padding: 20px 18px 18px; } }
+/* Story tab summary: two short facts, each kept on one line */
+.vw-story-sum { flex-wrap: wrap; row-gap: 2px; }
+.vw-story-sum > span { white-space: nowrap; }

@@ -18,11 +18,12 @@ export interface VideoBridge {
   videoRelink?: (name: string) => Promise<MediaEntry | null>
   videoResolve?: (paths: string[]) => Promise<ResolvedEntry[]>
   videoStoreStill?: (name: string, bytes: Uint8Array) => Promise<MediaEntry | null>
+  videoStoreTake?: (name: string, bytes: Uint8Array) => Promise<MediaEntry | null>
   videoSaveProject?: (name: string, text: string, existing: string | null) => Promise<string | null>
   videoOpenProject?: () => Promise<{ path: string; text: string } | null>
   videoAutosave?: (text: string) => Promise<{ ok: boolean; at: number }>
   videoAutosaveLatest?: () => Promise<{ at: number; text: string } | null>
-  videoAutosaveClear?: () => Promise<boolean>
+  videoAutosaveClear?: (projectId?: string) => Promise<boolean>
   videoExportBegin?: (name: string, kind: 'mp4' | 'webm') => Promise<{ id: string; path: string } | null>
   videoExportWrite?: (id: string, position: number, bytes: Uint8Array) => Promise<boolean>
   videoExportEnd?: (id: string, ok: boolean) => Promise<string | null>
@@ -157,12 +158,45 @@ function isBlack(ctx: CanvasRenderingContext2D): boolean {
 let seq = 0
 export const newAssetId = () => `asset-${Date.now().toString(36)}-${(seq++).toString(36)}`
 
-/** A bin entry for a file main approved (desktop) — probed for length, size and sound. */
-export async function assetFromEntry(e: MediaEntry, generated = false): Promise<MediaAsset | null> {
-  const type = kindOf(e.name)
+/** Run `fn` over `items` with at most `limit` at once, keeping the order of the results. An import of 200 files probed
+ * all at once opened 200 decoders and <video> elements together. */
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length)
+  let next = 0
+  const worker = async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i], i) } }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
+}
+
+/** How many files an import probes at once. */
+export const PROBE_CONCURRENCY = 4
+
+/** A bin entry for a file main approved (desktop) — probed for length, size and sound. `type` overrides the kind read
+ * from the extension (a voiceover take is a .webm that holds sound only). */
+export async function assetFromEntry(e: MediaEntry, generated = false, type: MediaAsset['type'] | null = kindOf(e.name)): Promise<MediaAsset | null> {
   if (!type) return null
   const p = await probeMedia(e.url, type)
   return { id: newAssetId(), name: e.name, type, url: e.url, path: e.path, size: e.size, mtimeMs: e.mtimeMs, duration: p.duration, width: p.width, height: p.height, hasAudio: p.hasAudio, thumbnailUrl: p.thumbnailUrl, generated }
+}
+
+/** Keep a recorded voiceover: in the desktop app main writes it to userData/video-takes and it is recorded by path
+ * (so a save, a reopen and a crash restore all find it); in the browser it stays an object URL for the session. */
+export async function keepTake(blob: Blob, name: string, duration: number): Promise<{ asset: MediaAsset; onDisk: boolean; error?: string }> {
+  const b = videoBridge()
+  let error: string | undefined
+  if (b?.videoStoreTake) {
+    try {
+      const entry = await b.videoStoreTake(name, new Uint8Array(await blob.arrayBuffer()))
+      const asset = entry ? await assetFromEntry(entry, true, 'audio') : null
+      if (asset) return { asset: { ...asset, name, duration: asset.duration > 0 ? asset.duration : duration }, onDisk: true }
+    } catch (e) {
+      error = (e as Error).message || 'could not write the take'
+    }
+  }
+  // the browser, or the write failed: the take stays playable for this session (and the desk says it is not on disk)
+  const url = URL.createObjectURL(blob)
+  rememberFile(url, blob)
+  return { asset: { id: newAssetId(), name, type: 'audio', url, duration, size: blob.size, generated: true }, onDisk: false, error }
 }
 
 /** A bin entry for a browser File (object URL, this session only). */

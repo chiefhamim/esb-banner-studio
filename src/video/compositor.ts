@@ -31,6 +31,8 @@ export interface RenderOptions {
   editor?: boolean
   /** Decoded frames by clip id (export). Clips not in the map use their cached <video> element. */
   frames?: Map<string, FrameSource>
+  /** The monitor is playing: the playback loop keeps each <video> running in step, so drawing must not seek it. */
+  playing?: boolean
 }
 
 /** Media served by the app's own protocol is read with CORS, so drawing it never taints the canvas (the export reads
@@ -72,8 +74,21 @@ export function getCachedImage(url: string): HTMLImageElement | null {
 export function dropCachedMedia(url: string) {
   const v = videoCache.get(url)
   if (v) { try { v.pause(); v.removeAttribute('src'); v.load() } catch { /* already gone */ } videoCache.delete(url) }
-  imageCache.delete(url)
+  const img = imageCache.get(url)
+  if (img) { img.onload = null; img.removeAttribute('src'); imageCache.delete(url) }
 }
+
+/** Release every cached <video> and picture whose URL is not in `keep` (a new or opened project, a removed file):
+ * each <video> holds a decoder and its buffered frames until it is let go. */
+export function pruneMediaCache(keep: Set<string>) {
+  for (const url of [...videoCache.keys(), ...imageCache.keys()]) if (!keep.has(url)) dropCachedMedia(url)
+}
+
+/** How many media elements are cached (tests). */
+export const mediaCacheSize = () => videoCache.size + imageCache.size
+
+/** The <video> already made for `url`, without making one. */
+export const peekCachedVideo = (url: string) => videoCache.get(url) ?? null
 
 export const hasBangla = (s: string) => /[ঀ-৿]/.test(s)
 const face = (text: string) => (hasBangla(text) ? '"Hind Siliguri", "ESB Sans", sans-serif' : '"ESB Sans", Inter, sans-serif')
@@ -123,6 +138,8 @@ export function renderCompositeFrame(ctx: Ctx, timeline: VideoProject, time: num
   ctx.fillStyle = '#000000'
   ctx.fillRect(0, 0, w, h)
 
+  // a caption moves up over a lower third or breaking strap shown at the same time, so the two never overlap
+  const captionBottom = captionLimit(layers.map((l) => l.clip), w, h, editor)
   let branded = false
   for (const { clip, alpha } of layers) {
     if (alpha <= 0) continue
@@ -137,13 +154,14 @@ export function renderCompositeFrame(ctx: Ctx, timeline: VideoProject, time: num
     } else if (clip.kind === 'caption') {
       ctx.save()
       ctx.globalAlpha = alpha
-      renderCaptionClip(ctx, clip, w, h, editor)
+      renderCaptionClip(ctx, clip, w, h, editor, captionBottom)
       ctx.restore()
     }
   }
 
-  // the ESB bug (top right), unless switched off or over a banner still, whose own masthead sits exactly there
-  if (timeline.bug !== false && !branded) renderStationBug(ctx, w, h)
+  // the ESB bug (top right), unless switched off, over a banner still (whose own masthead sits exactly there), or on an
+  // empty timeline (nothing to brand: the monitor stays black behind the start card)
+  if (timeline.bug !== false && !branded && timeline.clips.length > 0) renderStationBug(ctx, w, h)
   ctx.restore()
 }
 
@@ -163,7 +181,9 @@ function drawFootage(ctx: Ctx, clip: Clip, time: number, w: number, h: number, a
       const v = getCachedVideo(clip.sourceUrl)
       if (v) {
         const targetTime = Math.max(0, (clip.in || 0) + (time - clip.start))
-        if (opts.editor && Math.abs(v.currentTime - targetTime) > 0.08) v.currentTime = targetTime
+        // paused (scrubbing, stepping): put the frame exactly here. Playing: the playback loop runs the element and
+        // corrects drift itself; seeking it every frame here is what made playback stutter.
+        if (opts.editor && !opts.playing && Math.abs(v.currentTime - targetTime) > 0.04) v.currentTime = targetTime
         if (v.readyState >= 2 && v.videoWidth > 0) src = { image: v, width: v.videoWidth, height: v.videoHeight }
       }
     }
@@ -308,9 +328,33 @@ function renderOverlayClip(ctx: Ctx, clip: Clip, w: number, h: number, editor: b
   } else if (type === 'card') {
     // a centred text card: an accent bar on top, a title and a supporting text, both from the editor
     const labels = OVERLAY_LABELS.card
+    const empty = !(clip.overlayText ?? '').trim() && !(clip.overlaySub ?? '').trim()
     const title = fieldText(clip.overlayText, labels.text, editor)
     const body = fieldText(clip.overlaySub, labels.sub, editor)
-    if (title || body) {
+    if (empty && editor) {
+      // nothing typed yet: a quiet dashed outline where the card will sit (editor only, never exported)
+      const cardW = Math.min(w * 0.82, 1200 * short)
+      const cardH = 220 * short
+      const x = (w - cardW) / 2
+      const y = (h - cardH) / 2
+      ctx.setLineDash([10 * short, 8 * short])
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'
+      ctx.lineWidth = 2 * short
+      ctx.beginPath()
+      ctx.roundRect(x, y, cardW, cardH, 16 * short)
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)'
+      ctx.fill()
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.font = `600 ${Math.round(26 * short)}px "ESB Sans", sans-serif`
+      ctx.fillText('Text card', w / 2, h / 2 - 16 * short)
+      ctx.font = `500 ${Math.round(18 * short)}px "ESB Sans", sans-serif`
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
+      ctx.fillText('Type its title and text in the inspector', w / 2, h / 2 + 18 * short)
+    } else if (title || body) {
       const cardW = Math.min(w * 0.82, 1200 * short)
       const pad = 44 * short
       const tSize = Math.round(46 * short)
@@ -364,7 +408,22 @@ function renderOverlayClip(ctx: Ctx, clip: Clip, w: number, h: number, editor: b
   ctx.restore()
 }
 
-function renderCaptionClip(ctx: Ctx, clip: Clip, w: number, h: number, editor: boolean) {
+/** The lowest a caption's box may reach: just above a lower third or breaking strap on screen at the same time, else
+ * 92 % down the frame. */
+export function captionLimit(clips: Clip[], w: number, h: number, editor: boolean): number {
+  const short = Math.min(w, h) / 1080
+  let bottom = h * 0.92
+  for (const c of clips) {
+    if (c.kind !== 'overlay') continue
+    const has = editor || !!(c.overlayText ?? '').trim() || (c.overlayType === 'lower-third' && !!(c.overlaySub ?? '').trim())
+    if (!has) continue
+    if (c.overlayType === 'lower-third') bottom = Math.min(bottom, h * 0.76 - 18 * short)
+    else if (c.overlayType === 'breaking') bottom = Math.min(bottom, h * 0.82 - (24 + 18) * (h / 1080))
+  }
+  return bottom
+}
+
+function renderCaptionClip(ctx: Ctx, clip: Clip, w: number, h: number, editor: boolean, bottom = h * 0.92) {
   const field = fieldText(clip.captionText, 'Caption text', editor)
   if (!field) return
   ctx.save()
@@ -379,7 +438,7 @@ function renderCaptionClip(ctx: Ctx, clip: Clip, w: number, h: number, editor: b
   const boxW = Math.min(w * 0.92, Math.max(...lines.map((l) => ctx.measureText(l).width)) + padX * 2)
   const boxH = lines.length * lineH + padY * 2
   const boxX = (w - boxW) / 2
-  const boxY = h * 0.92 - boxH
+  const boxY = bottom - boxH
   ctx.fillStyle = 'rgba(0, 0, 0, 0.78)'
   ctx.beginPath()
   ctx.roundRect(boxX, boxY, boxW, boxH, 10 * scale)

@@ -7,6 +7,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
+import { createRequire } from 'node:module'
 
 const root = path.resolve(import.meta.dirname, '../..')
 const win = process.platform === 'win32'
@@ -16,6 +17,7 @@ const work = fs.mkdtempSync(path.join(os.tmpdir(), 'esb-vwork-'))
 const LONG = process.env.VIDEO_LONG === '1'
 let failed = 0
 const results = {}
+const videoMedia = createRequire(import.meta.url)('../../electron/video-media.cjs')
 function check(label, ok, info = '') { console.log(`${ok ? 'PASS' : 'FAIL'} ${label} ${info}`); if (!ok) failed++ }
 
 const probe = (f) => JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', f]).toString())
@@ -111,7 +113,7 @@ try {
   await page.fill('.vw-title-input', 'Edited after save')
   await page.waitForFunction(() => /autosaved/.test(document.querySelector('.vw-sb-save')?.textContent || ''), null, { timeout: 15000 })
   const snaps = fs.readdirSync(path.join(profile, 'video-autosave'))
-  check('Autosave wrote a snapshot to userData within 10 s (temp + rename, no .tmp left)', snaps.some((f) => /^snap-\d+\.json$/.test(f)) && !snaps.some((f) => f.endsWith('.tmp')), snaps.join(','))
+  check('Autosave wrote a snapshot to userData within 10 s (temp + rename, no .tmp left)', snaps.some((f) => /^snap-\d+-[0-9a-f]{12}\.json$/.test(f)) && !snaps.some((f) => f.endsWith('.tmp')), snaps.join(','))
 
   // 4. ACCEPT: kill the renderer mid-edit → the restore card, with the last state
   // Playwright gives up on a crashed page, so the reloaded window is driven through main (executeJavaScript)
@@ -181,6 +183,45 @@ try {
     try { const r = await session.fromPartition('persist:esb-site').fetch('esb-media://m/' + 'a'.repeat(32)); return r.status } catch { return 'refused' }
   })
   check('The CMS window’s session cannot use the media protocol', cmsCanRead !== 200 && cmsCanRead !== 404, String(cmsCanRead))
+
+  // S1: a crafted project approves nothing. It names a real media file this app never imported and a network share;
+  // both come back missing (Relink), the file's would-be id is not served, and the registry does not grow.
+  {
+    const secret = path.join(work, 'private', 'secret.mp4')
+    fs.mkdirSync(path.dirname(secret))
+    fs.copyFileSync(path.join(root, 'tools/fixtures/video/speech-6s.mp4'), secret)
+    const crafted = path.join(work, 'crafted.esbvideo')
+    fs.writeFileSync(crafted, JSON.stringify({ id: 'crafted', name: 'Crafted', aspect: '16:9', width: 1920, height: 1080, fps: 30, duration: 10, tracks: [['v2', 'overlay'], ['v1', 'video'], ['c1', 'caption'], ['a1', 'audio']].map(([id, kind]) => ({ id, name: id, kind, muted: false, locked: false })), clips: [], mediaAssets: [{ id: 'x1', name: 'secret.mp4', type: 'video', path: secret, size: 1, duration: 6 }, { id: 'x2', name: 'clip.mp4', type: 'video', path: '\\\\192.0.2.1\\share\\clip.mp4', size: 1, duration: 6 }] }))
+    const regBefore = fs.readFileSync(path.join(profile, 'video-media.json'), 'utf8')
+    await queue(app, 'open', crafted)
+    await page.click('.vw-open')
+    if (await page.locator('.vw-confirm-open').count()) await page.click('.vw-confirm-open')
+    await page.waitForFunction(() => document.querySelectorAll('.vw-media-card.missing').length === 2, null, { timeout: 15000 })
+    const status = await page.evaluate((id) => fetch('esb-media://m/' + id).then((r) => r.status, () => 'error'), videoMedia.mediaId(secret))
+    await new Promise((r) => setTimeout(r, 800)) // past the registry's write debounce
+    const regAfter = fs.readFileSync(path.join(profile, 'video-media.json'), 'utf8')
+    check('S1: opening a crafted project approves none of its media (both missing, not served, registry unchanged)', status === 404 && regAfter === regBefore && !regAfter.includes('secret.mp4') && !regAfter.includes('192.0.2.1'), JSON.stringify({ status, grew: regAfter !== regBefore }))
+  }
+
+  // P8: the window reloads mid-export → main closes the writer and removes the half file
+  {
+    await queue(app, 'open', [moved])
+    await page.click('.vw-start-import')
+    await page.click('.vw-media-card:has-text("moved-speech.mp4") .vw-add')
+    await page.waitForFunction(() => document.querySelectorAll('.vw-clip-block').length === 2)
+    const out = path.join(work, 'reloaded-mid-export.mp4')
+    await queue(app, 'save', out)
+    await page.click('.vw-header-actions button:has-text("Export")')
+    await page.waitForSelector('.vx-go:not([disabled])')
+    await page.click('.vx-go')
+    const started = await (async () => { for (let i = 0; i < 100; i++) { if (fs.existsSync(out + '.partial')) return true; await new Promise((r) => setTimeout(r, 50)) } return false })()
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.reload())
+    await page.waitForSelector('.launch-tile', { timeout: 20000 })
+    await new Promise((r) => setTimeout(r, 500))
+    check('P8: a reload mid-export removes the half-written file (no .partial, no target)', started && !fs.existsSync(out + '.partial') && !fs.existsSync(out), JSON.stringify({ started, partial: fs.existsSync(out + '.partial'), target: fs.existsSync(out) }))
+    await openVideo(page)
+    if (await page.locator('.vw-restore-discard').count()) await page.click('.vw-restore-discard')
+  }
 
   // 8. VIDEO_LONG: a 10-minute 1080p export, memory sampled every 500 ms across every Electron process
   if (LONG) {

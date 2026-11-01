@@ -120,9 +120,9 @@ async function importMedia(page) {
 
 /** The fixed project used by most states: footage + still on V1, two overlays on V2, a caption on C1, tone on A1. */
 let thumbRetries = 0
-async function seedTimeline(page, { playhead = 1.0, select = null, zoom = null } = {}) {
+async function seedTimeline(page, { playhead = 1.0, select = null, zoom = null, extra = null } = {}) {
   thumbRetries = await importMedia(page)
-  await page.evaluate(({ playhead, select, zoom }) => {
+  await page.evaluate(({ playhead, select, zoom, extra }) => {
     const vs = window.__videoStore
     const st = vs.getState()
     const a = st.mediaAssets
@@ -135,12 +135,22 @@ async function seedTimeline(page, { playhead = 1.0, select = null, zoom = null }
       { id: 'shot-cap', trackId: 'c1', title: 'Caption', kind: 'caption', start: 0.5, duration: 4.5, in: 0, out: 4.5, color: '#f59e0b', captionText: 'Sample caption text' },
       { id: 'shot-a1', trackId: 'a1', title: 'Sample tone', kind: 'audio', start: 0, duration: 8, in: 0, out: 8, color: '#8b5cf6', sourceUrl: aud?.url, mediaAssetId: aud?.id, volume: 0.8 },
     ]
-    st.loadProject({ ...st.project, name: 'Sample project', duration: 12, clips })
+    if (extra === 'linked') {
+      // the footage and a sound linked to it, as footage with its own sound arrives
+      clips[0] = { ...clips[0], linkId: 'link-shot' }
+      clips[5] = { ...clips[5], duration: 6, out: 6, linkId: 'link-shot', title: 'Sample clip · sound' }
+    }
+    if (extra === 'empty-card') clips.push({ id: 'shot-card', trackId: 'v2', title: 'Text card', kind: 'overlay', start: 9.2, duration: 2.5, in: 0, out: 2.5, color: '#7c3aed', overlayType: 'card', overlayText: '', overlaySub: '' })
+    st.loadProject({ ...st.project, name: 'Sample project', duration: 12, clips }, { dirty: true })
+    if (extra === 'missing') {
+      // the footage file is gone: its bin row says so with Relink, its clip is offline
+      vs.setState((s) => ({ mediaAssets: s.mediaAssets.map((x) => (x.type === 'video' ? { ...x, missing: true, url: '', path: 'C:\\Footage\\sample-clip.mp4' } : x)), project: { ...s.project, clips: s.project.clips.map((c) => (c.mediaAssetId === vid?.id ? { ...c, sourceUrl: undefined } : c)) } }))
+    }
     const s2 = vs.getState()
     if (zoom != null) s2.setZoom(zoom)
     if (select) s2.selectClip(select)
     s2.seek(playhead)
-  }, { playhead, select, zoom })
+  }, { playhead, select, zoom, extra })
 }
 
 async function clickTab(page, label) {
@@ -189,7 +199,29 @@ const STATES = {
     await page.evaluate(() => { const st = window.__videoStore.getState(); st.loadProject({ ...st.project, name: 'Sample project', clips: [] }) })
     return { note: 'no New action in this build: emptied via store' }
   },
-  'demo-default': async () => ({ note: 'the timeline the desk opens with' }),
+  // the start screen is `empty`; the old `demo-default` (the desk as it opened) is the same screen since Phase 0
+  'restore-card': async (page) => {
+    // a snapshot left by a session that did not save: leave the desk and come back, and the card offers it
+    await page.evaluate(() => {
+      const text = JSON.stringify({ id: 'proj-shot', name: 'Sample unsaved video', aspect: '16:9', width: 1920, height: 1080, fps: 30, duration: 30, tracks: [{ id: 'v2', name: 'V2', kind: 'overlay', muted: false, locked: false }], clips: [{ id: 'c1', trackId: 'v2', title: 'Lower third', kind: 'overlay', start: 0, duration: 4, in: 0, out: 4, color: '#10b981', overlayType: 'lower-third', overlayText: 'Sample name', overlaySub: '' }] })
+      localStorage.setItem('esb-banner-studio/video-autosave/v1', JSON.stringify([{ at: Date.now(), text, id: 'proj-shot' }]))
+    })
+    await page.click('.vw-header .ws-btn[data-ws="graphics"]')
+    await page.waitForSelector('.app > .topbar')
+    await page.click('.topbar .ws-btn[data-ws="video"]')
+    await page.waitForSelector('.vw-restore-card', { timeout: 8000 }).catch(() => na('no restore card'))
+    return {}
+  },
+  'new-confirm': async (page) => {
+    await seedTimeline(page)
+    await page.click('.vw-new')
+    await page.waitForSelector('.dialog[aria-label="Start a new video?"]')
+    await waitAnimations(page)
+    return { note: 'after the dialog open animation finished' }
+  },
+  'missing-media': async (page) => { await seedTimeline(page, { extra: 'missing' }); return {} },
+  'linked-clip': async (page) => { await seedTimeline(page, { select: 'shot-v1', extra: 'linked' }); return {} },
+  'empty-card': async (page) => { await seedTimeline(page, { select: 'shot-card', extra: 'empty-card', playhead: 10 }); return {} },
   timeline: async (page) => { await seedTimeline(page, { playhead: 1.0 }); return {} },
   'inspector-video': async (page) => { await seedTimeline(page, { select: 'shot-v1' }); if (!(await page.locator('.vw-inspector').count())) na('no inspector shown'); return {} },
   'inspector-overlay': async (page) => { await seedTimeline(page, { select: 'shot-ov-lt' }); if (!(await page.locator('.vw-inspector').count())) na('no inspector shown'); return {} },
@@ -232,6 +264,14 @@ const STATES = {
   'monitor-0.5': async (page) => { await seedTimeline(page, { playhead: 0.5 }); return { el: page.locator('.vw-canvas').first() } },
   'monitor-3.0': async (page) => { await seedTimeline(page, { playhead: 3.0 }); return { el: page.locator('.vw-canvas').first() } },
   'timeline-zoomed': async (page) => { await seedTimeline(page, { playhead: 1.0, zoom: 120 }); return {} },
+}
+
+/** Every running CSS/Web animation on the page has finished (a dialog's open fade, a sliding chip). */
+async function waitAnimations(page) {
+  await page.evaluate(async () => {
+    await new Promise((r) => requestAnimationFrame(() => r()))
+    await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null)))
+  })
 }
 
 async function seedDraft(page) {
@@ -280,6 +320,7 @@ try {
           await page.evaluate((th) => { if (window.__store?.getState().theme !== th) window.__store?.getState().setTheme(th) }, theme)
           const r = (await STATES[state](page)) || {}
           await settle(page)
+          await waitAnimations(page)
           const opts = { path: path.join(outDir, file), animations: 'disabled', caret: 'hide' }
           if (r.el) await r.el.screenshot(opts)
           else await page.screenshot(opts)
