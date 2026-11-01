@@ -4,9 +4,9 @@ import { COLLAGES } from '../core/collage'
 import { FONTS } from '../core/fonts'
 import type { FontId } from '../core/fonts'
 import { QUOTE_PRESETS, STAT_PRESETS, cardDesign, dateParts, headlineSize } from '../core/templates'
-import { CATEGORIES, getFormat, OPTIMAL_IMAGE_SPACES } from '../core/tokens'
+import { CATEGORIES, darkAccent, getFormat, OPTIMAL_IMAGE_SPACES } from '../core/tokens'
 import type { Category } from '../core/tokens'
-import type { Backdrop, CardDesign, CardType, El, Override, PhotosEl, Shadow, Stroke, TextEl } from '../core/types'
+import type { Backdrop, CardDesign, CardType, El, HeadDesign, Override, PhotosEl, Shadow, Stroke, TextEl } from '../core/types'
 import { LABEL_PRESETS, suggestHighlight, generatePlatformCaption, SECTOR_IMAGE_SUGGESTIONS } from '../core/newsroom'
 import type { LabelPresetId, SocialPlatform, ParsedArticle } from '../core/newsroom'
 import { balanceHeadlineBreaks } from '../editorial/translator'
@@ -100,17 +100,12 @@ function SpeakerPhotoField() {
 }
 
 /** Statement words in their own colour: any number of phrases, each with a colour, drawn as colour, marker or underline. */
-function PhraseList({ d, set, setMany, fallback }: { d: CardDesign; set: <K extends keyof CardDesign>(key: K, v: CardDesign[K] | undefined) => void; setMany: (patch: Partial<CardDesign>) => void; fallback: string }) {
-  // the first phrase lives in hiPhrase (older cards), the rest in hiPhrases
-  const list = [{ text: d.hiPhrase ?? '', color: d.hiPhraseColor }, ...(d.hiPhrases ?? [])]
-  const save = (next: { text: string; color?: string }[]) => {
-    const [first, ...rest] = next
-    // one write: separate set() calls each start from the same render's design and would undo each other
-    setMany({ hiPhrase: first?.text ? first.text : undefined, hiPhraseColor: first?.color, hiPhrases: rest.length ? rest : undefined })
-  }
+type Phrase = { text: string; color?: string }
+/** `save` gets the whole list in one write: separate writes each start from the same render's design and undo each other. */
+function PhraseList({ list, save, hiStyle, setStyle, fallback, where = 'the quote' }: { list: Phrase[]; save: (next: Phrase[]) => void; hiStyle: CardDesign['hiStyle']; setStyle: (v: CardDesign['hiStyle'] | undefined) => void; fallback: string; where?: string }) {
   return (
     <div className="phrase-list">
-      <span className="card-sub">Words in their own colour <small>one phrase per row, as it appears in the quote</small></span>
+      <span className="card-sub">Words in their own colour <small>one phrase per row, as it appears in {where}</small></span>
       {list.map((p, i) => (
         <div key={i} className="phrase-row">
           <input type="text" className="input" value={p.text} placeholder={i ? 'Another phrase' : 'e.g. 1,200 MW'} onChange={(e) => save(list.map((q, j) => (j === i ? { ...q, text: e.target.value } : q)))} aria-label={`Phrase ${i + 1}`} />
@@ -121,7 +116,7 @@ function PhraseList({ d, set, setMany, fallback }: { d: CardDesign; set: <K exte
       {list.length < 6 && <button type="button" className="btn sm" onClick={() => save([...list, { text: '' }])}><Icon name="plus" size={13} /><span>Add a phrase</span></button>}
       {list.some((p) => p.text.trim()) && (
         <Field label="Drawn as">
-          <Seg<'color' | 'marker' | 'underline'> className="block" value={d.hiStyle ?? 'color'} onChange={(v) => set('hiStyle', v === 'color' ? undefined : v)}
+          <Seg<'color' | 'marker' | 'underline'> className="block" value={hiStyle ?? 'color'} onChange={(v) => setStyle(v === 'color' ? undefined : v)}
             options={[{ value: 'color', label: 'Colour' }, { value: 'marker', label: 'Marker' }, { value: 'underline', label: 'Underline' }]} />
         </Field>
       )}
@@ -130,29 +125,30 @@ function PhraseList({ d, set, setMany, fallback }: { d: CardDesign; set: <K exte
 }
 
 const MY_DESIGNS_KEY = 'esb-banner-studio/card-designs/v1'
-interface SavedDesign { id: string; name: string; style: string; design: Partial<CardDesign>; scale?: number }
-function readMyDesigns(): Record<'quote' | 'stat', SavedDesign[]> {
-  try { const v = JSON.parse(localStorage.getItem(MY_DESIGNS_KEY) ?? 'null'); if (v && Array.isArray(v.quote) && Array.isArray(v.stat)) return v } catch { /* empty or blocked */ }
-  return { quote: [], stat: [] }
+type DesignKind = 'quote' | 'stat' | 'headline'
+interface SavedDesign { id: string; name: string; style: string; design: Partial<CardDesign> | HeadDesign; scale?: number }
+function readMyDesigns(): Record<DesignKind, SavedDesign[]> {
+  try { const v = JSON.parse(localStorage.getItem(MY_DESIGNS_KEY) ?? 'null'); if (v && Array.isArray(v.quote) && Array.isArray(v.stat)) return { headline: [], ...v } } catch { /* empty or blocked */ }
+  return { quote: [], stat: [], headline: [] }
 }
 
 /** The editor's own designs: the preset plus every change on top of it, kept on this computer and applied in one click.
  *  Applying copies the whole design into the banner, so a project file still renders the same on another computer. */
-function MyDesigns({ kind }: { kind: 'quote' | 'stat' }) {
+function MyDesigns({ kind }: { kind: DesignKind }) {
   const content = useStore((s) => s.doc.content)
   const setContent = useStore((s) => s.setContent)
   const [all, setAll] = useState(readMyDesigns)
   const [naming, setNaming] = useState<string | null>(null)
   const mine = all[kind]
-  const write = (next: Record<'quote' | 'stat', SavedDesign[]>) => { setAll(next); try { localStorage.setItem(MY_DESIGNS_KEY, JSON.stringify(next)) } catch { /* storage full or blocked */ } }
-  const style = (kind === 'quote' ? content.quoteStyle : content.statStyle) ?? 'classic'
-  const design = (kind === 'quote' ? content.quoteDesign : content.statDesign) ?? {}
+  const write = (next: Record<DesignKind, SavedDesign[]>) => { setAll(next); try { localStorage.setItem(MY_DESIGNS_KEY, JSON.stringify(next)) } catch { /* storage full or blocked */ } }
+  const style = kind === 'headline' ? '' : (kind === 'quote' ? content.quoteStyle : content.statStyle) ?? 'classic'
+  const design = (kind === 'headline' ? content.headDesign : kind === 'quote' ? content.quoteDesign : content.statDesign) ?? {}
   const save = () => {
     const name = (naming ?? '').trim() || `My design ${mine.length + 1}`
-    write({ ...all, [kind]: [...mine, { id: Math.random().toString(36).slice(2, 9), name, style, design, scale: content.cardScale }] })
+    write({ ...all, [kind]: [...mine, { id: Math.random().toString(36).slice(2, 9), name, style, design, ...(kind === 'headline' ? {} : { scale: content.cardScale }) }] })
     setNaming(null)
   }
-  const apply = (m: SavedDesign) => setContent(kind === 'quote' ? { quoteStyle: m.style, quoteDesign: { ...m.design }, cardScale: m.scale } : { statStyle: m.style, statDesign: { ...m.design }, cardScale: m.scale })
+  const apply = (m: SavedDesign) => setContent(kind === 'headline' ? { headDesign: { ...(m.design as HeadDesign) } } : kind === 'quote' ? { quoteStyle: m.style, quoteDesign: { ...(m.design as Partial<CardDesign>) }, cardScale: m.scale } : { statStyle: m.style, statDesign: { ...(m.design as Partial<CardDesign>) }, cardScale: m.scale })
   const same = (m: SavedDesign) => m.style === style && JSON.stringify(m.design) === JSON.stringify(design)
   return (
     <div className="my-designs">
@@ -287,7 +283,9 @@ function CardStylePanel({ kind }: { kind: 'quote' | 'stat' }) {
             <Field label={`Letter spacing · ${(d.quoteLs ?? FACE_LS[d.face]).toFixed(1)} px`}>
               <Slider value={d.quoteLs ?? FACE_LS[d.face]} min={-3} max={4} step={0.1} onChange={(v) => set('quoteLs', Math.round(v * 10) / 10)} />
             </Field>
-            <PhraseList d={d} set={set} setMany={setMany} fallback={cat.accent} />
+            {/* the first phrase lives in hiPhrase (older cards), the rest in hiPhrases */}
+            <PhraseList list={[{ text: d.hiPhrase ?? '', color: d.hiPhraseColor }, ...(d.hiPhrases ?? [])]} hiStyle={d.hiStyle} setStyle={(v) => set('hiStyle', v)} fallback={cat.accent}
+              save={([first, ...rest]) => setMany({ hiPhrase: first?.text ? first.text : undefined, hiPhraseColor: first?.color, hiPhrases: rest.length ? rest : undefined })} />
 
             <span className="card-sub">Speaker <small>name and designation</small></span>
             <Field label="Font">
@@ -420,6 +418,99 @@ function CardStylePanel({ kind }: { kind: 'quote' | 'stat' }) {
         {custom && <button type="button" className="btn sm ghost card-reset" onClick={() => pick(presetId)}><Icon name="reset" size={14} /><span>Back to {presetName}</span></button>}
       </div>
       <p className="hint">Drag the header or footer on the banner to move it as one block; double-click to pick a single element inside it.</p>
+    </Panel>
+  )
+}
+
+const lum = (hex: string) => { const n = parseInt(hex.replace('#', '').slice(0, 6), 16); return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255 }
+
+/** The standard news headline's design, for every format at once: type, colours, coloured phrases, effects and the band
+ *  behind it. Each control starts at the guideline's value; the Inspector's per-format changes still win over these. */
+function HeadlineDesignPanel() {
+  const content = useStore((s) => s.doc.content)
+  const format = useStore((s) => s.format)
+  const setContent = useStore((s) => s.setContent)
+  const hd: HeadDesign = content.headDesign ?? {}
+  const clean = (next: HeadDesign) => {
+    for (const k of Object.keys(next) as (keyof HeadDesign)[]) if (next[k] === undefined) delete next[k]
+    return Object.keys(next).length ? next : undefined
+  }
+  const set = <K extends keyof HeadDesign>(key: K, v: HeadDesign[K] | undefined) => setContent({ headDesign: clean({ ...hd, [key]: v }) })
+  const cat = CATEGORIES.find((x) => x.id === content.categoryId) ?? CATEGORIES[0]
+  const web = getFormat(format).family !== 'stack'
+  const bandDefault = web ? cat.panel[0] : cat.band
+  const darkBand = lum(hd.bgColor ?? bandDefault) < 0.45
+  const bangla = /[ঀ-৿]/.test(content.headline)
+  const lhDefault = bangla && !hd.font ? 140 : 118
+  const custom = Object.keys(hd).length > 0
+  return (
+    <Panel defaultOpen={false} title="Headline design" sub={custom ? 'Custom' : 'Guideline'} icon="palette">
+      <MyDesigns kind="headline" />
+      <div className="card-design">
+        <div className="card-colours card-type">
+          <span className="card-sub">Type <small>font, weight, size and spacing of the headline</small></span>
+          <Field label="Font">
+            <Select value={hd.font ?? (bangla ? 'bengali' : 'inter')} options={FONTS.map((f) => ({ value: f.id, label: f.name, hint: f.note }))} onChange={(v) => set('font', v as FontId)} title="Headline font" />
+          </Field>
+          <Field label="Weight">
+            <Seg<500 | 700 | 800> className="block" value={hd.weight ?? 800} onChange={(v) => set('weight', v === 800 ? undefined : v)}
+              options={[{ value: 500, label: 'Medium' }, { value: 700, label: 'Bold' }, { value: 800, label: 'Heavy' }]} />
+          </Field>
+          <Field label="Letters">
+            <Seg<'asis' | 'upper'> className="block" value={hd.case ?? 'asis'} onChange={(v) => set('case', v === 'asis' ? undefined : v)} options={[{ value: 'asis', label: 'As typed' }, { value: 'upper', label: 'CAPITALS' }]} />
+          </Field>
+          <Switch checked={!!hd.italic} onChange={(v) => set('italic', v || undefined)} label="Italic" />
+          <Field label="Alignment">
+            <Seg<'left' | 'center' | 'right'> className="block" value={hd.align ?? 'center'} onChange={(v) => set('align', v === 'center' ? undefined : v)}
+              options={[{ value: 'left', icon: 'alignTextLeft', label: 'Left' }, { value: 'center', icon: 'alignTextCenter', label: 'Centre' }, { value: 'right', icon: 'alignTextRight', label: 'Right' }]} />
+          </Field>
+          <Field label={`Size · ${Math.round((hd.scale ?? 1) * 100)} % of ${headlineSize(format, content.headline.length)} px`}>
+            <Slider value={Math.round((hd.scale ?? 1) * 100)} min={70} max={140} step={5} onChange={(v) => set('scale', v === 100 ? undefined : v / 100)} />
+          </Field>
+          <Field label={`Line spacing · ${hd.lh ?? lhDefault} %`}>
+            <Slider value={hd.lh ?? lhDefault} min={95} max={160} step={1} onChange={(v) => set('lh', v === lhDefault ? undefined : v)} />
+          </Field>
+          <Field label={`Letter spacing · ${(hd.ls ?? 0).toFixed(1)} px`}>
+            <Slider value={hd.ls ?? 0} min={-3} max={4} step={0.1} onChange={(v) => set('ls', Math.round(v * 10) / 10 || undefined)} />
+          </Field>
+          <PhraseList where="the headline" fallback={darkBand ? cat.accent : darkAccent(cat.accent)} hiStyle={hd.hiStyle} setStyle={(v) => set('hiStyle', v)}
+            list={[{ text: content.highlight, color: hd.hiPhraseColor }, ...(hd.hiPhrases ?? [])]}
+            save={([first, ...rest]) => setContent({ highlight: first?.text ?? '', headDesign: clean({ ...hd, hiPhraseColor: first?.color, hiPhrases: rest.length ? rest : undefined }) })} />
+          {!web && !content.highlightOnSocial && content.highlight.trim() && <p className="hint">The first phrase shows on this banner only with “Highlight on Facebook banner too” in the Headline panel; the others always show.</p>}
+        </div>
+
+        <div className="card-colours card-type">
+          <span className="card-sub">Effects <small>for words over a photo, and a pattern behind the headline</small></span>
+          <Field label="Text effect">
+            <Seg<'none' | 'shadow' | 'glow' | 'outline'> className="block" value={hd.textEffect ?? 'none'} onChange={(v) => set('textEffect', v === 'none' ? undefined : v)}
+              options={[{ value: 'none', label: 'None' }, { value: 'shadow', label: 'Shadow' }, { value: 'glow', label: 'Glow' }, { value: 'outline', label: 'Outline' }]} />
+          </Field>
+          {hd.textEffect && hd.textEffect !== 'none' && <ColorField label="Effect colour" value={hd.effectColor ?? (hd.textEffect === 'shadow' ? '#000000' : darkBand ? '#000000' : '#ffffff')} onChange={(v) => set('effectColor', v)} onReset={hd.effectColor ? () => set('effectColor', undefined) : undefined} />}
+          <Field label="Pattern">
+            <Select<'none' | 'dots' | 'lines' | 'grid' | 'diagonal' | 'grain'> value={hd.pattern ?? 'none'} onChange={(v) => set('pattern', v === 'none' ? undefined : v)} title="Band pattern"
+              options={[{ value: 'none', label: 'None' }, { value: 'dots', label: 'Dots' }, { value: 'lines', label: 'Lines' }, { value: 'grid', label: 'Grid' }, { value: 'diagonal', label: 'Diagonal lines' }, { value: 'grain', label: 'Grain' }]} />
+          </Field>
+          {hd.pattern && hd.pattern !== 'none' && <>
+            <Field label={`Strength · ${Math.round((hd.patternAlpha ?? 0.08) * 100)} %`}>
+              <Slider value={Math.round((hd.patternAlpha ?? 0.08) * 100)} min={2} max={40} step={1} onChange={(v) => set('patternAlpha', v / 100)} />
+            </Field>
+            <Field label={`Scale · ${Math.round((hd.patternScale ?? 1) * 100)} %`}>
+              <Slider value={Math.round((hd.patternScale ?? 1) * 100)} min={40} max={300} step={10} onChange={(v) => set('patternScale', v / 100)} />
+            </Field>
+            <ColorField label="Pattern colour" value={hd.patternColor ?? (darkBand ? '#ffffff' : '#0b0f19')} onChange={(v) => set('patternColor', v)} onReset={hd.patternColor ? () => set('patternColor', undefined) : undefined} />
+          </>}
+        </div>
+
+        <div className="card-colours">
+          <span className="card-sub">Colours <small>pick any colour; reset returns to the desk's own</small></span>
+          <ColorField label="Headline text" value={hd.inkColor ?? '#0b0f19'} onChange={(v) => set('inkColor', v)} onReset={hd.inkColor ? () => set('inkColor', undefined) : undefined} />
+          <ColorField label={web ? 'Side panel' : 'Headline band'} value={hd.bgColor ?? bandDefault} onChange={(v) => set('bgColor', v)} onReset={hd.bgColor ? () => set('bgColor', undefined) : undefined} />
+          <ColorField label="Header background" value={hd.headerColor ?? (web ? '#fffce1' : '#fdfbdc')} onChange={(v) => set('headerColor', v)} onReset={hd.headerColor ? () => set('headerColor', undefined) : undefined} />
+          <ColorField label="Footer background" value={hd.footerColor ?? cat.footer} onChange={(v) => set('footerColor', v)} onReset={hd.footerColor ? () => set('footerColor', undefined) : undefined} />
+        </div>
+        {custom && <button type="button" className="btn sm ghost card-reset" onClick={() => setContent({ headDesign: undefined })}><Icon name="reset" size={14} /><span>Back to the guideline</span></button>}
+      </div>
+      <p className="hint">Applies to every format. A change made in the Inspector for one format still wins there.</p>
     </Panel>
   )
 }
@@ -741,6 +832,7 @@ export function StoryPanel() {
         </Panel>
       )}
 
+      {cardType === 'standard' && <HeadlineDesignPanel />}
       {cardType === 'standard' && (
         <Panel defaultOpen={false} title="Headline" focusKey="headline" sub="Auto-sized" icon="newspaper" actions={<span className={'count' + (len > 90 ? ' bad' : len > 70 ? ' warn' : '')}>{len} / 90</span>}>
           <textarea ref={area} rows={4} className="input" value={content.headline} placeholder="Type the exact article title…" onChange={(e) => setContent({ headline: e.target.value })} />

@@ -307,7 +307,7 @@ const BN_RE = /[ঀ-৿]/
 const hexA = (c: string, a: string) => /^#[0-9a-f]{6}$/i.test(c) ? c + a : c
 
 /** Every coloured phrase in the card's statement, drawn as plain colour, a highlighter band or an underline. */
-function phraseRuns(text: string, d: CardDesign, ink: string, fallback: string): TextRun[] {
+function phraseRuns(text: string, d: Pick<CardDesign, 'hiPhrase' | 'hiPhraseColor' | 'hiPhrases' | 'hiStyle'>, ink: string, fallback: string): TextRun[] {
   const list = [...(d.hiPhrase ? [{ text: d.hiPhrase, color: d.hiPhraseColor }] : []), ...(d.hiPhrases ?? [])].filter((p) => p.text?.trim())
   const out: TextRun[] = []
   for (const p of list) {
@@ -322,7 +322,7 @@ function phraseRuns(text: string, d: CardDesign, ink: string, fallback: string):
 }
 
 /** The card's text effect on one word element (an Inspector shadow or outline the editor set stays theirs). */
-function cardEffect(el: TextEl, d: CardDesign, dark: boolean, k: number): TextEl {
+function cardEffect(el: TextEl, d: Pick<CardDesign, 'textEffect' | 'effectColor'>, dark: boolean, k: number): TextEl {
   const fx = d.textEffect ?? 'none'
   if (fx === 'shadow' && !el.dropShadow) el.dropShadow = { x: 0, y: 3 * k, blur: 12 * k, color: d.effectColor ?? '#000000', alpha: 0.45 }
   if (fx === 'glow' && !el.dropShadow) el.dropShadow = { x: 0, y: 0, blur: 18 * k, color: d.effectColor ?? (dark ? '#000000' : '#ffffff'), alpha: 0.9 }
@@ -331,9 +331,37 @@ function cardEffect(el: TextEl, d: CardDesign, dark: boolean, k: number): TextEl
 }
 
 /** The card background's pattern, if the design asks for one. */
-export function cardPattern(d: CardDesign, dark: boolean): RectPattern | undefined {
+export function cardPattern(d: Pick<CardDesign, 'pattern' | 'patternColor' | 'patternAlpha' | 'patternScale'>, dark: boolean): RectPattern | undefined {
   if (!d.pattern || d.pattern === 'none') return undefined
   return { kind: d.pattern, color: d.patternColor ?? (dark ? '#ffffff' : '#0b0f19'), alpha: d.patternAlpha ?? 0.08, scale: d.patternScale ?? 1 }
+}
+
+/** The standard news headline with the editor's headline design on top of the guideline (size by length, Inter 800,
+ *  centred, ink). `showFirst` is false where the guideline hides the key-phrase highlight (social without the switch);
+ *  the extra phrases the editor added always show. `bandFill` is the colour behind the words, for the effect defaults. */
+function newsHeadline(F: Factory, c: Doc['content'], format: FormatId, x: number, w: number, k: number, accent: string, showFirst: boolean, bandFill: string): TextEl {
+  const hd = c.headDesign ?? {}
+  const text = hd.case === 'upper' ? c.headline.toUpperCase() : c.headline
+  const dark = luminance(bandFill) < 0.45
+  const ink = hd.inkColor ?? INK
+  const runs = phraseRuns(text, { hiPhrase: showFirst ? c.highlight : undefined, hiPhraseColor: hd.hiPhraseColor, hiPhrases: hd.hiPhrases, hiStyle: hd.hiStyle }, ink, dark ? accent : darkAccent(accent))
+  const el = settle(F.text('headline', 'Headline', 'Headline', x, 0, {
+    text, size: Math.round(headlineSize(format, c.headline.length) * (hd.scale ?? 1) * 100) / 100, weight: hd.weight ?? 800,
+    font: hd.font ?? (BN_RE.test(text) ? 'bengali' : undefined), ls: (hd.ls ?? 0) * k, lh: hd.lh ?? (BN_RE.test(text) && !hd.font ? 140 : 118),
+    align: hd.align ?? 'center', fit: 'box', w, color: ink, runs, italic: hd.italic,
+  }))
+  return cardEffect(el, hd, dark, k)
+}
+
+/** Dark translucent backdrop behind the headline: white words (unless the editor picked a text colour) with the
+ *  phrases in the bright desk colour. */
+function headlineOnDarkPill(F: Factory & { ov: (id: string) => Override }, c: Doc['content'], headline: TextEl, accent: string) {
+  const hd = c.headDesign ?? {}
+  if (F.ov('headline').color || hd.inkColor) return
+  headline.color = '#ffffff'
+  if (c.cardType === 'standard' && (c.highlight || hd.hiPhrases?.length)) {
+    headline.runs = phraseRuns(headline.text, { hiPhrase: c.highlight, hiPhraseColor: hd.hiPhraseColor, hiPhrases: hd.hiPhrases, hiStyle: hd.hiStyle }, '#ffffff', accent)
+  }
 }
 
 /** Speaker headshot: a picture from the photo library, cut to the design's shape, ringed in the accent colour. */
@@ -647,7 +675,8 @@ function buildStack(format: FormatId, doc: Doc, cat: Category): El[] {
   const card = c.cardType === 'quote' || c.cardType === 'stat' ? c.cardType : null
   const cd = card ? cardDesign(c, card) : null
   // a light footer the editor picked reads with dark text
-  const footInk = cd?.footerColor && luminance(cd.footerColor) > 0.45 ? INK : FOOTER_TEXT
+  const footCol = (cd ?? c.headDesign)?.footerColor
+  const footInk = footCol && luminance(footCol) > 0.45 ? INK : FOOTER_TEXT
   const noPhoto = !!card && !cardDesign(c, card).photo
   if (card) {
     const bandBase = noPhoto ? { x: 0, y: headerH, w: W, h: footTop - headerH } : { x: 0, y: bandTop, w: W, h: sp.bandH }
@@ -662,11 +691,9 @@ function buildStack(format: FormatId, doc: Doc, cat: Category): El[] {
     cardPat = blk.pattern
   } else {
     // Standard headline (size by guideline)
-    const hSize = headlineSize(format, c.headline.length)
-    headline = settle(F.text('headline', 'Headline', 'Headline', sp.headX, 0, {
-      text: c.headline, size: hSize, weight: 800, lh: 118, align: 'center', fit: 'box', w: sp.headW, color: INK,
-      runs: c.highlightOnSocial ? highlightRuns(c.headline, c.highlight, darkAccent(accent)) : [],
-    }))
+    headline = newsHeadline(F, c, format, sp.headX, sp.headW, kb, accent, c.highlightOnSocial, c.headDesign?.bgColor ?? cat.band)
+    cardFill = c.headDesign?.bgColor
+    cardPat = c.headDesign ? cardPattern(c.headDesign, luminance(c.headDesign.bgColor ?? cat.band) < 0.45) : undefined
     const PILL_H = r2(62 * kb)
     const GAP = r2(22 * kb)
     const groupH = (c.showLinkPill ? PILL_H + GAP : 0) + headline.h
@@ -684,12 +711,7 @@ function buildStack(format: FormatId, doc: Doc, cat: Category): El[] {
   if (c.headlineBg) {
     const bgCol = c.headlineBgColor ?? '#0b0f19'
     const isDarkPill = bgCol.startsWith('#0') || bgCol.startsWith('#1') || bgCol.startsWith('#2')
-    if (!F.ov('headline').color && isDarkPill) {
-      headline.color = '#ffffff'
-      if (c.cardType === 'standard' && c.highlight) {
-        headline.runs = highlightRuns(c.headline, c.highlight, accent)
-      }
-    }
+    if (isDarkPill) headlineOnDarkPill(F, c, headline, accent)
     headline.bgPill = {
       color: bgCol,
       alpha: c.headlineBgAlpha ?? 0.76,
@@ -754,12 +776,12 @@ function buildStack(format: FormatId, doc: Doc, cat: Category): El[] {
     edge.opacity = bandOp
   }
   els.push(
-    F.rect('header-bg', 'Header background', 'Header', 0, 0, W, headerH, cd?.headerColor ?? SOCIAL_BG),
+    F.rect('header-bg', 'Header background', 'Header', 0, 0, W, headerH, (cd ?? c.headDesign)?.headerColor ?? SOCIAL_BG),
     photoLayer,
     bandRect,
     watermark,
     ...stripes(F, [0], stripeH, sw, sx, 'stripe-top', 'Decor'),
-    F.rect('footer-bg', 'Footer background', 'Footer', 0, footTop, W, footH, cd?.footerColor ?? cat.footer),
+    F.rect('footer-bg', 'Footer background', 'Footer', 0, footTop, W, footH, (cd ?? c.headDesign)?.footerColor ?? cat.footer),
     ...stripes(F, [headerH - stripeH], stripeH, sw, sx, 'stripe-head', 'Decor'),
     logo, edge, ...(cardBoxEl ? [cardBoxEl] : []), headline, ...extraBandEls, num, month, wk, rule, footerLine,
   )
@@ -806,7 +828,8 @@ function buildWeb(format: FormatId, doc: Doc, cat: Category): El[] {
   const card = c.cardType === 'quote' || c.cardType === 'stat' ? c.cardType : null
   const cd = card ? cardDesign(c, card) : null
   // a light footer the editor picked reads with dark text
-  const footInk = cd?.footerColor && luminance(cd.footerColor) > 0.45 ? INK : FOOTER_TEXT
+  const footCol = (cd ?? c.headDesign)?.footerColor
+  const footInk = footCol && luminance(footCol) > 0.45 ? INK : FOOTER_TEXT
   const noPhoto = !!card && !cardDesign(c, card).photo
   if (card) {
     const panelBase = noPhoto ? { x: 0, y: 200 * k, w: W, h: 800 * k } : { x: 1280 * k, y: 200 * k, w: 640 * k, h: 800 * k }
@@ -820,23 +843,16 @@ function buildWeb(format: FormatId, doc: Doc, cat: Category): El[] {
     cardFill = blk.fill
     cardPat = blk.pattern
   } else {
-    const hSize = headlineSize(format, c.headline.length)
-    headline = settle(F.text('headline', 'Headline', 'Headline', panelX, 0, {
-      text: c.headline, size: hSize, weight: 800, lh: 118, align: 'center', fit: 'box', w: panelW, color: INK,
-      runs: highlightRuns(c.headline, c.highlight, darkAccent(accent)),
-    }))
+    headline = newsHeadline(F, c, format, panelX, panelW, k, accent, true, c.headDesign?.bgColor ?? cat.panel[0])
+    cardFill = c.headDesign?.bgColor
+    cardPat = c.headDesign ? cardPattern(c.headDesign, luminance(c.headDesign.bgColor ?? cat.panel[0]) < 0.45) : undefined
     headline.y = 600 * k - headline.h / 2
   }
 
   if (c.headlineBg) {
     const bgCol = c.headlineBgColor ?? '#0b0f19'
     const isDarkPill = bgCol.startsWith('#0') || bgCol.startsWith('#1') || bgCol.startsWith('#2')
-    if (!F.ov('headline').color && isDarkPill) {
-      headline.color = '#ffffff'
-      if (c.cardType === 'standard' && c.highlight) {
-        headline.runs = highlightRuns(c.headline, c.highlight, accent)
-      }
-    }
+    if (isDarkPill) headlineOnDarkPill(F, c, headline, accent)
     headline.bgPill = {
       color: bgCol,
       alpha: c.headlineBgAlpha ?? 0.76,
@@ -895,13 +911,13 @@ function buildWeb(format: FormatId, doc: Doc, cat: Category): El[] {
     panelEdgeRect.opacity = bandOp
   }
   els.push(
-    F.rect('header-bg', 'Header background', 'Header', 0, 0, W, 200 * k, cd?.headerColor ?? WEB_HEADER),
+    F.rect('header-bg', 'Header background', 'Header', 0, 0, W, 200 * k, (cd ?? c.headDesign)?.headerColor ?? WEB_HEADER),
     ...stripes(F, [0, 186 * k], 14 * k, sw, sx, 'stripe', 'Decor'),
     logo, num, month, wk, rule, chip,
     photoLayer,
     panelRect,
     panelEdgeRect,
-    F.rect('footer-bg', 'Footer background', 'Footer', 0, 1000 * k, W, 80 * k, cd?.footerColor ?? cat.footer),
+    F.rect('footer-bg', 'Footer background', 'Footer', 0, 1000 * k, W, 80 * k, (cd ?? c.headDesign)?.footerColor ?? cat.footer),
     F.rect('footer-line', 'Footer line', 'Footer', 0, 1000 * k, W, 5 * k, accent),
     ft('fb-text', 'Facebook handle', 118, 'esbpowerlineofficial'),
     ft('web-text', 'Website', 868, 'esbpowerline.com'),

@@ -82,6 +82,21 @@ export interface CardDesign {
   patternScale?: number
 }
 
+/** The standard news headline's own design (every format, all optional so older banners render unchanged). Per-format
+ *  Inspector overrides still win over it. The first coloured phrase is content.highlight; hiPhraseColor is its colour. */
+export interface HeadDesign extends Pick<CardDesign, 'hiPhraseColor' | 'hiPhrases' | 'hiStyle' | 'textEffect' | 'effectColor' | 'pattern' | 'patternColor' | 'patternAlpha' | 'patternScale' | 'headerColor' | 'footerColor' | 'bgColor' | 'inkColor'> {
+  font?: FontId
+  weight?: 500 | 700 | 800
+  /** line height in % of size; letter spacing in px at 1080 wide */
+  lh?: number
+  ls?: number
+  italic?: boolean
+  /** size multiplier over the guideline size (0.7–1.4) */
+  scale?: number
+  align?: Align
+  case?: 'asis' | 'upper'
+}
+
 export interface GradientStop { p: number; c: string; a?: number }
 /** Figma-style linear gradient: t = tf[0][0]*xn + tf[0][1]*yn + tf[0][2] where xn,yn are 0..1 inside the box. */
 export interface GradientFill { stops: GradientStop[]; tf: [[number, number, number], [number, number, number]] }
@@ -283,6 +298,8 @@ export interface Content {
   statStyle?: string
   quoteDesign?: Partial<CardDesign>
   statDesign?: Partial<CardDesign>
+  /** standard headline design (fonts, colours, phrases, effects, band pattern) */
+  headDesign?: HeadDesign
   /** text size of the card's block, 0.8–1.3 */
   cardScale?: number
   /** curly quotes around the statement (Bold draws its own big mark) */
