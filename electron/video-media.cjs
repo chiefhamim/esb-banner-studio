@@ -21,6 +21,39 @@ const MEDIA_TYPES = {
 const MEDIA_EXT = new Set(Object.keys(MEDIA_TYPES))
 const extOf = (p) => String(p).split('.').pop().toLowerCase()
 
+/** A temp name next to `target` nobody can guess (`<target>.<random>.tmp`), so a link or hard link planted at a
+ * predictable temp name (project.json.tmp, x.bin.tmp, ...) is never written through. */
+const tempName = (target, suffix = '.tmp') => `${target}.${crypto.randomBytes(8).toString('hex')}${suffix}`
+
+/** Write `data` to `target` atomically: a fresh temp file opened with 'wx' (fails if anything, a link included, is
+ * already at that name), then renamed over the target (rename replaces the directory entry, never writes through it). */
+function writeFileAtomicSync(target, data, encoding) {
+  const tmp = tempName(target)
+  try {
+    const fd = fs.openSync(tmp, 'wx')
+    try { fs.writeFileSync(fd, data, encoding) } finally { fs.closeSync(fd) }
+    fs.renameSync(tmp, target)
+  } catch (e) {
+    try { fs.rmSync(tmp, { force: true }) } catch { /* gone */ }
+    throw e
+  }
+  return target
+}
+
+/** The same, async. */
+async function writeFileAtomic(target, data) {
+  const tmp = tempName(target)
+  try {
+    const fh = await fs.promises.open(tmp, 'wx')
+    try { await fh.writeFile(data) } finally { await fh.close() }
+    await fs.promises.rename(tmp, target)
+  } catch (e) {
+    try { fs.rmSync(tmp, { force: true }) } catch { /* gone */ }
+    throw e
+  }
+  return target
+}
+
 /** A network share (\\server\share, //server/share) or a Win32 device / long-path form (\\?\, \\.\). A stat on a
  * UNC path makes Windows open an SMB connection and offer the account's NTLM hash to that server, so these are never
  * touched. Mapped drive letters are local paths to Node and still work. */
@@ -52,11 +85,7 @@ function createMediaRegistry({ file, max = MAX_REGISTRY }) {
   let timer = null
   const flush = () => {
     clearTimeout(timer)
-    try {
-      const tmp = file + '.tmp'
-      fs.writeFileSync(tmp, JSON.stringify([...byId.values()]))
-      fs.renameSync(tmp, file)
-    } catch { /* best effort; the next add retries */ }
+    try { writeFileAtomicSync(file, JSON.stringify([...byId.values()])) } catch { /* best effort; the next add retries */ }
   }
   const persist = () => {
     clearTimeout(timer)
@@ -107,11 +136,14 @@ async function resolvePaths(registry, paths) {
   }))
 }
 
-/** The page origins that may read esb-media:// with CORS: the packaged app (file://, which Chromium may report as
- * "null") and the dev server. The protocol is registered on the editor's session only, so no other window asks. */
+/** The page origins that may read esb-media:// with CORS: the packaged app and the dev server. The packaged app is
+ * loaded from file://, whose origin Chromium reports as "null" (an opaque origin), so 'null' is accepted - but only
+ * when there is no dev server: in development the page is http://localhost, and a 'null' origin there could only be a
+ * sandboxed frame or a data: page. The protocol is registered on the editor's session only, so no other window asks. */
 function allowedOrigin(origin, devUrl) {
   if (!origin) return null
-  if (origin === 'file://' || origin === 'null') return origin
+  if (origin === 'file://') return origin
+  if (origin === 'null') return devUrl ? null : origin
   try { if (devUrl && new URL(devUrl).origin === origin) return origin } catch { /* no dev url */ }
   return null
 }
@@ -145,7 +177,7 @@ async function serveMedia(request, registry, { devUrl, folderFile } = {}) {
   }
   // CORS for the app's own page only (never '*')
   const origin = allowedOrigin(request.headers.get('origin'), devUrl)
-  const cors = { 'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges', 'Cross-Origin-Resource-Policy': 'same-site', Vary: 'Origin' }
+  const cors = { 'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges', 'Cross-Origin-Resource-Policy': 'same-site', 'X-Content-Type-Options': 'nosniff', Vary: 'Origin' }
   if (origin) cors['Access-Control-Allow-Origin'] = origin
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405, headers: cors })
   if (!p) return new Response(null, { status: 404, headers: cors })
@@ -189,27 +221,43 @@ function freeName(target) {
 }
 
 /** Exports in progress: a file opened in the place the editor chose, written at the positions the muxer asks for
- * (it goes back to patch box sizes), renamed into place only when it ends well. One export at a time. */
-function createExportWriter() {
+ * (it goes back to patch box sizes), renamed into place only when it ends well. One job at a time per writer.
+ * The half file has a random name opened with 'wx' (never a predictable `<target>.partial` a link could be planted at).
+ * Limits per job: `maxBytes` (the file), `folderCap` with `folderBytes` (what the folder already holds, so the folder
+ * stays under its cap while the file grows), and `minFree` - checked at begin AND while the file grows. */
+function createExportWriter({ free: freeOf = freeBytes } = {}) {
   let job = null
   return {
-    begin(target, { minFree = MIN_FREE_BYTES } = {}) {
+    begin(target, { minFree = MIN_FREE_BYTES, maxBytes = MAX_EXPORT_BYTES, folderCap = Infinity, folderBytes = 0 } = {}) {
       if (job) { try { fs.closeSync(job.fd) } catch { /* gone */ } try { fs.rmSync(job.partial, { force: true }) } catch { /* gone */ } job = null }
-      const free = freeBytes(path.dirname(target))
+      const free = freeOf(path.dirname(target))
       if (free != null && free < minFree) throw new Error(`Not enough free space on that drive (${Math.round(free / 1048576)} MB free).`)
-      const partial = target + '.partial'
-      const fd = fs.openSync(partial, 'w')
-      job = { id: crypto.randomBytes(12).toString('hex'), target, partial, fd, size: 0 }
+      if (folderBytes >= folderCap) throw new Error('That folder is full.')
+      const partial = tempName(target, '.partial')
+      const fd = fs.openSync(partial, 'wx')
+      job = { id: crypto.randomBytes(12).toString('hex'), target, partial, fd, size: 0, minFree, maxBytes: Math.min(maxBytes, MAX_EXPORT_BYTES), folderCap, folderBytes, sinceFreeCheck: 0 }
       return { id: job.id, path: target }
     },
     /** Validate and write one piece. The renderer is hostile: the id must be this job's, the position a whole number
-     * inside what was written (patches) or exactly at its end (appends), the piece a byte array of sane size. */
+     * inside what was written (patches) or exactly at its end (appends), the piece a byte array of sane size, the file
+     * within its own limit and its folder's cap, and the drive not running out of space. */
     async write(id, position, bytes) {
       if (!job || id !== job.id) throw new Error('No export in progress')
       if (!(bytes instanceof Uint8Array) || bytes.length === 0 || bytes.length > MAX_WRITE_BYTES) throw new Error('Bad export piece')
       if (!Number.isSafeInteger(position) || position < 0 || position > job.size) throw new Error('Bad export position')
-      if (position + bytes.length > MAX_EXPORT_BYTES) throw new Error('Export too large')
       const j = job
+      const grows = Math.max(0, position + bytes.length - j.size)
+      if (position + bytes.length > j.maxBytes) throw new Error('The file is larger than allowed')
+      if (j.folderBytes + j.size + grows > j.folderCap) throw new Error('The folder is full')
+      if (grows) {
+        // free space is looked at again every 64 MB of growth (statfs per 4 MB piece would cost more than it saves)
+        j.sinceFreeCheck += grows
+        if (j.sinceFreeCheck >= 64 * 1024 * 1024) {
+          j.sinceFreeCheck = 0
+          const free = freeOf(path.dirname(j.partial))
+          if (free != null && free - grows < j.minFree) throw new Error(`The drive is nearly full (${Math.round(free / 1048576)} MB free).`)
+        }
+      }
       // the size is claimed before the write, so a second piece sent while this one is on disk is checked against it
       j.size = Math.max(j.size, position + bytes.length)
       let off = 0
@@ -285,9 +333,7 @@ function writeSnapshot(dir, text, now = Date.now()) {
   const tag = projectTag(j && (j.id ?? (j.timeline && j.timeline.id)))
   fs.mkdirSync(dir, { recursive: true })
   const name = `snap-${String(now).padStart(15, '0')}-${tag}.json`
-  const tmp = path.join(dir, name + '.tmp')
-  fs.writeFileSync(tmp, text, 'utf8')
-  fs.renameSync(tmp, path.join(dir, name))
+  writeFileAtomicSync(path.join(dir, name), text, 'utf8')
   const all = listSnaps(dir)
   const drop = new Set()
   const mine = all.filter((x) => x.tag === tag)
@@ -298,14 +344,47 @@ function writeSnapshot(dir, text, now = Date.now()) {
   return { ok: true, at: now }
 }
 
-/** The newest snapshot that reads as JSON (a damaged newest one falls back to the one before). */
+/** The newest snapshot that reads as JSON (a damaged newest one falls back to the one before). Chosen by the time in
+ * its file name BEFORE anything is read, and only plain files of at most MAX_SNAPSHOT bytes are read (a planted
+ * multi-GB "snapshot" or a link is skipped). */
 function latestSnapshot(dir) {
   for (const { f, at } of listSnaps(dir).reverse()) {
     try {
-      const text = fs.readFileSync(path.join(dir, f), 'utf8')
+      const p = path.join(dir, f)
+      const st = fs.lstatSync(p)
+      if (!st.isFile() || st.size > MAX_SNAPSHOT) continue
+      const text = fs.readFileSync(p, 'utf8')
       JSON.parse(text)
       return { at, text }
     } catch { /* try the older one */ }
+  }
+  return null
+}
+
+/** The newest readable snapshot across several folders: every folder is listed by name (cheap), the candidates are
+ * sorted newest first, and files are read only until one parses - at most `maxReads` (startup used to read and parse
+ * the newest snapshot of up to 50 folders, synchronously). `dirs` = [{ dir, ...anything }]; the winner comes back as
+ * { at, text, dir, ...anything }. */
+async function latestSnapshotIn(dirs, { maxReads = 8 } = {}) {
+  const cands = []
+  for (const d of dirs) {
+    let names = []
+    try { names = await fs.promises.readdir(d.dir) } catch { continue }
+    for (const f of names) { const m = SNAP_RE.exec(f); if (m) cands.push({ d, f, at: Number(m[1]) }) }
+  }
+  cands.sort((x, y) => y.at - x.at || (x.f < y.f ? 1 : -1))
+  let reads = 0
+  for (const c of cands) {
+    if (reads >= maxReads) break
+    try {
+      const p = path.join(c.d.dir, c.f)
+      const st = await fs.promises.lstat(p)
+      if (!st.isFile() || st.size > MAX_SNAPSHOT) continue
+      reads++
+      const text = await fs.promises.readFile(p, 'utf8')
+      JSON.parse(text)
+      return { ...c.d, at: c.at, text }
+    } catch { /* the next older one */ }
   }
   return null
 }
@@ -357,9 +436,7 @@ function storeGenerated(dir, stem, ext, bytes, { maxFiles, maxBytes }) {
   let total = 0
   for (const f of names) { try { const st = fs.statSync(path.join(dir, f)); if (st.isFile()) { count++; total += st.size } } catch { /* gone */ } }
   if (count + 1 > maxFiles || total + bytes.length > maxBytes) throw new Error(`The app's ${path.basename(dir)} folder is full (${count} files, ${Math.round(total / 1048576)} MB). Remove old ones from ${dir}.`)
-  const tmp = file + '.tmp'
-  fs.writeFileSync(tmp, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length))
-  fs.renameSync(tmp, file)
+  writeFileAtomicSync(file, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length))
   return file
 }
 
@@ -372,4 +449,4 @@ function isVideoProjectPath(p) {
   return typeof p === 'string' && p.length > 9 && p.length < 4096 && !/[\u0000-\u001f]/.test(p) && /\.esbvideo$/i.test(p)
 }
 
-module.exports = { MEDIA_EXT, MEDIA_TYPES, isMediaPath, isNetworkOrDevicePath, mediaId, createMediaRegistry, entryFor, resolvePaths, allowedOrigin, parseRange, serveMedia, videoKind, createExportWriter, freeName, writeSnapshot, latestSnapshot, clearSnapshots, projectTag, isVideoProjectPath, KEEP_SNAPSHOTS, audioTakeKind, storeGenerated, STILLS_CAP, TAKES_CAP, MAX_TAKE_BYTES }
+module.exports = { tempName, writeFileAtomicSync, writeFileAtomic, latestSnapshotIn, MAX_SNAPSHOT, MAX_EXPORT_BYTES, MEDIA_EXT, MEDIA_TYPES, isMediaPath, isNetworkOrDevicePath, mediaId, createMediaRegistry, entryFor, resolvePaths, allowedOrigin, parseRange, serveMedia, videoKind, createExportWriter, freeName, writeSnapshot, latestSnapshot, clearSnapshots, projectTag, isVideoProjectPath, KEEP_SNAPSHOTS, audioTakeKind, storeGenerated, STILLS_CAP, TAKES_CAP, MAX_TAKE_BYTES }

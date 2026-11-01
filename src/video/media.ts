@@ -41,7 +41,7 @@ export interface VideoBridge {
   videoMediaFacts?: (urls: string[]) => Promise<{ url: string; size?: number; mtimeMs?: number; hash?: string; missing?: boolean }[]>
   videoRelinkSearch?: (folderId: string | null, items: { id: string; path?: string; size: number; hash: string }[]) => Promise<{ id: string; entry: MediaEntry }[]>
   videoProxyStatus?: (folderId: string | null, hashes: string[]) => Promise<Record<string, string>>
-  videoProxyBegin?: (folderId: string | null, hash: string) => Promise<{ id: string }>
+  videoProxyBegin?: (folderId: string | null, hash: string, sourceUrl?: string) => Promise<{ id: string }>
   videoProxyWrite?: (id: string, position: number, bytes: Uint8Array) => Promise<boolean>
   videoProxyEnd?: (id: string, ok: boolean) => Promise<{ url: string } | null>
   videoCacheRead?: (folderId: string | null, key: string) => Promise<Uint8Array | null>
@@ -255,6 +255,7 @@ export async function resolveAssets(assets: MediaAsset[]): Promise<MediaAsset[]>
 //   onProxyReady(cb)   a proxy became ready (swap readers for that asset)
 //   readCache / writeCache   key → bytes in the project's cache/ folder (waveforms, filmstrips)
 //   mediaInfo(id)      codec, fps, size, duration, key frame interval, proxy and missing state
+//   holdProxies(why)   pause background proxy work during playback / export; returns release()
 
 export type ProxyState = 'none' | 'pending' | 'ready' | 'failed'
 
@@ -262,7 +263,12 @@ export type ProxyState = 'none' | 'pending' | 'ready' | 'failed'
 export interface AssetMeta extends AssetFacts {
   /** The URL the facts were read from (they are read again when the asset is relinked to another file). */
   analyzedUrl?: string
-  /** The source is heavy (over 1080p, or key frames more than 1 s apart): a proxy is wanted. */
+  /** The URL `hash` was read from in this session. A relink keeps the old hash (it is what relink-by-hash looks for)
+   * until the new file's hash is read; nothing proxy-related trusts a hash read from another URL. */
+  hashUrl?: string
+  /** The source hash the ready proxy was made from (or found for): it is used only while it is the current file's. */
+  proxyHash?: string
+  /** The source is heavy (over 1080p, or key frames at least 0.5 s apart): a proxy is wanted. */
   proxyNeeded?: boolean
   proxy?: ProxyState
   /** 0..1 while pending and running. */
@@ -305,15 +311,23 @@ export function importOptions(): { mode: ImportMode; folderId: string | null } {
 
 const assetById = (id: string): MediaAsset | undefined => useVideoStore.getState().mediaAssets.find((a) => a.id === id)
 
+/** The entry's ready proxy belongs to the file the entry points at NOW: its facts and hash were read from the current
+ * URL and the proxy was made from that hash. Right after a relink none of that holds until the new file is read, so
+ * the preview (and anything cached from it, like a filmstrip) uses the new original, never the old file's proxy. */
+export function proxyIsCurrent(a: Pick<MediaAsset, 'url' | 'missing'>, m: AssetMeta | undefined): boolean {
+  return !!m && !a.missing && !!a.url && m.proxy === 'ready' && !!m.proxyUrl && m.analyzedUrl === a.url && m.hashUrl === a.url && !!m.hash && m.proxyHash === m.hash
+}
+
 /**
  * The URL the preview should decode for a bin entry: its proxy's `esb-media://p/…/proxies/<hash>.mp4` when one is
- * ready, else the original file's URL. Empty string for an unknown or missing entry. Never use it for export.
+ * ready for the file the entry points at now (`proxyIsCurrent`), else the original file's URL. Empty string for an
+ * unknown or missing entry. Never use it for export.
  */
 export function previewUrlFor(assetId: string): string {
   const a = assetById(assetId)
   if (!a || a.missing) return ''
   const m = metaFor(assetId)
-  return m?.proxy === 'ready' && m.proxyUrl ? m.proxyUrl : a.url
+  return proxyIsCurrent(a, m) ? m!.proxyUrl! : a.url
 }
 
 /** The URL an export must decode for a bin entry: always the original file (never a proxy). Empty when missing. */
@@ -329,11 +343,48 @@ export function onProxyReady(cb: (assetId: string) => void): () => void {
   proxyListeners.add(cb)
   return () => { proxyListeners.delete(cb) }
 }
-/** Mark a proxy ready and tell the listeners (used by the proxy queue). */
-export function proxyBecameReady(assetId: string, url: string, ms?: number) {
-  patchMeta(assetId, { proxy: 'ready', proxyUrl: url, proxyProgress: 1, proxyError: undefined, ...(ms != null ? { proxyMs: ms } : {}) })
+/** Mark a proxy ready (made from, or found for, the source hash `hash`) and tell the listeners (used by the proxy
+ * queue). */
+export function proxyBecameReady(assetId: string, url: string, ms?: number, hash: string | undefined = metaFor(assetId)?.hash) {
+  patchMeta(assetId, { proxy: 'ready', proxyUrl: url, proxyHash: hash, proxyProgress: 1, proxyError: undefined, ...(ms != null ? { proxyMs: ms } : {}) })
   for (const cb of [...proxyListeners]) { try { cb(assetId) } catch { /* a listener's own error */ } }
 }
+
+// ---------------------------------------------------------------- holding background proxy work
+
+const holds = new Map<symbol, string>()
+let holdWaiters: (() => void)[] = []
+const releasedListeners = new Set<() => void>()
+
+/**
+ * Hold background proxy work while something needs the decoder and the disk to itself. The engine calls it when
+ * playback starts and when an export starts, and calls the returned `release()` when that ends:
+ *
+ *   const release = holdProxies('playback')   // … later: release()
+ *
+ * While any hold is out, no new proxy is started and the one being made pauses: the page stops acknowledging its
+ * written pieces, so the worker's encoder stalls after at most one more 4 MB piece (it waits for each ack). Holds
+ * nest (playback during an export): work resumes when the last one is released. `release` is idempotent. `reason`
+ * is for debugging (`proxyHolds()`, `window.__videoMedia.holds()`).
+ */
+export function holdProxies(reason: string): () => void {
+  const key = Symbol(reason)
+  holds.set(key, String(reason).slice(0, 40))
+  return () => {
+    if (!holds.delete(key) || holds.size) return
+    const w = holdWaiters
+    holdWaiters = []
+    w.forEach((f) => f())
+    for (const cb of [...releasedListeners]) { try { cb() } catch { /* a listener's own error */ } }
+  }
+}
+/** The reasons proxies are held for now (empty: not held). */
+export const proxyHolds = (): string[] => [...holds.values()]
+export const proxiesHeld = () => holds.size > 0
+/** Resolves at once, or when the last hold is released. */
+export const proxiesUnheld = (): Promise<void> => (holds.size ? new Promise((r) => holdWaiters.push(r)) : Promise.resolve())
+/** Called whenever the last hold is released (the proxy queue starts its next job). */
+export function onProxiesReleased(cb: () => void): () => void { releasedListeners.add(cb); return () => { releasedListeners.delete(cb) } }
 
 export interface MediaInfo {
   codec: string | null
@@ -363,7 +414,8 @@ export function mediaInfo(assetId: string): MediaInfo | null {
     hasAudio: !!a.hasAudio,
     sizeBytes: a.size,
     keyframeInterval: m.keyframeInterval ?? null,
-    proxy: m.proxy ?? 'none',
+    // a proxy that belongs to the file before a relink is not this entry's proxy
+    proxy: m.proxy === 'ready' && !proxyIsCurrent(a, m) ? 'none' : m.proxy ?? 'none',
     missing: !!a.missing,
   }
 }
@@ -411,13 +463,19 @@ export async function writeCache(key: string, bytes: Uint8Array): Promise<void> 
 
 /** Over 1080p by picture size (either side past 1920 × 1080, in either orientation). */
 export const isOver1080p = (w?: number, h?: number) => !!w && !!h && (Math.max(w, h) > 1920 || Math.min(w, h) > 1080)
-/** Key frames further apart than this make scrubbing slow: such footage gets a proxy. */
-export const LONG_GOP_SECONDS = 1
+/** Key frames at least this far apart make scrubbing slow: such footage gets a proxy. Phones and cameras write a key
+ * frame every 0.5-1 s (and exports from editors every 2-10 s); with the earlier "more than 1 s" rule the common 1 s
+ * GOP got none. The proxy itself has a key frame every 0.5 s, so it never asks for a proxy of its own. */
+export const LONG_GOP_SECONDS = 0.5
 
-/** Footage that should be edited on a proxy: over 1080p, or with key frames more than 1 s apart. */
+/** Footage that should be edited on a proxy: over 1080p, or larger than 540p with key frames 0.5 s or more apart. */
 export function wantsProxy(a: Pick<MediaAsset, 'type' | 'width' | 'height' | 'missing'>, m: Pick<AssetMeta, 'keyframeInterval'>): boolean {
   if (a.type !== 'video' || a.missing) return false
-  return isOver1080p(a.width, a.height) || (m.keyframeInterval ?? 0) > LONG_GOP_SECONDS
+  if (isOver1080p(a.width, a.height)) return true
+  // a proxy is 540 on the short side: a source that small or smaller would only be scaled up, so it never gets one
+  if (!a.width || !a.height || Math.min(a.width, a.height) <= 540) return false
+  // a hair under 0.5 s (0.4999 from rounding the packet times) still counts
+  return (m.keyframeInterval ?? 0) >= LONG_GOP_SECONDS - 0.005
 }
 
 /** The proxy's picture size: 540 on the short side, the long side in proportion, both even. */

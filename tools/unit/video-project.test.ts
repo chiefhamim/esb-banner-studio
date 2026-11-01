@@ -24,6 +24,7 @@ beforeEach(() => {
 const write = (p: string, data: string | Buffer = 'x') => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data) }
 /** A directory junction (no admin rights needed on Windows); a dir symlink elsewhere. */
 const linkDir = (target: string, at: string) => fs.symlinkSync(target, at, process.platform === 'win32' ? 'junction' : 'dir')
+const SECRET = 'ab'.repeat(32)
 
 describe('project folder layout', () => {
   it('makes <name>.esbvideo with media, proxies, cache, autosave and renders', () => {
@@ -50,7 +51,7 @@ describe('project folder layout', () => {
   })
 
   it('knows folders by opaque id only; unknown or gone ids are null', () => {
-    const reg = vp.createFolderRegistry({ file: path.join(dir, 'folders.json') })
+    const reg = vp.createFolderRegistry({ file: path.join(dir, 'folders.json'), secret: SECRET })
     const id = reg.add(root)
     expect(id).toMatch(/^[0-9a-f]{32}$/)
     expect(reg.pathFor(id)).toBe(path.resolve(root))
@@ -60,7 +61,7 @@ describe('project folder layout', () => {
     expect(reg.add(dir)).toBeNull() // not a .esbvideo folder
     // a registry file edited to hold a UNC path is ignored on load
     fs.writeFileSync(path.join(dir, 'f2.json'), JSON.stringify(['\\\\evil\\s\\x.esbvideo', root]))
-    expect(vp.createFolderRegistry({ file: path.join(dir, 'f2.json') }).size()).toBe(1)
+    expect(vp.createFolderRegistry({ file: path.join(dir, 'f2.json'), secret: SECRET }).size()).toBe(1)
     fs.rmSync(root, { recursive: true })
     expect(reg.pathFor(id)).toBeNull()
   })
@@ -223,13 +224,22 @@ describe('cache/', () => {
 })
 
 describe('proxies: which footage and what size', () => {
-  it('over 1080p or key frames more than 1 s apart', () => {
+  it('over 1080p or key frames 0.5 s or more apart (phones and cameras: 0.5-1 s GOP)', () => {
     expect(isOver1080p(3840, 2160)).toBe(true)
     expect(isOver1080p(1920, 1080)).toBe(false)
     expect(isOver1080p(1080, 1920)).toBe(false)
     expect(isOver1080p(2160, 3840)).toBe(true)
-    expect(wantsProxy({ type: 'video', width: 1920, height: 1080 }, { keyframeInterval: 0.5 })).toBe(false)
+    expect(wantsProxy({ type: 'video', width: 1920, height: 1080 }, { keyframeInterval: 0.4 })).toBe(false)
+    expect(wantsProxy({ type: 'video', width: 1920, height: 1080 }, {})).toBe(false)
+    expect(wantsProxy({ type: 'video', width: 1920, height: 1080 }, { keyframeInterval: 0.5 })).toBe(true)
+    expect(wantsProxy({ type: 'video', width: 1920, height: 1080 }, { keyframeInterval: 0.4999 })).toBe(true)
+    expect(wantsProxy({ type: 'video', width: 1920, height: 1080 }, { keyframeInterval: 1 })).toBe(true)
     expect(wantsProxy({ type: 'video', width: 1920, height: 1080 }, { keyframeInterval: 2 })).toBe(true)
+    // never a proxy that would be bigger than its source (540 on the short side)
+    expect(wantsProxy({ type: 'video', width: 640, height: 360 }, { keyframeInterval: 2 })).toBe(false)
+    expect(wantsProxy({ type: 'video', width: 960, height: 540 }, { keyframeInterval: 10 })).toBe(false)
+    expect(wantsProxy({ type: 'video', width: 1280, height: 720 }, { keyframeInterval: 1 })).toBe(true)
+    expect(wantsProxy({ type: 'video' }, { keyframeInterval: 2 })).toBe(false)
     expect(wantsProxy({ type: 'video', width: 3840, height: 2160 }, {})).toBe(true)
     expect(wantsProxy({ type: 'video', width: 3840, height: 2160, missing: true }, {})).toBe(false)
     expect(wantsProxy({ type: 'image', width: 6000, height: 4000 }, {})).toBe(false)
@@ -325,5 +335,235 @@ describe('project.json schema and migration', () => {
     expect(relInMedia('C:\\Video\\A.esbvideo\\', 'c:/video/a.esbvideo/MEDIA/x.mp4')).toBe('media/x.mp4')
     expect(relInMedia('C:\\Video\\A.esbvideo', 'C:\\Video\\A.esbvideo\\media\\sub\\x.mp4')).toBeUndefined()
     expect(relInMedia('C:\\Video\\A.esbvideo', 'C:\\Footage\\x.mp4')).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------- Phase 1 fix round, Part A (security)
+
+/** A hard link needs no rights on Windows or elsewhere: the realistic way to plant a "temp file" that is really
+ * someone else's file. A file symlink is tried too where the OS allows it. */
+const plantHardLink = (outside: string, at: string) => fs.linkSync(outside, at)
+function trySymlink(outside: string, at: string): boolean {
+  try { fs.symlinkSync(outside, at, 'file'); return true } catch { return false }
+}
+
+describe('S1: temp files cannot be planted (random names, opened wx)', () => {
+  it('project.json, the cache and a proxy write never write through a link planted at the old temp names', async () => {
+    const outside = path.join(dir, 'precious.txt')
+    write(outside, 'keep me')
+    plantHardLink(outside, path.join(root, 'project.json.tmp'))
+    if (!trySymlink(outside, path.join(root, 'cache', 'wave-1.bin.tmp'))) plantHardLink(outside, path.join(root, 'cache', 'wave-1.bin.tmp'))
+    const hash = '0123456789abcdef0123456789abcdef'
+    plantHardLink(outside, path.join(root, 'proxies', `${hash}.mp4.partial`))
+
+    vp.writeProjectJson(root, '{"v":2}')
+    await vp.createCacheStore().write(vp.confinedDir(root, 'cache'), 'wave-1', new Uint8Array([9, 9, 9]))
+    const w = vm.createExportWriter()
+    const job = w.begin(vp.confinedTarget(root, 'proxies', `${hash}.mp4`), { minFree: 0 })
+    await w.write(job.id, 0, new Uint8Array(Buffer.from('....ftypisom................')))
+    expect(w.end(job.id, true)).toBe(path.join(fs.realpathSync.native(root), 'proxies', `${hash}.mp4`))
+
+    expect(fs.readFileSync(outside, 'utf8')).toBe('keep me')
+    expect(fs.readFileSync(path.join(root, 'project.json'), 'utf8')).toBe('{"v":2}')
+    expect(Array.from(fs.readFileSync(path.join(root, 'cache', 'wave-1.bin')))).toEqual([9, 9, 9])
+    // nothing of ours is left behind under a random temp name either
+    for (const d of [root, path.join(root, 'cache'), path.join(root, 'proxies')]) expect(fs.readdirSync(d).filter((f) => /\.[0-9a-f]{16}\.(tmp|partial)$/.test(f))).toEqual([])
+  })
+
+  it('temp names are random per write', () => {
+    const target = path.join(root, 'x.json')
+    const tmp = vm.tempName(target)
+    expect(tmp).toMatch(/x\.json\.[0-9a-f]{16}\.tmp$/)
+    expect(vm.tempName(target)).not.toBe(tmp)
+    vm.writeFileAtomicSync(target, 'ok')
+    expect(fs.readFileSync(target, 'utf8')).toBe('ok')
+  })
+
+  it('cleanFolder removes stray *.tmp / *.partial / *.copying in the root and every subfolder, without following links', () => {
+    const outside = path.join(dir, 'precious.txt')
+    write(outside, 'keep me')
+    const strays = [path.join(root, 'project.json.tmp'), path.join(root, 'cache', 'a.bin.tmp'), path.join(root, 'proxies', 'b.mp4.partial'), path.join(root, 'media', 'c.mp4.copying'), path.join(root, 'autosave', 'snap-1.json.ab.tmp')]
+    for (const f of strays) write(f)
+    plantHardLink(outside, path.join(root, 'cache', 'linked.bin.tmp'))
+    write(path.join(root, 'cache', 'keep.bin'), 'k')
+    vp.cleanFolder(root)
+    for (const f of strays) expect(fs.existsSync(f), f).toBe(false)
+    expect(fs.existsSync(path.join(root, 'cache', 'linked.bin.tmp'))).toBe(false)
+    expect(fs.readFileSync(outside, 'utf8')).toBe('keep me')
+    expect(fs.existsSync(path.join(root, 'cache', 'keep.bin'))).toBe(true)
+  })
+
+  it('a Save into an existing project folder cleans it too', () => {
+    write(path.join(root, 'project.json'), '{}')
+    write(path.join(root, 'project.json.tmp'))
+    vp.createProjectFolder(root)
+    expect(fs.existsSync(path.join(root, 'project.json.tmp'))).toBe(false)
+  })
+})
+
+describe('S2: the cache cap holds under parallel writes', () => {
+  it('40 writes sent at once: exactly as many as fit are kept, the rest refused', async () => {
+    const cdir = vp.confinedDir(root, 'cache')
+    const store = vp.createCacheStore({ maxEach: 100, maxTotal: 1000 })
+    const res = await Promise.allSettled(Array.from({ length: 40 }, (_, i) => store.write(cdir, `k-${i}`, new Uint8Array(100))))
+    expect(res.filter((r) => r.status === 'fulfilled').length).toBe(10)
+    expect(res.filter((r) => r.status === 'rejected').every((r) => /full/.test(String((r as PromiseRejectedResult).reason)))).toBe(true)
+    const onDisk = fs.readdirSync(cdir).filter((f) => f.endsWith('.bin')).reduce((n, f) => n + fs.statSync(path.join(cdir, f)).size, 0)
+    expect(onDisk).toBe(1000)
+    expect(store.total(cdir)).toBe(1000)
+    // the same key written 40 times at once counts once
+    const store2 = vp.createCacheStore({ maxEach: 100, maxTotal: 1000 })
+    const d2 = vp.confinedDir(vp.createProjectFolder(path.join(dir, 'B.esbvideo')), 'cache')
+    await Promise.all(Array.from({ length: 40 }, () => store2.write(d2, 'same', new Uint8Array(100))))
+    expect(store2.total(d2)).toBe(100)
+  })
+})
+
+describe('S3: proxy writes are capped per file, per folder, and by free space while they grow', () => {
+  const MB = 1024 * 1024
+  it('refuses a piece past the file limit or the folder cap, and stops when the drive fills up mid-write', async () => {
+    const t = path.join(root, 'proxies', 'a.mp4')
+    let w = vm.createExportWriter()
+    let j = w.begin(t, { minFree: 0, maxBytes: 10 })
+    await w.write(j.id, 0, new Uint8Array(10))
+    await expect(w.write(j.id, 10, new Uint8Array(1))).rejects.toThrow(/larger/)
+    w.end(j.id, false)
+
+    j = w.begin(t, { minFree: 0, folderBytes: 90, folderCap: 100 })
+    await w.write(j.id, 0, new Uint8Array(10))
+    await expect(w.write(j.id, 10, new Uint8Array(1))).rejects.toThrow(/full/)
+    // a patch inside what was written does not grow the file and is allowed
+    await w.write(j.id, 0, new Uint8Array(5))
+    w.end(j.id, false)
+    expect(() => w.begin(t, { minFree: 0, folderBytes: 100, folderCap: 100 })).toThrow(/full/)
+
+    let free = 10_000 * MB
+    w = vm.createExportWriter({ free: () => free })
+    j = w.begin(t, { minFree: 1024 * MB })
+    await w.write(j.id, 0, new Uint8Array(32 * MB))
+    free = 1050 * MB // the drive filled up from elsewhere: this 40 MB piece would leave less than 1 GB
+    await expect(w.write(j.id, 32 * MB, new Uint8Array(40 * MB))).rejects.toThrow(/nearly full/)
+    w.end(j.id, false)
+    expect(fs.readdirSync(path.join(root, 'proxies')).filter((f) => f.endsWith('.partial'))).toEqual([])
+  })
+})
+
+describe('S4: folder ids are an HMAC with the install secret', () => {
+  it('the same path gets a different id under another secret, never the old plain hash; the secret persists', () => {
+    const p = path.join(dir, 'X.esbvideo')
+    const a = vp.folderId(p, SECRET)
+    expect(a).toMatch(/^[0-9a-f]{32}$/)
+    expect(vp.folderId(p, 'cd'.repeat(32))).not.toBe(a)
+    expect(vp.folderId(p.toUpperCase() + path.sep, SECRET)).toBe(a) // the same folder however it is spelled
+    const plain = require('node:crypto').createHash('sha256').update('esb-folder:' + path.resolve(p).replace(/\\/g, '/').toLowerCase()).digest('hex').slice(0, 32)
+    expect(a).not.toBe(plain)
+    expect(() => vp.folderId(p)).toThrow(/secret/)
+    const sf = path.join(dir, 'secret')
+    const s1 = vp.loadInstallSecret(sf)
+    expect(s1).toMatch(/^[0-9a-f]{64}$/)
+    expect(vp.loadInstallSecret(sf)).toBe(s1)
+    // the registry keeps working across launches with the same secret
+    const r1 = vp.createFolderRegistry({ file: path.join(dir, 'reg.json'), secret: s1 })
+    const id = r1.add(root)
+    expect(vp.createFolderRegistry({ file: path.join(dir, 'reg.json'), secret: s1 }).pathFor(id)).toBe(path.resolve(root))
+    expect(r1.entries()).toEqual([{ id, path: path.resolve(root) }])
+    // a new secret (the file was lost): the folder is still known, under a new id
+    const r3 = vp.createFolderRegistry({ file: path.join(dir, 'reg.json'), secret: 'ef'.repeat(32) })
+    expect(r3.pathFor(id)).toBeNull()
+    expect(r3.size()).toBe(1)
+  })
+})
+
+describe('S5: the autosave restore picks the newest snapshot by name and reads only small plain files', () => {
+  it('across folders, newest first, skipping a planted huge file and a damaged one', async () => {
+    const a = vp.confinedDir(root, 'autosave')
+    const b = path.join(dir, 'userdata-autosave')
+    fs.mkdirSync(b)
+    const name = (t: number) => `snap-${String(t).padStart(15, '0')}-aaaaaaaaaaaa.json`
+    write(path.join(b, name(100)), '{"n":"old"}')
+    write(path.join(a, name(200)), '{"n":"folder"}')
+    // newer, but over 25 MB (sparse): skipped without being read
+    const huge = path.join(a, name(300))
+    fs.writeFileSync(huge, '{')
+    fs.truncateSync(huge, vm.MAX_SNAPSHOT + 1)
+    // newer still, but damaged
+    write(path.join(b, name(400)), '{not json')
+    const best = await vm.latestSnapshotIn([{ dir: b }, { dir: a, folder: { id: 'f', path: root } }])
+    expect(JSON.parse(best.text).n).toBe('folder')
+    expect(best.at).toBe(200)
+    expect(best.folder).toEqual({ id: 'f', path: root })
+    expect(JSON.parse(vm.latestSnapshot(a).text).n).toBe('folder')
+    // reading stops after maxReads candidates
+    expect(await vm.latestSnapshotIn([{ dir: b }], { maxReads: 1 })).toBeNull()
+    expect(await vm.latestSnapshotIn([{ dir: path.join(dir, 'nope') }])).toBeNull()
+  })
+
+  it('an autosave/ that is a junction out of the project is refused (main asks confinedDir first)', () => {
+    const outside = path.join(dir, 'elsewhere')
+    fs.mkdirSync(outside)
+    fs.rmSync(path.join(root, 'autosave'), { recursive: true })
+    linkDir(outside, path.join(root, 'autosave'))
+    expect(() => vp.confinedDir(root, 'autosave')).toThrow(/outside/)
+  })
+})
+
+describe('S6: relink search stays bounded', () => {
+  it('a slow folder (cloud placeholders) is left after one slow hash; the hash count is capped', async () => {
+    const slow = path.join(dir, 'cloud')
+    const fast = path.join(dir, 'local')
+    for (let i = 0; i < 5; i++) write(path.join(slow, `c${i}.mp4`), Buffer.alloc(10, i))
+    write(path.join(fast, 'x.mp4'), Buffer.alloc(10, 7))
+    let t = 0
+    const hashed: string[] = []
+    const hash = async (p: string) => { hashed.push(path.basename(p)); if (p.startsWith(slow)) t += 5000; return 'f'.repeat(32) }
+    const found = await vp.findByHash([{ id: 'a', size: 10, hash: 'e'.repeat(32) }], [slow, fast], { now: () => t, hash, budgetMs: 60000 })
+    expect(found.size).toBe(0)
+    expect(hashed.filter((f) => f.startsWith('c'))).toHaveLength(1)
+    expect(hashed).toContain('x.mp4')
+    const many = path.join(dir, 'many')
+    for (let i = 0; i < 30; i++) write(path.join(many, `m${i}.mp4`), Buffer.alloc(10))
+    let n = 0
+    await vp.findByHash([{ id: 'a', size: 10, hash: 'e'.repeat(32) }], [many], { maxHashes: 5, hash: async () => { n++; return 'f'.repeat(32) } })
+    expect(n).toBe(5)
+  })
+})
+
+describe('S7: only media files, and only from the subfolder named', () => {
+  it('a proxies/ entry that links into cache/ is refused; the protocol serves media types only', async () => {
+    write(path.join(root, 'cache', 'wave.bin'), 'secret')
+    write(path.join(root, 'proxies', 'real.mp4'), 'x')
+    expect(vp.confinedFile(root, 'proxies/real.mp4')).toBeTruthy()
+    if (trySymlink(path.join(root, 'cache', 'wave.bin'), path.join(root, 'proxies', 'linked.mp4'))) expect(vp.confinedFile(root, 'proxies/linked.mp4')).toBeNull()
+    write(path.join(root, 'renders', 'notes.txt'), 'x')
+    const res = await vm.serveMedia(new Request('esb-media://p/u/renders/notes.txt'), { pathFor: () => null }, { folderFile: (_k: string, rel: string) => vp.confinedFile(root, rel) })
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('S8 / P11: protocol headers and the confined-file memo', () => {
+  it('nosniff on every answer; a null origin only in the packaged app', async () => {
+    write(path.join(root, 'media', 'a.mp4'), 'x')
+    const res = await vm.serveMedia(new Request('esb-media://p/u/media/a.mp4'), { pathFor: () => null }, { folderFile: (_k: string, rel: string) => vp.confinedFile(root, rel) })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+    expect((await vm.serveMedia(new Request('esb-media://m/zz'), { pathFor: () => null })).headers.get('x-content-type-options')).toBe('nosniff')
+    expect(vm.allowedOrigin('null', undefined)).toBe('null')
+    expect(vm.allowedOrigin('null', 'http://localhost:5173')).toBeNull()
+    expect(vm.allowedOrigin('http://localhost:5173', 'http://localhost:5173')).toBe('http://localhost:5173')
+  })
+
+  it('resolves a file once per short window, and again after invalidate or the window', () => {
+    write(path.join(root, 'media', 'a.mp4'), 'x')
+    let t = 0
+    const r = vp.createConfinedResolver({ ttlMs: 1000, now: () => t })
+    const f = r.resolve('k', root, 'media/a.mp4')
+    expect(f).toBeTruthy()
+    fs.rmSync(path.join(root, 'media', 'a.mp4'))
+    expect(r.resolve('k', root, 'media/a.mp4')).toBe(f) // memo (opening it then 404s)
+    r.invalidate('k')
+    expect(r.resolve('k', root, 'media/a.mp4')).toBeNull()
+    write(path.join(root, 'media', 'a.mp4'), 'x')
+    t = 2000
+    expect(r.resolve('k', root, 'media/a.mp4')).toBe(f)
   })
 })

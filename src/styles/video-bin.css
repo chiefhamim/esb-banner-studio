@@ -1,35 +1,52 @@
 /* Video desk — media bin metadata (Phase 1, src/video/BinCard.tsx). Every class is prefixed vw-bin-. */
-.vw-bin-card { align-items: flex-start; }
-.vw-bin-card .vw-media-actions { align-self: center; }
-.vw-bin-card .vw-media-info { display: flex; flex-direction: column; gap: 2px; }
+/* one grid per row: the name shares its line with the actions, and the facts and the proxy line below run under the
+   actions to the row's right edge (in a 312 px bin the facts got ~140 px beside the buttons and were cut) */
+.vw-media-card.vw-bin-card { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; column-gap: 10px; row-gap: 1px; align-items: start; }
+.vw-bin-card > .vw-media-thumb { grid-column: 1; grid-row: 1 / span 3; align-self: start; margin-top: 2px; }
+.vw-bin-card .vw-media-info { display: contents; }
+.vw-bin-card .vw-media-title { grid-column: 2; grid-row: 1; align-self: center; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.vw-bin-card .vw-media-actions { grid-column: 3; grid-row: 1; align-self: center; }
+.vw-bin-card .vw-bin-facts, .vw-bin-card .vw-media-info > .vw-bin-meta { grid-column: 2 / span 2; grid-row: 2; min-width: 0; }
+.vw-bin-card .vw-bin-tags { grid-column: 2 / span 2; grid-row: 3; min-width: 0; }
 .vw-bin-meta { font-size: 11px; line-height: 15px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-/* the facts wrap to a second line rather than cutting the size or the frame rate (the 312 px bin) */
-.vw-media-meta.vw-bin-meta { white-space: normal; text-overflow: clip; overflow: visible; overflow-wrap: anywhere; }
+/* two fixed fact lines (what it is / how big): each one line, never wrapped mid-list, so no line starts or ends with
+   a separator; the whole list is in the tooltip */
+.vw-bin-facts { display: flex; flex-direction: column; min-width: 0; }
+.vw-media-meta.vw-bin-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vw-bin-found { color: var(--text-2); }
-.vw-bin-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 18px; margin-top: 1px; }
+.vw-media-meta.vw-bin-meta.vw-bin-found-line { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.vw-bin-card.found .vw-media-title { color: var(--text); }
+.vw-bin-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-top: 2px; }
 .vw-bin-tags:empty { display: none; }
 
-.vw-bin-proxy, .vw-bin-tag {
-  display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px;
-  font: 600 10.5px/18px var(--font-ui); letter-spacing: var(--track-chip, .05em); text-transform: uppercase;
-  color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-1); white-space: nowrap;
-}
-button.vw-bin-proxy { cursor: pointer; }
-button.vw-bin-proxy:hover { color: var(--text); background: var(--fill-hover); }
-.vw-bin-proxy.ready { color: var(--success); background: var(--success-soft); }
-.vw-bin-proxy.failed { color: var(--danger); background: var(--danger-soft); }
-.vw-bin-proxy.pending { padding-right: 2px; color: var(--text); }
-.vw-bin-proxy-label { min-width: 62px; }
-.vw-bin-bar { position: relative; width: 56px; height: 4px; overflow: hidden; background: var(--fill-active, var(--fill-hover)); border-radius: 2px; }
+/* the proxy line: plain status words plus, when something can be done, a real 28 px button */
+.vw-bin-proxy { display: flex; flex: 1 1 100%; align-items: center; gap: 6px; min-width: 0; min-height: 16px; font-size: 11px; line-height: 15px; color: var(--text-2); }
+.vw-bin-proxy > svg { flex: none; }
+.vw-bin-proxy-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.vw-bin-proxy.ready { color: var(--success); }
+.vw-bin-proxy.ready .vw-bin-proxy-label { color: var(--text-2); }
+.vw-bin-proxy.failed { color: var(--danger); }
+.vw-bin-proxy.failed { align-items: flex-start; }
+.vw-bin-proxy.failed > svg { margin-top: 2px; }
+/* the reason is the point of this line: it wraps (three lines at most; the whole text is in the tooltip) instead of being cut */
+.vw-bin-proxy.failed .vw-bin-proxy-label { flex: 1 1 auto; color: var(--text-2); white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.vw-bin-proxy.pending .vw-bin-proxy-label { flex: none; min-width: 64px; color: var(--text); }
+.vw-bin-proxy.make .vw-bin-proxy-label { flex: 1 1 auto; color: var(--text-3); }
+.vw-bin-proxy .btn.xs.vw-bin-proxy-btn { flex: none; height: 28px; min-height: 28px; margin-left: auto; padding: 0 10px; }
+.vw-bin-bar { position: relative; flex: 1 1 auto; min-width: 32px; max-width: 72px; height: 4px; overflow: hidden; background: var(--fill-active, var(--fill-hover)); border-radius: 2px; }
 .vw-bin-bar > span { position: absolute; inset: 0 auto 0 0; background: var(--text-2); border-radius: 2px; transition: width .2s linear; }
-.vw-bin-proxy-x { display: grid; place-items: center; width: 16px; height: 16px; padding: 0; color: var(--text-3); background: transparent; border: 0; border-radius: 3px; cursor: pointer; }
-.vw-bin-proxy-x:hover { color: var(--text); background: var(--fill-hover); }
+.vw-bin-tag { font-size: 11px; line-height: 15px; color: var(--text-3); white-space: nowrap; cursor: default; }
+
+.vw-media-card .btn.xs.vw-bin-use-found, .vw-media-card .btn.xs.vw-relink { height: 28px; min-height: 28px; }
 
 .vw-bin-missing { align-items: center; }
+.vw-bin-missing.all-found { background: var(--fill); }
 .vw-bin-missing-text { flex: 1 1 auto; min-width: 0; }
-.vw-bin-missing .btn.vw-bin-relink-all { flex: none; height: 28px; }
+.vw-bin-missing .btn.vw-bin-relink-all { flex: none; height: 28px; min-height: 28px; }
 
-.vw-bin-import-mode { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+/* the import mode row and the browser note line up with the rows' thumbnails (each row has 6 px of padding) */
+.vw-bin-import-mode { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; padding: 0 6px; }
 .vw-bin-import-label { font-size: 11.5px; color: var(--text-3); }
+.vw-bin-content .vw-bin-note { padding: 0 6px; }
 
 @media (prefers-reduced-motion: reduce) { .vw-bin-bar > span { transition: none; } }

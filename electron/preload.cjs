@@ -29,7 +29,7 @@ contextBridge.exposeInMainWorld('esb', {
   videoMediaFacts: (urls) => ipcRenderer.invoke('esb:video-media-facts', urls),
   videoRelinkSearch: (folderId, items) => ipcRenderer.invoke('esb:video-relink-search', folderId, items),
   videoProxyStatus: (folderId, hashes) => ipcRenderer.invoke('esb:video-proxy-status', folderId, hashes),
-  videoProxyBegin: (folderId, hash) => ipcRenderer.invoke('esb:video-proxy-begin', folderId, hash),
+  videoProxyBegin: (folderId, hash, sourceUrl) => ipcRenderer.invoke('esb:video-proxy-begin', folderId, hash, sourceUrl),
   videoProxyWrite: (id, position, bytes) => ipcRenderer.invoke('esb:video-proxy-write', id, position, bytes),
   videoProxyEnd: (id, ok) => ipcRenderer.invoke('esb:video-proxy-end', id, ok),
   videoCacheRead: (folderId, key) => ipcRenderer.invoke('esb:video-cache-read', folderId, key),

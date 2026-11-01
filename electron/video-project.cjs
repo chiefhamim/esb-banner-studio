@@ -17,7 +17,7 @@
 const crypto = require('node:crypto')
 const fs = require('node:fs')
 const path = require('node:path')
-const { isMediaPath, isNetworkOrDevicePath, MEDIA_EXT, videoKind } = require('./video-media.cjs')
+const { isMediaPath, isNetworkOrDevicePath, MEDIA_EXT, videoKind, writeFileAtomicSync, writeFileAtomic } = require('./video-media.cjs')
 
 const FOLDER_DIRS = ['media', 'proxies', 'cache', 'autosave', 'renders']
 /** Subfolders whose files esb-media:// may serve (never cache/ or autosave/, which are read through IPC only). */
@@ -67,20 +67,47 @@ function isInside(root, p) {
 
 const real = (p) => fs.realpathSync.native(p)
 
-/** The real path of an existing file `rel` inside the folder `root`, or null. The file's real location (after every
- * junction and symlink on the way) must be inside the folder's real location, and it must be a plain file. */
+/** The real path of an existing file `rel` (`<sub>/<name>`) inside the folder `root`, or null. The subfolder's real
+ * location must be the folder's own `<sub>` (not a junction to elsewhere, not another subfolder), and the file's real
+ * location (after every junction and symlink on the way) must sit directly in it, as a plain file. So
+ * `proxies/x.mp4` can never be a link into `cache/` or `autosave/`, which are never served. */
 function confinedFile(root, rel, allowed = SERVED_DIRS) {
   const r = safeRel(rel, allowed)
   if (!r || !isLocalAbsolute(root)) return null
+  const [sub] = r.split('/')
   const target = path.join(root, r)
   if (!isInside(root, target)) return null
   try {
     const realRoot = real(root)
+    const realSub = real(path.join(root, sub))
+    if (!sameish(path.dirname(realSub), realRoot) || !sameish(path.basename(realSub), sub)) return null
     const file = real(target)
-    if (!isInside(realRoot, file) || !fs.statSync(file).isFile()) return null
+    if (!sameish(path.dirname(file), realSub) || !fs.statSync(file).isFile()) return null
     return file
   } catch {
     return null
+  }
+}
+
+/** confinedFile behind a short-lived memo (esb-media://p range requests ask for the same file many times a second;
+ * each answer cost a realpath of the folder, the subfolder and the file plus a stat). An entry lives `ttlMs` and is
+ * dropped by `invalidate(key)` when this process changes that folder (a proxy finished). A file that turns out to be
+ * gone when it is opened is simply a 404, and the next request resolves it again. */
+function createConfinedResolver({ ttlMs = 1500, max = 500, now = () => Date.now() } = {}) {
+  const memo = new Map()
+  return {
+    resolve(key, root, rel, allowed = SERVED_DIRS) {
+      const k = `${key}\u0000${root}\u0000${rel}`
+      const hit = memo.get(k)
+      const t = now()
+      if (hit && t - hit.at < ttlMs) return hit.file
+      const file = confinedFile(root, rel, allowed)
+      if (memo.size >= max) memo.delete(memo.keys().next().value)
+      memo.set(k, { at: t, file, key })
+      return file
+    },
+    invalidate(key) { for (const [k, v] of memo) if (key == null || v.key === key) memo.delete(k) },
+    size: () => memo.size,
   }
 }
 
@@ -112,30 +139,46 @@ function confinedTarget(root, sub, name) {
 }
 
 const norm = (p) => path.resolve(String(p)).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase()
-/** The opaque id a project folder is known by. */
-const folderId = (p) => crypto.createHash('sha256').update('esb-folder:' + norm(p)).digest('hex').slice(0, 32)
+/** The opaque id a project folder is known by: an HMAC of its path with this install's own secret (userData), so an
+ * id cannot be worked out from a path (or a path checked against an id) by anyone who does not hold the secret. */
+const folderId = (p, secret) => {
+  if (typeof secret !== 'string' || secret.length < 32) throw new Error('folderId needs the install secret')
+  return crypto.createHmac('sha256', secret).update('esb-folder:' + norm(p)).digest('hex').slice(0, 32)
+}
+
+/** This install's secret for folder ids: 32 random bytes kept in `file` (made once, 'wx', so two first runs agree on
+ * one). A missing or damaged file gets a new secret: known folders then simply get new ids (the registry keeps paths). */
+function loadInstallSecret(file) {
+  try { const t = fs.readFileSync(file, 'utf8').trim(); if (/^[0-9a-f]{64}$/.test(t)) return t } catch { /* first run */ }
+  const fresh = crypto.randomBytes(32).toString('hex')
+  try {
+    fs.writeFileSync(file, fresh, { flag: 'wx' })
+    return fresh
+  } catch {
+    try { const t = fs.readFileSync(file, 'utf8').trim(); if (/^[0-9a-f]{64}$/.test(t)) return t } catch { /* unreadable */ }
+    try { writeFileAtomicSync(file, fresh) } catch { /* memory only: ids last this session */ }
+    return fresh
+  }
+}
 
 /** Project folders the editor created or opened in main's own dialog, kept across launches (userData/video-folders.json,
  * newest last, at most `max`). Only these may be named by id. */
-function createFolderRegistry({ file, max = 200 }) {
+function createFolderRegistry({ file, secret, max = 200 }) {
   const byId = new Map()
+  const idOf = (p) => folderId(p, secret)
   try {
     const list = JSON.parse(fs.readFileSync(file, 'utf8'))
-    if (Array.isArray(list)) for (const p of list.slice(-max)) if (isProjectFolderPath(p)) byId.set(folderId(p), path.resolve(p))
+    if (Array.isArray(list)) for (const p of list.slice(-max)) if (isProjectFolderPath(p)) byId.set(idOf(p), path.resolve(p))
   } catch { /* first run */ }
   const flush = () => {
-    try {
-      const tmp = file + '.tmp'
-      fs.writeFileSync(tmp, JSON.stringify([...byId.values()]))
-      fs.renameSync(tmp, file)
-    } catch { /* best effort */ }
+    try { writeFileAtomicSync(file, JSON.stringify([...byId.values()])) } catch { /* best effort */ }
   }
   return {
     /** Approve a folder (it must exist as a directory); returns its id, or null. */
     add(p) {
       if (!isProjectFolderPath(p)) return null
       try { if (!fs.statSync(p).isDirectory()) return null } catch { return null }
-      const id = folderId(p)
+      const id = idOf(p)
       byId.delete(id)
       byId.set(id, path.resolve(p))
       while (byId.size > max) byId.delete(byId.keys().next().value)
@@ -150,6 +193,8 @@ function createFolderRegistry({ file, max = 200 }) {
       try { return fs.statSync(p).isDirectory() ? p : null } catch { return null }
     },
     list: () => [...byId.values()],
+    /** [{ id, path }] for every known folder (oldest first). */
+    entries: () => [...byId.entries()].map(([id, p]) => ({ id, path: p })),
     size: () => byId.size,
     flush,
   }
@@ -168,12 +213,30 @@ function createProjectFolder(dir) {
   }
   fs.mkdirSync(dir, { recursive: true })
   for (const d of FOLDER_DIRS) confinedDir(dir, d)
+  if (st) cleanFolder(dir)
   return path.resolve(dir)
 }
 
-/** Remove half-written proxies left by a session that ended mid-job (they are redone). */
+const STRAY = /\.(partial|copying|tmp)$/
+
+/** Remove half-written files (`*.partial`, `*.copying`, `*.tmp`) left in one folder by a session that ended mid-job
+ * (they are redone). Plain files only: a link or folder of that name is left alone (never followed). */
 function cleanPartials(dir) {
-  try { for (const f of fs.readdirSync(dir)) if (/\.(partial|copying|tmp)$/.test(f)) fs.rmSync(path.join(dir, f), { force: true }) } catch { /* nothing there */ }
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      if (!STRAY.test(f)) continue
+      const p = path.join(dir, f)
+      try { if (fs.lstatSync(p).isFile() || fs.lstatSync(p).isSymbolicLink()) fs.rmSync(p, { force: true }) } catch { /* gone */ }
+    }
+  } catch { /* nothing there */ }
+}
+
+/** Clean a whole project folder (its root and every subfolder) of half-written files. Run once per folder per session
+ * before this session writes there: on open, on a Save into an existing folder, and the first time an id is used. */
+function cleanFolder(root) {
+  if (!isLocalAbsolute(root)) return
+  cleanPartials(root)
+  for (const d of FOLDER_DIRS) { try { cleanPartials(confinedDir(root, d)) } catch { /* a linked or unreadable subfolder */ } }
 }
 
 /** project.json of a folder: its text (≤ 25 MB), read from inside the folder's real location. */
@@ -194,10 +257,7 @@ function writeProjectJson(dir, text) {
   if (!isProjectFolderPath(dir)) throw new Error('Not a project folder')
   const target = path.join(dir, PROJECT_FILE)
   try { if (!fs.lstatSync(target).isFile()) throw new Error('project.json is not a plain file') } catch (e) { if (e && e.code !== 'ENOENT') throw e }
-  const tmp = target + '.tmp'
-  fs.writeFileSync(tmp, text, 'utf8')
-  fs.renameSync(tmp, target)
-  return target
+  return writeFileAtomicSync(target, text, 'utf8')
 }
 
 // ---------------------------------------------------------------- quick hash (relink) and copying into media/
@@ -295,13 +355,18 @@ async function relinkDirs({ root, original, approved }) {
 }
 
 /** Find files matching each wanted {id, size, hash} in `dirs` (plain files only, links skipped; at most `maxEntries`
- * directory entries looked at in all). Only a file of the same size is hashed. Returns Map id → path. */
-async function findByHash(items, dirs, { maxEntries = 20000 } = {}) {
+ * directory entries looked at in all). Only a file of the same size is hashed, one at a time, at most `maxHashes` in
+ * all. Cloud placeholders (OneDrive "online-only" files) cannot be told apart cheaply from Node (no file-attribute
+ * API), and hashing one downloads it: so a hash that takes longer than `slowMs` marks its folder slow and the rest of
+ * that folder is skipped, and the whole search stops after `budgetMs`. Returns Map id → path. */
+async function findByHash(items, dirs, { maxEntries = 20000, maxHashes = 200, slowMs = 1500, budgetMs = 20000, now = () => Date.now(), hash = quickHash } = {}) {
   const want = (Array.isArray(items) ? items : []).slice(0, 500).filter((i) => i && typeof i.id === 'string' && Number.isSafeInteger(i.size) && i.size > 0 && /^[0-9a-f]{32}$/.test(String(i.hash)))
   const bySize = new Map()
   for (const i of want) { const l = bySize.get(i.size) || []; l.push(i); bySize.set(i.size, l) }
   const found = new Map()
   let seen = 0
+  let hashes = 0
+  const t0 = now()
   outer: for (const dir of dirs) {
     if (!isLocalAbsolute(dir)) continue
     let entries
@@ -309,6 +374,7 @@ async function findByHash(items, dirs, { maxEntries = 20000 } = {}) {
     for (const d of entries) {
       if (++seen > maxEntries) break outer
       if (found.size === want.length) break outer
+      if (now() - t0 > budgetMs || hashes >= maxHashes) break outer
       if (!d.isFile()) continue // a symlink or junction is never followed here
       const p = path.join(dir, d.name)
       if (!isMediaPath(p) || hasStreamSuffix(p)) continue
@@ -317,8 +383,11 @@ async function findByHash(items, dirs, { maxEntries = 20000 } = {}) {
       const cands = (bySize.get(st.size) || []).filter((c) => !found.has(c.id))
       if (!cands.length) continue
       let h
-      try { h = await quickHash(p) } catch { continue }
+      const h0 = now()
+      hashes++
+      try { h = await hash(p) } catch { continue }
       for (const c of cands) if (c.hash === h) found.set(c.id, p)
+      if (now() - h0 > slowMs) continue outer // a slow (cloud / network-backed) folder: skip the rest of it
     }
   }
   return found
@@ -331,17 +400,29 @@ const CACHE_MAX_EACH = 32 * 1024 * 1024
 const CACHE_MAX_TOTAL = 1024 * 1024 * 1024
 
 /** Key → bytes in a cache folder. Keys are `[a-z0-9-]{1,80}`; each entry ≤ 32 MB; the folder ≤ 1 GB. Past the cap a
- * write is refused (nothing is evicted: something may still use it); the caller recomputes what it needs. */
+ * write is refused (nothing is evicted: something may still use it); the caller recomputes what it needs. Writes to
+ * one folder run one after another (a promise chain per folder), so 40 writes sent at once are each checked against
+ * the total the previous ones left — they once all passed the cap together. Each goes to a random temp name opened
+ * with 'wx', then is renamed into place. */
 function createCacheStore({ maxEach = CACHE_MAX_EACH, maxTotal = CACHE_MAX_TOTAL } = {}) {
   const totals = new Map()
+  const chains = new Map()
   const scan = (dir) => {
     let n = 0
-    try { for (const f of fs.readdirSync(dir)) { if (!f.endsWith('.bin')) continue; try { n += fs.statSync(path.join(dir, f)).size } catch { /* gone */ } } } catch { /* empty */ }
+    try { for (const f of fs.readdirSync(dir)) { if (!f.endsWith('.bin')) continue; try { n += fs.lstatSync(path.join(dir, f)).size } catch { /* gone */ } } } catch { /* empty */ }
     return n
   }
   const fileFor = (dir, key) => {
     if (typeof key !== 'string' || !CACHE_KEY.test(key)) throw new Error('Bad cache key')
     return path.join(dir, key + '.bin')
+  }
+  const serial = (dir, fn) => {
+    const k = norm(dir)
+    const run = (chains.get(k) || Promise.resolve()).then(fn, fn)
+    const tail = run.catch(() => {})
+    chains.set(k, tail)
+    tail.then(() => { if (chains.get(k) === tail) chains.delete(k) })
+    return run
   }
   return {
     async read(dir, key) {
@@ -352,17 +433,18 @@ function createCacheStore({ maxEach = CACHE_MAX_EACH, maxTotal = CACHE_MAX_TOTAL
         return new Uint8Array(await fs.promises.readFile(f))
       } catch { return null }
     },
-    async write(dir, key, bytes) {
-      const f = fileFor(dir, key)
-      if (!(bytes instanceof Uint8Array) || bytes.length > maxEach) throw new Error(`Cache entries are at most ${Math.round(maxEach / 1048576)} MB`)
-      let old = 0
-      try { const st = fs.lstatSync(f); if (!st.isFile()) throw new Error('Refusing to write over a link'); old = st.size } catch (e) { if (e && e.code !== 'ENOENT') throw e }
-      const total = totals.has(dir) ? totals.get(dir) : scan(dir)
-      if (total - old + bytes.length > maxTotal) throw new Error('The project cache is full')
-      const tmp = f + '.tmp'
-      await fs.promises.writeFile(tmp, bytes)
-      await fs.promises.rename(tmp, f)
-      totals.set(dir, total - old + bytes.length)
+    write(dir, key, bytes) {
+      let f
+      try { f = fileFor(dir, key) } catch (e) { return Promise.reject(e) }
+      if (!(bytes instanceof Uint8Array) || bytes.length > maxEach) return Promise.reject(new Error(`Cache entries are at most ${Math.round(maxEach / 1048576)} MB`))
+      return serial(dir, async () => {
+        let old = 0
+        try { const st = fs.lstatSync(f); if (!st.isFile()) throw new Error('Refusing to write over a link'); old = st.size } catch (e) { if (e && e.code !== 'ENOENT') throw e }
+        const total = totals.has(dir) ? totals.get(dir) : scan(dir)
+        if (total - old + bytes.length > maxTotal) throw new Error('The project cache is full')
+        await writeFileAtomic(f, bytes)
+        totals.set(dir, total - old + bytes.length)
+      })
     },
     total: (dir) => (totals.has(dir) ? totals.get(dir) : scan(dir)),
   }
@@ -399,8 +481,8 @@ function dirBytes(dir) {
 
 module.exports = {
   FOLDER_DIRS, SERVED_DIRS, PROJECT_FILE, LIBRARY_KEY, MAX_PROJECT_TEXT,
-  hasStreamSuffix, isLocalAbsolute, isProjectFolderPath, isSafeName, safeRel, isInside, confinedFile, confinedDir, confinedTarget,
-  folderId, createFolderRegistry, createProjectFolder, cleanPartials, readProjectJson, writeProjectJson,
+  hasStreamSuffix, isLocalAbsolute, isProjectFolderPath, isSafeName, safeRel, isInside, confinedFile, confinedDir, confinedTarget, createConfinedResolver,
+  folderId, loadInstallSecret, createFolderRegistry, createProjectFolder, cleanPartials, cleanFolder, readProjectJson, writeProjectJson,
   quickHash, mediaNameFor, copyIntoMedia, relinkDirs, findByHash,
   CACHE_KEY, CACHE_MAX_EACH, CACHE_MAX_TOTAL, createCacheStore,
   proxyName, proxyReady, folderUrl, dirBytes,

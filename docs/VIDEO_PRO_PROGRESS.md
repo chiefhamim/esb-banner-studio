@@ -330,3 +330,106 @@ track add / move / remove / undo through the UI; no page errors.
 ### Next step
 Phase 2 (pro editing) on top of the v2 model: speed and keyframes are already in the type; the compositor's layer pass
 takes them per frame.
+
+
+## Phase 1 fix round — Part A (2026-11-01, branch `video-p1-io`)
+
+Main process, project IO and security after the Phase 1 review, plus the bin items from the UI review (B4–B19). Every
+item was re-checked before it was fixed; all of them reproduced.
+
+### Security
+- **S1 predictable temp names — fixed.** Every temp file is now `<target>.<16 random hex>.tmp` (or `.partial`) opened
+  with `'wx'` and renamed into place (`writeFileAtomicSync` / `writeFileAtomic` / `tempName` in `video-media.cjs`):
+  project.json, cache entries, proxies and exports (`createExportWriter`), autosave snapshots, the media and folder
+  registries, stills/takes. A link or hard link planted at the old names (`project.json.tmp`, `<key>.bin.tmp`,
+  `<hash>.mp4.partial`) is never written through. `cleanFolder(root)` clears stray `*.tmp|*.partial|*.copying` (plain
+  files and links only, never followed) in the root and every subfolder: on open, on a Save into an existing folder
+  (`createProjectFolder`), and the first time any folder id is used in a session (`cleanOnce` in `folderRoot`, also the
+  library).
+- **S2 cache cap under parallel writes — fixed.** Writes to one cache folder run one after another (promise chain per
+  folder); 40 parallel writes keep exactly the 10 that fit, the same key written 40× counts once.
+- **S3 proxy writes — fixed.** Per proxy: at most 2 × its source (≥ 256 MB, ≤ 8 GB; the renderer names the source by
+  the esb-media URL main handed out, else 8 GB). Per folder: the running total (folder bytes + this file) stays under
+  100 GB (project) / 20 GB (library). Free space is checked at begin and again every 64 MB of growth (1 GB floor).
+- **S4 folder ids — fixed.** `folderId(path, secret)` = HMAC-SHA256 with a per-install secret (`userData/video-folder-
+  secret`, 32 random bytes, made once with `'wx'`). The registry still stores paths, so a lost secret only re-keys the
+  ids. Snapshots name their folder by the id main returns with them, so restore keeps working. (Media ids `esb-media://m/`
+  are still a plain hash of the path: the renderer knows those paths anyway; not in this round's scope.)
+- **S5 autosave restore — fixed.** Each folder's `autosave/` goes through `confinedDir` (a junction out is skipped);
+  `latestSnapshotIn(dirs)` lists names only, sorts every candidate newest first by the time in its name, then reads
+  (async) only plain files ≤ 25 MB, at most 8, until one parses. Startup no longer reads up to 50 × 25 MB synchronously.
+- **S6 relink search — fixed, kept simple.** One search at a time in main (queued); at most 200 hashes per search, 20 s
+  budget; a hash that takes over 1.5 s marks its folder slow and the rest of that folder is skipped. Cloud placeholders
+  (OneDrive online-only) cannot be detected cheaply from Node (no file-attribute API; `stat().blocks` is not reliable
+  on Windows), so the slow-hash rule is what keeps a search from downloading a cloud folder: at most one file per such
+  folder is read.
+- **S7 — fixed.** `esb:video-media-facts` (and everything else through `pathForMediaUrl`) answers only media
+  extensions; `confinedFile` now checks that the subfolder's real location is the folder's own `<sub>` and that the
+  file's real location sits directly in it (a `proxies/x.mp4` link into `cache/` is refused).
+- **S8 — fixed.** Every esb-media answer carries `X-Content-Type-Options: nosniff`. Origin `null` is needed: the
+  packaged app is loaded with `loadFile` (file://, an opaque origin Chromium reports as `null`), so it is accepted only
+  when there is no dev server; in development only the dev server's origin is.
+
+### Correctness
+- **C3 relink keeps the old proxy — fixed.** `previewUrlFor` and `mediaInfo().proxy` use a proxy only while
+  `proxyIsCurrent`: facts and hash read from the current URL and the proxy made from that hash (`hashUrl`,
+  `proxyHash`). Right after a relink the preview (and a filmstrip cached from it) gets the new original. The pipeline
+  also resets the proxy fields at once when an entry's URL changes (`sourceChanged`, from the store subscription, so
+  `VideoWorkspace.relink()` needed no change), drops a queued proxy of the old file, and a proxy finished for the old
+  file is not given to the entry.
+- **C6 — fixed.** Saving a Phase 0 single file adds hash / codec / fps / key-frame interval to each media record
+  (`singleFileText`; read back by the v1 → v2 migration, ignored by Phase 0 builds). A failed re-hash after a relink keeps
+  the previous hash (relink-by-hash still has it) but nothing proxy-related trusts it (`hashUrl` ≠ the new URL).
+
+### Performance
+- **P5a — fixed. New API for the engine:** `holdProxies(reason: string): () => void` in `src/video/media.ts`
+  (re-exported from `proxies.ts`; `proxyHolds()`, `proxiesHeld()`; `window.__videoMedia.holds()`). Call it when
+  playback starts and when an export starts; call the returned `release()` (idempotent) when it ends. Holds nest. While
+  held no proxy starts, and the running one pauses: the page stops acking its 4 MB pieces, so the encoder stalls after
+  at most one more piece; Cancel while held terminates the worker. **Not yet called:** the engine fixer wires it into
+  playback and export (Part A does not edit `src/video/engine/*`).
+- **P2 — fixed.** `LONG_GOP_SECONDS = 0.5`, `>=` (with 5 ms slack for packet-time rounding): footage larger than 540p
+  with key frames ≥ 0.5 s apart, or over 1080p, gets a proxy. New guard: a source 540p or smaller never gets one (the
+  proxy would be an upscale — the 640×360 speech fixture started making one). Measured (dev server, headless Edge,
+  `tools/out/p1-fix/scrub-gop.mjs`, the engine test's method, 40 random seeks, 2 runs): 1080p30 1 s-GOP original
+  p50 20–21 ms / p95 50 ms / max 50; its 540p 0.5 s-GOP proxy (ffmpeg with the worker's settings) p50 20 / p95 30 /
+  max 30–31 ms.
+- **P11 — fixed.** esb-media://p resolves through `createConfinedResolver` (1.5 s memo per folder + file, dropped when a
+  proxy of that folder finishes); a request costs one async stat for a hot file instead of 2 realpath + 2 stat. A file
+  removed inside the window is a 404 and is resolved again after it.
+
+### Bin UI (lead's review)
+- **B4** a file found again by hash: the row says "Found as <name> in …\<folder>\<folder>" with **Use it**
+  (`.vw-bin-use-found`), no "Not found", no Relink; the banner says "N files were found again in a new place." (Use all
+  `.vw-bin-relink-all` when more than one) and names only the still-missing ones as missing.
+- **B5** "Proxy failed: <reason>" (wraps up to 3 lines; whole text in the tooltip) + **Retry** (`.vw-bin-proxy-retry`).
+- **B7** facts are two fixed lines — "0:06.0 · H.264 · 29.97 fps" / "3840×2160 · silent · 1.7 GB" — never wrapped
+  mid-list. The row is a grid now: the name shares its line with the actions and the facts run under the actions to the
+  right edge (beside the buttons they had ~140 px and were cut). "sound" is no longer printed; only "silent" is.
+- **B8** one proxy line with real 28 px buttons: "Proxy 42 % ▬ [Cancel]" (`.vw-bin-proxy-cancel`, keeps
+  `.vw-bin-proxy-x`), "✓ Plays from proxy", "Proxy failed: … [Retry]", "No proxy [Make proxy]" (`.vw-bin-proxy-make`).
+- **B9** ready = "✓ Plays from proxy" (tooltip: exports read the original) and "Copied into project" (tooltip) — on
+  one line where the bin is wide enough, else the next line.
+- **B19** "On import" and the browser note are indented 6 px like the rows' thumbnails.
+
+### Files
+`electron/video-media.cjs`, `electron/video-project.cjs`, `electron/main.cjs` (Video IPC only), `electron/preload.cjs`
+(`videoProxyBegin` passes the source URL), `src/video/media.ts`, `src/video/proxies.ts`, `src/video/projectIO.ts`,
+`src/video/BinCard.tsx`, `src/styles/video-bin.css`, `tools/unit/video-project.test.ts` (+15: S1–S8, P11, the 540p
+guard), new `tools/unit/video-p1-media.test.ts` (C3, C6, holdProxies), `tools/e2e/video-electron-test.mjs` (random
+`.partial` names, Use it, "silent"). Not touched: `src/video/engine/*`, `VideoWorkspace.tsx`, `proxyWorker.ts`,
+`tools/e2e/video-shots.mjs`.
+
+### Checks
+- `npm run lint`: 0 errors. `npm run build`: ok. `npm test`: 913 passed (78 files).
+- `npm run test:video`: 55 PASS, 0 FAIL. `npm run test:electron`: 66 PASS, 0 FAIL (4K → proxy ready 5.3 s, worker
+  4.7 s; proxy re-found on restart in 146 ms; export still as sharp as the original).
+- Screens: `tools/out/p1-fix/` (`bin-normal`, `bin-proxy-pending`, `bin-proxy-ready`, `bin-proxy-failed`,
+  `bin-proxy-cancelled`, `bin-missing`, `bin-missing-found`; light/dark × 900/1366/1920), inspected.
+
+### Known gaps
+- `holdProxies` is not called until the engine fixer's playback/export change lands.
+- The shot harness seeds the found file as `'C:\Footage\…'` in a JS string (backslashes eaten), so its found row shows
+  no folder; real paths show it (electron test: "Found as moved-speech.mp4 in …\esb-vwork-…\footage").
+- The failed-proxy reason is clamped to 3 lines (tooltip has all of it).
+- Media ids (`esb-media://m/<id>`) are still unsalted hashes of the path.
