@@ -210,6 +210,28 @@ describe('outreach-engine: headless send loop, error recovery & lifecycle (§1.5
     expect(snap[0].sent).toBe(1)
   })
 
+  // (2b) sending hours widened while a batch waits for the window: it sends now, not at the old opening time
+  it('(2b) new sending hours apply to a batch already waiting for the window', async () => {
+    now = Date.UTC(2026, 9, 31, 10, 0, 0) // Saturday 16:00 Dhaka, outside the Sun–Thu window
+    const h = createTestHarness()
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c2b', messages: [{ to: 'test@example.com', subject: 'Hi', body: 'Hello' }] })
+    await h.engine.tick()
+    expect(h.engine.snapshot()[0].why).toBe('window')
+    // the editor opens Saturdays too and saves; nothing else changes
+    h.settings.set({ window: { enabled: true, from: '09:00', to: '17:00', days: [0, 1, 2, 3, 4, 6], tz: 'Asia/Dhaka' } })
+    expect(h.engine.settingsChanged().woke).toBe(true)
+    await h.engine.tick()
+    expect(h.sentMails.length).toBe(1)
+    // and narrowing the hours still holds a batch back (the tick re-applies the window)
+    h.engine.submit({ campaignId: 'c2c', messages: [{ to: 'other@example.org', subject: 'Hi', body: 'Hello' }] })
+    h.settings.set({ window: { enabled: true, from: '09:00', to: '17:00', days: [0, 1, 2, 3, 4], tz: 'Asia/Dhaka' } })
+    h.engine.settingsChanged()
+    now += 10 * 60 * 1000
+    await h.engine.tick()
+    expect(h.sentMails.length).toBe(1) // nothing went out on the now-closed Saturday
+  })
+
   // (3) ramp day-1 cap 30
   it('(3) ramp day-1 cap 30', async () => {
     const h = createTestHarness({ settings: { ramp: true, dailyLimit: 100 } })

@@ -497,7 +497,10 @@ ipcMain.handle('esb:outreach-settings', () => {
   return { ...s, dryRun: !!(process.env.ESB_OUTREACH_DRYRUN || process.env.ESB_DRYRUN) }
 })
 ipcMain.handle('esb:outreach-settings-save', (_e, rawS) => {
-  return outreachSettings.save(rawS)
+  const r = outreachSettings.save(rawS)
+  // new sending hours / limits apply to a batch that is already waiting, not only to the next one
+  if (r && r.ok && outreachEngineInstance && typeof outreachEngineInstance.settingsChanged === 'function') outreachEngineInstance.settingsChanged()
+  return r
 })
 let dnsCheckerInstance = null
 const getDnsChecker = () => (dnsCheckerInstance ??= require('./outreach-dns.cjs').createDnsChecker({

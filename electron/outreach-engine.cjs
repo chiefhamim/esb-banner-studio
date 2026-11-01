@@ -950,9 +950,34 @@ function createEngine(deps = {}) {
     events.append({ type: 'engine.quit', clean: !!clean, dry: dryRun })
   }
 
+  // Autopilot settings were saved (sending hours, days, daily limit, pacing): a batch asleep until the OLD window
+  // opening, the old daily-limit reset or the old gap must re-check now, not at its stale time. Only those holds are
+  // cleared — the next tick re-applies the new settings and waits again if it still may not send. Paused, stopped and
+  // Gmail-quota/offline waits are untouched.
+  function settingsChanged() {
+    let woke = false
+    for (const j of jobs.list()) {
+      if (j.status === 'waiting' && (j.why === 'window' || j.why === 'cap' || j.why === 'gap')) {
+        j.status = 'queued'
+        j.why = null
+        j.until = null
+        j.gapKey = undefined
+        jobs.saveState(j, { force: true })
+        pushProgress(j)
+        woke = true
+      }
+    }
+    if (woke && isRunning) {
+      if (activeTimer) clearTimer(activeTimer)
+      activeTimer = setTimer(tick, 100)
+    }
+    return { woke }
+  }
+
   return {
     start,
     submit,
+    settingsChanged,
     control,
     pauseAll,
     snapshot,
