@@ -3,7 +3,7 @@
 // banner and photo the desk already has. All media is rendered here to same-origin object URLs, so the export
 // canvas never draws a cross-origin image.
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useEditorialStore } from '../editorial/editorialStore'
 import { useStore, imageAssets } from '../store'
 import { useShellStore } from '../shell/shellStore'
@@ -15,11 +15,25 @@ import { Icon } from '../ui/Icon'
 import { useVideoStore } from './videoStore'
 import { buildStoryTimeline, holdFor, storyPoints } from './storyVideo'
 import { formatShortTime } from './timeline'
-import type { AspectRatio } from './timeline'
+import type { AspectRatio, MediaAsset } from './timeline'
+import { assetFromEntry, newAssetId, videoBridge } from './media'
 
 const FORMAT_FOR: Record<AspectRatio, FormatId> = { '16:9': 'web', '9:16': 'story', '1:1': 'sq', '4:5': 'fb45' }
 
-async function photoUrl(): Promise<string | null> {
+/** Keep a rendered still for the bin: in the desktop app it is written to userData through main (so a saved story
+ * video finds it again after a restart); in the browser it stays an object URL for the session. */
+async function keepStill(blob: Blob, name: string, w: number, h: number): Promise<MediaAsset> {
+  const b = videoBridge()
+  if (b?.videoStoreStill) {
+    const entry = await b.videoStoreStill(name, new Uint8Array(await blob.arrayBuffer()))
+    const asset = entry ? await assetFromEntry(entry, true) : null
+    if (asset) return { ...asset, name }
+  }
+  const url = URL.createObjectURL(blob)
+  return { id: newAssetId(), name, type: 'image', url, thumbnailUrl: url, duration: 0, size: blob.size, width: w, height: h, generated: true }
+}
+
+async function photoBlob(): Promise<{ blob: Blob; w: number; h: number } | null> {
   const first = useStore.getState().images[0]
   const img = first ? imageAssets[first.id] : undefined
   if (!img || !img.naturalWidth) return null
@@ -29,7 +43,7 @@ async function photoUrl(): Promise<string | null> {
   c.height = Math.round(img.naturalHeight * scale)
   c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
   const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.92))
-  return blob ? URL.createObjectURL(blob) : null
+  return blob ? { blob, w: c.width, h: c.height } : null
 }
 
 export function StoryVideoPanel() {
@@ -41,6 +55,7 @@ export function StoryVideoPanel() {
   const [confirm, setConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  const root = useRef<HTMLDivElement>(null)
 
   const points = useMemo(() => storyPoints(draft.deck, draft.body), [draft.deck, draft.body])
   const desk = CATEGORIES.find((c) => c.id === categoryId)?.name ?? 'ESB Power Line'
@@ -60,8 +75,13 @@ export function StoryVideoPanel() {
     setBusy(true)
     setNote(null)
     try {
-      const base = await loadBaseAssets()
-      const banner = await renderBanner(useStore.getState().doc, FORMAT_FOR[project.aspect], base, 1, 'jpeg', 0.92)
+      // the banner carries the headline; if it cannot be rendered, the title card sets the headline itself
+      let banner: Blob | null = null
+      try { banner = await renderBanner(useStore.getState().doc, FORMAT_FOR[project.aspect], await loadBaseAssets(), 1, 'jpeg', 0.92) } catch { banner = null }
+      const slug = draft.headline.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'story'
+      const bannerAsset = banner ? await keepStill(banner, `${slug}-banner-${project.aspect.replace(':', 'x')}.jpg`, project.width, project.height) : null
+      const photo = await photoBlob()
+      const photoAsset = photo ? await keepStill(photo.blob, `${slug}-photo.jpg`, photo.w, photo.h) : null
       const tl = buildStoryTimeline({
         aspect: project.aspect,
         headline: draft.headline,
@@ -69,11 +89,17 @@ export function StoryVideoPanel() {
         body: draft.body,
         desk,
         credit: draft.credit || useStore.getState().doc.content.credit,
-        bannerUrl: URL.createObjectURL(banner),
-        photoUrl: await photoUrl(),
+        bannerUrl: bannerAsset?.url ?? null,
+        photoUrl: photoAsset?.url ?? null,
+        bannerAssetId: bannerAsset?.id,
+        photoAssetId: photoAsset?.id,
+        accent: CATEGORIES.find((c) => c.id === categoryId)?.accent,
       })
-      loadProject({ ...tl, fps: project.fps })
+      const bin = useVideoStore.getState().mediaAssets
+      loadProject({ ...tl, fps: project.fps }, { assets: [...bin, ...[bannerAsset, photoAsset].filter((a): a is MediaAsset => !!a)], path: null, dirty: true })
       setNote(`Built a ${formatShortTime(tl.duration)} cut — ${tl.clips.length} clips. Trim, re-time or add sound, then Export.`)
+      // the outline was scrolled down to the Build button: bring its headline back into view
+      requestAnimationFrame(() => root.current?.closest('.vw-bin-content')?.scrollTo({ top: 0 }))
     } catch (e) {
       setNote('Could not build the cut: ' + ((e as Error).message || 'unknown error'))
     } finally {
@@ -83,7 +109,7 @@ export function StoryVideoPanel() {
   }
 
   return (
-    <div className="vw-story">
+    <div className="vw-story" ref={root}>
       <div className="vw-story-head">
         <span className="vw-story-kicker">{desk}</span>
         <b>{draft.headline}</b>

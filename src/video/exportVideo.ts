@@ -1,24 +1,37 @@
 // Video export, frame-exact, through WebCodecs.
 //
 // The first exporter recorded a canvas with MediaRecorder. That ties the file's timing to the wall clock, so it
-// drifted. Frames were pushed every half frame-interval, so the file ran at the wrong speed. Footage was drawn before
-// its seek finished, and the Export button capped every video at 3 seconds with no sound. Here each frame is drawn
-// only once every clip under it is at the right instant. It is encoded with its own timestamp (i/fps), so a
-// 90-second timeline is a 90-second file however long the render takes. The A1 track is mixed offline at 48 kHz
-// with each clip's trim and volume, and muxed alongside.
+// drifted, ran at the wrong speed and was capped at 3 seconds with no sound. Here each frame is drawn only once every
+// clip under it is at the exact instant, and is encoded with its own timestamp (i/fps), so a 90-second timeline is a
+// 90-second file however long the render takes.
 //
-// MP4 (H.264) is the default. Audio is AAC where the platform encodes it (Windows, macOS) and Opus otherwise. Both
-// are valid in MP4 and accepted by Facebook and YouTube. WebM (VP9 + Opus) is the fallback when H.264 is unavailable.
+// Footage frames are decoded by mediabunny (demux + WebCodecs VideoDecoder) at exactly the frame times the export
+// needs (samplesAtTimestamps), so a long source is read once, front to back. A source the decoder cannot read falls
+// back to seeking its <video> element per frame. Sound: every audible clip on the audio tracks — voiceover, music and
+// each footage clip's own sound (its linked A1 clip) — is decoded the same way and mixed offline at 48 kHz in 10 s
+// pieces, each added just before the frames it belongs to, so the muxer interleaves and nothing waits in memory.
+//
+// Where the file goes: in the desktop app the muxer streams to a file the editor chose (StreamTarget → main, which
+// writes it in place), so a long export never holds the file in memory. In the browser it is kept in memory and
+// downloaded (BufferTarget).
+//
+// MP4 (H.264) is the default. Audio is AAC where the platform encodes it (Windows, macOS) and Opus otherwise. WebM
+// (VP9 + Opus) is the fallback when H.264 is unavailable.
 
-import { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny'
+import { AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_HIGH, StreamTarget, VideoSampleSink, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny'
+import type { Input, StreamTargetChunk, VideoSample } from 'mediabunny'
 import type { Clip, VideoProject } from './timeline'
+import { clipsMissingMedia, contentEnd, isActive } from './timeline'
+import type { FrameSource } from './compositor'
 import { getCachedImage, getCachedVideo, renderCompositeFrame } from './compositor'
+import { inputFor } from './media'
 
 export type ExportContainer = 'mp4' | 'webm'
 
 export interface ExportResult {
   filename: string
-  blob: Blob
+  /** The file in memory (browser export only; a streamed export is already on disk). */
+  blob: Blob | null
   size: number
   duration: number
   container: ExportContainer
@@ -33,20 +46,42 @@ export interface ExportOptions {
   fps?: number
   container?: ExportContainer
   signal?: AbortSignal
+  /** Stream the file here instead of keeping it in memory (desktop: a file main opened in the chosen place). */
+  writable?: WritableStream<StreamTargetChunk>
 }
 
 const SAMPLE_RATE = 48000
+const AUDIO_CHUNK_SECONDS = 10
 
-/** The clips whose sound goes into the file: A1 clips with a source, not muted, on a track that is not muted. */
+/** The clips whose sound goes into the file: clips on audio tracks with a source, not muted, volume above zero, on a
+ * track that is not muted. A footage clip's own sound is its linked clip on A1, so it follows the same rules. */
 export function audibleClips(project: VideoProject): Clip[] {
   const mutedTracks = new Set(project.tracks.filter((t) => t.muted).map((t) => t.id))
   return project.clips.filter((c) => c.kind === 'audio' && !!c.sourceUrl && !c.muted && (c.volume ?? 1) > 0 && !mutedTracks.has(c.trackId))
 }
 
-/** How long the file is: the whole timeline, or the requested draft length. */
+/** How long the file is: up to the end of the last clip, or the requested draft length. */
 export function exportDuration(project: VideoProject, maxDuration?: number): number {
-  const d = maxDuration != null ? Math.min(project.duration, maxDuration) : project.duration
+  const end = contentEnd(project)
+  const d = maxDuration != null ? Math.min(end, maxDuration) : end
   return Math.max(1 / Math.max(1, project.fps), d)
+}
+
+/** Why an export cannot start, or null. A timeline with missing media would export holes, so it is refused. */
+export function exportBlocker(project: VideoProject): string | null {
+  if (!project.clips.length || contentEnd(project) <= 0) return 'The timeline is empty. Import media or build a video from a story first.'
+  const missing = clipsMissingMedia(project)
+  if (missing.length) return `${missing.length} clip${missing.length === 1 ? '' : 's'} ${missing.length === 1 ? 'has' : 'have'} no media (${missing.slice(0, 2).map((c) => c.title).join(', ')}${missing.length > 2 ? ', …' : ''}). Relink the files in the Media tab first.`
+  return null
+}
+
+/** Overlay and caption clips with nothing typed in: they are left out of the export (their labels are editor-only). */
+export function emptyTextClips(project: VideoProject): Clip[] {
+  return project.clips.filter((c) => {
+    if (c.kind === 'caption') return !(c.captionText ?? '').trim()
+    if (c.kind === 'overlay' && c.overlayType && c.overlayType !== 'logo' && !c.sourceUrl) return !(c.overlayText ?? '').trim() && !(c.overlaySub ?? '').trim()
+    return false
+  })
 }
 
 /** The best container and codecs this machine can encode, preferring MP4/H.264. */
@@ -60,66 +95,132 @@ export async function pickCodecs(width: number, height: number, fps: number, pre
   throw new Error('This system cannot encode video (no H.264, VP9 or VP8 encoder).')
 }
 
-/** Put every V1 clip under `time` at its exact source frame, and wait until the frame is decoded; stills load once. */
-async function seekFootage(project: VideoProject, time: number) {
-  const waits: Promise<void>[] = []
-  for (const c of project.clips) {
-    if (c.trackId !== 'v1' || !c.still || !c.sourceUrl || time < c.start || time >= c.start + c.duration) continue
-    const img = getCachedImage(c.sourceUrl)
-    if (img && !img.complete) waits.push(img.decode().catch(() => {}))
-  }
-  for (const c of project.clips) {
-    if (c.trackId !== 'v1' || !c.sourceUrl || c.still || time < c.start || time >= c.start + c.duration) continue
-    const v = getCachedVideo(c.sourceUrl)
-    if (!v) continue
-    const target = Math.max(0, (c.in || 0) + (time - c.start))
-    if (v.readyState < 1) {
-      waits.push(new Promise((res) => { v.addEventListener('loadedmetadata', () => res(), { once: true }); setTimeout(res, 4000) }))
-    }
-    waits.push((async () => {
-      if (v.readyState < 1) await new Promise((r) => setTimeout(r, 0))
-      if (Math.abs(v.currentTime - target) < 1 / (project.fps * 4) && v.readyState >= 2) return
-      await new Promise<void>((res) => {
-        const done = () => { clearTimeout(t); v.removeEventListener('seeked', done); res() }
-        const t = setTimeout(done, 3000)
-        v.addEventListener('seeked', done)
-        v.currentTime = target
-      })
-    })())
-  }
-  await Promise.all(waits)
+// ---------------------------------------------------------------- footage frames
+
+/** Source time of `clip` at timeline time `t`. */
+const srcTime = (c: Clip, t: number) => Math.max(0, (c.in || 0) + (t - c.start))
+
+/** The frame numbers of an export at which `clip` is on screen. */
+export function activeFrames(clip: Clip, fps: number, totalFrames: number): number[] {
+  const out: number[] = []
+  const first = Math.max(0, Math.floor(clip.start * fps) - 1)
+  const last = Math.min(totalFrames - 1, Math.ceil((clip.start + clip.duration) * fps) + 1)
+  for (let i = first; i <= last; i++) if (isActive(clip, i / fps)) out.push(i)
+  return out
 }
 
-/** Mix the audible clips into one stereo buffer the length of the export. */
+interface FootageReader { input: Input; iter: AsyncIterator<VideoSample | null>; lastFrame: number }
+
+/** Open a decoder for one footage clip that yields exactly one frame per export frame it is on screen; null when the
+ * decoder cannot read it (the <video> fallback is used). */
+async function openFootage(clip: Clip, fps: number, totalFrames: number): Promise<FootageReader | null> {
+  if (!clip.sourceUrl) return null
+  const frames = activeFrames(clip, fps, totalFrames)
+  if (!frames.length) return null
+  let input: Input | null = null
+  try {
+    input = inputFor(clip.sourceUrl)
+    const track = await input.getPrimaryVideoTrack()
+    if (!track || !(await track.canDecode())) { input.dispose(); return null }
+    const sink = new VideoSampleSink(track)
+    const times = frames.map((i) => srcTime(clip, i / fps))
+    return { input, iter: sink.samplesAtTimestamps(times)[Symbol.asyncIterator](), lastFrame: frames[frames.length - 1] }
+  } catch {
+    input?.dispose()
+    return null
+  }
+}
+
+/** Fallback: put a footage clip's <video> at its exact source frame and wait until the frame is decoded. */
+async function seekElement(c: Clip, time: number, fps: number) {
+  const v = getCachedVideo(c.sourceUrl!)
+  if (!v) return
+  const target = srcTime(c, time)
+  if (v.readyState < 1) await new Promise<void>((res) => { v.addEventListener('loadedmetadata', () => res(), { once: true }); setTimeout(res, 4000) })
+  if (Math.abs(v.currentTime - target) < 1 / (fps * 4) && v.readyState >= 2) return
+  await new Promise<void>((res) => {
+    const done = () => { clearTimeout(t); v.removeEventListener('seeked', done); res() }
+    const t = setTimeout(done, 3000)
+    v.addEventListener('seeked', done)
+    v.currentTime = target
+  })
+}
+
+// ---------------------------------------------------------------- sound
+
+interface AudioReader { buffers(from: number, to: number): AsyncIterable<{ buffer: AudioBuffer; timestamp: number }>; close(): void }
+
+/** A reader over one file's sound: mediabunny's decoder, or (a file it cannot read) the whole file through
+ * decodeAudioData. Null when the file has no sound. */
+async function openAudio(url: string): Promise<AudioReader | null> {
+  try {
+    const input = inputFor(url)
+    const track = await input.getPrimaryAudioTrack()
+    if (track && (await track.canDecode())) {
+      const sink = new AudioBufferSink(track)
+      return { buffers: (a, b) => sink.buffers(a, b), close: () => input.dispose() }
+    }
+    input.dispose()
+    if (!track) return null
+  } catch { /* fall through to decodeAudioData */ }
+  try {
+    const bytes = await (await fetch(url)).arrayBuffer()
+    const buffer = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(bytes)
+    return {
+      buffers: async function* () { yield { buffer, timestamp: 0 } },
+      close: () => {},
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Mix the audible clips over [t0, t1) of the timeline into one stereo 48 kHz buffer (silence where nothing plays). */
+async function mixPiece(clips: Clip[], readers: Map<string, AudioReader | null>, t0: number, t1: number): Promise<AudioBuffer> {
+  const length = Math.max(1, Math.round((t1 - t0) * SAMPLE_RATE))
+  const here = clips.filter((c) => c.start < t1 && c.start + c.duration > t0)
+  if (!here.length) return new AudioBuffer({ length, numberOfChannels: 2, sampleRate: SAMPLE_RATE })
+  const ctx = new OfflineAudioContext(2, length, SAMPLE_RATE)
+  for (const c of here) {
+    const url = c.sourceUrl!
+    if (!readers.has(url)) readers.set(url, await openAudio(url))
+    const reader = readers.get(url)
+    if (!reader) continue
+    const a = Math.max(t0, c.start)
+    const b = Math.min(t1, c.start + c.duration)
+    if (b <= a) continue
+    const gain = ctx.createGain()
+    gain.gain.value = c.volume ?? 1
+    gain.connect(ctx.destination)
+    for await (const wb of reader.buffers(srcTime(c, a), srcTime(c, b))) {
+      // where this decoded piece's first sample lands in the mix, clipped to the part of the clip inside [t0, t1)
+      const when = c.start + (wb.timestamp - (c.in || 0)) - t0
+      let start = when
+      let offset = 0
+      if (start < a - t0) { offset = a - t0 - start; start = a - t0 }
+      const end = Math.min(when + wb.buffer.duration, b - t0)
+      if (end <= start) continue
+      const src = ctx.createBufferSource()
+      src.buffer = wb.buffer
+      src.connect(gain)
+      src.start(start, offset, end - start)
+    }
+  }
+  return ctx.startRendering()
+}
+
+/** Mix the audible clips into one stereo buffer the length of the export (tests and short previews). */
 export async function mixAudio(project: VideoProject, duration: number): Promise<AudioBuffer | null> {
   const clips = audibleClips(project).filter((c) => c.start < duration)
   if (!clips.length) return null
-  const ctx = new OfflineAudioContext(2, Math.ceil(duration * SAMPLE_RATE), SAMPLE_RATE)
-  const decoded = new Map<string, AudioBuffer | null>()
-  let placed = 0
-  for (const c of clips) {
-    const url = c.sourceUrl!
-    if (!decoded.has(url)) {
-      try {
-        const bytes = await (await fetch(url)).arrayBuffer()
-        decoded.set(url, await ctx.decodeAudioData(bytes))
-      } catch {
-        decoded.set(url, null)
-      }
-    }
-    const buf = decoded.get(url)
-    if (!buf) continue
-    const src = ctx.createBufferSource()
-    src.buffer = buf
-    const gain = ctx.createGain()
-    gain.gain.value = c.volume ?? 1
-    src.connect(gain).connect(ctx.destination)
-    const length = Math.min(c.duration, duration - c.start, buf.duration - (c.in || 0))
-    if (length <= 0) continue
-    src.start(c.start, c.in || 0, length)
-    placed++
-  }
-  return placed ? ctx.startRendering() : null
+  const readers = new Map<string, AudioReader | null>()
+  try { return await mixPiece(clips, readers, 0, duration) } finally { readers.forEach((r) => r?.close()) }
+}
+
+async function fontsReady() {
+  if (typeof document === 'undefined' || !document.fonts) return
+  await Promise.all(['500', '600', '700', '800'].flatMap((wt) => [document.fonts.load(`${wt} 40px "ESB Sans"`), document.fonts.load(`${wt} 40px "Hind Siliguri"`, 'বাংলা')]).map((p) => p.catch(() => null)))
+  await document.fonts.ready
 }
 
 export async function exportTimelineVideo(
@@ -127,10 +228,13 @@ export async function exportTimelineVideo(
   onProgress: (current: number, total: number) => void,
   options: ExportOptions = {},
 ): Promise<ExportResult> {
+  const blocked = exportBlocker(timeline)
+  if (blocked) throw new Error(blocked)
   const fps = options.fps || timeline.fps || 30
   const duration = exportDuration(timeline, options.maxDuration)
   const totalFrames = Math.max(1, Math.round(duration * fps))
   const codecs = await pickCodecs(timeline.width, timeline.height, fps, options.container)
+  await fontsReady()
 
   const canvas = document.createElement('canvas')
   canvas.width = timeline.width
@@ -138,49 +242,107 @@ export async function exportTimelineVideo(
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Could not get a 2D canvas for the render')
 
-  const audio = codecs.audio ? await mixAudio(timeline, duration) : null
-
-  const target = new BufferTarget()
+  const sounding = codecs.audio ? audibleClips(timeline).filter((c) => c.start < duration) : []
+  const bufferTarget = options.writable ? null : new BufferTarget()
+  let written = 0
+  const target = options.writable
+    ? new StreamTarget(new WritableStream<StreamTargetChunk>({
+      write: async (chunk) => {
+        written = Math.max(written, chunk.position + chunk.data.byteLength)
+        const w = options.writable!.getWriter()
+        try { await w.write(chunk) } finally { w.releaseLock() }
+      },
+    }), { chunked: true, chunkSize: 8 * 1024 * 1024 })
+    : bufferTarget!
   const output = new Output({
-    format: codecs.container === 'mp4' ? new Mp4OutputFormat({ fastStart: 'in-memory' }) : new WebMOutputFormat(),
+    format: codecs.container === 'mp4' ? new Mp4OutputFormat({ fastStart: options.writable ? false : 'in-memory' }) : new WebMOutputFormat(),
     target,
   })
   const videoSource = new CanvasSource(canvas, { codec: codecs.video, bitrate: options.bitrate ?? (timeline.width * timeline.height >= 1920 * 1080 ? 10_000_000 : 8_000_000), keyFrameInterval: 2 })
   output.addVideoTrack(videoSource, { frameRate: fps })
-  const audioSource = audio && codecs.audio ? new AudioBufferSource({ codec: codecs.audio, quality: QUALITY_HIGH }) : null
+  const audioSource = sounding.length && codecs.audio ? new AudioBufferSource({ codec: codecs.audio, quality: QUALITY_HIGH }) : null
   if (audioSource) output.addAudioTrack(audioSource)
   await output.start()
+
+  const footage = timeline.clips.filter((c) => c.kind === 'video' && !c.still && !!c.sourceUrl)
+  const readers = new Map<string, FootageReader | null>()
+  const audioReaders = new Map<string, AudioReader | null>()
+  let audioUpTo = 0
+  const addAudioUntil = async (t: number) => {
+    if (!audioSource) return
+    while (audioUpTo < Math.min(t, duration) - 1e-9) {
+      const t1 = Math.min(duration, audioUpTo + AUDIO_CHUNK_SECONDS)
+      await audioSource.add(await mixPiece(sounding, audioReaders, audioUpTo, t1))
+      audioUpTo = t1
+    }
+  }
 
   try {
     for (let i = 0; i < totalFrames; i++) {
       if (options.signal?.aborted) throw new DOMException('Export cancelled', 'AbortError')
       const t = i / fps
-      await seekFootage(timeline, t)
-      renderCompositeFrame(ctx, timeline, t, canvas.width, canvas.height)
+      // the sound for the next 10 s goes in as the picture reaches it
+      if (t >= audioUpTo) await addAudioUntil(t + AUDIO_CHUNK_SECONDS)
+      const frames = new Map<string, FrameSource>()
+      const samples: VideoSample[] = []
+      const waits: Promise<void>[] = []
+      for (const c of footage) {
+        if (!isActive(c, t)) {
+          const r = readers.get(c.id)
+          if (r && i > r.lastFrame) { r.input.dispose(); readers.set(c.id, null) }
+          continue
+        }
+        if (!readers.has(c.id)) readers.set(c.id, await openFootage(c, fps, totalFrames))
+        const r = readers.get(c.id)
+        if (r) {
+          const { value } = await r.iter.next()
+          if (value) {
+            samples.push(value)
+            frames.set(c.id, { image: value.toCanvasImageSource(), width: value.displayWidth, height: value.displayHeight })
+          }
+        } else {
+          waits.push(seekElement(c, t, fps))
+        }
+      }
+      for (const c of timeline.clips) {
+        if (c.still && c.sourceUrl && isActive(c, t)) {
+          const img = getCachedImage(c.sourceUrl)
+          if (img && !img.complete) waits.push(img.decode().catch(() => {}))
+        }
+      }
+      await Promise.all(waits)
+      renderCompositeFrame(ctx, timeline, t, canvas.width, canvas.height, { frames })
+      for (const s of samples) s.close()
       await videoSource.add(t, 1 / fps)
       onProgress(i + 1, totalFrames)
     }
-    if (audioSource && audio) await audioSource.add(audio)
+    await addAudioUntil(duration)
     await output.finalize()
   } catch (err) {
     await output.cancel().catch(() => {})
     throw err
   } finally {
+    readers.forEach((r) => r?.input.dispose())
+    audioReaders.forEach((r) => r?.close())
     canvas.width = canvas.height = 0
   }
 
   const mime = codecs.container === 'mp4' ? 'video/mp4' : 'video/webm'
-  const blob = new Blob([target.buffer!], { type: mime })
-  const safeTitle = (timeline.name || 'video').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'video'
+  const blob = bufferTarget ? new Blob([bufferTarget.buffer!], { type: mime }) : null
   return {
-    filename: `${safeTitle}-${timeline.aspect.replace(':', 'x')}.${codecs.container}`,
+    filename: exportFilename(timeline, codecs.container),
     blob,
-    size: blob.size,
+    size: blob ? blob.size : written,
     duration,
     container: codecs.container,
     videoCodec: codecs.video === 'avc' ? 'H.264' : codecs.video.toUpperCase(),
     audioCodec: audioSource ? (codecs.audio === 'aac' ? 'AAC' : 'Opus') : null,
   }
+}
+
+export function exportFilename(timeline: VideoProject, container: ExportContainer): string {
+  const safeTitle = (timeline.name || 'video').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'video'
+  return `${safeTitle}-${timeline.aspect.replace(':', 'x')}.${container}`
 }
 
 export function downloadVideoBlob(blob: Blob, filename: string) {

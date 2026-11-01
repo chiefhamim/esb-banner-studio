@@ -46,3 +46,12 @@ describe('story → video', () => {
     expect(tl.clips.some((c) => c.overlayType === 'headline' && c.overlayText === 'H')).toBe(true)
   })
 })
+
+describe('story → video without a photo', () => {
+  it('the banner stands in for the photo and the clips say so (not "Photo")', () => {
+    const tl = buildStoryTimeline({ aspect: '16:9', headline: 'H', deck: 'A deck sentence that is long enough to use.', body: '', desk: 'D', bannerUrl: 'blob:b', photoUrl: null, bannerAssetId: 'ab' })
+    const stills = tl.clips.filter((c) => c.still)
+    expect(stills.map((c) => c.title)).toEqual(['Banner', 'Banner (no photo)', 'Close · banner'])
+    expect(stills.every((c) => c.mediaAssetId === 'ab')).toBe(true)
+  })
+})

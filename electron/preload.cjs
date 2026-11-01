@@ -1,8 +1,26 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 contextBridge.exposeInMainWorld('esb', {
   readClipboard: () => ipcRenderer.invoke('esb:read-clipboard'),
   saveImage: (name, bytes, dir) => ipcRenderer.invoke('esb:save-image', name, bytes, dir),
   saveVideo: (name, bytes) => ipcRenderer.invoke('esb:save-video', name, bytes),
+  // Video desk. Dropped files: the path is read here from the File object itself (page script cannot hand over a path)
+  videoImport: () => ipcRenderer.invoke('esb:video-import'),
+  videoImportDropped: (files) => {
+    const paths = []
+    for (const f of Array.from(files || []).slice(0, 200)) { try { const p = webUtils.getPathForFile(f); if (p) paths.push(p) } catch { /* not a dropped file */ } }
+    return ipcRenderer.invoke('esb:video-import-dropped', paths)
+  },
+  videoRelink: (name) => ipcRenderer.invoke('esb:video-relink', name),
+  videoResolve: (paths) => ipcRenderer.invoke('esb:video-resolve', paths),
+  videoStoreStill: (name, bytes) => ipcRenderer.invoke('esb:video-store-still', name, bytes),
+  videoSaveProject: (name, text, existing) => ipcRenderer.invoke('esb:video-save-project', name, text, existing),
+  videoOpenProject: () => ipcRenderer.invoke('esb:video-open-project'),
+  videoAutosave: (text) => ipcRenderer.invoke('esb:video-autosave', text),
+  videoAutosaveLatest: () => ipcRenderer.invoke('esb:video-autosave-latest'),
+  videoAutosaveClear: () => ipcRenderer.invoke('esb:video-autosave-clear'),
+  videoExportBegin: (name, kind) => ipcRenderer.invoke('esb:video-export-begin', name, kind),
+  videoExportWrite: (id, position, bytes) => ipcRenderer.invoke('esb:video-export-write', id, position, bytes),
+  videoExportEnd: (id, ok) => ipcRenderer.invoke('esb:video-export-end', id, ok),
   pickFolder: () => ipcRenderer.invoke('esb:pick-folder'),
   reveal: (p) => ipcRenderer.invoke('esb:reveal', p),
   saveProject: (name, text, existing) => ipcRenderer.invoke('esb:save-project', name, text, existing),

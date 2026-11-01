@@ -1,6 +1,6 @@
 const { spawn } = require('node:child_process')
 // ESB Studio — desktop shell. Everything runs locally; no network access is needed.
-const { app, BrowserWindow, Menu, ipcMain, dialog, shell, Tray, nativeImage, clipboard } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell, Tray, nativeImage, clipboard, protocol } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const { FsScope } = require('./fs-scope.cjs')
@@ -15,6 +15,11 @@ const { createSettingsManager } = require('./outreach-settings.cjs')
 const { createEngine } = require('./outreach-engine.cjs')
 const { createTray } = require('./outreach-tray.cjs')
 const outreachGuard = require('./outreach-guard.cjs')
+const videoMedia = require('./video-media.cjs')
+
+// The Video desk's media protocol (esb-media://m/<id>, electron/video-media.cjs). Registered before the app is ready so
+// <video>, fetch and the decoder can stream from it with range requests; served on the editor's session only.
+protocol.registerSchemesAsPrivileged([{ scheme: 'esb-media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }])
 
 // Last line of defence: a stray network or stream error in the main process is logged (userData/main-errors.log) instead
 // of stopping the editor with Electron's "A JavaScript error occurred in the main process" dialog. Each cause found is
@@ -273,6 +278,100 @@ ipcMain.handle('esb:save-video', async (_e, name, bytes) => {
   fs.writeFileSync(r.filePath, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length))
   return r.filePath
 })
+
+// ---------------------------------------------------------------- Video desk: media by path, projects, autosave, export
+// Every path here comes from a dialog main itself showed, a drop the preload resolved from a File, a still the app
+// rendered, or a project the editor opened; the renderer only ever receives opaque esb-media:// URLs for them.
+let videoRegistry = null
+const videoExports = videoMedia.createExportWriter()
+const videoAutosaveDir = () => path.join(app.getPath('userData'), 'video-autosave')
+const MEDIA_FILTERS = [
+  { name: 'Video, audio and pictures', extensions: [...videoMedia.MEDIA_EXT] },
+  { name: 'Video', extensions: ['mp4', 'm4v', 'mov', 'webm', 'mkv'] },
+  { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'opus', 'flac'] },
+  { name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] },
+]
+const videoEntries = (paths) => paths.map((p) => { try { return videoMedia.entryFor(videoRegistry, p) } catch { return null } }).filter(Boolean)
+ipcMain.handle('esb:video-import', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Import media', properties: ['openFile', 'multiSelections'], filters: MEDIA_FILTERS })
+  if (r.canceled || !r.filePaths.length) return []
+  return videoEntries(r.filePaths.slice(0, 200))
+})
+ipcMain.handle('esb:video-import-dropped', (_e, paths) => {
+  // sent by the preload from dropped File objects (webUtils.getPathForFile); page script cannot pass a string here
+  if (!Array.isArray(paths)) return []
+  return videoEntries(paths.filter(videoMedia.isMediaPath).slice(0, 200))
+})
+ipcMain.handle('esb:video-relink', async (_e, name) => {
+  const r = await dialog.showOpenDialog(win, { title: `Find ${String(name || 'the missing file').slice(0, 120)}`, properties: ['openFile'], filters: MEDIA_FILTERS })
+  if (r.canceled || !r.filePaths[0]) return null
+  return videoEntries([r.filePaths[0]])[0] || null
+})
+ipcMain.handle('esb:video-resolve', (_e, paths) => videoMedia.resolvePaths(videoRegistry, paths))
+ipcMain.handle('esb:video-store-still', (_e, name, bytes) => {
+  // a banner or photo the app rendered for Story → video, kept in userData so a saved story video finds it again
+  if (!guard.isImageBytes(bytes) || bytes.length > 50 * 1024 * 1024) throw new Error('Not a PNG, JPEG or WebP image')
+  const ext = bytes[0] === 0x89 ? 'png' : bytes[0] === 0xff ? 'jpg' : 'webp'
+  const dir = path.join(app.getPath('userData'), 'video-stills')
+  fs.mkdirSync(dir, { recursive: true })
+  const hash = require('node:crypto').createHash('sha256').update(bytes).digest('hex').slice(0, 24)
+  const stem = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '').slice(0, 60)
+  const file = path.join(dir, `${stem}-${hash}.${ext}`)
+  if (!fs.existsSync(file)) fs.writeFileSync(file, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length))
+  return videoEntries([file])[0] || null
+})
+ipcMain.handle('esb:video-save-project', async (_e, name, text, existingPath) => {
+  if (typeof text !== 'string' || text.length > 25 * 1024 * 1024) throw new Error('Project text too large')
+  JSON.parse(text)
+  let target = null
+  if (existingPath != null) {
+    if (!videoMedia.isVideoProjectPath(existingPath)) throw new Error('Not a video project file')
+    fsScope.assertAllowed(String(existingPath), 'save video project')
+    target = String(existingPath)
+  } else {
+    const dir = path.join(defaultDir(), 'Video')
+    fs.mkdirSync(dir, { recursive: true })
+    const stem = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '')
+    const r = await dialog.showSaveDialog(win, { title: 'Save video project', defaultPath: path.join(dir, stem + '.esbvideo'), filters: [{ name: 'ESB video project', extensions: ['esbvideo'] }] })
+    if (r.canceled || !r.filePath) return null
+    target = /\.esbvideo$/i.test(r.filePath) ? r.filePath : r.filePath + '.esbvideo'
+    fsScope.allowFile(target)
+  }
+  const tmp = target + '.tmp'
+  fs.writeFileSync(tmp, text, 'utf8')
+  fs.renameSync(tmp, target)
+  return target
+})
+ipcMain.handle('esb:video-open-project', async () => {
+  const dir = path.join(defaultDir(), 'Video')
+  fs.mkdirSync(dir, { recursive: true })
+  const r = await dialog.showOpenDialog(win, { title: 'Open video project', defaultPath: dir, properties: ['openFile'], filters: [{ name: 'ESB video project', extensions: ['esbvideo', 'json'] }] })
+  if (r.canceled || !r.filePaths[0]) return null
+  const filePath = r.filePaths[0]
+  if (fs.statSync(filePath).size > 25 * 1024 * 1024) throw new Error('Project file too large')
+  const text = fs.readFileSync(filePath, 'utf8')
+  // the editor chose this project: the media it lists (existing files with media extensions) may be played
+  for (const p of videoMedia.projectMediaPaths(text)) videoRegistry.add(p)
+  const isVideoProject = /\.esbvideo$/i.test(filePath)
+  if (isVideoProject) fsScope.allowFile(filePath)
+  return { path: isVideoProject ? filePath : null, text }
+})
+ipcMain.handle('esb:video-autosave', (_e, text) => videoMedia.writeSnapshot(videoAutosaveDir(), text))
+ipcMain.handle('esb:video-autosave-latest', () => videoMedia.latestSnapshot(videoAutosaveDir()))
+ipcMain.handle('esb:video-autosave-clear', () => videoMedia.clearSnapshots(videoAutosaveDir()))
+ipcMain.handle('esb:video-export-begin', async (_e, name, kind) => {
+  const k = kind === 'webm' ? 'webm' : 'mp4'
+  const safe = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '') + '.' + k
+  fs.mkdirSync(defaultDir(), { recursive: true })
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(defaultDir(), safe), filters: [{ name: k === 'mp4' ? 'MP4 video' : 'WebM video', extensions: [k] }] })
+  if (r.canceled || !r.filePath) return null
+  const target = r.filePath.toLowerCase().endsWith('.' + k) ? r.filePath : r.filePath + '.' + k
+  fsScope.allowFile(target)
+  fsScope.assertAllowed(target, 'export video target')
+  return videoExports.begin(target)
+})
+ipcMain.handle('esb:video-export-write', (_e, id, position, bytes) => videoExports.write(id, position, bytes))
+ipcMain.handle('esb:video-export-end', (_e, id, ok) => videoExports.end(id, ok === true))
 
 ipcMain.handle('esb:pick-folder', async () => {
   fs.mkdirSync(defaultDir(), { recursive: true })
@@ -618,6 +717,9 @@ app.whenReady().then(() => {
   fsScope.allow(path.join(app.getPath('temp'), 'esb-studio-drag')) // the drag staging folder only, never the whole temp directory
 
   const userData = app.getPath('userData')
+  videoRegistry = videoMedia.createMediaRegistry({ file: path.join(userData, 'video-media.json') })
+  // the editor's session only (the CMS window has its own partition, so it cannot read the editor's media)
+  protocol.handle('esb-media', (request) => videoMedia.serveMedia(request, videoRegistry))
   // the send results the desk projects onto its campaigns go to the window as they happen (engineClient.ts applyEvents);
   // without this the list only caught up at the next launch
   const LIVE = new Set(['send.ok', 'send.fail', 'send.skip', 'reply', 'bounce', 'optout'])

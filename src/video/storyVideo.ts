@@ -21,6 +21,11 @@ export interface StoryVideoInput {
   bannerUrl: string | null
   /** The story's photo without text (same-origin URL). */
   photoUrl: string | null
+  /** Bin entries for the banner and the photo, so a saved story video finds its stills again. */
+  bannerAssetId?: string
+  photoAssetId?: string
+  /** The story's category colour, for the title card's accent. */
+  accent?: string
 }
 
 const MAX_POINTS = 4
@@ -54,14 +59,15 @@ export function buildStoryTimeline(input: StoryVideoInput): VideoProject {
   const clips: Clip[] = []
   let t = 0
   const id = (k: string) => `story-${k}-${clips.length}`
+  const assetFor = (url: string | null) => (url && url === input.bannerUrl ? input.bannerAssetId : url && url === input.photoUrl ? input.photoAssetId : undefined)
   const still = (url: string | null, start: number, duration: number, title: string, kenBurns: 'in' | 'out' = 'in'): Clip | null =>
-    url ? { id: id('v'), trackId: 'v1', title, kind: 'video', start, duration, in: 0, out: duration, color: '#2563eb', sourceUrl: url, still: true, kenBurns } : null
+    url ? { id: id('v'), trackId: 'v1', title, kind: 'video', start, duration, in: 0, out: duration, color: '#2563eb', sourceUrl: url, mediaAssetId: assetFor(url), still: true, kenBurns } : null
 
   // 1. title: the banner carries the headline itself
   const titleHold = Math.max(4, Math.min(7, holdFor(input.headline)))
   const banner = still(input.bannerUrl ?? input.photoUrl, t, titleHold, 'Banner')
   if (banner) clips.push(input.bannerUrl ? { ...banner, branded: true } : banner)
-  if (!input.bannerUrl) clips.push({ id: id('h'), trackId: 'v2', title: 'Headline', kind: 'overlay', start: t, duration: titleHold, in: 0, out: titleHold, color: '#dc2626', overlayType: 'headline', overlayText: input.headline })
+  if (!input.bannerUrl) clips.push({ id: id('h'), trackId: 'v2', title: 'Headline', kind: 'overlay', start: t, duration: titleHold, in: 0, out: titleHold, color: '#dc2626', overlayType: 'headline', overlayText: input.headline, overlaySub: input.desk, accent: input.accent })
   t += titleHold
 
   // 2. points
@@ -73,7 +79,8 @@ export function buildStoryTimeline(input: StoryVideoInput): VideoProject {
     t += d
   })
   if (points.length) {
-    const photo = still(input.photoUrl ?? input.bannerUrl, pointsStart, t - pointsStart, 'Photo', 'out')
+    // without a photo the banner stands in, and the clip says so
+    const photo = still(input.photoUrl ?? input.bannerUrl, pointsStart, t - pointsStart, input.photoUrl ? 'Photo' : 'Banner (no photo)', 'out')
     if (photo) clips.push(photo)
     const lt = Math.min(5, t - pointsStart)
     clips.push({ id: id('l'), trackId: 'v2', title: 'Lower third', kind: 'overlay', start: pointsStart, duration: lt, in: 0, out: lt, color: '#059669', overlayType: 'lower-third', overlayText: input.desk, overlaySub: input.credit ? `Photo: ${input.credit}` : 'ESB Power Line' })
@@ -81,7 +88,7 @@ export function buildStoryTimeline(input: StoryVideoInput): VideoProject {
 
   // 3. close
   const close = 4
-  const end = still(input.photoUrl ?? input.bannerUrl, t, close, 'Close')
+  const end = still(input.photoUrl ?? input.bannerUrl, t, close, input.photoUrl ? 'Close · photo' : 'Close · banner')
   if (end) clips.push(end)
   clips.push({ id: id('c'), trackId: 'c1', title: 'Read more', kind: 'caption', start: t, duration: close, in: 0, out: close, color: '#f59e0b', captionText: 'Read the full story on esbpowerline.com' })
   t += close
