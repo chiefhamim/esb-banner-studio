@@ -25,9 +25,13 @@ import { NeedsYou } from './NeedsYou'
 import { domainOf, roleMailbox, disposableDomain } from './addressCheck'
 import { cloudAgo, lockBlock, useCloud } from './cloudStore'
 import { clickedText, engineSkipText, keyOf, openedText, outcomeOf } from './outcome'
+import { fmtCountdown, fmtDay } from './activityFormat'
+import { useEngineStore } from './engineStore'
 
 const fmtWhen = (t: number) => new Date(t).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-const mmss = (ms: number) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
+const mmss = (ms: number) => fmtCountdown(ms)
+const HOLD_TEXT: Record<string, string> = { window: 'Outside sending hours', cap: 'Daily limit reached', quota: 'Gmail asked to slow down', schedule: 'Scheduled', offline: 'Offline', domain: 'Same company just emailed' }
+const settingsTz = () => useEngineStore.getState().settings?.window?.tz || 'Asia/Dhaka'
 const gap = (lo: number, hi: number) => (lo >= 60 ? `${Math.round(lo / 60)}–${Math.round(hi / 60)} min` : `${lo}–${hi} s`)
 
 // memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
@@ -510,13 +514,17 @@ function SendFooter() {
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
   const willSend = Math.min(queue.length, Math.max(0, (set?.dailyLimit ?? 0) - (s.mail?.sent24h ?? 0)))
   const lock = useCloud((x) => (c ? x.locks[c.id] : undefined))
+  // why the engine is holding this campaign's batch: outside sending hours, daily limit, Gmail's slow-down, a start time
+  const holdWhy = useEngineStore((x) => { const j = c ? x.jobForCampaign(c.id) : undefined; return j && j.status === 'waiting' && j.why && j.why !== 'gap' && j.until ? j.why : null })
+  const holdUntil = useEngineStore((x) => (c ? x.jobForCampaign(c.id)?.until ?? null : null))
+  const hold = holdWhy && holdUntil ? { why: holdWhy, until: holdUntil } : null
   const why = cannotStart()
   const blocked = lockBlock(lock)
   if (s.run !== 'idle') {
     return (
       <footer className="or-right-foot">
         {blocked && <p className="or-foot-note" role="status">{blocked}</p>}
-        <div className="or-progress"><span><b>{s.runSent}</b> of {s.runTotal} sent</span>{s.current ? <span>Sending to {s.current}</span> : s.nextAt ? <span>Next in <b>{mmss(s.nextAt - Date.now())}</b></span> : null}</div>
+        <div className="or-progress"><span><b>{s.runSent}</b> of {s.runTotal} sent</span>{s.current ? <span>Sending to {s.current}</span> : hold ? <span>{HOLD_TEXT[hold.why] ?? 'Waiting'} · resumes <b>{fmtDay(hold.until, settingsTz())}</b></span> : s.nextAt ? <span>Next in <b>{mmss(s.nextAt - Date.now())}</b></span> : null}</div>
         <div className="or-meter"><i style={{ width: `${s.runTotal ? (s.runSent / s.runTotal) * 100 : 0}%` }} /></div>
         <div className="or-actions">
           {s.run === 'running'

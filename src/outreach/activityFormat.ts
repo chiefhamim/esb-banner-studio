@@ -85,6 +85,8 @@ export function fmtDurationHours(sec: number): string {
 
 export function fmtCountdown(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000))
+  // an hour or more reads as hours and minutes ("15 h 59 m"), never "959:05"
+  if (s >= 3600) return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')} m`
   const m = Math.floor(s / 60)
   const sec = s % 60
   return `${m}:${String(sec).padStart(2, '0')}`
