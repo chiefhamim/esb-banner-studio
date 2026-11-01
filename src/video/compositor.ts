@@ -177,6 +177,13 @@ const emptyOverlay = (c: Clip) => c.overlayType !== 'logo' && !c.sourceUrl && !(
 
 export const offlineKey = (clip: Clip, w: number, h: number) => JSON.stringify(['offline', clip.title, w, h, fontEpoch])
 
+/** Editor-only words on the monitor (the offline slate, an empty card's hint) never go below a legible size: `px` at
+ * the frame's scale, but at least `min` CSS pixels on a small monitor (the raster is drawn in device pixels). */
+function legible(px: number, min: number): number {
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+  return Math.round(Math.max(px, min * dpr))
+}
+
 /** The honest slate for a clip whose file is not there (editor only; an export with missing media is refused). */
 export function rasterOffline(clip: Clip, w: number, h: number): { src: TexImageSource; width: number; height: number } {
   const { c, ctx } = scratchCanvas(w, h)
@@ -186,11 +193,13 @@ export function rasterOffline(clip: Clip, w: number, h: number): { src: TexImage
   ctx.fillStyle = 'rgba(255,255,255,0.55)'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.font = `700 ${Math.round(34 * s)}px "ESB Sans", sans-serif`
-  ctx.fillText('Media offline', w / 2, h / 2 - 24 * s)
-  ctx.font = `500 ${Math.round(24 * s)}px ${face(clip.title)}`
-  ctx.fillStyle = 'rgba(255,255,255,0.4)'
-  ctx.fillText(clip.title.length > 60 ? clip.title.slice(0, 57) + '…' : clip.title, w / 2, h / 2 + 24 * s)
+  const big = legible(34 * s, 15)
+  const small = legible(24 * s, 12)
+  ctx.font = `700 ${big}px "ESB Sans", sans-serif`
+  ctx.fillText('Media offline', w / 2, h / 2 - big * 0.7)
+  ctx.font = `500 ${small}px ${face(clip.title)}`
+  ctx.fillStyle = 'rgba(255,255,255,0.5)'
+  ctx.fillText(clip.title.length > 60 ? clip.title.slice(0, 57) + '…' : clip.title, w / 2, h / 2 + small * 0.9)
   return { src: c as TexImageSource, width: w, height: h }
 }
 
@@ -341,11 +350,13 @@ function renderOverlayClip(ctx: Ctx, clip: Clip, w: number, h: number, editor: b
       ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.font = `600 ${Math.round(26 * short)}px "ESB Sans", sans-serif`
-      ctx.fillText('Text card', w / 2, h / 2 - 16 * short)
-      ctx.font = `500 ${Math.round(18 * short)}px "ESB Sans", sans-serif`
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
-      ctx.fillText('Type its title and text in the inspector', w / 2, h / 2 + 18 * short)
+      const big = legible(26 * short, 13)
+      const small = legible(18 * short, 11)
+      ctx.font = `600 ${big}px "ESB Sans", sans-serif`
+      ctx.fillText('Text card', w / 2, h / 2 - big * 0.65)
+      ctx.font = `500 ${small}px "ESB Sans", sans-serif`
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
+      ctx.fillText('Type its title and text in the inspector', w / 2, h / 2 + small * 0.9)
     } else if (title || body) {
       const cardW = Math.min(w * 0.82, 1200 * short)
       const pad = 44 * short

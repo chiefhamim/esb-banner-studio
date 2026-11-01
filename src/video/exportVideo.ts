@@ -28,6 +28,10 @@ import { GLCompositor } from './engine/glCompositor'
 import { renderFrame } from './engine/render'
 import type { FrameInput } from './engine/render'
 import { exportUrl } from './engine/mediaSource'
+import { holdBackgroundFor, holdProxies } from './engine/background'
+
+/** The graphics context went away mid-export (GPU reset, driver update): the frames would be black. */
+export const CONTEXT_LOST_MESSAGE = 'The graphics context was lost during the export (the GPU was reset), so the remaining frames could not be drawn. Nothing was saved; export again.'
 
 export type ExportContainer = 'mp4' | 'webm'
 
@@ -279,6 +283,9 @@ export async function exportTimelineVideo(
     }
   }
 
+  // filmstrips, waveforms and proxies wait while the export runs (they would take decoder and GPU time from it)
+  const releaseBackground = holdBackgroundFor('export')
+  const releaseProxies = holdProxies('export')
   try {
     for (let i = 0; i < totalFrames; i++) {
       if (options.signal?.aborted) throw new DOMException('Export cancelled', 'AbortError')
@@ -287,34 +294,40 @@ export async function exportTimelineVideo(
       if (t >= audioUpTo) await addAudioUntil(t + AUDIO_CHUNK_SECONDS)
       const frames = new Map<string, FrameInput>()
       const samples: VideoSample[] = []
-      const waits: Promise<void>[] = []
-      for (const c of footage) {
-        if (!isActive(c, t)) {
-          const r = readers.get(c.id)
-          if (r && i > r.lastFrame) { r.input.dispose(); readers.set(c.id, null) }
-          continue
-        }
-        if (!readers.has(c.id)) readers.set(c.id, await openFootage(c, fps, totalFrames))
-        const r = readers.get(c.id)
-        if (r) {
-          const { value } = await r.iter.next()
-          if (value) {
-            samples.push(value)
-            frames.set(c.id, { image: value.toCanvasImageSource(), width: value.displayWidth, height: value.displayHeight })
+      try {
+        const waits: Promise<void>[] = []
+        for (const c of footage) {
+          if (!isActive(c, t)) {
+            const r = readers.get(c.id)
+            if (r && i > r.lastFrame) { r.input.dispose(); readers.set(c.id, null) }
+            continue
           }
-        } else {
-          waits.push(seekElement(c, t, fps).then((f) => { if (f) frames.set(c.id, f) }))
+          if (!readers.has(c.id)) readers.set(c.id, await openFootage(c, fps, totalFrames))
+          const r = readers.get(c.id)
+          if (r) {
+            const { value } = await r.iter.next()
+            if (value) {
+              samples.push(value)
+              frames.set(c.id, { image: value.toCanvasImageSource(), width: value.displayWidth, height: value.displayHeight })
+            }
+          } else {
+            waits.push(seekElement(c, t, fps).then((f) => { if (f) frames.set(c.id, f) }))
+          }
         }
-      }
-      for (const c of timeline.clips) {
-        if (c.still && c.sourceUrl && isActive(c, t)) {
-          const img = getCachedImage(c.sourceUrl)
-          if (img && !img.complete) waits.push(img.decode().catch(() => {}))
+        for (const c of timeline.clips) {
+          if (c.still && c.sourceUrl && isActive(c, t)) {
+            const img = getCachedImage(c.sourceUrl)
+            if (img && !img.complete) waits.push(img.decode().catch(() => {}))
+          }
         }
+        await Promise.all(waits)
+        if (comp.isLost()) throw new Error(CONTEXT_LOST_MESSAGE)
+        renderFrame(comp, timeline, t, canvas.width, canvas.height, { frames: (c) => frames.get(c.id) ?? null })
+        if (comp.isLost()) throw new Error(CONTEXT_LOST_MESSAGE)
+      } finally {
+        // every decoded frame is closed, whatever happened to this one
+        for (const s of samples) { try { s.close() } catch { /* closed */ } }
       }
-      await Promise.all(waits)
-      renderFrame(comp, timeline, t, canvas.width, canvas.height, { frames: (c) => frames.get(c.id) ?? null })
-      for (const s of samples) s.close()
       await videoSource.add(t, 1 / fps)
       onProgress(i + 1, totalFrames)
     }
@@ -324,6 +337,8 @@ export async function exportTimelineVideo(
     await output.cancel().catch(() => {})
     throw err
   } finally {
+    releaseBackground()
+    releaseProxies()
     readers.forEach((r) => r?.input.dispose())
     audioReaders.forEach((r) => r?.close())
     comp.dispose()

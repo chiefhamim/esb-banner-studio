@@ -34,7 +34,7 @@ const heightFor = (w) => (w === 1366 ? 768 : 900)
 const BASE = `http://localhost:${PORT}/`
 
 // ------------------------------------------------------------------ synthetic media (cached, deterministic)
-const mediaDir = path.join(os.tmpdir(), 'esb-video-shots-media-v1')
+const mediaDir = path.join(os.tmpdir(), 'esb-video-shots-media-v2')
 const MEDIA = {
   clip: path.join(mediaDir, 'sample-clip.mp4'),
   still: path.join(mediaDir, 'sample-still.png'),
@@ -48,8 +48,13 @@ function makeMedia() {
     if (r.status !== 0) { console.warn('ffmpeg failed for', path.basename(out), String(r.stderr || r.error)); return false }
     return true
   }
-  // 6 s test pattern, every frame a key frame so a seek lands on the exact frame
-  const okClip = ff(['-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=6', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-g', '1', '-bf', '0', '-an'], MEDIA.clip)
+  // 6 s test pattern, every frame a key frame so a seek lands on the exact frame, WITH real sound: the committed
+  // speech-like fixture's audio (silence for 1 s, then a voice), so the bin's "sound" fact, the linked A1 clip and
+  // its waveform are all true
+  const speech = path.join(root, 'tools', 'fixtures', 'video', 'speech-6s.mp4')
+  const okClip = fs.existsSync(speech)
+    ? ff(['-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=6', '-i', speech, '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-g', '1', '-bf', '0', '-c:a', 'aac', '-b:a', '96k', '-shortest'], MEDIA.clip)
+    : ff(['-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=6', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-g', '1', '-bf', '0', '-an'], MEDIA.clip)
   const okStill = ff(['-f', 'lavfi', '-i', 'gradients=size=1600x900:seed=7:nb_colors=3:type=linear:duration=1', '-frames:v', '1'], MEDIA.still)
   const okTone = ff(['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=8', '-c:a', 'pcm_s16le'], MEDIA.tone)
   // fall back to the checked-in fixtures if ffmpeg is missing
@@ -136,9 +141,9 @@ async function seedTimeline(page, { playhead = 1.0, select = null, zoom = null, 
       { id: 'shot-a1', trackId: 'a1', title: 'Sample tone', kind: 'audio', start: 0, duration: 8, in: 0, out: 8, color: '#8b5cf6', sourceUrl: aud?.url, mediaAssetId: aud?.id, volume: 0.8 },
     ]
     if (extra === 'linked') {
-      // the footage and a sound linked to it, as footage with its own sound arrives
+      // the footage and its own sound (the clip file's audio track: a voice after 1 s), linked, as an import makes them
       clips[0] = { ...clips[0], linkId: 'link-shot' }
-      clips[5] = { ...clips[5], duration: 6, out: 6, linkId: 'link-shot', title: 'Sample clip · sound' }
+      clips[5] = { ...clips[5], duration: 6, out: 6, linkId: 'link-shot', title: 'Sample clip · sound', sourceUrl: vid?.url, mediaAssetId: vid?.id, volume: 1 }
     }
     if (extra === 'multi-track') {
       // timeline v2: a second footage track over V1 (a picture in picture), a text track with a title
@@ -146,6 +151,16 @@ async function seedTimeline(page, { playhead = 1.0, select = null, zoom = null, 
       st.addTrack('text')
       clips.push({ id: 'shot-v3', trackId: 'v3', title: 'Sample clip (inset)', kind: 'video', start: 1, duration: 5, in: 0, out: 5, color: '#0ea5e9', sourceUrl: vid?.url, mediaAssetId: vid?.id, fit: 'fit', scale: 0.38, offX: 0.27, offY: -0.25, rotation: -3 })
       clips.push({ id: 'shot-t1', trackId: 't1', title: 'Card', kind: 'overlay', start: 6.5, duration: 3, in: 0, out: 3, color: '#7c3aed', overlayType: 'card', overlayText: 'Sample card title', overlaySub: 'Sample card text' })
+    }
+    if (extra === 'many-tracks') {
+      // more tracks than the timeline shows: three extra footage tracks with an inset each, and an extra sound track
+      for (let k = 0; k < 3; k++) st.addTrack('video')
+      st.addTrack('text')
+      st.addTrack('audio')
+      const ids = window.__videoStore.getState().project.tracks.map((t) => t.id)
+      for (const id of ids.filter((x) => /^v[3-9]$/.test(x))) clips.push({ id: `shot-${id}`, trackId: id, title: `Inset on ${id.toUpperCase()}`, kind: 'video', start: 1 + Number(id.slice(1)) * 0.5, duration: 3, in: 0, out: 3, color: '#0ea5e9', sourceUrl: vid?.url, mediaAssetId: vid?.id, fit: 'fit', scale: 0.3, offX: 0.3, offY: -0.3 })
+      const a2 = ids.find((x) => x === 'a2')
+      if (a2) clips.push({ id: 'shot-a2', trackId: a2, title: 'Sample tone (A2)', kind: 'audio', start: 2, duration: 6, in: 0, out: 6, color: '#8b5cf6', sourceUrl: aud?.url, mediaAssetId: aud?.id, volume: 0.6 })
     }
     if (extra === 'empty-card') clips.push({ id: 'shot-card', trackId: 'v2', title: 'Text card', kind: 'overlay', start: 9.2, duration: 2.5, in: 0, out: 2.5, color: '#7c3aed', overlayType: 'card', overlayText: '', overlaySub: '' })
     st.loadProject({ ...vs.getState().project, name: 'Sample project', duration: 12, clips }, { dirty: true })
@@ -216,11 +231,11 @@ async function seedBin(page, { extra = null, video = {}, folder = false, found =
     const vs = window.__videoStore
     const vid = vs.getState().mediaAssets.find((x) => x.type === 'video')
     if (!vid) return false
-    if (uhd) vs.setState((s) => ({ mediaAssets: s.mediaAssets.map((x) => (x.id === vid.id ? { ...x, name: 'sample-4k.mp4', width: 3840, height: 2160, size: 1.86e9 } : x)) }))
+    if (uhd) vs.setState((s) => ({ mediaAssets: s.mediaAssets.map((x) => (x.id === vid.id ? { ...x, name: 'sample-4k.mp4', width: 3840, height: 2160, size: 34e6 } : x)) }))
     window.__videoMeta.setState((s) => ({
-      folder: folder ? { id: '0'.repeat(32), path: 'C:\Users\Editor\Pictures\ESB Banners\Video\Sample project.esbvideo' } : s.folder,
+      folder: folder ? { id: '0'.repeat(32), path: String.raw`C:\Users\Editor\Pictures\ESB Banners\Video\Sample project.esbvideo` } : s.folder,
       byId: { ...s.byId, [vid.id]: { ...s.byId[vid.id], analyzedUrl: vid.url || 'x', ...video } },
-      found: found ? { [vid.id]: { path: 'C:\Footage\day2\sample-4k.mp4', name: 'sample-4k.mp4', size: 1, mtimeMs: 0, url: '' } } : {},
+      found: found ? { [vid.id]: { path: String.raw`C:\Footage\day2\sample-4k.mp4`, name: 'sample-4k.mp4', size: 1, mtimeMs: 0, url: '' } } : {},
     }))
     return true
   }, { video, folder, found, uhd })
@@ -263,10 +278,12 @@ const STATES = {
   'inspector-video': async (page) => { await seedTimeline(page, { select: 'shot-v1' }); if (!(await page.locator('.vw-inspector').count())) na('no inspector shown'); return {} },
   'inspector-overlay': async (page) => { await seedTimeline(page, { select: 'shot-ov-lt' }); if (!(await page.locator('.vw-inspector').count())) na('no inspector shown'); return {} },
   'inspector-audio': async (page) => { await seedTimeline(page, { select: 'shot-a1' }); if (!(await page.locator('.vw-inspector').count())) na('no inspector shown'); return {} },
-  'tab-media': tabState('Media'),
+  // ('tab-media' was the same picture as 'timeline': the Media tab is the desk's default)
   // Phase 1 bin states (metadata line, proxy badge + progress, missing / found again, link-or-copy on import)
   'bin-normal': async (page) => seedBin(page, { uhd: false }),
   'bin-proxy-pending': async (page) => seedBin(page, { folder: true, video: { codec: 'avc1.640033', fps: 29.97, keyframeInterval: 2, proxyNeeded: true, proxy: 'pending', proxyProgress: 0.42 } }),
+  'bin-proxy-0': async (page) => seedBin(page, { folder: true, video: { codec: 'avc1.640033', fps: 29.97, keyframeInterval: 2, proxyNeeded: true, proxy: 'pending', proxyProgress: 0 } }),
+  'bin-proxy-99': async (page) => seedBin(page, { folder: true, video: { codec: 'avc1.640033', fps: 29.97, keyframeInterval: 2, proxyNeeded: true, proxy: 'pending', proxyProgress: 0.99 } }),
   'bin-proxy-ready': async (page) => seedBin(page, { folder: true, video: { codec: 'hvc1.1.6.L153', fps: 25, keyframeInterval: 1, proxyNeeded: true, proxy: 'ready', proxyUrl: 'esb-media://p/x/proxies/x.mp4', storage: 'copy', file: 'media/sample-4k.mp4' } }),
   'bin-proxy-failed': async (page) => seedBin(page, { video: { codec: 'avc1.640033', fps: 30, keyframeInterval: 3, proxyNeeded: true, proxy: 'failed', proxyError: 'This file cannot be converted here' } }),
   'bin-proxy-cancelled': async (page) => seedBin(page, { video: { codec: 'avc1.640033', fps: 30, keyframeInterval: 3, proxyNeeded: true, proxy: 'none', proxyCancelled: true } }),
@@ -310,7 +327,16 @@ const STATES = {
   'monitor-3.0': async (page) => { await seedTimeline(page, { playhead: 3.0 }); return { el: page.locator('.vw-canvas').first() } },
   'timeline-zoomed': async (page) => { await seedTimeline(page, { playhead: 1.0, zoom: 120 }); return {} },
   'multi-track': async (page) => { await seedTimeline(page, { playhead: 2.0, extra: 'multi-track' }); return {} },
+  // footage with its own (real) sound: the linked A1 clip's waveform is the file's audio
   'waveform-lane': async (page) => { await seedTimeline(page, { playhead: 1.0, zoom: 160, extra: 'linked' }); return { el: page.locator('.vw-timeline-footer').first() } },
+  // more tracks than fit: the lanes scrolled to the bottom (headers level with lanes, the ruler pinned on top)
+  'tracks-scrolled': async (page) => {
+    await seedTimeline(page, { playhead: 2.0, extra: 'many-tracks' })
+    await page.evaluate(() => { const sc = document.querySelector('.vw-tracks-scroll'); sc.scrollTop = sc.scrollHeight })
+    return {}
+  },
+  // the same, unscrolled: the "N more tracks" chip at the foot of the headers
+  'tracks-below': async (page) => { await seedTimeline(page, { playhead: 2.0, extra: 'many-tracks' }); return {} },
   'add-track-menu': async (page) => {
     await seedTimeline(page)
     await page.click('.vw-add-track')
@@ -331,6 +357,26 @@ const STATES = {
     await page.click('.menu .menu-item:has-text("Remove track")')
     return { note: 'V3 and its clip removed (Ctrl+Z brings it back)' }
   },
+}
+
+/** The timeline's geometry: every track header level with its lane (±1 px), the ruler on screen. */
+async function timelineGeometry(page) {
+  return page.evaluate(() => {
+    const scroller = document.querySelector('.vw-tracks-scroll')
+    if (!scroller) return null
+    const problems = []
+    const sb = scroller.getBoundingClientRect()
+    for (const h of document.querySelectorAll('.vw-track-head[data-track-id]')) {
+      const lane = document.querySelector(`.vw-track-lane[data-track-id="${h.dataset.trackId}"]`)
+      if (!lane) { problems.push(`${h.dataset.trackId}: no lane`); continue }
+      const a = h.getBoundingClientRect(), b = lane.getBoundingClientRect()
+      if (Math.abs(a.top - b.top) > 1 || Math.abs(a.height - b.height) > 1) problems.push(`${h.dataset.trackId}: header ${Math.round(a.top)}+${Math.round(a.height)} vs lane ${Math.round(b.top)}+${Math.round(b.height)}`)
+    }
+    const ruler = document.querySelector('.vw-ruler')?.getBoundingClientRect()
+    if (!ruler || ruler.bottom <= sb.top + 1 || ruler.top < sb.top - 1) problems.push('ruler not on screen')
+    const below = [...document.querySelectorAll('.vw-track-head[data-track-id]')].filter((h) => h.getBoundingClientRect().top >= sb.bottom - 2).length
+    return { problems, scrollTop: scroller.scrollTop, scrollHeight: scroller.scrollHeight, clientHeight: scroller.clientHeight, tracksBelow: below }
+  }).catch(() => null)
 }
 
 /** Every running CSS/Web animation on the page has finished (a dialog's open fade, a sliding chip). */
@@ -368,6 +414,8 @@ try {
   for (const theme of THEMES) {
     for (const width of WIDTHS) {
       for (const state of wanted) {
+        // the monitor is drawn the same in both themes (it is always dark): shoot it in the first theme only
+        if (state.startsWith('monitor-') && theme !== THEMES[0]) continue
         const file = `${state}__${theme}__${width}.png`
         const ctx = await browser.newContext({ viewport: { width, height: heightFor(width) }, deviceScaleFactor: 1, reducedMotion: 'reduce', colorScheme: theme, acceptDownloads: true })
         // a fixed wall clock: the story banner prints today's date, and nothing else should change between runs
@@ -388,10 +436,11 @@ try {
           const r = (await STATES[state](page)) || {}
           await settle(page)
           await waitAnimations(page)
+          const geo = await timelineGeometry(page)
           const opts = { path: path.join(outDir, file), animations: 'disabled', caret: 'hide' }
           if (r.el) await r.el.screenshot(opts)
           else await page.screenshot(opts)
-          entry = { ...entry, ok: true, note: [r.note, thumbRetries ? `black bin thumbnail on import, re-imported ${thumbRetries}x` : '', pageErrors.length ? `page errors: ${pageErrors.join(' | ')}` : ''].filter(Boolean).join('; ') }
+          entry = { ...entry, ok: true, geometry: geo, note: [r.note, geo?.problems?.length ? `TIMELINE: ${geo.problems.join(', ')}` : '', thumbRetries ? `black bin thumbnail on import, re-imported ${thumbRetries}x` : '', pageErrors.length ? `page errors: ${pageErrors.join(' | ')}` : ''].filter(Boolean).join('; ') }
           console.log(`ok   ${file}${entry.note ? '  (' + entry.note + ')' : ''}`)
         } catch (e) {
           if (e instanceof NA) {
