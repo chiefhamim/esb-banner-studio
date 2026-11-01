@@ -8,7 +8,7 @@ import { OUTREACH_BLUEPRINTS } from './outreachAi'
 import { useOutreachStore } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 
-export async function useDesignFile(file: File | undefined): Promise<void> {
+export async function applyDesignFile(file: File | undefined): Promise<void> {
   const s = useOutreachStore.getState()
   const c = s.campaign()
   if (!file || !c) return

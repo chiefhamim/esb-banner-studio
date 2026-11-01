@@ -24,7 +24,7 @@ import { ask, useOutreachUi, type LeftTab } from './outreachUi'
 import { downloadText, eligible, inAudience, resultsCsv, resumeBatch } from './campaign'
 import { useEngineStore } from './engineStore'
 import { describeRun, fmtDay } from './activityFormat'
-import { useDesignFile } from './designImport'
+import { applyDesignFile } from './designImport'
 import { AiSettingsDialog } from '../editorial/AiSettingsDialog'
 import { EngineStatus } from '../editorial/EngineStatus'
 import { ProviderMark } from '../editorial/ProviderMark'
@@ -184,7 +184,7 @@ export function OutreachWorkspace() {
           {set ? <span className="ed-avatar">{(set.name || set.user).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span> : <><Icon name="mail" size={14} /><span className="ed-account-label">Sender</span></>}
         </button>
         <input ref={file} type="file" accept=".xlsx,.csv,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void s.importList(f); e.target.value = '' }} />
-        <input ref={designFile} type="file" accept=".html,.htm,text/html" hidden onChange={(e) => { void useDesignFile(e.target.files?.[0]); e.target.value = '' }} />
+        <input ref={designFile} type="file" accept=".html,.htm,text/html" hidden onChange={(e) => { void applyDesignFile(e.target.files?.[0]); e.target.value = '' }} />
       </header>
 
       {banner}

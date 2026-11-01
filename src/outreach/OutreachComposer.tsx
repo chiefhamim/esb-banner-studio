@@ -18,7 +18,7 @@ import { Icon, type IconName } from '../ui/Icon'
 import { MenuButton, Select, Seg, Switch } from '../ui/controls'
 import type { OutreachLang } from './types'
 import { designPreviewHtml } from './design'
-import { useDesignFile } from './designImport'
+import { applyDesignFile } from './designImport'
 
 const SUBJECT_MAX = 70
 const EMAIL = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[a-z]{2,}$/i
@@ -174,7 +174,7 @@ export function OutreachComposer() {
   return (
     <main className="or-center" aria-label="Letter">
       <div className="or-toolbar">
-        <input ref={designInput} type="file" accept=".html,.htm,text/html" hidden onChange={(e) => { void useDesignFile(e.target.files?.[0]); e.target.value = '' }} />
+        <input ref={designInput} type="file" accept=".html,.htm,text/html" hidden onChange={(e) => { void applyDesignFile(e.target.files?.[0]); e.target.value = '' }} />
         <Select<string> value={c.design ? 'designed' : c.blueprint === 'template' ? (s.templates.find((t) => t.subject === c.subject && t.body === c.body)?.id ?? 'template') : c.blueprint} className="or-letter-select" onChange={(v) => void pickLetter(v)}
           options={[
             ...(c.design ? [{ value: 'designed', label: c.design.name, hint: 'Designed', icon: 'image' as const }] : []),
