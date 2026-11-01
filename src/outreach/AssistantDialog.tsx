@@ -7,6 +7,7 @@ import { useDesk } from './outreachStore'
 import { useOutreachUi } from './outreachUi'
 import { engineClient } from './engineClient'
 import { askAssistant, applyAssistantAction, type AssistantActionItem } from './operator'
+import { fmtTime, useClockFormat } from '../ui/time'
 
 interface MessageItem {
   id: string
@@ -90,6 +91,7 @@ function ResultView({ result }: { result: unknown }) {
 }
 
 export function AssistantDialog({ onClose }: { onClose: () => void }) {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const ui = useOutreachUi()
   const outreach = useDesk()
   const engine = useEngineStore()
@@ -353,7 +355,7 @@ export function AssistantDialog({ onClose }: { onClose: () => void }) {
                 {recentActions.map((ev) => (
                   <li key={ev.id}>
                     <span>{ev.text}</span>
-                    <time>{new Date(ev.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+                    <time>{fmtTime(ev.t)}</time>
                   </li>
                 ))}
               </ul>

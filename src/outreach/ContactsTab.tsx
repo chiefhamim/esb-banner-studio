@@ -16,6 +16,7 @@ import { Select } from '../ui/controls'
 import type { Contact } from './types'
 import { engineSkipText, outcomeOf, type Outcome } from './outcome'
 import { useCloud } from './cloudStore'
+import { useClockFormat } from '../ui/time'
 
 const sameOutcome = (a: Outcome, b: Outcome) => a.st === b.st && a.label === b.label && a.detail === b.detail
 const rowCache = new WeakMap<Contact, { c: Contact; skip: string | null; out: Outcome }>()
@@ -63,6 +64,8 @@ export const ContactsTab = memo(function ContactsTab() {
   // contact object), so the memoised rows do not re-render.
   const subject = useDeferredValue(c?.subject ?? '')
   const body = useDeferredValue(c?.body ?? '')
+  // the outcome text carries times ("Accepted by the mail server 1 Nov 4:58 PM"), so a time-format change rebuilds the rows
+  const clock = useClockFormat()
   const rows: Row[] = useMemo(() => inAud.map((x) => {
     const skip = c ? skipReason(x, subject, body) : null
     const eng = engagement?.[x.email]
@@ -73,7 +76,7 @@ export const ContactsTab = memo(function ContactsTab() {
     const row = { c: x, skip, out }
     rowCache.set(x, row)
     return row
-  }), [inAud, subject, body, engagement, engineSkips]) // eslint-disable-line react-hooks/exhaustive-deps
+  }), [inAud, subject, body, engagement, engineSkips, clock]) // eslint-disable-line react-hooks/exhaustive-deps
   const eligibleForBulkApprove = useMemo(() => {
     return inAud.filter((x) => {
       if (x.approved) return false

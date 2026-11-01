@@ -8,16 +8,16 @@ import { DigestDialog } from './DigestDialog'
 import { Icon } from '../ui/Icon'
 import { MenuButton } from '../ui/controls'
 import type { Campaign } from './types'
+import { fmtShortTime, useClockFormat } from '../ui/time'
 
 export const STATUS_TEXT: Record<Campaign['status'], string> = { draft: 'Draft', scheduled: 'Scheduled', sending: 'Sending', paused: 'Paused', done: 'Done' }
 
-const when = (t: number) => {
-  const d = new Date(t), now = new Date()
-  return d.toDateString() === now.toDateString() ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString([], { day: 'numeric', month: 'short' })
-}
+// today: the time ("4:58 PM" / "16:58"); before: the date ("1 Nov")
+const when = (t: number) => fmtShortTime(t)
 
 // memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
 export const CampaignsTab = memo(function CampaignsTab() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const s = useDesk()
   const ui = useOutreachUi()
   const idle = s.run === 'idle'

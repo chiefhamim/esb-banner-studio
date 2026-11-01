@@ -16,6 +16,7 @@ import { ExportSheet } from './ExportSheet'
 const TRACK_LABEL = { overlay: 'Overlays', video: 'Footage', caption: 'Captions', audio: 'Audio' } as const
 import { StoryVideoPanel } from './StoryVideoPanel'
 import { downloadVideoBlob } from './exportVideo'
+import { fmtTime } from '../ui/time'
 
 export function VideoWorkspace() {
   const {
@@ -447,7 +448,7 @@ export function VideoWorkspace() {
         const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' })
         const url = URL.createObjectURL(blob)
         const dur = Math.max(1, Math.round((performance.now() - startedAt) / 100) / 10)
-        const name = `Voiceover Take ${new Date().toLocaleTimeString()}`
+        const name = `Voiceover Take ${fmtTime(Date.now(), { seconds: true })}`
 
         const asset: MediaAsset = {
           id: `asset-vo-${Date.now()}`,

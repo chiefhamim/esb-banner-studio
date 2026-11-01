@@ -8,14 +8,16 @@ import { createPortal } from 'react-dom'
 import { useOutreachStore, type LogEntry } from './outreachStore'
 import { useOutreachUi } from './outreachUi'
 import { Icon, type IconName } from '../ui/Icon'
+import { fmtTime, useClockFormat } from '../ui/time'
 
 type Kind = 'all' | 'ok' | 'info' | 'problem'
 const KINDS: { kind: Kind; label: string }[] = [{ kind: 'all', label: 'All' }, { kind: 'ok', label: 'Sent' }, { kind: 'info', label: 'Notes' }, { kind: 'problem', label: 'Problems' }]
 const kindOf = (l: LogEntry): Kind => (l.level === 'ok' ? 'ok' : l.level === 'info' ? 'info' : 'problem')
 const ICON: Record<LogEntry['level'], IconName> = { ok: 'check', info: 'info', warn: 'info', error: 'x' }
-const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+const time = (t: number) => fmtTime(t)
 
 export function OutreachActivity() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const log = useOutreachStore((s) => s.log)
   const [open, setOpen] = useState(false)
   const [kind, setKind] = useState<Kind>('all')

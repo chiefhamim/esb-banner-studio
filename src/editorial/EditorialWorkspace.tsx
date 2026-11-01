@@ -87,6 +87,7 @@ import {
   openSiteCms,
 } from './siteApi'
 import { parseArticleDocument } from './extract'
+import { fmtTime, useClockFormat } from '../ui/time'
 
 if (typeof window !== 'undefined') {
   // Test seam: lets the Playwright extraction suite run page fixtures through the real extractor.
@@ -173,6 +174,7 @@ const COLS_KEY = 'esb-banner-studio/editorial/columns'
 const COLS_DEFAULT = { src: 312, side: 340 }
 
 export function EditorialWorkspace() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const source = useEditorialStore((s) => s.source)
   const draft = useEditorialStore((s) => s.draft)
   const siteStatus = useEditorialStore((s) => s.siteStatus)
@@ -1621,7 +1623,7 @@ export function EditorialWorkspace() {
               onFix={fixReady}
               onToast={showToast}
               last={lastPublish && lastPublish.story === (activeStory?.id ?? null) ? (
-                <p className={'ed-last ' + (lastPublish.ok ? 'ok' : 'bad')}><Icon name={lastPublish.ok ? 'check' : 'info'} size={12} /><span>{lastPublish.text} · {new Date(lastPublish.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></p>
+                <p className={'ed-last ' + (lastPublish.ok ? 'ok' : 'bad')}><Icon name={lastPublish.ok ? 'check' : 'info'} size={12} /><span>{lastPublish.text} · {fmtTime(lastPublish.at)}</span></p>
               ) : null}
               banner={
                 <>
@@ -1685,7 +1687,7 @@ export function EditorialWorkspace() {
           ========================================================================= */}
       <footer className="statusbar ed-statusbar">
         <button type="button" className={'sb-cms ' + (siteStatus.connected && !siteStatus.sessionEnded ? 'on' : 'off')} onClick={() => { if (siteStatus.sessionEnded) useEditorialStore.getState().logoutStaff(); setShowLoginModal(true) }}
-          data-tip={`${siteStatus.statusText || (siteStatus.connected ? 'Connected' : 'Not reachable')} · checked ${siteStatus.lastChecked || 'now'} — open the connection check`}>
+          data-tip={`${siteStatus.statusText || (siteStatus.connected ? 'Connected' : 'Not reachable')} · checked ${siteStatus.checkedAt ? fmtTime(siteStatus.checkedAt, { seconds: true }) : siteStatus.lastChecked || 'now'} — open the connection check`}>
           <span className="sb-k">CMS</span>
           <span className="sb-pill"><i className="sb-dot" aria-hidden />{siteStatus.sessionEnded ? 'Sign-in ended · click to sign in' : siteStatus.connected ? <><span className="sb-text">{staffSession ? `Connected as ${staffSession.name || staffSession.email}` : 'Site online · not signed in'}</span><span className="sb-ms">{siteStatus.latencyMs} ms</span></> : 'Disconnected'}</span>
         </button>

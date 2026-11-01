@@ -5,6 +5,7 @@
 
 import { create } from 'zustand'
 import type { Engagement } from './outcome'
+import { fmtTime } from '../ui/time'
 
 export type CloudState =
   | 'signed-out' // no staff session: local only
@@ -67,7 +68,7 @@ export { ago as cloudAgo }
 /** Why Send/Resume must wait for another PC, or null. A stale lock does not block: it is offered for take-over. */
 export function lockBlock(lock: LockInfo | null | undefined): string | null {
   if (!lock || lock.mine || lock.stale) return null
-  return `Sending from ${lock.label || 'another PC'} — last seen ${new Date(lock.heartbeatAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  return `Sending from ${lock.label || 'another PC'} — last seen ${fmtTime(lock.heartbeatAt)}`
 }
 
 /** The status bar's words for the sync state. */

@@ -404,15 +404,17 @@ export function useSlidingThumb(value: unknown, memoryKey?: string) {
   return { wrap, thumb }
 }
 
-export function Seg<T extends string | number>({ value, options, onChange, className = '' }: {
+export function Seg<T extends string | number>({ value, options, onChange, className = '', label }: {
   value: T; options: { value: T; icon?: IconName; label?: string; tip?: string }[]; onChange: (v: T) => void; className?: string
+  /** Accessible name of the group (screen readers announce it before the options). */
+  label?: string
 }) {
   const { wrap, thumb } = useSlidingThumb(value)
   return (
-    <div ref={wrap} className={'seg-ctl ' + className} role="group">
+    <div ref={wrap} className={'seg-ctl ' + className} role="group" aria-label={label}>
       {thumb}
       {options.map((o) => (
-        <button key={String(o.value)} type="button" className={o.value === value ? 'on' : ''} data-tip={o.tip} onClick={() => onChange(o.value)}>
+        <button key={String(o.value)} type="button" className={o.value === value ? 'on' : ''} aria-pressed={o.value === value} data-tip={o.tip} onClick={() => onChange(o.value)}>
           {o.icon && <Icon name={o.icon} size={14} />}{o.label != null && <span className="seg-label">{o.label}</span>}
         </button>
       ))}

@@ -5,8 +5,10 @@ import { ask, useOutreachUi } from './outreachUi'
 import { describeRun } from './activityFormat'
 import { eligible, pauseBatch, resumeBatch, stopBatch } from './campaign'
 import { Icon } from '../ui/Icon'
+import { useClockFormat } from '../ui/time'
 
 export function AutopilotCard() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const ui = useOutreachUi()
   const s = useDesk()
   const engine = useEngineStore()

@@ -24,6 +24,7 @@ import type { Campaign, ListMeta } from './types'
 import type { Engagement } from './outcome'
 import type { DesignLetter } from './design'
 import type { Sheet } from './directory'
+import { fmtDateTime } from '../ui/time'
 
 const LS = 'esb-banner-studio/outreach/cloud'
 const PC_KEY = 'esb-banner-studio/outreach/pc'
@@ -404,7 +405,7 @@ export async function beforeSend(campaignId: string): Promise<{ ok: true; note?:
       if (!held.stale) return { ok: false, reason: lockBlock(held)! }
       const take = await ask({
         title: `Take over from ${held.label}?`,
-        body: `${held.label} started sending this campaign and was last seen ${new Date(held.heartbeatAt).toLocaleString()}. Take over only if that PC is closed or offline: its sends that have not reached the shared copy yet are not known here, and those people could be written to twice.`,
+        body: `${held.label} started sending this campaign and was last seen ${fmtDateTime(held.heartbeatAt, { weekday: false })}. Take over only if that PC is closed or offline: its sends that have not reached the shared copy yet are not known here, and those people could be written to twice.`,
         ok: 'Take over', danger: true,
       })
       if (!take) return { ok: false, reason: `Not taken over — ${held.label} still holds this campaign` }

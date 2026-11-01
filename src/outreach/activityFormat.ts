@@ -1,3 +1,4 @@
+import { fmtDateTime, fmtTime, fmtWallClock } from '../ui/time'
 import type { AutopilotSettings, JobSnapshot, OutreachEvent, OutreachStats } from '../esb'
 
 const DOW_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -20,41 +21,14 @@ export function fmtDuration(sec: number): string {
   return `${d} day${d === 1 ? '' : 's'}`
 }
 
+/** Time of day in the Autopilot window's zone, in the editor's 12/24-hour choice: "4:58 PM" / "16:58". */
 export function fmtClock(ts: number, tz = 'Asia/Dhaka'): string {
-  try {
-    const dtf = new Intl.DateTimeFormat('en-GB', {
-      timeZone: tz,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-    return dtf.format(new Date(ts))
-  } catch {
-    const d = new Date(ts)
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  }
+  return fmtTime(ts, { tz })
 }
 
+/** Day and time in the Autopilot window's zone: "Sun 1 Nov 4:58 PM" / "Sun 1 Nov 16:58". */
 export function fmtDay(ts: number, tz = 'Asia/Dhaka'): string {
-  try {
-    const dtf = new Intl.DateTimeFormat('en-GB', {
-      timeZone: tz,
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    })
-    const parts = dtf.formatToParts(new Date(ts))
-    const p: Record<string, string> = {}
-    for (const part of parts) p[part.type] = part.value
-    // e.g. "Sun 09:00" or "Thu 19 Nov"
-    return `${p.weekday} ${p.day} ${p.month} ${p.hour}:${p.minute}`
-  } catch {
-    const d = new Date(ts)
-    return `${DOW_NAMES[d.getDay()]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`
-  }
+  return fmtDateTime(ts, { tz })
 }
 
 export function fmtShortDay(ts: number, tz = 'Asia/Dhaka'): string {
@@ -120,7 +94,7 @@ export function describeRun(
   if (!job || job.status === 'queued' && job.sent === 0 && job.total === 0) {
     const days = (settings?.window?.days || [0, 1, 2, 3, 4]).map((d) => DOW_NAMES[d]).join(', ')
     const winText = settings?.window?.enabled
-      ? `${days} ${settings.window.from}–${settings.window.to}, ${tzShort}`
+      ? `${days} ${fmtWallClock(settings.window.from)}–${fmtWallClock(settings.window.to)}, ${tzShort}`
       : 'Sending anytime'
     const rampText = settings?.ramp
       ? `Up to ${settings?.dailyLimit ?? 100} a day (ramp)`

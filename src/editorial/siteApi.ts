@@ -1,3 +1,4 @@
+import { fmtTime } from '../ui/time'
 // Live communication and synchronization bridge between ESB Studio and https://esbpowerline.com
 // Implements genuine Supabase Auth against sxgokpmrbgdndstygapc.supabase.co
 // and replicates the exact CMS schema and API contracts of the esbpowerline repository.
@@ -11,6 +12,8 @@ export interface SiteStatus {
   connected: boolean
   latencyMs: number
   lastChecked: string
+  /** When the check ran (ms); shown through ui/time so the 12/24-hour setting applies at once. */
+  checkedAt?: number
   version?: string
   statusText?: string
   /** The site's auth service ended this sign-in (signed in elsewhere): uploads are refused until the editor signs in again. */
@@ -113,7 +116,8 @@ export async function checkSiteConnection(): Promise<SiteStatus> {
     return {
       connected: ok,
       latencyMs: latencyMs || 120,
-      lastChecked: new Date().toLocaleTimeString(),
+      lastChecked: fmtTime(Date.now(), { seconds: true }),
+      checkedAt: Date.now(),
       statusText: ok ? 'Online & Synchronized' : 'Site Unreachable',
     }
   } catch (err: any) {
@@ -121,7 +125,8 @@ export async function checkSiteConnection(): Promise<SiteStatus> {
     return {
       connected: false,
       latencyMs,
-      lastChecked: new Date().toLocaleTimeString(),
+      lastChecked: fmtTime(Date.now(), { seconds: true }),
+      checkedAt: Date.now(),
       statusText: err?.message || 'Connection Failed',
     }
   }
@@ -752,20 +757,21 @@ export function htmlToBody(html: string): string {
 /** Live check of the site: the public feed answers, the auth service is up, and — when signed in — the database accepts the editor's token. */
 export async function probeSite(session?: StaffSession | null): Promise<SiteStatus> {
   const t0 = performance.now()
-  const stamp = () => new Date().toLocaleTimeString()
+  const at = Date.now()
+  const stamp = () => ({ lastChecked: fmtTime(at, { seconds: true }), checkedAt: at })
   const feed = await siteFetch(`${SITE_BASE_URL}/feed.xml?_=${Date.now()}`, 6000)
   const latencyMs = Math.max(1, Math.round(performance.now() - t0))
-  if (!feed.ok) return { connected: false, latencyMs, lastChecked: stamp(), statusText: feed.status ? `Site answered HTTP ${feed.status}` : 'Site unreachable' }
-  if (!session?.token) return { connected: true, latencyMs, lastChecked: stamp(), statusText: 'Site online — sign in to use the CMS' }
+  if (!feed.ok) return { connected: false, latencyMs, ...stamp(), statusText: feed.status ? `Site answered HTTP ${feed.status}` : 'Site unreachable' }
+  if (!session?.token) return { connected: true, latencyMs, ...stamp(), statusText: 'Site online — sign in to use the CMS' }
   // keep-alive: renews the token well before it expires, from the newest saved copy
   const live = (await ensureFreshSession(session)) ?? session
   const refused = await sessionRefusedBySite(live)
-  if (refused) return { connected: true, latencyMs, lastChecked: stamp(), statusText: `Site online — it ended your sign-in (HTTP ${refused}); sign in again`, sessionEnded: true }
+  if (refused) return { connected: true, latencyMs, ...stamp(), statusText: `Site online — it ended your sign-in (HTTP ${refused}); sign in again`, sessionEnded: true }
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/Article?select=id&limit=1`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${live.token}` } })
-    if (r.ok) return { connected: true, latencyMs, lastChecked: stamp(), statusText: 'Site and database connected' }
-    return { connected: true, latencyMs, lastChecked: stamp(), statusText: r.status === 401 ? 'Site online — your sign-in expired' : `Site online — database answered HTTP ${r.status}` }
+    if (r.ok) return { connected: true, latencyMs, ...stamp(), statusText: 'Site and database connected' }
+    return { connected: true, latencyMs, ...stamp(), statusText: r.status === 401 ? 'Site online — your sign-in expired' : `Site online — database answered HTTP ${r.status}` }
   } catch {
-    return { connected: true, latencyMs, lastChecked: stamp(), statusText: 'Site online — database not reachable' }
+    return { connected: true, latencyMs, ...stamp(), statusText: 'Site online — database not reachable' }
   }
 }

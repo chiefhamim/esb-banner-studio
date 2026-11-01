@@ -13,6 +13,7 @@ import { Icon } from '../ui/Icon'
 import { FacebookDialog } from './FacebookDialog'
 import { getFacebook, verifyFacebook } from './facebook'
 import siteIcon from '../assets/images/site/site-icon.png'
+import { fmtTime, useClockFormat } from '../ui/time'
 
 /** The role colours esbpowerline.com uses (lib/constants.ts ROLES), so the badge matches the site's own RoleBadge. */
 const ROLE_COLOR: Record<string, string> = { SUPER_ADMIN: '#ff3b6f', ADMIN: '#8b5cf6', EDITOR: '#3b82f6', AUTHOR: '#10b981', CONTRIBUTOR: '#f59e0b' }
@@ -20,6 +21,7 @@ const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: 'Super admin', ADMIN: 
 const isDesktop = () => typeof window !== 'undefined' && !!(window as unknown as { esb?: { openSiteAs?: unknown } }).esb?.openSiteAs
 
 export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast: (m: string) => void }) {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const session = useEditorialStore((s) => s.staffSession)
   const loginStaff = useEditorialStore((s) => s.loginStaff)
   const logoutStaff = useEditorialStore((s) => s.logoutStaff)
@@ -164,8 +166,8 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                   <div className="acct-title"><b>esbpowerline.com</b><span className={'acct-pill ' + (siteCheck.s === 'checking' ? 'checking' : siteCheck.s === 'bad' || !siteStatus.connected ? 'bad' : 'ok')}><i />{siteCheck.s === 'checking' ? 'Checking…' : !siteStatus.connected ? 'Unreachable' : siteCheck.s === 'bad' ? 'Needs attention' : `Connected · ${siteStatus.latencyMs} ms`}</span></div>
                   <p>CMS and article database · signed in as {session.email}</p>
                   {siteCheck.s === 'bad' && siteBad.map((c) => <p key={c.id} className="acct-err">{c.label}: {c.detail}</p>)}
-                  {siteCheck.at && siteCheck.s !== 'checking' && <p className="acct-fine">{siteCheck.checks.filter((c) => c.status === 'ok').length} checks passed{siteCheck.checks.some((c) => c.status === 'skip') ? ', ' + siteCheck.checks.filter((c) => c.status === 'skip').length + ' skipped' : ''} · {siteCheck.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
-                  {expires && <p className="acct-fine">Session renews automatically · current token until {expires.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+                  {siteCheck.at && siteCheck.s !== 'checking' && <p className="acct-fine">{siteCheck.checks.filter((c) => c.status === 'ok').length} checks passed{siteCheck.checks.some((c) => c.status === 'skip') ? ', ' + siteCheck.checks.filter((c) => c.status === 'skip').length + ' skipped' : ''} · {fmtTime(siteCheck.at)}</p>}
+                  {expires && <p className="acct-fine">Session renews automatically · current token until {fmtTime(expires)}</p>}
                   <div className="acct-actions">
                     <button type="button" className="btn sm primary" onClick={() => void openCms('/cms/articles/new')} disabled={opening}><Icon name="externalLink" size={13} /><span>{opening ? 'Opening…' : 'New article'}</span></button>
                     <button type="button" className="btn sm" onClick={() => void openCms('/cms')} disabled={opening}><Icon name="globe" size={13} /><span>CMS dashboard</span></button>

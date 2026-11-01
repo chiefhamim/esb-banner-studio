@@ -9,6 +9,7 @@ import { fmtDuration, fmtDay, describeRun } from './activityFormat'
 import { Icon, type IconName } from '../ui/Icon'
 import { useEngineStore } from './engineStore'
 import { engineClient } from './engineClient'
+import { fmtHour, useClockFormat } from '../ui/time'
 
 function Kpi({ icon, tone, label, figure, sub, small }: { icon: IconName; tone: string; label: string; figure: ReactNode; sub: ReactNode; small?: boolean }) {
   return (
@@ -46,6 +47,7 @@ function Duration({ label, tip, value, sub }: { label: string; tip: string; valu
 }
 
 export function ActivityOverview() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const store = useActivityStore()
   const engine = useEngineStore()
   const stats = store.stats
@@ -110,10 +112,10 @@ export function ActivityOverview() {
 
   // 2. Today by hour chart data
   const hourData = stats.today.map((h) => ({
-    label: `${String(h.t).padStart(2, '0')}:00`,
+    label: fmtHour(h.t),
     sent: h.sent,
     failed: h.failed,
-    tooltip: `${String(h.t).padStart(2, '0')}:00–${String((h.t + 1) % 24).padStart(2, '0')}:00 · ${h.sent} sent · ${h.failed} failed`,
+    tooltip: `${fmtHour(h.t)}–${fmtHour(h.t + 1)} · ${h.sent} sent · ${h.failed} failed`,
   }))
 
   // 3. Days chart data

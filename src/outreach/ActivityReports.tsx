@@ -13,6 +13,7 @@ import { downloadText } from './campaign'
 import { Icon } from '../ui/Icon'
 import { Seg } from '../ui/controls'
 import type { JobSnapshot } from '../esb'
+import { useClockFormat } from '../ui/time'
 
 export function safeCsvCell(val: string | number | null | undefined): string {
   if (val == null) return '""'
@@ -55,6 +56,7 @@ export function buildRunCsv(jobs: JobSnapshot[]): string {
 }
 
 export function ActivityReports() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const store = useActivityStore()
   const stats = store.stats
   const [subTab, setSubTab] = useState<'day' | 'run'>('day')

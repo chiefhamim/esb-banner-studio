@@ -27,8 +27,9 @@ import { cloudAgo, lockBlock, useCloud } from './cloudStore'
 import { clickedText, engineSkipText, keyOf, openedText, outcomeOf } from './outcome'
 import { fmtCountdown, fmtDay } from './activityFormat'
 import { useEngineStore } from './engineStore'
+import { fmtDateTime, useClockFormat } from '../ui/time'
 
-const fmtWhen = (t: number) => new Date(t).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+const fmtWhen = (t: number) => fmtDateTime(t, { weekday: false })
 const mmss = (ms: number) => fmtCountdown(ms)
 const HOLD_TEXT: Record<string, string> = { window: 'Outside sending hours', cap: 'Daily limit reached', quota: 'Gmail asked to slow down', schedule: 'Scheduled', offline: 'Offline', domain: 'Same company just emailed' }
 const settingsTz = () => useEngineStore.getState().settings?.window?.tz || 'Asia/Dhaka'
@@ -53,6 +54,7 @@ export const OutreachInspector = memo(function OutreachInspector() {
 })
 
 function SendTab() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const s = useDesk()
   const c = s.campaign()
   const desktop = !!window.esb?.outreachSend
@@ -126,7 +128,7 @@ function SendTab() {
       <section className="or-card">
         <header><Icon name="send" size={14} /><h3>{c?.name ?? 'Campaign'}</h3>{c && <span className={'or-chip cs-' + c.status}>{STATUS_TEXT[c.status]}</span>}</header>
         <p className="or-muted">{!c ? 'Open or create a campaign.' : queue.length ? `${queue.length} ready${desktop && set ? ` · ${willSend} can go today` : ''}` : s.contacts.length ? 'Nobody in this audience is ready — see Skipped in Contacts' : c.kind === 'direct' ? 'Type addresses in the To line' : 'Import a list to start'}</p>
-        {c?.status === 'scheduled' && c.scheduledAt && s.run === 'idle' && <p className="or-sched"><Icon name="clock" size={13} /><span>Starts {new Date(c.scheduledAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} — keep the app open</span><button type="button" className="btn xs" onClick={() => s.patch({ status: 'draft', scheduledAt: null })}>Cancel</button></p>}
+        {c?.status === 'scheduled' && c.scheduledAt && s.run === 'idle' && <p className="or-sched"><Icon name="clock" size={13} /><span>Starts {fmtDateTime(c.scheduledAt)} — keep the app open</span><button type="button" className="btn xs" onClick={() => s.patch({ status: 'draft', scheduledAt: null })}>Cancel</button></p>}
         {c && (sent > 0 || failed > 0) && (
           <div className="or-results">
             <span><b>{sent}</b> sent</span>
@@ -177,6 +179,7 @@ function SendTab() {
 }
 
 function ContactTab() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const s = useDesk()
   const engagementAll = useCloud((x) => (s.activeId ? x.engagement[s.activeId] : undefined))
   const [previewModal, setPreviewModal] = useState(false)
@@ -501,6 +504,7 @@ function FollowUpCard() {
 /** Pinned to the foot of the right column on every tab, like Editorial's Review & publish: what is ready, and the
  *  one button that sends — or, while a batch runs, its progress with Pause and Stop. */
 function SendFooter() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const s = useDesk()
   const ui = useOutreachUi()
   const c = s.campaign()

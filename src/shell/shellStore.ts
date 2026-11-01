@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { reducedMotion } from '../ui/motion'
 
 export type WorkspaceId = 'home' | 'graphics' | 'editorial' | 'video' | 'outreach' | 'audio'
+/** How every time of day in the app reads: "4:58 PM" or "16:58" (Home → Settings → Time format; helpers in `ui/time.ts`). */
+export type ClockFormat = '12h' | '24h'
 
 interface ShellState {
   workspace: WorkspaceId
@@ -18,6 +20,8 @@ interface ShellState {
   quitPrompt: boolean
   setQuitPrompt: (on: boolean) => void
   triggerQuit: (force?: boolean) => Promise<void>
+  clock: ClockFormat
+  setClock: (c: ClockFormat) => void
 }
 
 const STORAGE_KEY = 'esb-banner-studio/shell'
@@ -29,6 +33,23 @@ const ORDER: WorkspaceId[] = ['home', 'editorial', 'graphics', 'video', 'outreac
 
 /** The app always opens on Home, whichever workspace was open when it was closed. */
 const loadSavedWorkspace = (): WorkspaceId => 'home'
+
+const CLOCK_KEY = 'esb-banner-studio/clock'
+/** This computer's own habit (Windows region settings): h11/h12 → 12-hour, otherwise 24-hour. */
+export function systemClock(): ClockFormat {
+  try {
+    const hc = new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle
+    return hc === 'h11' || hc === 'h12' ? '12h' : '24h'
+  } catch { return '24h' }
+}
+/** The editor's choice once made; until then the OS default, so nothing changes until they pick one. */
+const loadClock = (): ClockFormat => {
+  try {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(CLOCK_KEY) : null
+    if (v === '12h' || v === '24h') return v
+  } catch { /* ignore */ }
+  return systemClock()
+}
 
 export const useShellStore = create<ShellState>((set, get) => ({
   workspace: loadSavedWorkspace(),
@@ -79,4 +100,12 @@ export const useShellStore = create<ShellState>((set, get) => ({
       set({ quitPrompt: true })
     }
   },
+  clock: loadClock(),
+  setClock: (clock) => {
+    try { localStorage.setItem(CLOCK_KEY, clock) } catch { /* ignore */ }
+    set({ clock })
+  },
 }))
+
+// dev only: lets tools/e2e/clock-format-check.mjs flip the setting while a desk is on screen (live re-render check)
+if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') Object.assign(window, { __shell: useShellStore })

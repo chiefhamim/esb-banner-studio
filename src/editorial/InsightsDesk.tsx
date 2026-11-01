@@ -14,6 +14,7 @@ import {
   refreshInsights, saveInsightsCache, startOfWeek, toCsv, weeklyTable, weeksOf, writeWeeklySummary,
 } from './insights'
 import type { InsightsCache, PublishRecord } from './insights'
+import { fmtDateTime, fmtTime, useClockFormat } from '../ui/time'
 
 type Range = 7 | 28 | 90
 const RANGES: { value: Range; label: string }[] = [{ value: 7, label: '7 days' }, { value: 28, label: '28 days' }, { value: 90, label: '90 days' }]
@@ -21,7 +22,7 @@ const RANGES: { value: Range; label: string }[] = [{ value: 7, label: '7 days' }
 const n = (v: number | null) => (v == null ? '—' : v.toLocaleString('en-US'))
 const tk = (v: number) => (v >= 10_000 ? Math.round(v / 1000) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v))
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-const clock = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+const clock = (iso: string) => fmtDateTime(iso, { weekday: false })
 
 function download(name: string, text: string) {
   const url = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' }))
@@ -41,6 +42,7 @@ function total(records: PublishRecord[], cache: InsightsCache, key: 'impressions
 }
 
 export function InsightsDesk({ fb, ai, onConnectFb }: { fb: FacebookConfig | null; ai: AiSettings; onConnectFb: () => void }) {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const [range, setRange] = useState<Range>(28)
   const [log, setLog] = useState<PublishRecord[]>(readPublishLog)
   const [cache, setCache] = useState<InsightsCache>(loadInsightsCache)
@@ -116,7 +118,7 @@ export function InsightsDesk({ fb, ai, onConnectFb }: { fb: FacebookConfig | nul
 
   const refreshTip = blocked === 'no-token' ? 'Connect a Facebook Page first'
     : blocked === 'expired-token' ? 'Facebook rejected this Page token. Paste a new one; it will not be tried again'
-    : blocked === 'rate-limited' ? `Facebook is limiting requests. Refresh opens again at ${new Date(cache.rateLimitedUntil!).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+    : blocked === 'rate-limited' ? `Facebook is limiting requests. Refresh opens again at ${fmtTime(cache.rateLimitedUntil!)}`
     : `Read the figures again from Facebook (each post at most once every ${STALE_MS / 60_000} minutes)`
   const err = cache.lastError
 
@@ -162,7 +164,7 @@ export function InsightsDesk({ fb, ai, onConnectFb }: { fb: FacebookConfig | nul
         )}
         {fb && blocked === 'rate-limited' && (
           <div className="callout warn ed-ins-note" role="status"><Icon name="clock" size={15} />
-            <span>Facebook is limiting requests. Nothing is asked again before {new Date(cache.rateLimitedUntil!).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}; the figures below are from the cache.</span>
+            <span>Facebook is limiting requests. Nothing is asked again before {fmtTime(cache.rateLimitedUntil!)}; the figures below are from the cache.</span>
           </div>
         )}
         {fb && !blocked && err && (err.kind === 'offline' || err.kind === 'bad-request' || err.kind === 'denied' || err.kind === 'malformed' || err.kind === 'http') && (

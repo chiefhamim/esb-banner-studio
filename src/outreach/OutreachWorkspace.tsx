@@ -35,8 +35,10 @@ import { aiFor, providerMeta } from '../editorial/aiProviders'
 import { useStore } from '../store'
 import { Icon } from '../ui/Icon'
 import { MenuBar, Tabs, Seg, type MenuDef } from '../ui/controls'
+import { fmtTime, useClockFormat } from '../ui/time'
 
 export function OutreachWorkspace() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const s = useDesk()
   const ui = useOutreachUi()
   const ai = useEditorialStore((e) => e.ai)
@@ -218,7 +220,7 @@ export function OutreachWorkspace() {
 
       <footer className="statusbar ed-statusbar or-status">
         <button type="button" className={'sb-cms ' + (smtpOn ? 'on' : 'off')} onClick={() => { if (s.mail?.hasPassword) void s.checkSmtp(true); else if (desktop) ui.set({ sheet: 'sender' }) }}
-          data-tip={smtp.state === 'bad' ? `${smtp.error} — click to try again` : smtp.state === 'ok' ? `Signed in to ${set?.host} · checked ${new Date(smtp.at).toLocaleTimeString()} — click to check again` : set ? 'Click to sign in to the mail server now' : 'Set up the account that sends'}>
+          data-tip={smtp.state === 'bad' ? `${smtp.error} — click to try again` : smtp.state === 'ok' ? `Signed in to ${set?.host} · checked ${fmtTime(smtp.at)} — click to check again` : set ? 'Click to sign in to the mail server now' : 'Set up the account that sends'}>
           <span className="sb-k">Mail</span>
           <span className="sb-pill"><i className="sb-dot" aria-hidden />{smtpText}</span>
         </button>
@@ -227,7 +229,7 @@ export function OutreachWorkspace() {
           <button type="button" className={'sb-cms or-sb-inbox ' + (s.inbox.state === 'bad' ? 'off' : 'on')} onClick={() => void s.checkInbox(true)}
             data-tip={s.inbox.state === 'bad' ? `${s.inbox.error} — click to try again` : `Replies, unsubscribes and bounces read from ${s.mail.imapHost || 'the inbox'} (read-only). Click to read it now`}>
             <span className="sb-k">Inbox</span>
-            <span className="sb-pill"><i className="sb-dot" aria-hidden />{s.inbox.state === 'busy' ? 'Reading' : s.inbox.state === 'bad' ? 'Not read' : s.inbox.state === 'ok' ? <span className="sb-text">{totalReplies} repl{totalReplies === 1 ? 'y' : 'ies'} · {new Date(s.inbox.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span> : 'Not read yet'}</span>
+            <span className="sb-pill"><i className="sb-dot" aria-hidden />{s.inbox.state === 'busy' ? 'Reading' : s.inbox.state === 'bad' ? 'Not read' : s.inbox.state === 'ok' ? <span className="sb-text">{totalReplies} repl{totalReplies === 1 ? 'y' : 'ies'} · {fmtTime(s.inbox.at)}</span> : 'Not read yet'}</span>
           </button>
         </>}
         <div className="sep" />

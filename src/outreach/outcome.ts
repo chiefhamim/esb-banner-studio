@@ -6,6 +6,7 @@
 // their own (Apple Mail Privacy Protection, Gmail's image proxy) and others never do.
 
 import type { Campaign, Contact } from './types'
+import { fmtDateTime } from '../ui/time'
 
 /** Opens and clicks seen for one recipient's message key(s), folded from outreach_events. */
 export interface Engagement {
@@ -33,10 +34,10 @@ export interface Outcome {
 export const EMAIL_SYNTAX = /^[A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/
 export const isEmailSyntax = (s: string) => s.length <= 254 && EMAIL_SYNTAX.test(s)
 
-// one formatter for every row: Date#toLocaleString builds a new Intl formatter on each call, which for 800 sent
-// contacts cost ~40 ms every time the list was recomputed (each keystroke in the letter)
-const WHEN = new Intl.DateTimeFormat([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-const when = (t?: number) => (t ? WHEN.format(t) : '')
+// never Date#toLocaleString per row: it builds a new Intl formatter on each call, which for 800 sent contacts cost
+// ~40 ms every time the list was recomputed (each keystroke in the letter). fmtDateTime reads local time from the Date
+// itself and follows Home → Settings → Time format ("1 Nov 4:58 PM" / "1 Nov 16:58").
+const when = (t?: number) => (t ? fmtDateTime(t, { weekday: false }) : '')
 
 export const LABEL: Record<OutcomeState, string> = {
   busy: 'Sending', out: 'Opted out', bounced: 'Bounced', replied: 'Replied', clicked: 'Clicked', opened: 'Opened (approx.)',

@@ -8,6 +8,7 @@ import { useActivityStore, type LogChip } from './activityStore'
 import { describeEvent, fmtClock, fmtDay } from './activityFormat'
 import { dayHeading, eventMeta } from './activityMeta'
 import { Icon, type IconName } from '../ui/Icon'
+import { useClockFormat } from '../ui/time'
 
 interface ChipDef {
   id: LogChip
@@ -29,6 +30,7 @@ const CHIPS: ChipDef[] = [
 ]
 
 export function ActivityLog() {
+  useClockFormat() // re-render when Home → Settings → Time format changes
   const store = useActivityStore()
   const events = store.logEvents
   const [expandedId, setExpandedId] = useState<string | null>(null)

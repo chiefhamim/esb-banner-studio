@@ -16,6 +16,7 @@ import { aiFor, aiPaused } from '../editorial/aiProviders'
 import { DEFAULT_STRIPES, EMAIL_FONTS, logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
 import { Dialog, Field, Select, Switch } from '../ui/controls'
 import { Icon, type IconName } from '../ui/Icon'
+import { fmtDateTime } from '../ui/time'
 
 export function SignaturesDialog() {
   const s = useDesk()
@@ -388,7 +389,7 @@ export function ReviewSendDialog() {
     if (when === 'later') {
       if (!(atMs > Date.now() + 30_000)) return
       s.patch({ status: 'scheduled', scheduledAt: atMs })
-      s.addLog('info', `${c.name}: scheduled for ${new Date(atMs).toLocaleString()}`)
+      s.addLog('info', `${c.name}: scheduled for ${fmtDateTime(atMs)}`)
       close()
       return
     }

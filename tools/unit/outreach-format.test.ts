@@ -1,6 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
+import { useShellStore } from '../../src/shell/shellStore'
 import { describeRun, describeEvent, fmtDuration, fmtClock, fmtDay, reportSummary } from '../../src/outreach/activityFormat'
 import type { AutopilotSettings, JobSnapshot, OutreachEvent } from '../../src/esb'
+
+// these expectations are the 24-hour reading; the 12-hour one is covered in time-format.test.ts
+beforeAll(() => useShellStore.getState().setClock('24h'))
 
 const mockSettings: AutopilotSettings = {
   window: { enabled: true, from: '09:00', to: '17:00', days: [0, 1, 2, 3, 4], tz: 'Asia/Dhaka' },

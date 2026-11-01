@@ -13,7 +13,8 @@ import { FORMAT_LIST } from '../core/tokens'
 const HOME_FORMATS = ['fb45', 'story', 'sq', 'web', 'yt'].map((id) => FORMAT_LIST.find((f) => f.id === id)!)
 import type { FormatId } from '../core/types'
 import { Icon } from '../ui/Icon'
-import { Dialog } from '../ui/controls'
+import { Dialog, Seg } from '../ui/controls'
+import { fmtHm, fmtTime } from '../ui/time'
 
 const HOME_BG_POS_KEY = 'esb-banner-studio/home-bg-pos'
 type BgPos = { x: number; y: number; s: number }
@@ -47,7 +48,8 @@ export function HomeWorkspace() {
   const canQuit = typeof window !== 'undefined' && !!window.esb?.quit
   const [recents, setRecents] = useState<RecentProject[]>([])
   const top = recents[0] ?? null
-  const [recoverySnapshot, setRecoverySnapshot] = useState<{ time: string; name: string } | null>(null)
+  const [recoverySnapshot, setRecoverySnapshot] = useState<{ at: number; name: string } | null>(null)
+  const clock = useShellStore((s) => s.clock)
 
   useEffect(() => {
     setRecents(readRecent())
@@ -58,8 +60,7 @@ export function HomeWorkspace() {
       if (raw) {
         const snap = JSON.parse(raw)
         if (snap && snap.dirty && snap.savedAt) {
-          const dateStr = new Date(snap.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-          setRecoverySnapshot({ time: dateStr, name: snap.name || 'Untitled project' })
+          setRecoverySnapshot({ at: Number(snap.savedAt) || Date.parse(snap.savedAt) || Date.now(), name: snap.name || 'Untitled project' })
         }
       }
     } catch { /* ignore */ }
@@ -187,6 +188,21 @@ export function HomeWorkspace() {
             {customBg && <button type="button" className="btn" onClick={resetBackground}><Icon name="reset" size={14} /> Use default</button>}
           </div>
         </div>
+        {/* one app-wide choice: every time of day on every desk follows it (ui/time.ts) */}
+        <div className="stack home-clock-setting" style={{ gap: 10, marginTop: 20 }}>
+          <strong id="home-clock-label">Time format</strong>
+          <div className="row" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Seg
+              className="home-clock-seg"
+              label="Time format"
+              value={clock}
+              onChange={(v) => useShellStore.getState().setClock(v)}
+              options={[{ value: '12h', label: '12-hour', tip: 'Times read like 4:58 PM' }, { value: '24h', label: '24-hour', tip: 'Times read like 16:58' }]}
+            />
+            <span className="sub home-clock-example" aria-live="polite">e.g. {fmtHm(16, 58, { clock })}</span>
+          </div>
+          <p className="sub">Used for every time the Studio shows, on every desk. Outreach times stay in the sending window's time zone.</p>
+        </div>
       </Dialog>
     )}
     {/* the background: a soft colour field that drifts slowly; a veil in the theme's own colour keeps it quiet */}
@@ -286,7 +302,7 @@ export function HomeWorkspace() {
                     <span className="recent-name">{top.name}</span>
                     <span className="recent-path mono">{dirOf(top.path)}</span>
                     <span className="recent-meta">ESB project · {top.path.split(/[\\/]/).pop()}{top.at ? ` · opened ${ago(top.at)}` : ''}</span>
-                    {recoverySnapshot && <span className="recent-warn"><i />Unsaved changes · {recoverySnapshot.time.replace(/:\d{2}(?=\s?[AP]M|$)/i, '')}</span>}
+                    {recoverySnapshot && <span className="recent-warn"><i />Unsaved changes · {fmtTime(recoverySnapshot.at)}</span>}
                   </div>
                   <div className="recent-actions" onClick={(e) => e.stopPropagation()}>
                     {recoverySnapshot ? (
@@ -308,7 +324,7 @@ export function HomeWorkspace() {
                   <div className="recent-info">
                     <span className="recent-name">Unsaved session</span>
                     <span className="recent-path">{recoverySnapshot?.name}</span>
-                    <span className="recent-meta">Found from {recoverySnapshot?.time}</span>
+                    <span className="recent-meta">Found from {recoverySnapshot ? fmtTime(recoverySnapshot.at, { seconds: true }) : ''}</span>
                   </div>
                   <div className="recent-actions">
                     <button type="button" className="ibtn" data-tip="Restore the unsaved session" aria-label="Restore the unsaved session" onClick={handleRestoreRecovery}><Icon name="undo" size={15} /></button>
