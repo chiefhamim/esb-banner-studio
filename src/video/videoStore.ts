@@ -1,7 +1,13 @@
 import { create } from 'zustand'
-import type { AspectRatio, Clip, MediaAsset, VideoProject } from './timeline'
+import type { AspectRatio, Clip, MediaAsset, TrackKind, VideoProject } from './timeline'
 import {
   addClip,
+  addTrack,
+  ensureTracksFor,
+  moveTrack,
+  removeTrack,
+  renameTrack,
+  setTrackHidden,
   ASPECT_CONFIGS,
   contentEnd,
   EMPTY_VIEW_SECONDS,
@@ -73,6 +79,12 @@ interface VideoState {
   setZoom: (zoom: number) => void
   toggleTrackMute: (trackId: string) => void
   toggleTrackLock: (trackId: string) => void
+  /** Timeline v2: add a track of a kind (returns its id), remove one with its clips, move one in the list, hide one. */
+  addTrack: (kind: TrackKind) => string
+  removeTrack: (trackId: string) => boolean
+  moveTrack: (trackId: string, toIndex: number) => void
+  toggleTrackHidden: (trackId: string) => void
+  renameTrack: (trackId: string, name: string) => void
   setExporting: (exporting: boolean, progress?: number) => void
   newProject: () => void
   addMediaAsset: (asset: MediaAsset) => void
@@ -170,12 +182,12 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     s.seek(s.currentTime + dt)
   },
 
-  addClip: (clip) => set((s) => ({ ...edit(s, addClip(s.project, clip)), selectedClipId: clip.id })),
+  addClip: (clip) => set((s) => ({ ...edit(s, addClip(ensureTracksFor(s.project, [clip]), clip)), selectedClipId: clip.id })),
 
 
   addClips: (clips) => set((s) => {
     if (!clips.length) return {}
-    let p = s.project
+    let p = ensureTracksFor(s.project, clips)
     for (const c of clips) p = addClip(p, c)
     return { ...edit(s, p), selectedClipId: clips[0].id }
   }),
@@ -218,6 +230,27 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   toggleTrackMute: (trackId) => set((s) => edit(s, { ...s.project, tracks: s.project.tracks.map((t) => (t.id === trackId ? { ...t, muted: !t.muted } : t)) })),
 
   toggleTrackLock: (trackId) => set((s) => edit(s, { ...s.project, tracks: s.project.tracks.map((t) => (t.id === trackId ? { ...t, locked: !t.locked } : t)) })),
+
+  addTrack: (kind) => {
+    const before = new Set(get().project.tracks.map((t) => t.id))
+    set((s) => edit(s, addTrack(s.project, kind)))
+    return get().project.tracks.find((t) => !before.has(t.id))?.id ?? ''
+  },
+
+  removeTrack: (trackId) => {
+    const s = get()
+    const next = removeTrack(s.project, trackId)
+    if (next === s.project) return false
+    const gone = !next.clips.some((c) => c.id === s.selectedClipId)
+    set((st) => ({ ...edit(st, next), selectedClipId: gone ? null : st.selectedClipId }))
+    return true
+  },
+
+  moveTrack: (trackId, toIndex) => set((s) => edit(s, moveTrack(s.project, trackId, toIndex))),
+
+  toggleTrackHidden: (trackId) => set((s) => edit(s, setTrackHidden(s.project, trackId, !s.project.tracks.find((t) => t.id === trackId)?.hidden))),
+
+  renameTrack: (trackId, name) => set((s) => edit(s, renameTrack(s.project, trackId, name))),
 
   setExporting: (exporting, progress = 0) => set({ exporting, exportProgress: progress }),
 

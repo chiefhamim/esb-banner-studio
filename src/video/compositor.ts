@@ -1,15 +1,12 @@
-// Composite frame renderer for the Video desk: one function draws a frame for the monitor and for the export.
-//
-// Every visual clip under the playhead is drawn, in track order (layersAt): footage and stills first, then overlays,
-// then captions; overlapping footage on one track crossfades. Footage and stills take the clip's crop, fill/fit,
-// scale and offset (footageRect).
+// Canvas 2D rasters for the Video desk's WebGL2 compositor (engine/render.ts draws the frame; this file draws the
+// pictures that are not footage): overlays (lower third, headline, card, breaking, picture, logo), captions, the
+// "Media offline" slate and the ESB bug. Bangla is shaped by the browser's own text engine.
 //
 // Placeholders: an overlay added from the bin starts with empty fields. In the editor (`editor: true`) an empty field
 // is drawn as its label, dimmed ("Speaker name"), so the editor sees what to fill in; an export never draws them, and
 // an overlay with nothing filled in is left out of the file altogether. Nothing here supplies a name, title or figure.
 
-import type { Clip, VideoProject } from './timeline'
-import { footageRect, layersAt } from './timeline'
+import type { Clip } from './timeline'
 import logoUrl from '../assets/images/esb-logo.png'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
@@ -21,18 +18,6 @@ let stationLogoImg: HTMLImageElement | null = null
 if (typeof Image !== 'undefined') {
   stationLogoImg = new Image()
   stationLogoImg.src = logoUrl
-}
-
-/** A frame the export decoded itself (a WebCodecs frame), drawn instead of the clip's <video> element. */
-export interface FrameSource { image: CanvasImageSource; width: number; height: number }
-
-export interface RenderOptions {
-  /** The monitor: draw labels for empty fields and a "Media offline" slate. Off for an export. */
-  editor?: boolean
-  /** Decoded frames by clip id (export). Clips not in the map use their cached <video> element. */
-  frames?: Map<string, FrameSource>
-  /** The monitor is playing: the playback loop keeps each <video> running in step, so drawing must not seek it. */
-  playing?: boolean
 }
 
 /** Media served by the app's own protocol is read with CORS, so drawing it never taints the canvas (the export reads
@@ -128,88 +113,95 @@ export const OVERLAY_LABELS = {
 const PLACEHOLDER_INK = 'rgba(255, 255, 255, 0.38)'
 const ESB_STRIPES = ['#1e9b4a', '#e52d2d', '#ec8e3c']
 
-export function renderCompositeFrame(ctx: Ctx, timeline: VideoProject, time: number, canvasWidth: number, canvasHeight: number, opts: RenderOptions = {}) {
-  const w = canvasWidth
-  const h = canvasHeight
-  const editor = !!opts.editor
-  const layers = layersAt(timeline, time)
+// ---------------------------------------------------------------- rasters for the WebGL2 compositor
+//
+// Titles, captions, picture overlays, the "Media offline" slate and the ESB bug are drawn here with Canvas 2D (the
+// browser shapes Bangla) into a frame-sized canvas, which the compositor uploads once and keeps by `rasterKey`. A
+// raster is made again only when something that changes its pixels changes (its words, accent, place, the frame size,
+// editor or export, a picture finishing loading, fonts arriving).
 
-  ctx.save()
-  ctx.fillStyle = '#000000'
-  ctx.fillRect(0, 0, w, h)
-
-  // a caption moves up over a lower third or breaking strap shown at the same time, so the two never overlap
-  const captionBottom = captionLimit(layers.map((l) => l.clip), w, h, editor)
-  let branded = false
-  for (const { clip, alpha } of layers) {
-    if (alpha <= 0) continue
-    if (clip.kind === 'video') {
-      if (clip.branded) branded = true
-      drawFootage(ctx, clip, time, w, h, alpha, opts)
-    } else if (clip.kind === 'overlay') {
-      ctx.save()
-      ctx.globalAlpha = alpha
-      renderOverlayClip(ctx, clip, w, h, editor)
-      ctx.restore()
-    } else if (clip.kind === 'caption') {
-      ctx.save()
-      ctx.globalAlpha = alpha
-      renderCaptionClip(ctx, clip, w, h, editor, captionBottom)
-      ctx.restore()
-    }
-  }
-
-  // the ESB bug (top right), unless switched off, over a banner still (whose own masthead sits exactly there), or on an
-  // empty timeline (nothing to brand: the monitor stays black behind the start card)
-  if (timeline.bug !== false && !branded && timeline.clips.length > 0) renderStationBug(ctx, w, h)
-  ctx.restore()
+let fontEpoch = 0
+if (typeof document !== 'undefined' && document.fonts) {
+  document.fonts.addEventListener?.('loadingdone', () => { fontEpoch++; if (typeof window !== 'undefined') window.dispatchEvent(new Event('esb:video-media-ready')) })
 }
 
-function drawFootage(ctx: Ctx, clip: Clip, time: number, w: number, h: number, alpha: number, opts: RenderOptions) {
-  let src: { image: CanvasImageSource; width: number; height: number } | null = null
-  let zoom = 1
-  if (clip.sourceUrl && clip.still) {
-    const img = getCachedImage(clip.sourceUrl)
-    if (img && img.complete && img.naturalWidth > 0) src = { image: img, width: img.naturalWidth, height: img.naturalHeight }
-    // a still moves slowly, 0→6 % over the clip, so a picture held for several seconds does not read as a frozen frame
-    const p = Math.min(1, Math.max(0, (time - clip.start) / Math.max(0.001, clip.duration)))
-    zoom = 1 + 0.06 * (clip.kenBurns === 'out' ? 1 - p : p)
-  } else if (clip.sourceUrl) {
-    const decoded = opts.frames?.get(clip.id)
-    if (decoded) src = decoded
-    else {
-      const v = getCachedVideo(clip.sourceUrl)
-      if (v) {
-        const targetTime = Math.max(0, (clip.in || 0) + (time - clip.start))
-        // paused (scrubbing, stepping): put the frame exactly here. Playing: the playback loop runs the element and
-        // corrects drift itself; seeking it every frame here is what made playback stutter.
-        if (opts.editor && !opts.playing && Math.abs(v.currentTime - targetTime) > 0.04) v.currentTime = targetTime
-        if (v.readyState >= 2 && v.videoWidth > 0) src = { image: v, width: v.videoWidth, height: v.videoHeight }
-      }
-    }
+function makeCanvas(w: number, h: number): HTMLCanvasElement | OffscreenCanvas {
+  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h)
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  return c
+}
+
+/** A reusable scratch canvas per size (a raster is uploaded to the GPU at once, so one canvas serves every raster). */
+const scratch = new Map<string, HTMLCanvasElement | OffscreenCanvas>()
+function scratchCanvas(w: number, h: number) {
+  const k = `${w}x${h}`
+  let c = scratch.get(k)
+  if (!c) {
+    if (scratch.size > 4) scratch.clear()
+    c = makeCanvas(w, h)
+    scratch.set(k, c)
   }
-  if (src) {
-    const r = footageRect(src.width, src.height, w, h, clip, zoom)
-    ctx.save()
-    ctx.globalAlpha = alpha
-    ctx.drawImage(src.image, r.sx, r.sy, r.sw, r.sh, r.dx, r.dy, r.dw, r.dh)
-    ctx.restore()
-  } else if (opts.editor && !clip.sourceUrl) {
-    // an honest slate, in the editor only: the file is not there (an export with missing media is refused)
-    ctx.save()
-    ctx.fillStyle = '#16181d'
-    ctx.fillRect(0, 0, w, h)
-    const s = Math.min(w, h) / 1080
-    ctx.fillStyle = 'rgba(255,255,255,0.55)'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.font = `700 ${Math.round(34 * s)}px "ESB Sans", sans-serif`
-    ctx.fillText('Media offline', w / 2, h / 2 - 24 * s)
-    ctx.font = `500 ${Math.round(24 * s)}px ${face(clip.title)}`
-    ctx.fillStyle = 'rgba(255,255,255,0.4)'
-    ctx.fillText(clip.title.length > 60 ? clip.title.slice(0, 57) + '…' : clip.title, w / 2, h / 2 + 24 * s)
-    ctx.restore()
-  }
+  const ctx = c.getContext('2d') as Ctx
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.clearRect(0, 0, w, h)
+  return { c, ctx }
+}
+
+const imageState = (url?: string) => {
+  if (!url) { const l = stationLogoImg; return l && l.complete && l.naturalWidth > 0 ? 'L1' : 'L0' }
+  const img = getCachedImage(url)
+  return img && img.complete && img.naturalWidth > 0 ? `I${img.naturalWidth}x${img.naturalHeight}` : 'I0'
+}
+
+/** Everything that changes a text/graphic layer's pixels, as one string (the compositor's texture key). */
+export function rasterKey(clip: Clip, w: number, h: number, editor: boolean, captionBottom: number): string {
+  const pic = clip.kind === 'overlay' && (clip.overlayType === 'logo' || clip.sourceUrl) ? imageState(clip.sourceUrl) : ''
+  return JSON.stringify([clip.kind, clip.overlayType, clip.overlayText, clip.overlaySub, clip.captionText, clip.accent, clip.sourceUrl, clip.scale, clip.posX, clip.posY, w, h, editor, clip.kind === 'caption' ? Math.round(captionBottom) : 0, pic, fontEpoch])
+}
+
+/** Draw an overlay or caption clip into a frame-sized canvas. Null when it draws nothing (an empty title in an
+ * export, a picture not loaded yet). */
+export function rasterLayer(clip: Clip, w: number, h: number, editor: boolean, captionBottom: number): { src: TexImageSource; width: number; height: number } | null {
+  if (clip.kind === 'caption' && !fieldText(clip.captionText, 'Caption text', editor)) return null
+  if (clip.kind === 'overlay' && !editor && emptyOverlay(clip)) return null
+  if (clip.kind !== 'overlay' && clip.kind !== 'caption') return null
+  const { c, ctx } = scratchCanvas(w, h)
+  if (clip.kind === 'overlay') renderOverlayClip(ctx, clip, w, h, editor)
+  else renderCaptionClip(ctx, clip, w, h, editor, captionBottom)
+  return { src: c as TexImageSource, width: w, height: h }
+}
+
+const emptyOverlay = (c: Clip) => c.overlayType !== 'logo' && !c.sourceUrl && !(c.overlayText ?? '').trim() && !(c.overlaySub ?? '').trim()
+
+export const offlineKey = (clip: Clip, w: number, h: number) => JSON.stringify(['offline', clip.title, w, h, fontEpoch])
+
+/** The honest slate for a clip whose file is not there (editor only; an export with missing media is refused). */
+export function rasterOffline(clip: Clip, w: number, h: number): { src: TexImageSource; width: number; height: number } {
+  const { c, ctx } = scratchCanvas(w, h)
+  ctx.fillStyle = '#16181d'
+  ctx.fillRect(0, 0, w, h)
+  const s = Math.min(w, h) / 1080
+  ctx.fillStyle = 'rgba(255,255,255,0.55)'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = `700 ${Math.round(34 * s)}px "ESB Sans", sans-serif`
+  ctx.fillText('Media offline', w / 2, h / 2 - 24 * s)
+  ctx.font = `500 ${Math.round(24 * s)}px ${face(clip.title)}`
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'
+  ctx.fillText(clip.title.length > 60 ? clip.title.slice(0, 57) + '…' : clip.title, w / 2, h / 2 + 24 * s)
+  return { src: c as TexImageSource, width: w, height: h }
+}
+
+export const bugKey = (w: number, h: number) => `bug|${w}x${h}|${imageState()}`
+
+/** The ESB bug raster (null until the logo has loaded). */
+export function rasterBug(w: number, h: number): { src: TexImageSource; width: number; height: number } | null {
+  if (!(stationLogoImg && stationLogoImg.complete && stationLogoImg.naturalWidth > 0)) return null
+  const { c, ctx } = scratchCanvas(w, h)
+  renderStationBug(ctx, w, h)
+  return { src: c as TexImageSource, width: w, height: h }
 }
 
 function stripes(ctx: Ctx, x: number, y: number, bw: number, bh: number, accent?: string) {
@@ -476,4 +468,11 @@ function renderStationBug(ctx: Ctx, w: number, h: number) {
   ctx.shadowColor = 'transparent'
   ctx.drawImage(logo, x + padX, y + padY, logoW, logoH)
   ctx.restore()
+}
+
+/** Wait for the pictures a frame needs that load on their own (the ESB logo; still and overlay pictures), so the first
+ * exported frames are not drawn without them. */
+export async function picturesReady(urls: string[]) {
+  const imgs = [stationLogoImg, ...urls.map((u) => getCachedImage(u))].filter((i): i is HTMLImageElement => !!i)
+  await Promise.all(imgs.map((i) => (i.complete && i.naturalWidth > 0 ? null : i.decode().catch(() => {}))))
 }

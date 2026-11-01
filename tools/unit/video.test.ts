@@ -50,7 +50,7 @@ describe('Video timeline', () => {
     expect(tl.width).toBe(1920)
     expect(tl.height).toBe(1080)
     expect(tl.fps).toBe(30)
-    expect(tl.tracks.map((t) => t.id)).toEqual(['v2', 'v1', 'c1', 'a1'])
+    expect(tl.tracks.map((t) => t.id)).toEqual(['c1', 'v2', 'v1', 'a1']) // v2: the top of the list is drawn on top
     expect(tl.clips).toEqual([])
     expect(tl.bug).toBe(true)
     expect(contentEnd(tl)).toBe(0)

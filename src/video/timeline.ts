@@ -1,7 +1,13 @@
-// Timeline model and pure algorithms for ESB Studio Video Desk.
-// Supports multi-track editing: Video (V1), Graphics Overlays (V2), Captions (C1), and Audio (A1).
+// Timeline model (v2) and pure algorithms for ESB Studio Video Desk.
+//
+// Any number of tracks of five kinds: video (footage and stills), overlay (titles and pictures over the picture),
+// text (titles and captions), caption and audio. Visual tracks are drawn in list order from the bottom up: the track
+// at the top of the list covers the ones below it. A clip and its own sound share a link group (`linkId`): they move,
+// trim, split and delete together until unlinked. Fields Phase 2 will use (speed, keyframes, effects, transitions) are
+// typed here but optional, and nothing reads them yet. Every edit is a pure function of the project.
 
-export type TrackKind = 'video' | 'overlay' | 'caption' | 'audio'
+export type TrackKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio'
+export const TRACK_KINDS: readonly TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']
 export type AspectRatio = '16:9' | '9:16' | '1:1' | '4:5'
 export type OverlayTemplate = 'lower-third' | 'headline' | 'breaking' | 'card' | 'logo'
 
@@ -36,7 +42,17 @@ export interface Track {
   kind: TrackKind
   muted: boolean
   locked: boolean
+  /** A visual track switched off: not drawn in the preview or the export (its clips stay). */
+  hidden?: boolean
 }
+
+/** Phase 2 (reserved, typed but not read yet): an animated value. */
+export type Ease = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'bezier'
+export interface Keyframe { t: number; v: number; ease?: Ease; bezier?: [number, number, number, number] }
+/** Phase 2 (reserved): one effect in a clip's chain. */
+export interface ClipEffect { id: string; type: string; enabled?: boolean; params?: Record<string, number | string | boolean> }
+/** Phase 2 (reserved): a transition at a clip's head or tail. */
+export interface ClipTransition { type: string; duration: number }
 
 export interface Clip {
   id: string
@@ -84,6 +100,19 @@ export interface Clip {
   kenBurns?: 'in' | 'out'
   /** The picture already carries the ESB masthead (a rendered banner), so the station bug is not drawn over it. */
   branded?: boolean
+  /** Layer transform: rotation in degrees around the anchor (default 0). */
+  rotation?: number
+  /** Layer transform: the point it rotates around, as a fraction of the layer (default 0.5, the centre). */
+  anchorX?: number
+  anchorY?: number
+  // ---- Phase 2, reserved: typed so projects can carry them; not read by this version
+  /** Playback speed: a constant (1 = normal) or a ramp. */
+  speed?: number | { ramp: Keyframe[] }
+  /** Animated properties: property name → keyframes. */
+  keyframes?: Record<string, Keyframe[]>
+  effects?: ClipEffect[]
+  transitionIn?: ClipTransition
+  transitionOut?: ClipTransition
 }
 
 export interface VideoProject {
@@ -143,10 +172,11 @@ export function parseTimecode(code: string, fps = 30): number {
 /** A new project is empty: no demo clips, no sample names or figures. The editor imports media or builds from a story. */
 export function createDefaultTimeline(aspect: AspectRatio = '16:9'): VideoProject {
   const cfg = ASPECT_CONFIGS[aspect]
+  // the top of the list is drawn last (on top): captions over titles over footage; sound below
   const tracks: Track[] = [
+    { id: 'c1', name: 'C1 · Captions', kind: 'caption', muted: false, locked: false },
     { id: 'v2', name: 'V2 · Overlays', kind: 'overlay', muted: false, locked: false },
     { id: 'v1', name: 'V1 · Footage', kind: 'video', muted: false, locked: false },
-    { id: 'c1', name: 'C1 · Captions', kind: 'caption', muted: false, locked: false },
     { id: 'a1', name: 'A1 · Audio', kind: 'audio', muted: false, locked: false },
   ]
   return {
@@ -175,6 +205,13 @@ export function contentEnd(project: VideoProject): number {
 
 /** A clip is on screen (or audible) at `time`. One rule for the preview, the export and the frame planner. */
 export const isActive = (c: Clip, time: number) => time >= c.start && time < c.start + c.duration
+
+/** The clips whose sound goes into the file: clips on audio tracks with a source, not muted, volume above zero, on a
+ * track that is not muted. A footage clip's own sound is its linked clip on A1, so it follows the same rules. */
+export function audibleClips(project: VideoProject): Clip[] {
+  const mutedTracks = new Set(project.tracks.filter((t) => t.muted).map((t) => t.id))
+  return project.clips.filter((c) => c.kind === 'audio' && !!c.sourceUrl && !c.muted && (c.volume ?? 1) > 0 && !mutedTracks.has(c.trackId))
+}
 
 /** The ids of every clip that moves with `clipId` (itself, plus its linked video/audio partner). */
 export function linkedIds(project: VideoProject, clipId: string): Set<string> {
@@ -213,35 +250,57 @@ export function freeStart(project: VideoProject, trackId: string, at: number, du
   return t
 }
 
-/** Drawing order of the visual tracks: footage first, then overlays, then captions; within a kind, the track shown
- * lower in the list is drawn first, so a higher track covers it. */
-export function visualTrackOrder(project: VideoProject): string[] {
-  const rank = { video: 0, overlay: 1, caption: 2, audio: 3 } as const
-  return project.tracks
+/** Drawing order of the visual tracks (v2): the list from the bottom up, so the track at the top of the list covers
+ * every track below it. Hidden tracks are not drawn. */
+export function visualTrackOrder(project: Pick<VideoProject, 'tracks'>): string[] {
+  const out: string[] = []
+  for (let i = project.tracks.length - 1; i >= 0; i--) {
+    const t = project.tracks[i]
+    if (t.kind !== 'audio' && !t.hidden) out.push(t.id)
+  }
+  return out
+}
+
+/** The v1 drawing rule (footage, then overlays, then captions; within a kind the lower track first). Kept only for the
+ * migration, which orders a v1 project's tracks so that the v2 rule draws exactly what v1 drew. */
+export function v1VisualOrder(tracks: Track[]): string[] {
+  const rank: Record<string, number> = { video: 0, overlay: 1, text: 1, caption: 2 }
+  return tracks
     .map((t, i) => ({ t, i }))
     .filter(({ t }) => t.kind !== 'audio')
-    .sort((a, b) => rank[a.t.kind] - rank[b.t.kind] || b.i - a.i)
+    .sort((a, b) => (rank[a.t.kind] ?? 1) - (rank[b.t.kind] ?? 1) || b.i - a.i)
     .map(({ t }) => t.id)
 }
 
-export interface Layer { clip: Clip; alpha: number }
+export interface Layer {
+  clip: Clip
+  alpha: number
+  /** Footage crossfade: this clip fades in over `from` (the clip before it on the same track) by `progress` 0..1.
+   * The compositor mixes the two in one two-input pass; `alpha` already carries progress × opacity. */
+  mix?: { from: Clip; progress: number }
+}
 
 /** Every visual clip under `time`, in drawing order, with its opacity. Where two clips overlap on a footage track the
  * later one fades in across the overlap (a crossfade); a later clip on the same track is drawn over an earlier one. */
 export function layersAt(project: VideoProject, time: number): Layer[] {
   const out: Layer[] = []
+  const kindOf = new Map(project.tracks.map((t) => [t.id, t.kind]))
   for (const trackId of visualTrackOrder(project)) {
-    const track = project.tracks.find((t) => t.id === trackId)!
     const here = project.clips.filter((c) => c.trackId === trackId && isActive(c, time)).sort((a, b) => a.start - b.start || (a.id < b.id ? -1 : 1))
     here.forEach((c, k) => {
       let alpha = c.opacity ?? 1
-      if (track.kind === 'video' && k > 0) {
+      let mix: Layer['mix']
+      if (kindOf.get(trackId) === 'video' && k > 0) {
         const prev = here[k - 1]
         const overlapEnd = Math.min(prev.start + prev.duration, c.start + c.duration)
         const span = overlapEnd - c.start
-        if (span > 0) alpha *= Math.min(1, Math.max(0, (time - c.start) / span))
+        if (span > 0) {
+          const progress = Math.min(1, Math.max(0, (time - c.start) / span))
+          alpha *= progress
+          mix = { from: prev, progress }
+        }
       }
-      out.push({ clip: c, alpha })
+      out.push(mix ? { clip: c, alpha, mix } : { clip: c, alpha })
     })
   }
   return out
@@ -283,7 +342,7 @@ export function moveClip(timeline: VideoProject, clipId: string, newStart: numbe
   const delta = Math.max(newStart - target.start, -minStart)
   const updatedClips = timeline.clips.map((c) => {
     if (!group.has(c.id)) return c
-    return { ...c, start: c.start + delta, trackId: c.id === clipId && newTrackId ? newTrackId : c.trackId }
+    return { ...c, start: c.start + delta, trackId: c.id === clipId && newTrackId && canPlaceOn(timeline, c, newTrackId) ? newTrackId : c.trackId }
   })
   const maxEnd = Math.max(timeline.duration, ...updatedClips.map((c) => c.start + c.duration))
   return { ...timeline, duration: maxEnd, clips: updatedClips }
@@ -414,16 +473,15 @@ export function serializeVideoProject(project: VideoProject, bin: MediaAsset[] =
     sourceUrl: isRuntimeUrl(c.sourceUrl) ? undefined : c.sourceUrl,
     thumbnailUrl: isRuntimeUrl(c.thumbnailUrl) ? undefined : c.thumbnailUrl,
   }))
-  return JSON.stringify({ ...project, clips, mediaAssets: assets, version: PROJECT_VERSION }, null, 2)
+  return JSON.stringify({ ...project, clips, mediaAssets: assets, version: PROJECT_VERSION, timelineVersion: TIMELINE_VERSION }, null, 2)
 }
 
 export function deserializeVideoProject(json: string): VideoProject | null {
   try {
     const parsed = JSON.parse(json)
     if (!parsed || !Array.isArray(parsed.tracks) || !Array.isArray(parsed.clips)) return null
-    const clips: Clip[] = parsed.clips
-      .filter((c: unknown) => !!c && typeof c === 'object')
-      .map((c: Clip) => ({ ...c, sourceUrl: isRuntimeUrl(c.sourceUrl) ? undefined : c.sourceUrl }))
+    const tl = migrateTimeline(parsed)
+    const clips: Clip[] = tl.clips.map((c) => ({ ...c, sourceUrl: isRuntimeUrl(c.sourceUrl) ? undefined : c.sourceUrl }))
     const mediaAssets: MediaAsset[] = (Array.isArray(parsed.mediaAssets) ? parsed.mediaAssets : [])
       .filter((a: unknown) => !!a && typeof a === 'object')
       .map((a: MediaAsset) => ({ ...a, url: isRuntimeUrl(a.url) ? '' : a.url || '' }))
@@ -435,7 +493,7 @@ export function deserializeVideoProject(json: string): VideoProject | null {
       height: parsed.height || 1080,
       fps: parsed.fps || 30,
       duration: parsed.duration || EMPTY_VIEW_SECONDS,
-      tracks: parsed.tracks,
+      tracks: tl.tracks,
       clips,
       mediaAssets,
       bug: parsed.bug !== false,
@@ -470,30 +528,196 @@ export function clipsMissingMedia(project: VideoProject): Clip[] {
  * editor asks for that; sound goes to A1. Each lands at `at`, or after the clips already there if it would overlap. */
 export function clipsForAsset(project: VideoProject, asset: MediaAsset, at: number, as: 'auto' | 'overlay' = 'auto', stamp = Date.now().toString(36)): Clip[] {
   const base = { mediaAssetId: asset.id, sourceUrl: asset.url || undefined, thumbnailUrl: asset.thumbnailUrl, in: 0 }
+  const V = trackForKind(project, 'video') ?? 'v1'
+  const A = trackForKind(project, 'audio') ?? 'a1'
+  const O = trackForKind(project, 'overlay') ?? 'v2'
   if (asset.type === 'video') {
     const d = asset.duration > 0 ? asset.duration : 5
     // footage and its sound start together, at a place free on both tracks
-    let start = freeStart(project, 'v1', at, d)
+    let start = freeStart(project, V, at, d)
     if (asset.hasAudio) {
       for (let k = 0; k < 8; k++) {
-        const a = freeStart(project, 'a1', start, d)
-        const v = freeStart(project, 'v1', a, d)
+        const a = freeStart(project, A, start, d)
+        const v = freeStart(project, V, a, d)
         if (a === start && v === start) break
         start = Math.max(a, v)
       }
     }
     const link = asset.hasAudio ? `link-${stamp}` : undefined
-    const video: Clip = { ...base, id: `clip-vid-${stamp}`, trackId: 'v1', title: asset.name, kind: 'video', start, duration: d, out: d, color: '#2563eb', srcDuration: asset.duration > 0 ? asset.duration : undefined, linkId: link }
+    const video: Clip = { ...base, id: `clip-vid-${stamp}`, trackId: V, title: asset.name, kind: 'video', start, duration: d, out: d, color: '#2563eb', srcDuration: asset.duration > 0 ? asset.duration : undefined, linkId: link }
     if (!asset.hasAudio) return [video]
-    return [video, { ...base, id: `clip-aud-${stamp}`, trackId: 'a1', title: `${asset.name} · sound`, kind: 'audio', start, duration: d, out: d, color: '#7c3aed', volume: 1, srcDuration: video.srcDuration, linkId: link, thumbnailUrl: undefined }]
+    return [video, { ...base, id: `clip-aud-${stamp}`, trackId: A, title: `${asset.name} · sound`, kind: 'audio', start, duration: d, out: d, color: '#7c3aed', volume: 1, srcDuration: video.srcDuration, linkId: link, thumbnailUrl: undefined }]
   }
   if (asset.type === 'audio') {
     const d = asset.duration > 0 ? asset.duration : 5
-    return [{ ...base, id: `clip-aud-${stamp}`, trackId: 'a1', title: asset.name, kind: 'audio', start: freeStart(project, 'a1', at, d), duration: d, out: d, color: '#8b5cf6', volume: 1, srcDuration: asset.duration > 0 ? asset.duration : undefined, thumbnailUrl: undefined }]
+    return [{ ...base, id: `clip-aud-${stamp}`, trackId: A, title: asset.name, kind: 'audio', start: freeStart(project, A, at, d), duration: d, out: d, color: '#8b5cf6', volume: 1, srcDuration: asset.duration > 0 ? asset.duration : undefined, thumbnailUrl: undefined }]
   }
   if (as === 'overlay') {
-    return [{ ...base, id: `clip-img-${stamp}`, trackId: 'v2', title: asset.name, kind: 'overlay', start: Math.max(0, at), duration: 5, out: 5, color: '#059669' }]
+    return [{ ...base, id: `clip-img-${stamp}`, trackId: O, title: asset.name, kind: 'overlay', start: Math.max(0, at), duration: 5, out: 5, color: '#059669' }]
   }
   const d = 5
-  return [{ ...base, id: `clip-still-${stamp}`, trackId: 'v1', title: asset.name, kind: 'video', start: freeStart(project, 'v1', at, d), duration: d, out: d, color: '#2563eb', still: true, kenBurns: 'in' }]
+  return [{ ...base, id: `clip-still-${stamp}`, trackId: V, title: asset.name, kind: 'video', start: freeStart(project, V, at, d), duration: d, out: d, color: '#2563eb', still: true, kenBurns: 'in' }]
+}
+
+// ---------------------------------------------------------------- timeline v2: tracks and the v1 migration
+
+/** The version of the `timeline` part of a project file (tracks and clips). v1 = Phase 0 (four fixed tracks, drawn
+ * by kind); v2 = any number of tracks, drawn in list order. The file's own `version` belongs to the project schema. */
+export const TIMELINE_VERSION = 2
+
+export interface TimelineData { version: number; tracks: Track[]; clips: Clip[] }
+
+/** Which clips a track takes. Text tracks take titles (text overlays) and captions; a picture overlay needs an overlay
+ * track; footage and stills a video track; sound an audio track. */
+export function trackAccepts(kind: TrackKind, clip: Pick<Clip, 'kind' | 'sourceUrl' | 'overlayType' | 'mediaAssetId'>): boolean {
+  if (kind === 'text') return clip.kind === 'caption' || (clip.kind === 'overlay' && clip.overlayType !== 'logo' && !clip.sourceUrl && !clip.mediaAssetId)
+  return kind === clip.kind
+}
+
+/** The clip may move to `trackId` (the track exists, is not locked and takes clips of its kind). */
+export function canPlaceOn(project: Pick<VideoProject, 'tracks'>, clip: Clip, trackId: string): boolean {
+  const t = project.tracks.find((x) => x.id === trackId)
+  return !!t && !t.locked && trackAccepts(t.kind, clip)
+}
+
+/** The track new clips of a kind go to: V1 / A1 / V2 / C1 when they are there with that kind (what Phase 0 used),
+ * else the lowest track of that kind (the first one added). Undefined when the project has none. */
+export function trackForKind(project: Pick<VideoProject, 'tracks'>, kind: TrackKind): string | undefined {
+  const pref = { video: 'v1', audio: 'a1', overlay: 'v2', caption: 'c1', text: 't1' }[kind]
+  if (project.tracks.some((t) => t.id === pref && t.kind === kind)) return pref
+  for (let i = project.tracks.length - 1; i >= 0; i--) if (project.tracks[i].kind === kind) return project.tracks[i].id
+  return undefined
+}
+
+const PREFIX: Record<TrackKind, string> = { video: 'v', overlay: 'v', text: 't', caption: 'c', audio: 'a' }
+export const TRACK_KIND_LABEL: Record<TrackKind, string> = { video: 'Footage', overlay: 'Overlays', text: 'Text', caption: 'Captions', audio: 'Audio' }
+
+/** A free id for a new track of `kind`: V3, T1, C2, A2… (video and overlay tracks share the V numbers). */
+export function nextTrackId(project: Pick<VideoProject, 'tracks'>, kind: TrackKind): string {
+  const p = PREFIX[kind]
+  let n = 0
+  for (const t of project.tracks) {
+    const m = new RegExp(`^${p}(\\d+)$`).exec(t.id)
+    if (m) n = Math.max(n, Number(m[1]))
+  }
+  let id = `${p}${n + 1}`
+  while (project.tracks.some((t) => t.id === id)) id = `${p}${++n + 1}`
+  return id
+}
+
+/** Add a track of `kind`. A visual track goes above the top track of the same kind (or at the top), so it covers what
+ * is there; a sound track goes below the others. `at` puts it at that list index instead. */
+export function addTrack<P extends Pick<VideoProject, 'tracks'>>(project: P, kind: TrackKind, opts: { at?: number; id?: string } = {}): P {
+  const id = opts.id && !project.tracks.some((t) => t.id === opts.id) ? opts.id : nextTrackId(project, kind)
+  const track: Track = { id, name: `${id.toUpperCase()} · ${TRACK_KIND_LABEL[kind]}`, kind, muted: false, locked: false }
+  let at = opts.at
+  if (at == null) {
+    if (kind === 'audio') at = project.tracks.length
+    else {
+      const same = project.tracks.findIndex((t) => t.kind === kind)
+      at = same >= 0 ? same : 0
+    }
+  }
+  const tracks = [...project.tracks]
+  tracks.splice(Math.max(0, Math.min(tracks.length, at)), 0, track)
+  return { ...project, tracks }
+}
+
+/** Remove a track and the clips on it. Refused (the project comes back unchanged) for a locked track or one whose clips
+ * are linked to a clip on a locked track. A clip's linked partner on another track stays, unlinked. */
+export function removeTrack(project: VideoProject, trackId: string): VideoProject {
+  const t = project.tracks.find((x) => x.id === trackId)
+  if (!t || t.locked) return project
+  const doomed = project.clips.filter((c) => c.trackId === trackId)
+  if (doomed.some((c) => groupLocked(project, c.id))) return project
+  const ids = new Set(doomed.map((c) => c.id))
+  const links = new Set(doomed.map((c) => c.linkId).filter(Boolean))
+  const clips = project.clips.filter((c) => !ids.has(c.id)).map((c) => (c.linkId && links.has(c.linkId) ? { ...c, linkId: undefined } : c))
+  return { ...project, tracks: project.tracks.filter((x) => x.id !== trackId), clips }
+}
+
+/** Move a track to list index `to` (0 = top). Its clips go with it. */
+export function moveTrack(project: VideoProject, trackId: string, to: number): VideoProject {
+  const from = project.tracks.findIndex((t) => t.id === trackId)
+  if (from < 0) return project
+  const dest = Math.max(0, Math.min(project.tracks.length - 1, to))
+  if (dest === from) return project
+  const tracks = [...project.tracks]
+  const [t] = tracks.splice(from, 1)
+  tracks.splice(dest, 0, t)
+  return { ...project, tracks }
+}
+
+export function renameTrack(project: VideoProject, trackId: string, name: string): VideoProject {
+  const clean = name.replace(/\s+/g, ' ').trim().slice(0, 60)
+  if (!clean) return project
+  return { ...project, tracks: project.tracks.map((t) => (t.id === trackId ? { ...t, name: clean } : t)) }
+}
+
+export function setTrackHidden(project: VideoProject, trackId: string, hidden: boolean): VideoProject {
+  return { ...project, tracks: project.tracks.map((t) => (t.id === trackId && t.kind !== 'audio' ? { ...t, hidden: hidden || undefined } : t)) }
+}
+
+/** Make sure every clip's track exists (a clip added for a track the editor removed, or a story build on a project
+ * without captions): missing tracks are added with the clip's kind and the id the clip names. */
+export function ensureTracksFor(project: VideoProject, clips: Clip[]): VideoProject {
+  let p = project
+  for (const c of clips) {
+    if (p.tracks.some((t) => t.id === c.trackId)) continue
+    p = addTrack(p, c.kind, { id: c.trackId })
+  }
+  return p
+}
+
+const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d)
+
+/** The timeline part of any project file as v2 (pure). A v1 timeline (no `timelineVersion`) has its visual tracks put
+ * in the order that makes the v2 drawing rule draw exactly what v1 drew (v1 drew footage, then overlays, then
+ * captions, whatever their place in the list); nothing else about its clips changes. Both versions are cleaned the
+ * same way: tracks without an id or a known kind are repaired, duplicate track ids renamed, a clip whose track is gone
+ * gets a track of its kind (never dropped), and numbers that are not numbers get safe values. */
+export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unknown; clips?: unknown }): TimelineData {
+  const version = raw.timelineVersion === TIMELINE_VERSION ? TIMELINE_VERSION : 1
+  const seen = new Set<string>()
+  let tracks: Track[] = (Array.isArray(raw.tracks) ? raw.tracks : [])
+    .filter((t): t is Record<string, unknown> => !!t && typeof t === 'object')
+    .map((t, i) => {
+      const kind = TRACK_KINDS.includes(t.kind as TrackKind) ? (t.kind as TrackKind) : 'video'
+      let id = typeof t.id === 'string' && /^[\w-]{1,40}$/.test(t.id) ? t.id : `${PREFIX[kind]}x${i + 1}`
+      while (seen.has(id)) id = `${id}-${i}`
+      seen.add(id)
+      const track: Track = { id, name: typeof t.name === 'string' && t.name.trim() ? t.name : `${id.toUpperCase()} · ${TRACK_KIND_LABEL[kind]}`, kind, muted: !!t.muted, locked: !!t.locked }
+      if (t.hidden === true && kind !== 'audio') track.hidden = true
+      return track
+    })
+  const clips: Clip[] = []
+  for (const c of Array.isArray(raw.clips) ? raw.clips : []) {
+    if (!c || typeof c !== 'object' || typeof (c as Clip).id !== 'string') continue
+    const o = c as Clip
+    let track = tracks.find((t) => t.id === o.trackId)
+    let kind: TrackKind = TRACK_KINDS.includes(o.kind) ? o.kind : track ? track.kind : 'video'
+    if (kind === 'text') kind = 'overlay'
+    const clip: Clip = { ...o, kind, start: Math.max(0, num(o.start, 0)), duration: Math.max(0.05, num(o.duration, 1)), in: Math.max(0, num(o.in, 0)) }
+    clip.out = num(o.out, clip.in + clip.duration)
+    if (typeof clip.title !== 'string') clip.title = String(clip.title ?? '')
+    if (typeof clip.color !== 'string') clip.color = '#2563eb'
+    if (!track) {
+      // the clip's track is gone: give it one of its kind rather than lose the clip
+      const want = typeof o.trackId === 'string' && /^[\w-]{1,40}$/.test(o.trackId) && !seen.has(o.trackId) ? o.trackId : undefined
+      const before = new Set(tracks.map((t) => t.id))
+      tracks = addTrack({ tracks }, kind, { id: want }).tracks
+      track = tracks.find((t) => !before.has(t.id))!
+      seen.add(track.id)
+    }
+    clip.trackId = track.id
+    clips.push(clip)
+  }
+  if (version === 1) {
+    // v1 drew by kind; order the visual tracks so the list, read bottom-up, draws the same
+    const order = v1VisualOrder(tracks) // drawn first → last
+    const byId = new Map(tracks.map((t) => [t.id, t]))
+    const visualTopDown = [...order].reverse().map((id) => byId.get(id)!)
+    tracks = [...visualTopDown, ...tracks.filter((t) => t.kind === 'audio')]
+  }
+  return { version: TIMELINE_VERSION, tracks, clips }
 }

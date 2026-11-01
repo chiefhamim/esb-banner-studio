@@ -2,11 +2,20 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
-import { Dialog, IconButton, Seg, Select, Slider, Switch, Tabs } from '../ui/controls'
-import type { AspectRatio, Clip, MediaAsset, OverlayTemplate, Track } from './timeline'
-import { clipsForAsset, contentEnd, formatShortTime, formatTimecode, groupLocked, isActive } from './timeline'
+import { ContextMenu, Dialog, IconButton, MenuButton, Seg, Select, Slider, Switch, Tabs } from '../ui/controls'
+import type { MenuEntry } from '../ui/controls'
+import type { AspectRatio, Clip, MediaAsset, OverlayTemplate, Track, TrackKind } from './timeline'
+import { TRACK_KIND_LABEL, canPlaceOn, clipsForAsset, contentEnd, formatShortTime, formatTimecode, groupLocked, trackForKind } from './timeline'
 import { useVideoStore } from './videoStore'
-import { OVERLAY_LABELS, dropCachedMedia, getCachedVideo, peekCachedVideo, pruneMediaCache, renderCompositeFrame } from './compositor'
+import { OVERLAY_LABELS, dropCachedMedia, pruneMediaCache } from './compositor'
+import { GLCompositor } from './engine/glCompositor'
+import { renderFrame } from './engine/render'
+import { previewEngine } from './engine/previewEngine'
+import { audioEngine, audioSignature } from './engine/audioEngine'
+import { attachLaneCanvas } from './engine/laneCanvas'
+import { onProxyReady, previewUrl } from './engine/mediaSource'
+import { renderPreviewStill } from './engine/still'
+import { holdBackground } from './engine/background'
 import { ExportSheet } from './ExportSheet'
 import { StoryVideoPanel } from './StoryVideoPanel'
 import { PROBE_CONCURRENCY, assetFromEntry, assetFromFile, hasDiskMedia, importOptions, keepTake, mapLimit, patchMeta, probeMedia, takeImportErrors, videoBridge } from './media'
@@ -17,7 +26,6 @@ import type { Snapshot } from './projectIO'
 import { fmtTime, useClockFormat } from '../ui/time'
 import '../styles/video.css'
 
-const TRACK_LABEL = { overlay: 'Overlays', video: 'Footage', caption: 'Captions', audio: 'Audio' } as const
 type BinTab = 'overlays' | 'media' | 'captions' | 'audio' | 'story'
 
 /** The overlay presets: a kind of title with empty fields. The editor types every word; nothing is filled in here. */
@@ -30,8 +38,6 @@ const OVERLAY_PRESETS: { type: OverlayTemplate; tag: string; desc: string; color
 ]
 
 const pct = (v: number) => `${Math.round(v * 100)}%`
-/** Footage and sound are re-seeked only when they drift this far from the playhead (or the editor seeks). */
-const DRIFT = 0.25
 /** The inspector gets its own column beside the monitor from this window width; below it, it takes the bin's place. */
 const WIDE_INSPECTOR = '(min-width: 1180px)'
 
@@ -49,93 +55,57 @@ function useMediaQuery(q: string) {
   return on
 }
 
-// ---------------------------------------------------------------- playback: wall clock, footage and sound in step
+// ---------------------------------------------------------------- playback: one wall clock for picture and sound
 
-/** The <audio> elements that play the timeline's sound, one per source file (not one per clip). */
-const audioEls = new Map<string, HTMLAudioElement>()
-function audioFor(url: string) {
-  let a = audioEls.get(url)
-  if (!a) {
-    a = new Audio()
-    a.preload = 'metadata'
-    a.src = url
-    audioEls.set(url, a)
-  }
-  return a
-}
-function releaseAudio(url: string) {
-  const a = audioEls.get(url)
-  if (!a) return
-  try { a.pause(); a.removeAttribute('src'); a.load() } catch { /* already gone */ }
-  audioEls.delete(url)
-}
-
-/** Put every footage <video> and every sound in step with the playhead. Playing: active elements run on their own and
- * are re-seeked only when they drift more than DRIFT (or after a seek). Paused: everything stops (the monitor seeks
- * footage to the exact frame itself). */
-function syncMedia(t: number, playing: boolean) {
-  const { project } = getState()
-  const mutedTracks = new Set(project.tracks.filter((tr) => tr.muted).map((tr) => tr.id))
-  // footage
-  const runVideo = new Map<string, number>()
-  if (playing) for (const c of project.clips) if (c.kind === 'video' && !c.still && c.sourceUrl && isActive(c, t) && !runVideo.has(c.sourceUrl)) runVideo.set(c.sourceUrl, Math.max(0, (c.in || 0) + (t - c.start)))
-  for (const c of project.clips) {
-    if (c.kind !== 'video' || c.still || !c.sourceUrl) continue
-    const want = runVideo.get(c.sourceUrl)
-    const v = want != null ? getCachedVideo(c.sourceUrl) : peekCachedVideo(c.sourceUrl)
-    if (!v) continue
-    if (want == null) { if (!v.paused) v.pause(); continue }
-    if (Math.abs(v.currentTime - want) > DRIFT) v.currentTime = want
-    if (v.paused) v.play().catch(() => {})
-  }
-  // sound: one element per file; the first audible clip of that file under the playhead drives it
-  const runAudio = new Map<string, { offset: number; volume: number }>()
-  const urls = new Set<string>()
-  for (const c of project.clips) {
-    if (c.kind !== 'audio' || !c.sourceUrl) continue
-    urls.add(c.sourceUrl)
-    if (playing && !runAudio.has(c.sourceUrl) && isActive(c, t) && !c.muted && !mutedTracks.has(c.trackId)) runAudio.set(c.sourceUrl, { offset: (c.in || 0) + (t - c.start), volume: Math.max(0, Math.min(1, c.volume ?? 1)) })
-  }
-  for (const url of urls) {
-    const want = runAudio.get(url)
-    if (!want) { const a = audioEls.get(url); if (a && !a.paused) a.pause(); continue }
-    const a = audioFor(url)
-    a.volume = want.volume
-    if (a.paused || Math.abs(a.currentTime - want.offset) > DRIFT) a.currentTime = want.offset
-    if (a.paused) a.play().catch(() => {})
-  }
-  for (const url of [...audioEls.keys()]) if (!urls.has(url)) releaseAudio(url)
-}
+/** The clock starts this far in the future, so the first sound can be scheduled and the first frames decoded before
+ * the playhead moves (the picture and the sound then start at the same instant). */
+const START_LEAD_MS = 60
 
 /** The playback loop. The position comes from the wall clock (where play started + time since), never from adding up
- * frame times, so a slow frame never slows the video down; a seek while playing moves the origin. */
+ * frame times, so a slow frame never slows the video down; a seek while playing moves the origin. Sound is scheduled
+ * on the Web Audio clock mapped to the same wall clock (engine/audioEngine.ts); the preview engine keeps its decoders
+ * a little ahead of the playhead. */
 function PlaybackEngine() {
   const playing = useVideoStore((s) => s.playing)
   useEffect(() => {
-    if (!playing) { syncMedia(getState().currentTime, false); return }
+    const eng = previewEngine()
+    const audio = audioEngine()
+    holdBackground(playing)
+    if (!playing) { eng.stopStreams(); audio.stop(); return }
     let raf = 0
-    let origin = performance.now()
+    let origin = performance.now() + START_LEAD_MS
     let base = getState().currentTime
     let last = base
+    let project = getState().project
+    let sig = audioSignature(project)
+    const position = () => base + Math.max(0, performance.now() - origin) / 1000
+    const restartAudio = () => { void audio.start(getState().project, base, origin, position) }
+    eng.startStats()
+    eng.updateStreams(project, base, true)
+    restartAudio()
     const tick = () => {
       const st = getState()
       if (!st.playing) return
       const now = performance.now()
-      if (Math.abs(st.currentTime - last) > 1e-4) { origin = now; base = st.currentTime } // the editor seeked
+      if (Math.abs(st.currentTime - last) > 1e-4) { origin = now + START_LEAD_MS; base = st.currentTime; restartAudio() } // the editor seeked
       const end = Math.max(0.1, contentEnd(st.project) || st.project.duration)
-      let t = base + (now - origin) / 1000
-      if (t >= end) { t = 0; base = 0; origin = now }
+      let t = base + Math.max(0, now - origin) / 1000
+      if (t >= end) { t = 0; base = 0; origin = now + START_LEAD_MS; restartAudio() }
+      if (st.project !== project) {
+        project = st.project
+        const next = audioSignature(project)
+        if (next !== sig) { sig = next; base = t; origin = now; restartAudio() } else audio.updateGains(project)
+      }
       st.seek(t)
       last = getState().currentTime
-      syncMedia(last, true)
+      eng.updateStreams(st.project, last, true)
       raf = requestAnimationFrame(tick)
     }
-    syncMedia(base, true)
     raf = requestAnimationFrame(tick)
-    return () => { cancelAnimationFrame(raf); syncMedia(getState().currentTime, false) }
+    return () => { cancelAnimationFrame(raf); eng.stopStreams(); audio.stop() }
   }, [playing])
-  // leaving the desk stops and releases the sound
-  useEffect(() => () => { for (const url of [...audioEls.keys()]) releaseAudio(url) }, [])
+  // leaving the desk stops the sound and the decoders' look-ahead
+  useEffect(() => () => { audioEngine().stop(); previewEngine().stopStreams(); holdBackground(false) }, [])
   return null
 }
 
@@ -170,36 +140,70 @@ function SplitButton() {
   return <button type="button" className="btn sm subtle vw-split" disabled={!can} onClick={split} data-tip="Split the clip at the playhead (S)"><Icon name="crop" size={13} /> Split</button>
 }
 
-/** The monitor: draws outside React, once per animation frame, whenever the project, the playhead or a picture changes. */
+/** The monitor: a WebGL2 canvas drawn outside React, once per animation frame, whenever the project, the playhead or
+ * a decoded frame changes. Without WebGL2 it says so (and draws nothing) rather than show a wrong picture. */
 function Monitor({ aspect }: { aspect: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [glError, setGlError] = useState<string | null>(null)
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
+    let comp: GLCompositor
+    try { comp = new GLCompositor(canvas) } catch (e) { setGlError((e as Error).message); return }
+    const eng = previewEngine()
     let raf = 0
     const draw = () => {
       raf = 0
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
+      if (comp.lost) { setGlError('The graphics context was lost. Reopen the Video desk to draw the picture again.'); return }
       const dpr = window.devicePixelRatio || 1
-      const w = canvas.clientWidth
-      const h = canvas.clientHeight
-      if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr) }
+      const w = Math.max(1, Math.round(canvas.clientWidth * dpr))
+      const h = Math.max(1, Math.round(canvas.clientHeight * dpr))
       const st = getState()
-      ctx.save()
-      ctx.scale(dpr, dpr)
-      renderCompositeFrame(ctx, st.project, st.currentTime, w, h, { editor: true, playing: st.playing })
-      ctx.restore()
+      const t = st.currentTime
+      const { frames, exact } = eng.lookup(t, st.playing)
+      renderFrame(comp, st.project, t, w, h, { editor: true, frames })
+      eng.drawLog?.push({ perf: performance.now(), t })
+      if (st.playing) eng.noteDraw(Math.round(t * st.project.fps), exact())
+      else if (exact()) eng.noteExactPaused(t)
     }
     const schedule = () => { if (!raf) raf = requestAnimationFrame(draw) }
-    const unsub = useVideoStore.subscribe((s, prev) => { if (s.project !== prev.project || s.currentTime !== prev.currentTime || s.playing !== prev.playing) schedule() })
+    eng.onFrame = schedule
+    const unsub = useVideoStore.subscribe((s, prev) => {
+      if (s.currentTime !== prev.currentTime && !s.playing) eng.noteSeek(s.currentTime)
+      if (s.project !== prev.project || s.currentTime !== prev.currentTime || s.playing !== prev.playing) schedule()
+    })
+    const offProxy = onProxyReady(() => schedule())
     window.addEventListener('esb:video-media-ready', schedule)
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null
     ro?.observe(canvas)
     schedule()
-    return () => { unsub(); window.removeEventListener('esb:video-media-ready', schedule); ro?.disconnect(); cancelAnimationFrame(raf) }
+    return () => {
+      unsub(); offProxy(); window.removeEventListener('esb:video-media-ready', schedule); ro?.disconnect(); cancelAnimationFrame(raf)
+      if (eng.onFrame === schedule) eng.onFrame = () => {}
+      comp.dispose()
+    }
   }, [])
-  return <canvas ref={canvasRef} className="vw-canvas" style={{ '--vw-ar': aspect } as React.CSSProperties} />
+  return (
+    <>
+      <canvas ref={canvasRef} className="vw-canvas" style={{ '--vw-ar': aspect } as React.CSSProperties} />
+      {glError && <div className="vw-gl-error" role="alert"><Icon name="alert" size={16} /><span>{glError}</span></div>}
+    </>
+  )
+}
+
+/** Waveforms and filmstrips: one canvas over the visible part of the lanes, drawn by engine/laneCanvas.ts. */
+function LaneVisuals({ scrollerRef, lanesRef }: { scrollerRef: React.RefObject<HTMLDivElement | null>; lanesRef: React.RefObject<HTMLDivElement | null> }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const scroller = scrollerRef.current
+    const lanes = lanesRef.current
+    if (!canvas || !scroller || !lanes) return
+    const lc = attachLaneCanvas(canvas, scroller, lanes, { clips: () => getState().project.clips, assets: () => getState().mediaAssets, zoom: () => getState().zoom })
+    const unsub = useVideoStore.subscribe((s, p) => { if (s.mediaAssets !== p.mediaAssets || s.zoom !== p.zoom) lc.redraw() })
+    return () => { unsub(); lc.detach() }
+  }, [scrollerRef, lanesRef])
+  return <canvas ref={canvasRef} className="vw-lane-visuals" aria-hidden="true" />
 }
 
 // ---------------------------------------------------------------- the timeline (memoised: it redraws on edits, not on the playhead)
@@ -216,22 +220,22 @@ const Ruler = memo(function Ruler({ duration, zoom, onPointerDown, rulerRef }: {
 
 type ClipGrab = (e: React.PointerEvent, clip: Clip, what: 'move' | 'left' | 'right') => void
 
-const Lanes = memo(function Lanes({ tracks, clips, selectedClipId, zoom, onGrab }: { tracks: Track[]; clips: Clip[]; selectedClipId: string | null; zoom: number; onGrab: ClipGrab }) {
+const Lanes = memo(function Lanes({ tracks, clips, selectedClipId, zoom, onGrab, lanesRef }: { tracks: Track[]; clips: Clip[]; selectedClipId: string | null; zoom: number; onGrab: ClipGrab; lanesRef: React.RefObject<HTMLDivElement | null> }) {
   const locked = new Set(tracks.filter((t) => t.locked).map((t) => t.id))
   return (
-    <div className="vw-lanes-container">
+    <div className="vw-lanes-container" ref={lanesRef}>
       {tracks.map((t) => {
         const own = clips.filter((c) => c.trackId === t.id)
         const rows = laneRows(own)
         return (
-          <div key={t.id} className={`vw-track-lane lane-${t.kind}${t.locked ? ' locked' : ''}`}>
+          <div key={t.id} className={`vw-track-lane lane-${t.kind}${t.locked ? ' locked' : ''}${t.hidden ? ' hidden' : ''}`} data-track-id={t.id}>
             {own.map((clip) => {
               const row = rows.row.get(clip.id) ?? 0
               const isLocked = locked.has(clip.trackId)
               return (
                 <div
                   key={clip.id}
-                  className={`vw-clip-block ${clip.id === selectedClipId ? 'selected' : ''}${clip.sourceUrl || (clip.kind !== 'video' && clip.kind !== 'audio') ? '' : ' offline'}${rows.count > 1 ? ' stacked' : ''}`}
+                  className={`vw-clip-block ${clip.id === selectedClipId ? 'selected' : ''}${clip.sourceUrl || (clip.kind !== 'video' && clip.kind !== 'audio') ? '' : ' offline'}${rows.count > 1 ? ' stacked' : ''}${clip.sourceUrl && (clip.kind === 'video' || clip.kind === 'audio') && rows.count === 1 ? ' has-visual' : ''}`}
                   data-clip-kind={clip.kind}
                   data-clip-id={clip.id}
                   style={{ left: `${clip.start * zoom}px`, width: `${clip.duration * zoom}px`, backgroundColor: clip.color, '--row': row, '--rows': rows.count } as React.CSSProperties}
@@ -265,7 +269,7 @@ export function VideoWorkspace() {
   })))
   const {
     setAspect, setProjectName, seek, togglePlay, stepFrame, addClip, addClips, updateClip,
-    selectClip, setZoom, toggleTrackMute, toggleTrackLock, newProject, addMediaAsset, removeMediaAsset,
+    selectClip, setZoom, toggleTrackMute, toggleTrackLock, toggleTrackHidden, newProject, addMediaAsset, removeMediaAsset,
     relinkAsset, setRecordingVoiceover, undo, redo, setBug, unlinkClip, beginGesture,
   } = getState()
   useClockFormat()
@@ -290,6 +294,9 @@ export function VideoWorkspace() {
   const recordingTimerRef = useRef<number | null>(null)
 
   const rulerRef = useRef<HTMLDivElement>(null)
+  const tracksScrollRef = useRef<HTMLDivElement>(null)
+  const lanesRef = useRef<HTMLDivElement>(null)
+  const [trackMenu, setTrackMenu] = useState<{ id: string; x: number; y: number } | null>(null)
   const binRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const projectInputRef = useRef<HTMLInputElement>(null)
@@ -311,6 +318,9 @@ export function VideoWorkspace() {
     for (const p of [st.project, ...st.history, ...st.future]) for (const c of p.clips) if (c.sourceUrl) keep.add(c.sourceUrl)
     for (const a of st.mediaAssets) if (a.url) keep.add(a.url)
     pruneMediaCache(keep)
+    const urls = new Set<string>()
+    for (const c of st.project.clips) { const u = previewUrl(c); if (u) urls.add(u) }
+    previewEngine().prune(urls)
   }, [generation])
 
   // a fade at the foot of the bin while there is more below (re-measured after each render: tab, rows, inspector)
@@ -408,7 +418,12 @@ export function VideoWorkspace() {
       if (!d) return
       const st = getState()
       if (d.kind === 'playhead') st.seek(timeAt(e.clientX))
-      else if (d.kind === 'move') st.moveClip(d.id, Math.max(0, d.origStart + (e.clientX - d.startX) / st.zoom))
+      else if (d.kind === 'move') {
+        const lane = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('.vw-track-lane')
+        const clip = st.project.clips.find((c) => c.id === d.id)
+        const to = lane?.dataset.trackId && clip && lane.dataset.trackId !== clip.trackId && canPlaceOn(st.project, clip, lane.dataset.trackId) ? lane.dataset.trackId : undefined
+        st.moveClip(d.id, Math.max(0, d.origStart + (e.clientX - d.startX) / st.zoom), to)
+      }
       else {
         const dt = (e.clientX - d.startX) / st.zoom
         if (Math.abs(dt) >= 0.1) {
@@ -466,7 +481,7 @@ export function VideoWorkspace() {
     const e = await b.videoRelink(asset.name)
     if (!e) return
     const p = await probeMedia(e.url, asset.type)
-    if (asset.url) dropCachedMedia(asset.url)
+    if (asset.url) { dropCachedMedia(asset.url); previewEngine().dropSource(asset.url) }
     relinkAsset(asset.id, { url: e.url, path: e.path, size: e.size, mtimeMs: e.mtimeMs, name: e.name, duration: p.duration || asset.duration, width: p.width ?? asset.width, height: p.height ?? asset.height, hasAudio: p.hasAudio ?? asset.hasAudio, thumbnailUrl: asset.type === 'image' ? e.url : p.thumbnailUrl })
     patchMeta(asset.id, { storage: 'reference', file: undefined })
     flash(`Relinked ${e.name}`)
@@ -492,7 +507,7 @@ export function VideoWorkspace() {
         // the take is written to disk (desktop) before it goes on the timeline, so a save or a crash restore keeps it
         void keepTake(blob, name, dur).then(({ asset, onDisk, error }) => {
           addMediaAsset(asset)
-          addClip({ id: `clip-vo-${Date.now()}`, trackId: 'a1', title: name, kind: 'audio', start: at, duration: dur, in: 0, out: dur, color: '#7c3aed', sourceUrl: asset.url, mediaAssetId: asset.id, srcDuration: dur })
+          addClip({ id: `clip-vo-${Date.now()}`, trackId: trackForKind(getState().project, 'audio') ?? 'a1', title: name, kind: 'audio', start: at, duration: dur, in: 0, out: dur, color: '#7c3aed', sourceUrl: asset.url, mediaAssetId: asset.id, srcDuration: dur })
           if (!onDisk && hasDiskMedia()) flash(`The voiceover could not be written to disk (${error ?? 'unknown error'}); it plays this session only.`)
         })
       }
@@ -557,13 +572,15 @@ export function VideoWorkspace() {
   // ---------------------------------------------------------------- Overlays and captions
   const handleAddOverlay = (type: OverlayTemplate, tag: string) => {
     const color = OVERLAY_PRESETS.find((p) => p.type === type)?.color ?? '#10b981'
-    const clip: Clip = { id: `clip-ov-${Date.now().toString(36)}`, trackId: 'v2', title: tag, kind: 'overlay', start: getState().currentTime, duration: 5, in: 0, out: 5, color, overlayType: type }
+    const p = getState().project
+    const clip: Clip = { id: `clip-ov-${Date.now().toString(36)}`, trackId: trackForKind(p, 'overlay') ?? (type !== 'logo' ? trackForKind(p, 'text') : undefined) ?? 'v2', title: tag, kind: 'overlay', start: getState().currentTime, duration: 5, in: 0, out: 5, color, overlayType: type }
     if (type !== 'logo') { clip.overlayText = ''; clip.overlaySub = '' }
     addClip(clip)
   }
   const handleAddCaption = () => {
     const text = captionDraft.trim()
-    addClip({ id: `clip-cap-${Date.now().toString(36)}`, trackId: 'c1', title: text ? text.slice(0, 40) : 'Caption', kind: 'caption', start: getState().currentTime, duration: 4.5, in: 0, out: 4.5, color: '#f59e0b', captionText: text })
+    const p = getState().project
+    addClip({ id: `clip-cap-${Date.now().toString(36)}`, trackId: trackForKind(p, 'caption') ?? trackForKind(p, 'text') ?? 'c1', title: text ? text.slice(0, 40) : 'Caption', kind: 'caption', start: getState().currentTime, duration: 4.5, in: 0, out: 4.5, color: '#f59e0b', captionText: text })
     setCaptionDraft('')
   }
 
@@ -778,26 +795,35 @@ export function VideoWorkspace() {
             <button type="button" className="btn sm subtle vw-delete" disabled={!selectedClipId} onClick={removeSelected} data-tip="Delete the selected clip (Del)"><Icon name="trash" size={13} /> Delete</button>
           </div>
           <div className="vw-tl-tools-right">
+            <MenuButton label="Track" icon="plus" className="sm subtle vw-add-track" items={ADD_TRACK.map((k) => ({ label: `${TRACK_KIND_LABEL[k]} track`, hint: ADD_HINT[k], onClick: () => { const id = getState().addTrack(k); flash(`Added ${id.toUpperCase()} · ${TRACK_KIND_LABEL[k]}`) } }))} align="end" />
+            <span className="vw-tl-sep" />
             <IconButton icon="minus" tip="Zoom out" onClick={() => setZoom(zoom - 10)} />
             <span className="vw-zoom-label mono">{zoom} px/s</span>
             <IconButton icon="plus" tip="Zoom in" onClick={() => setZoom(zoom + 10)} />
           </div>
         </div>
 
-        <div className="vw-tracks-scroll">
+        <div className="vw-tracks-scroll" ref={tracksScrollRef}>
           <div className="vw-track-headers">
             <div className="vw-ruler-header">Tracks</div>
             {project.tracks.map((t) => (
-              <div key={t.id} className="vw-track-head">
-                <span className="vw-th-title" data-tip={t.name}><b>{t.id.toUpperCase()}</b>{TRACK_LABEL[t.kind]}</span>
+              <div key={t.id} className={`vw-track-head${t.hidden ? ' hidden' : ''}`} data-track-id={t.id}>
+                <span className="vw-th-title" data-tip={t.name}><b>{t.id.toUpperCase()}</b>{TRACK_KIND_LABEL[t.kind]}</span>
                 <div className="vw-th-actions">
-                  {t.kind === 'audio' && (
+                  {t.kind === 'audio' ? (
                     <button type="button" className={`vw-th-btn ${t.muted ? 'active' : ''}`} onClick={() => toggleTrackMute(t.id)} aria-label={`${t.muted ? 'Unmute' : 'Mute'} ${t.id.toUpperCase()}`} aria-pressed={!!t.muted} data-tip={t.muted ? 'Unmute track' : 'Mute track'}>
                       <Icon name={t.muted ? 'volumeX' : 'volume'} size={13} />
+                    </button>
+                  ) : (
+                    <button type="button" className={`vw-th-btn vw-th-hide ${t.hidden ? 'active' : ''}`} onClick={() => toggleTrackHidden(t.id)} aria-label={`${t.hidden ? 'Show' : 'Hide'} ${t.id.toUpperCase()}`} aria-pressed={!!t.hidden} data-tip={t.hidden ? 'Show track (drawn again)' : 'Hide track (not drawn or exported)'}>
+                      <Icon name={t.hidden ? 'eyeOff' : 'eye'} size={13} />
                     </button>
                   )}
                   <button type="button" className={`vw-th-btn ${t.locked ? 'active' : ''}`} onClick={() => toggleTrackLock(t.id)} aria-label={`${t.locked ? 'Unlock' : 'Lock'} ${t.id.toUpperCase()}`} aria-pressed={!!t.locked} data-tip={t.locked ? 'Unlock track' : 'Lock track'}>
                     <Icon name={t.locked ? 'lock' : 'unlock'} size={13} />
+                  </button>
+                  <button type="button" className="vw-th-btn vw-th-more" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setTrackMenu({ id: t.id, x: r.left, y: r.bottom + 4 }) }} aria-label={`More for ${t.id.toUpperCase()}`} data-tip="Move or remove the track">
+                    <Icon name="more" size={13} />
                   </button>
                 </div>
               </div>
@@ -807,7 +833,8 @@ export function VideoWorkspace() {
           <div className="vw-lanes-area" style={{ width: `${project.duration * zoom + 300}px` }}>
             <Ruler duration={project.duration} zoom={zoom} onPointerDown={onRulerDown} rulerRef={rulerRef} />
             <Playhead zoom={zoom} />
-            <Lanes tracks={project.tracks} clips={project.clips} selectedClipId={selectedClipId} zoom={zoom} onGrab={onGrab} />
+            <Lanes tracks={project.tracks} clips={project.clips} selectedClipId={selectedClipId} zoom={zoom} onGrab={onGrab} lanesRef={lanesRef} />
+            <LaneVisuals scrollerRef={tracksScrollRef} lanesRef={lanesRef} />
           </div>
         </div>
       </footer>
@@ -824,6 +851,21 @@ export function VideoWorkspace() {
         <span className="muted">{project.width} × {project.height} · {project.fps} fps · {formatShortTime(length)}</span>
       </footer>
 
+      {trackMenu && (() => {
+        const st = getState()
+        const i = st.project.tracks.findIndex((t) => t.id === trackMenu.id)
+        const t = st.project.tracks[i]
+        if (!t) return null
+        const n = st.project.clips.filter((c) => c.trackId === t.id).length
+        const items: MenuEntry[] = [
+          { heading: t.name },
+          { label: 'Move up', icon: 'chevUp', disabled: i === 0, onClick: () => getState().moveTrack(t.id, i - 1) },
+          { label: 'Move down', icon: 'chevDown', disabled: i === st.project.tracks.length - 1, onClick: () => getState().moveTrack(t.id, i + 1) },
+          { divider: true },
+          { label: n ? `Remove track and its ${n} clip${n === 1 ? '' : 's'}` : 'Remove track', icon: 'trash', danger: true, disabled: t.locked, hint: t.locked ? 'Unlock it first' : 'Ctrl+Z brings it back', onClick: () => { if (!getState().removeTrack(t.id)) flash('That track (or a clip linked to it) is locked. Unlock it first.') } },
+        ]
+        return <ContextMenu x={trackMenu.x} y={trackMenu.y} items={items} onClose={() => setTrackMenu(null)} />
+      })()}
       {exportModal && <ExportSheet project={project} onClose={() => setExportModal(false)} onShowMedia={() => { setExportModal(false); showTab('media') }} />}
       {confirmReplace && (
         <Dialog
@@ -937,7 +979,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
                 <Slider className={`vw-s-${k}`} min={0} max={0.45} step={0.005} value={clip[k] ?? 0} onChange={(v) => set({ [k]: v })} />
               </div>
             ))}
-            <button type="button" className="btn sm vw-reset-transform" onClick={() => set({ fit: undefined, scale: undefined, offX: undefined, offY: undefined, cropL: undefined, cropR: undefined, cropT: undefined, cropB: undefined })}><Icon name="reset" size={12} />Reset frame</button>
+            <button type="button" className="btn sm vw-reset-transform" onClick={() => set({ fit: undefined, scale: undefined, offX: undefined, offY: undefined, cropL: undefined, cropR: undefined, cropT: undefined, cropB: undefined, rotation: undefined, anchorX: undefined, anchorY: undefined })}><Icon name="reset" size={12} />Reset frame</button>
           </>
         )}
         {clip.kind === 'audio' && (
@@ -949,6 +991,24 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
             <Switch checked={!clip.muted} onChange={(on) => set({ muted: !on })} label="Sound on" />
           </>
         )}
+        {clip.kind !== 'audio' && !isFootage && (
+          <>
+            <div className="vw-field">
+              <label>Position X <em>{pct(clip.offX ?? 0)}</em></label>
+              <Slider className="vw-s-x" min={-1} max={1} step={0.005} value={clip.offX ?? 0} onChange={(v) => set({ offX: v })} />
+            </div>
+            <div className="vw-field">
+              <label>Position Y <em>{pct(clip.offY ?? 0)}</em></label>
+              <Slider className="vw-s-y" min={-1} max={1} step={0.005} value={clip.offY ?? 0} onChange={(v) => set({ offY: v })} />
+            </div>
+          </>
+        )}
+        {clip.kind !== 'audio' && (
+          <div className="vw-field">
+            <label>Rotation <em>{Math.round(clip.rotation ?? 0)}°</em></label>
+            <Slider className="vw-s-rot" min={-180} max={180} step={1} value={clip.rotation ?? 0} onChange={(v) => set({ rotation: v || undefined })} />
+          </div>
+        )}
         {clip.kind !== 'audio' && (
           <div className="vw-field">
             <label>Opacity <em>{pct(clip.opacity ?? 1)}</em></label>
@@ -958,7 +1018,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
         {linkedWith && (
           <div className="vw-linked">
             <Icon name="link" size={12} />
-            <span>Linked to {linkedWith.kind === 'audio' ? 'its sound on A1' : 'its footage on V1'}: they move, trim and split together.</span>
+            <span>Linked to {linkedWith.kind === 'audio' ? `its sound on ${linkedWith.trackId.toUpperCase()}` : `its footage on ${linkedWith.trackId.toUpperCase()}`}: they move, trim and split together.</span>
             <button type="button" className="btn xs vw-unlink" onClick={onUnlink}>Unlink</button>
           </div>
         )}
@@ -970,4 +1030,31 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
       </div>
     </div>
   )
+}
+
+const ADD_TRACK: TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']
+const ADD_HINT: Record<TrackKind, string> = {
+  video: 'Footage and stills, over the tracks below',
+  overlay: 'Titles and pictures',
+  text: 'Titles and captions',
+  caption: 'Captions',
+  audio: 'Music, voice, sound',
+}
+
+// dev-only handle for the end-to-end tests (engine stats, a preview still for the golden frames)
+if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') {
+  Object.assign(window, {
+    __videoEngine: {
+      preview: previewEngine,
+      audio: audioEngine,
+      stats: () => previewEngine().stats(),
+      scrubLatencies: () => previewEngine().scrubLatencies.slice(),
+      still: async (t: number) => {
+        const r = await renderPreviewStill(getState().project, t)
+        // raw RGBA as base64 (a data URL read off a Blob: fast for 8 MB)
+        const url: string = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsDataURL(new Blob([r.pixels as unknown as BlobPart])) })
+        return { width: r.width, height: r.height, base64: url.slice(url.indexOf(',') + 1) }
+      },
+    },
+  })
 }

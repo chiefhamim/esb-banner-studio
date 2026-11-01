@@ -124,3 +124,29 @@
 /* Story tab summary: two short facts, each kept on one line */
 .vw-story-sum { flex-wrap: wrap; row-gap: 2px; }
 .vw-story-sum > span { white-space: nowrap; }
+
+/* ---------------------------------------------------------------- Phase 1 engine: lanes with pictures and sound */
+/* footage and sound clips keep their name in a band at the top; the filmstrip or waveform is drawn under it by the
+   lane canvas (engine/laneCanvas.ts), which sits over the lanes and under the playhead */
+.vw-clip-block.has-visual { align-items: flex-start; padding-top: 1px; }
+.vw-clip-block.has-visual .vw-clip-title, .vw-clip-block.has-visual .vw-clip-duration { line-height: 14px; }
+.vw-clip-block.has-visual .vw-clip-link { width: 14px; height: 14px; margin-top: 0; }
+.vw-lanes-area { position: relative; }
+.vw-lane-visuals { position: absolute; left: 0; top: 28px; z-index: 5; pointer-events: none; }
+/* a hidden visual track: its lane and header are dimmed (its clips are not drawn or exported) */
+.vw-track-lane.hidden .vw-clip-block { opacity: 0.42; }
+.vw-track-head.hidden .vw-th-title { opacity: 0.55; }
+.vw-th-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vw-th-title b { flex: none; }
+.vw-track-head { gap: 4px; }
+.vw-th-actions { flex: none; }
+.vw-th-btn { width: 24px; height: 26px; }
+.vw-tl-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--card-line); }
+.vw-add-track { gap: 6px; }
+.vw-add-track .chev { margin-left: 0; }
+/* the monitor says when it cannot draw (no WebGL2, a lost context) instead of showing a wrong picture */
+.vw-gl-error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: left; color: #f4f4f5; background: #101014; font: 500 13px/19px var(--ui); }
+.vw-gl-error span { max-width: 460px; }
+.vw-gl-error svg { flex: none; color: #f5c26b; }
+/* the track header holds its name and three tools (show/sound, lock, more) without cutting "Captions" */
+.vw-track-headers { width: 184px; }
