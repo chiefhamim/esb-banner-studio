@@ -42,6 +42,10 @@ const ATTACH_TYPES = {
   txt: 'text/plain', csv: 'text/csv',
 }
 const DAY = 24 * 3600 * 1000
+/** A designed letter's pictures (Letter → Designed HTML): carried inside the message by cid, never linked. */
+const DESIGN_IMAGE_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' }
+const DESIGN_MAX_IMAGES = 24
+const DESIGN_MAX_HTML = 300_000
 
 const oneLine = (s, max) => String(s ?? '').replace(/[\r\n\t\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, max)
 const isEmail = (s) => typeof s === 'string' && s.length <= 254 && EMAIL_RE.test(s)
@@ -81,6 +85,35 @@ function attachmentFrom(a) {
   return { filename: name, content: Buffer.from(m[1], 'base64'), contentType: ATTACH_TYPES[ext] }
 }
 
+/** A designed letter: its HTML (bounded; email-html.mjs cuts it down before it is used) and its pictures, each a
+ *  cid named esb-dN with real image data. Per-recipient words come separately as `vars` (one line each). */
+function designFrom(d) {
+  if (d == null) return null
+  if (typeof d !== 'object') throw new Error('Bad designed letter')
+  const html = String(d.html ?? '')
+  if (!html.trim()) throw new Error('The designed letter is empty')
+  if (html.length > DESIGN_MAX_HTML) throw new Error('The designed letter is too long')
+  const list = Array.isArray(d.images) ? d.images : []
+  if (list.length > DESIGN_MAX_IMAGES) throw new Error(`A designed letter may carry at most ${DESIGN_MAX_IMAGES} pictures`)
+  const seen = new Set()
+  const images = list.map((im) => {
+    const cid = String(im?.cid ?? '')
+    if (!/^esb-d[0-9]{1,3}$/.test(cid) || seen.has(cid)) throw new Error('Bad picture in the designed letter')
+    seen.add(cid)
+    const m = /^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=\s]+)$/.exec(String(im?.dataUrl ?? ''))
+    if (!m) throw new Error('A picture in the designed letter is not a PNG, JPEG, GIF or WebP')
+    return { cid, filename: `${cid}.${DESIGN_IMAGE_TYPES[m[1]]}`, content: Buffer.from(m[2], 'base64'), contentType: m[1] }
+  })
+  return { html, images }
+}
+
+function varsFrom(v) {
+  const out = {}
+  if (!v || typeof v !== 'object') return out
+  for (const [k, val] of Object.entries(v).slice(0, 20)) if (/^[a-z][a-z0-9_]{0,30}$/.test(k)) out[k] = oneLine(val, 300)
+  return out
+}
+
 /** One message as the renderer asks for it: a single plain address, a one-line subject, bounded bodies and files. */
 function validateMail(m) {
   const o = m && typeof m === 'object' ? m : {}
@@ -109,9 +142,11 @@ function validateMail(m) {
   const list = Array.isArray(o.attachments) ? o.attachments : []
   if (list.length > MAX_ATTACHMENTS) throw new Error(`At most ${MAX_ATTACHMENTS} attachments`)
   const attachments = list.map(attachmentFrom)
-  const bytes = attachments.reduce((n, a) => n + a.content.length, 0)
+  const design = designFrom(o.design)
+  const vars = varsFrom(o.vars)
+  const bytes = attachments.reduce((n, a) => n + a.content.length, 0) + (design ? design.images.reduce((n, i) => n + i.content.length, 0) : 0)
   if (bytes > MAX_ATTACH_BYTES) throw new Error('Attachments are over 18 MB together — Gmail would refuse the message')
-  return { to: to.toLowerCase(), subject, body, signature, optOut, footerLine, headerBg, footerBg, stripeColors, fontFamily, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
+  return { to: to.toLowerCase(), subject, body, signature, optOut, footerLine, headerBg, footerBg, stripeColors, fontFamily, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, design, vars, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
 }
 
 /** May this send go now? Reads the ledger of earlier sends. */
@@ -261,17 +296,22 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     const gate = ledgerCheck(l, clock(), saved, mail)
     if (!gate.ok) return { ok: false, error: gate.reason, nextAt: gate.nextAt, duplicate: !!gate.duplicate }
     try {
-      const { renderEmail } = await render()
-      const { html, text } = renderEmail({
+      const { renderEmail, renderDesigned } = await render()
+      const unsubscribeHref = `mailto:${saved.user}?subject=unsubscribe`
+      const { html, text } = mail.design ? renderDesigned({
+        html: mail.design.html, vars: mail.vars, lang: mail.lang, optOut: mail.optOut, unsubscribeHref,
+      }) : renderEmail({
         body: mail.body, signature: mail.signature, optOut: mail.optOut, lang: mail.lang, letterhead: mail.letterhead,
         logoSrc: 'cid:esb-logo', officialPad: mail.officialPad, sidebarSrc: 'cid:esb-pad-sidebar', qrSrc: 'cid:esb-pad-qr',
         footerLine: mail.footerLine, headerBg: mail.headerBg, footerBg: mail.footerBg, stripeColors: mail.stripeColors, fontFamily: mail.fontFamily,
       })
       // every pad/letterhead image travels inside the message (cid:), never as a link to a server; the QR is built
       // fresh from PAD_VCARD above, not read off the printed pad
-      const logo = mail.letterhead && !mail.officialPad && fs.existsSync(LOGO)
+      // a designed letter brings its own pictures and frame — no letterhead or pad chrome around it
+      const designImages = mail.design ? mail.design.images.map((i) => ({ filename: i.filename, content: i.content, cid: i.cid, contentType: i.contentType, contentDisposition: 'inline' })) : []
+      const logo = !mail.design && mail.letterhead && !mail.officialPad && fs.existsSync(LOGO)
         ? [{ filename: 'esb-logo.png', path: LOGO, cid: 'esb-logo', contentType: 'image/png' }] : []
-      const pad = mail.officialPad
+      const pad = !mail.design && mail.officialPad
         ? [
             { filename: 'esb-logo.png', path: LOGO, cid: 'esb-logo', contentType: 'image/png' },
             ...(fs.existsSync(PAD_SIDEBAR) ? [{ filename: 'esb-pad-sidebar.png', path: PAD_SIDEBAR, cid: 'esb-pad-sidebar', contentType: 'image/png' }] : []),
@@ -284,8 +324,8 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
         subject: mail.subject,
         text,
         html,
-        attachments: [...logo, ...pad, ...mail.attachments],
-        list: { unsubscribe: `mailto:${saved.user}?subject=unsubscribe` },
+        attachments: [...designImages, ...logo, ...pad, ...mail.attachments],
+        list: { unsubscribe: unsubscribeHref },
         // a follow-up sits under the first letter in the recipient's mail client
         ...(gate.inReplyTo ? { inReplyTo: gate.inReplyTo, references: [gate.inReplyTo] } : {}),
       })

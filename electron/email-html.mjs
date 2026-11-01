@@ -152,6 +152,90 @@ function textOn(hex) {
   return yiq >= 150 ? BRAND.ink : '#ffffff'
 }
 
+// ------------------------------------------------------------------ designed HTML letters
+// A designed email (Letter → Designed HTML) is a full HTML page the editor built elsewhere, used as it is instead of
+// the marks above. It is the editor's own file, but the renderer is treated as hostile here as everywhere, so the
+// page is cut down to what a mail client should ever see before anything else happens:
+//   - no script, iframe, object, embed, form or input, base, meta refresh, link or svg; no on…= handlers;
+//   - links only https:, mailto: or #anchor; images only cid: pictures carried inside the message (so a design
+//     can never load a tracking pixel or anything else from a server);
+//   - CSS url(...) only cid:, @import dropped.
+// Per-recipient words go in as {key} / {key|fallback} placeholders, filled with escaped text (never markup);
+// {unsubscribe} becomes the sender's own opt-out address. Same function for the Preview and for the sent message.
+
+export const DESIGN_MAX_HTML = 300_000
+export const DESIGN_CID_RE = /^esb-d[0-9]{1,3}$/
+const PLACEHOLDER = /\{([a-z][a-z0-9_]*)(?:\|([^{}\n<>]*))?\}/gi
+const NAME_FALLBACK = { en: 'Sir/Madam', bn: 'মহোদয়' }
+
+export function sanitizeDesignHtml(input) {
+  let h = String(input ?? '').slice(0, DESIGN_MAX_HTML)
+  // whole elements whose content must go too
+  h = h.replace(/<(script|iframe|object|embed|svg|math|template|noscript|form|select|textarea|title)\b[\s\S]*?<\/\1\s*>/gi, '')
+  // void or stray tags
+  h = h.replace(/<\/?(script|iframe|object|embed|svg|math|template|frame|frameset|applet|base|link|form|input|button|select|textarea|option|portal|meta)\b[^>]*>/gi, (m) =>
+    /^<meta\b/i.test(m) && !/http-equiv/i.test(m) ? m : '')
+  // event handlers and inline javascript in any attribute
+  h = h.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+  h = h.replace(/\s(href|src|background|action|formaction|xlink:href|poster|lowsrc|dynsrc)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi, (m, attr, _q, a, b, c) => {
+    const v = String(a ?? b ?? c ?? '').trim()
+    const name = attr.toLowerCase()
+    if (name === 'href') return /^(https:\/\/|mailto:|#)/i.test(v) || v === '{unsubscribe}' ? ` href="${v.replace(/"/g, '&quot;')}"` : ' href="#"'
+    if (name === 'src' || name === 'background') return /^cid:esb-d[0-9]{1,3}$/i.test(v) ? ` ${name}="${v}"` : ''
+    return ''
+  })
+  // CSS: no @import, url() only to cid:, no expression()/behavior
+  h = h.replace(/@import[^;]*;?/gi, '')
+  h = h.replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (m, _q, u) => (/^cid:esb-d[0-9]{1,3}$/i.test(u.trim()) ? `url(${u.trim()})` : 'none'))
+  h = h.replace(/expression\s*\(|behavior\s*:|-moz-binding/gi, '')
+  return h
+}
+
+/** {key} / {key|fallback} → the recipient's value, escaped; {unsubscribe} → the opt-out address. */
+export function fillDesign(html, vars = {}, { lang = 'en', unsubscribeHref = '' } = {}) {
+  return String(html).replace(PLACEHOLDER, (m, rawKey, fallback) => {
+    const key = rawKey.toLowerCase()
+    if (key === 'unsubscribe') return escapeHtml(unsubscribeHref || '#')
+    const v = String(vars?.[key] ?? '').trim()
+    if (v) return escapeHtml(v)
+    if (fallback !== undefined) return escapeHtml(fallback)
+    return key === 'name' ? NAME_FALLBACK[lang === 'bn' ? 'bn' : 'en'] : ''
+  })
+}
+
+/** The words of a designed page, for the text/plain part and for the desk's checks. */
+export function designText(html) {
+  return String(html)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(style|head|script)\b[\s\S]*?<\/\1>/gi, '')
+    .replace(/<div[^>]*display\s*:\s*none[^>]*>[\s\S]*?<\/div>/gi, '')
+    .replace(/<a\b[^>]*href="(https:[^"]+|mailto:[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (m, href, inner) => {
+      const words = inner.replace(/<[^>]+>/g, '').trim()
+      // a link around a picture or an icon only has no words to show in plain text; it is dropped, not printed bare
+      return words && !href.includes(words.replace(/\s+/g, '')) ? `${words} (${href.replace(/\?utm_[^"]*$/, '')})` : words
+    })
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|h[1-6]|tr|li|table|div)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&middot;/g, '·').replace(/&rarr;/g, '→').replace(/&amp;/g, '&').replace(/&#39;|&rsquo;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#?\w+;/g, ' ')
+    .split('\n').map((l) => l.replace(/[ \t ]+/g, ' ').trim()).filter((l, i, a) => l || (a[i - 1] ?? '') !== '')
+    .join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/**
+ * A designed letter as it goes out. `imageSrc(cid)` gives each picture's address: the cid itself when sending, a
+ * data URL in the Preview. Returns the same { html, text } shape as renderEmail.
+ */
+export function renderDesigned({ html, vars = {}, lang = 'en', unsubscribeHref = '', optOut = '', imageSrc = (cid) => `cid:${cid}` }) {
+  const clean = sanitizeDesignHtml(html)
+  let out = fillDesign(clean, vars, { lang, unsubscribeHref })
+  out = out.replace(/cid:(esb-d[0-9]{1,3})/gi, (m, cid) => imageSrc(cid.toLowerCase()) || m)
+  if (!/<html[\s>]/i.test(out)) out = `<!doctype html><html lang="${lang === 'bn' ? 'bn' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head><body style="margin:0">${out}</body></html>`
+  const words = designText(fillDesign(clean, vars, { lang, unsubscribeHref }))
+  const text = [words, optOut ? `—\n${optOut}` : ''].filter(Boolean).join('\n\n')
+  return { html: out, text }
+}
+
 export function renderEmail({
   body, signature = '', optOut = '', lang = 'en', letterhead = false, logoSrc = 'cid:esb-logo',
   officialPad = false, sidebarSrc = 'cid:esb-pad-sidebar', qrSrc = 'cid:esb-pad-qr', footerLine = DEFAULT_FOOTER_LINE,

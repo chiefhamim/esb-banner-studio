@@ -424,6 +424,8 @@ function createEngine(deps = {}) {
           body: msg.body,
           optOut: msg.optOut,
           ...job.shared,
+          // a designed letter's per-recipient words ({name}, …); the page itself is in job.shared.design
+          ...(msg.vars ? { vars: msg.vars } : {}),
           attachments: job.attachments,
           followUp: job.kind === 'followup',
         }

@@ -6,6 +6,7 @@
 // (`esb-banner-studio/outreach/v2`); imported workbooks and attachments in IndexedDB (idb.ts), being too big for it.
 // The main process keeps its own ledger of sends, which is what stops a repeat; `campaign.sent` is what the list shows.
 
+import { designBytes, type DesignLetter } from './design'
 import { create } from 'zustand'
 import type { EsbInboxResult, EsbOutreachStatus } from '../esb'
 import type { AttachmentItem, Campaign, Contact, ListMeta, OutreachBlueprintId, OutreachLang, Signature, Source, Template } from './types'
@@ -173,6 +174,8 @@ interface OutreachState extends Saved {
   cancelCheckAddresses: () => void
   query: string
   attachments: AttachmentItem[]
+  /** The open campaign's designed HTML letter (design.ts), read from IndexedDB `design:{id}`; null when it uses marks. */
+  design: DesignLetter | null
 
   run: RunState
   nextAt: number | null
@@ -212,6 +215,10 @@ interface OutreachState extends Saved {
   setLang: (lang: OutreachLang) => void
   addAttachment: (a: AttachmentItem) => void
   removeAttachment: (id: string) => void
+  /** Use a designed HTML letter: the page goes to IndexedDB, `body` becomes its plain-text version. */
+  setDesign: (d: DesignLetter, text: string) => Promise<void>
+  /** Back to an ordinary letter; the plain-text version stays as the body to edit. */
+  clearDesign: () => Promise<void>
   addSource: (s: Source) => void
   updateSource: (id: string, p: Partial<Source>) => void
   removeSource: (id: string) => void
@@ -307,6 +314,12 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     if ((get().activeId ?? null) !== (c?.id ?? null)) return // another campaign was opened meanwhile
     set({ attachments: files })
   }
+  const loadDesign = async () => {
+    const c = get().campaign()
+    const d = c?.design ? (await idbGet<DesignLetter>(`design:${c.id}`)) ?? null : null
+    if ((get().activeId ?? null) !== (c?.id ?? null)) return
+    set({ design: d })
+  }
 
   // open the last campaign once the store exists
   queueMicrotask(() => { if (get().activeId) void get().openCampaign(get().activeId!) })
@@ -321,6 +334,7 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     view: 'all',
     query: '',
     attachments: [],
+    design: null,
     run: 'idle',
     nextAt: null,
     current: null,
@@ -387,7 +401,7 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
       if (!get().campaigns.some((c) => c.id === id)) return
       set({ activeId: id, activeContact: null, view: 'all', query: '' })
       persist()
-      await Promise.all([loadContacts(), loadAttachments()])
+      await Promise.all([loadContacts(), loadAttachments(), loadDesign()])
       set({ activeContact: get().contacts[0]?.id ?? null })
     },
     createCampaign: async (over = {}) => {
@@ -405,6 +419,8 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
       const c = newCampaign({ ...src, id: uid('cmp'), name: `${src.name} (copy)`, status: 'draft', scheduledAt: null, sent: {}, failed: {}, replied: {}, bounced: {}, followed: {}, interrupted: null, createdAt: Date.now() })
       const files = await idbGet<AttachmentItem[]>(`files:${id}`)
       if (files) await idbSet(`files:${c.id}`, files)
+      const design = await idbGet<DesignLetter>(`design:${id}`)
+      if (design) await idbSet(`design:${c.id}`, design)
       set({ campaigns: [c, ...get().campaigns] })
       persist()
       await get().openCampaign(c.id)
@@ -412,12 +428,13 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     deleteCampaign: async (id) => {
       if (get().run !== 'idle' && id === get().activeId) return
       await idbDel(`files:${id}`)
+      await idbDel(`design:${id}`)
       const campaigns = get().campaigns.filter((c) => c.id !== id)
       set({ campaigns })
       if (get().activeId === id) {
         set({ activeId: campaigns[0]?.id ?? null })
         persist()
-        if (campaigns[0]) await get().openCampaign(campaigns[0].id); else set({ contacts: [], sheets: [], attachments: [] })
+        if (campaigns[0]) await get().openCampaign(campaigns[0].id); else set({ contacts: [], sheets: [], attachments: [], design: null })
       } else persist()
     },
     patch: (p) => { const c = get().campaign(); if (c) patchCampaign(c.id, p) },
@@ -534,6 +551,19 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
       const c = get().campaign(); if (!c) return
       const next = get().attachments.filter((a) => a.id !== id)
       set({ attachments: next }); void idbSet(`files:${c.id}`, next)
+    },
+    setDesign: async (d, text) => {
+      const c = get().campaign(); if (!c) return
+      await idbSet(`design:${c.id}`, d)
+      if (get().activeId !== c.id) return
+      set({ design: d })
+      get().patch({ design: { name: d.name, importedAt: d.importedAt, images: d.images.length, bytes: designBytes(d) }, body: text })
+    },
+    clearDesign: async () => {
+      const c = get().campaign(); if (!c) return
+      await idbDel(`design:${c.id}`)
+      set({ design: null })
+      get().patch({ design: undefined })
     },
     addSource: (src) => { const c = get().campaign(); if (c) get().patch({ sources: [src, ...c.sources] }) },
     updateSource: (id, p) => { const c = get().campaign(); if (c) get().patch({ sources: c.sources.map((x) => (x.id === id ? { ...x, ...p } : x)) }) },

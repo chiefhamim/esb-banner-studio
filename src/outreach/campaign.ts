@@ -6,6 +6,7 @@
 // the minimum gap and no-repeat on its own ledger whatever this loop does, so a fault here can never send more than
 // the settings allow.
 
+import { designPayload, designVars, type DesignLetter } from './design'
 import { useOutreachStore } from './outreachStore'
 import { buildMessage, missingFields, skipReason } from './compose'
 import type { Campaign, Contact } from './types'
@@ -49,11 +50,22 @@ export function mailFor(contact: Contact, c: Campaign): Omit<EsbOutreachMail, 't
   const opener = c.openers?.[contact.email]?.text
   const m = buildMessage(contact, resolved.subject, resolved.body, c.lang, opener)
   const st = useOutreachStore.getState()
+  const design = designFor(c)
   return {
     subject: m.subject, body: m.body, optOut: m.optOut, signature: signatureOf(c), lang: c.lang, letterhead: c.letterhead,
     officialPad: c.officialPad, footerLine: st.footerLine, fontFamily: st.fontFamily,
     headerBg: st.headerBg, footerBg: st.footerBg, stripeColors: st.stripeColors,
+    ...(design ? { design: designPayload(design), vars: designVars(contact, design.html, opener) } : {}),
   }
+}
+
+/** The campaign's designed letter, loaded. A campaign marked as designed whose page is not loaded (another campaign
+ *  is open, or IndexedDB lost it) must never quietly go out as its plain-text version, so that is an error. */
+export function designFor(c: Campaign): DesignLetter | null {
+  if (!c.design) return null
+  const st = useOutreachStore.getState()
+  if (st.activeId === c.id && st.design) return st.design
+  throw new Error(`${c.name}: its designed letter is not loaded — open the campaign, or pick the HTML file again (Letter → Designed HTML)`)
 }
 
 const attachmentsOf = () => useOutreachStore.getState().attachments.map((a) => ({ name: a.name, dataUrl: a.dataUrl }))
@@ -105,6 +117,7 @@ export function cannotStart(mode: 'first' | 'followup' = 'first'): string | null
   if (!s.mail?.hasPassword || !s.mail.settings) return 'Save the sender account and app password first'
   if (mode === 'first') {
     if (!c.subject.trim() || !c.body.trim()) return 'The letter needs a subject and a body'
+    if (c.design && !s.design) return 'The designed letter is not loaded — pick the HTML file again (Letter → Designed HTML)'
     if (!eligible(s.contacts, c.subject, c.body, c.audience).length) return 'Nobody in this audience is ready to send to'
   } else if (!followUpQueue(s.contacts, c).due.length) return 'Nobody is due a follow-up yet'
   return null
@@ -118,13 +131,16 @@ export async function startBatch(mode: 'first' | 'followup' = 'first', startAt?:
   if (why) { s.addLog('warn', why); return }
   const c = s.campaign()!
 
-  const spec = buildJobSpec({
-    campaign: c,
-    contacts: s.contacts,
-    mode,
-    attachments: mode === 'first' ? attachmentsOf() : [],
-    startAt,
-  })
+  let spec
+  try {
+    spec = buildJobSpec({
+      campaign: c,
+      contacts: s.contacts,
+      mode,
+      attachments: mode === 'first' ? attachmentsOf() : [],
+      startAt,
+    })
+  } catch (e) { s.addLog('error', (e as Error).message); return }
 
   s.patch({
     status: startAt ? 'scheduled' : 'sending',
@@ -195,7 +211,8 @@ export async function sendTest(to: string, sample: Contact | undefined) {
   const send = window.esb?.outreachSend
   if (!send) return { ok: false as const, error: 'Sending needs the ESB Studio desktop app' }
   if (!c) return { ok: false as const, error: 'Open a campaign first' }
-  const m = mailFor(sample ?? { ...STAND_IN, email: to }, c)
+  let m
+  try { m = mailFor(sample ?? { ...STAND_IN, email: to }, c) } catch (e) { return { ok: false as const, error: (e as Error).message } }
   const r = await send({ to, ...m, subject: `[Test] ${m.subject}`, attachments: attachmentsOf(), isTest: true })
   s.addLog(r.ok ? 'ok' : 'error', r.ok ? `Test sent to ${to}` : `Test to ${to}: ${r.error}`)
   return r

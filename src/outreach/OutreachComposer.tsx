@@ -17,6 +17,7 @@ import { ProviderMark } from '../editorial/ProviderMark'
 import { Icon, type IconName } from '../ui/Icon'
 import { MenuButton, Select, Seg, Switch } from '../ui/controls'
 import type { OutreachLang } from './types'
+import { designPreviewHtml, importDesign } from './design'
 
 const SUBJECT_MAX = 70
 const EMAIL = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[a-z]{2,}$/i
@@ -46,13 +47,15 @@ export function OutreachComposer() {
   const [padSidebar, setPadSidebar] = useState('')
   const [padQr, setPadQr] = useState('')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const designInput = useRef<HTMLInputElement>(null)
+  const [designNotes, setDesignNotes] = useState<string[]>([])
   const ai = aiFor('outreach')
   const aiName = providerMeta(ai?.provider ?? roleProvider(loadAiSettings(), 'outreach')).name
   const active = s.contacts.find((x) => x.id === s.activeContact) ?? s.contacts[0]
 
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
   useEffect(() => { void padSidebarDataUrl().then(setPadSidebar); void padQrDataUrl().then(setPadQr) }, [])
-  useEffect(() => { setToText(c?.kind === 'direct' ? c.recipients.join(', ') : ''); setVariants([]); setAiNote(null) }, [c?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setToText(c?.kind === 'direct' ? c.recipients.join(', ') : ''); setVariants([]); setAiNote(null); setDesignNotes([]) }, [c?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const audience = useMemo(() => s.contacts.filter((x) => inAudience(x, c?.audience)), [s.contacts, c?.audience])
   const suggestion = useMemo(() => (c?.kind === 'list' ? suggestBlueprint(audience, c.audience.purposes) : null), [audience, c?.kind, c?.audience.purposes])
@@ -62,6 +65,9 @@ export function OutreachComposer() {
     if (!c || ui.view !== 'preview') return null
     const who = active ?? STAND_IN
     const m = buildMessage(who, c.subject, c.body, c.lang)
+    if (c.design) {
+      return { who, subject: m.subject, html: s.design ? designPreviewHtml(s.design, who, c.lang, s.mail?.settings?.user, c.openers?.[who.email]?.text) : '' }
+    }
     return {
       who, subject: m.subject,
       html: withViewerMargin(renderEmail({
@@ -70,7 +76,7 @@ export function OutreachComposer() {
         headerBg: s.headerBg, footerBg: s.footerBg, stripeColors: s.stripeColors,
       }).html, c.letterhead, c.officialPad),
     }
-  }, [c, active, ui.view, logo, padSidebar, padQr, s.footerLine, s.headerBg, s.footerBg, s.stripeColors, s.fontFamily, s.signatures]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [c, active, ui.view, logo, padSidebar, padQr, s.footerLine, s.headerBg, s.footerBg, s.stripeColors, s.fontFamily, s.signatures, s.design, s.mail]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const allFieldKeys = useMemo(() => {
     const custom = new Set<string>()
@@ -128,6 +134,12 @@ export function OutreachComposer() {
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + tag.length, a + tag.length) })
   }
   const pickLetter = async (v: string) => {
+    if (v === 'design') { designInput.current?.click(); return }
+    if (v === 'designed') return
+    if (c.design) {
+      if (!(await ask({ title: 'Stop using the designed letter?', body: `${c.design.name} is set aside and the letter you pick replaces it. Pick the HTML file again to bring it back.`, ok: 'Use a written letter' }))) return
+      await s.clearDesign()
+    }
     if (edited && !(await ask({ title: 'Replace the letter?', body: 'The subject and body you have written are replaced. Undo is not available for this.', ok: 'Replace' }))) return
     if (v === 'blank') s.patch({ blueprint: 'blank', subject: '', body: '' })
     else if (v.startsWith('tpl-')) s.applyTemplate(v)
@@ -149,6 +161,20 @@ export function OutreachComposer() {
       s.addLog('error', `${what}: ${(e as Error).message}`)
     } finally { setBusy(null) }
   }
+  const loadDesign = async (file: File | undefined) => {
+    if (!file) return
+    if (file.size > 25 * 1024 * 1024) { s.addLog('error', `${file.name} is over 25 MB`); return }
+    try {
+      const r = importDesign(file.name, await file.text())
+      if (!c.design && edited && !(await ask({ title: 'Use the designed letter?', body: 'The page is sent in place of the letter you have written. Its plain-text version replaces the body (shown by mail clients that do not display HTML).', ok: 'Use the design' }))) return
+      await s.setDesign(r.design, r.text)
+      setDesignNotes(r.notes)
+      s.addLog('ok', `Designed letter ${file.name}: ${r.design.images.length} picture${r.design.images.length === 1 ? '' : 's'} carried inside the message`)
+      ui.set({ view: 'preview' })
+    } catch (e) {
+      s.addLog('error', (e as Error).message)
+    }
+  }
   const commitTo = (t = toText) => {
     const parts = t.split(/[\s,;]+/).filter(Boolean)
     s.setRecipients(parts.filter((p) => EMAIL.test(p)))
@@ -156,18 +182,21 @@ export function OutreachComposer() {
   const badTo = toText.split(/[\s,;]+/).filter((p) => p && !EMAIL.test(p))
   const mail = s.mail?.settings
   const ready = eligible(s.contacts, c.subject, c.body, c.audience).length
-  const aiOff = !ai || aiPaused()
-  const aiTip = aiPaused() ? 'AI is OFF — turn it on in the Engine panel (status bar)' : ai ? '' : `Add a ${aiName} key for the Letter job in the AI dialog`
+  const aiOff = !ai || aiPaused() || !!c.design
+  const aiTip = c.design ? 'A designed letter is sent as it is; AI writing works on written letters' : aiPaused() ? 'AI is OFF — turn it on in the Engine panel (status bar)' : ai ? '' : `Add a ${aiName} key for the Letter job in the AI dialog`
 
   return (
     <main className="or-center" aria-label="Letter">
       <div className="or-toolbar">
-        <Select<string> value={c.blueprint === 'template' ? (s.templates.find((t) => t.subject === c.subject && t.body === c.body)?.id ?? 'template') : c.blueprint} className="or-letter-select" onChange={(v) => void pickLetter(v)}
+        <input ref={designInput} type="file" accept=".html,.htm,text/html" hidden onChange={(e) => { void loadDesign(e.target.files?.[0]); e.target.value = '' }} />
+        <Select<string> value={c.design ? 'designed' : c.blueprint === 'template' ? (s.templates.find((t) => t.subject === c.subject && t.body === c.body)?.id ?? 'template') : c.blueprint} className="or-letter-select" onChange={(v) => void pickLetter(v)}
           options={[
+            ...(c.design ? [{ value: 'designed', label: c.design.name, hint: 'Designed', icon: 'image' as const }] : []),
             ...OUTREACH_BLUEPRINTS.map((b) => ({ value: b.id as string, label: b.label, hint: b.tag, icon: 'mail' as const })),
             ...s.templates.map((t) => ({ value: t.id, label: t.name, hint: 'Saved' })),
             ...(c.blueprint === 'template' && !s.templates.some((t) => t.subject === c.subject && t.body === c.body) ? [{ value: 'template', label: 'From a template (edited)', hint: '' }] : []),
             { value: 'blank', label: 'Blank letter', hint: '' },
+            { value: 'design', label: c.design ? 'Replace the designed HTML…' : 'Designed HTML…', hint: 'File', icon: 'upload' as const },
           ]} />
         <Seg<OutreachLang> className="or-lang-seg" value={c.lang} onChange={s.setLang} options={[{ value: 'en', label: 'EN', tip: 'English' }, { value: 'bn', label: 'বাংলা', tip: 'Bangla' }]} />
         <div className="spacer" />
@@ -216,6 +245,23 @@ export function OutreachComposer() {
             </div>
           )}
 
+          {c.design ? (
+            <div className="or-design">
+              <div className="or-design-head">
+                <span className="or-design-ic"><Icon name="image" size={18} /></span>
+                <div className="or-design-meta">
+                  <b>{c.design.name}</b>
+                  <span>Designed HTML · {c.design.images} picture{c.design.images === 1 ? '' : 's'} inside the message · {Math.max(1, Math.round(c.design.bytes / 1024))} kB</span>
+                </div>
+                <button type="button" className="btn" onClick={() => designInput.current?.click()}><Icon name="upload" size={14} /><span>Replace</span></button>
+                <button type="button" className="btn" onClick={() => ui.set({ view: 'preview' })}><Icon name="eye" size={14} /><span>Preview</span></button>
+              </div>
+              <p className="or-design-note">The page is sent as designed, to each contact on their own. <code>{'{name|Reader}'}</code> and the other placeholders are filled from the contact's row, and <code>{'{unsubscribe}'}</code> becomes your opt-out address. The plain-text version below is made from the page for mail clients that do not show HTML. Signature and letterhead are not added.</p>
+              {!s.design && <p className="or-inline-warn">The page is not on this computer any more. Pick the HTML file again with Replace before sending.</p>}
+              {designNotes.map((n) => <p key={n} className="or-inline-warn">{n}</p>)}
+              <textarea className={'or-text or-design-text' + (c.lang === 'bn' ? ' bn' : '')} value={c.body} readOnly aria-label="Plain-text version" />
+            </div>
+          ) : (<>
           <div className="or-fmt" role="toolbar" aria-label="Formatting">
             {TOOLS.map((t) => <button key={t.kind} type="button" className="ibtn" aria-label={t.tip} data-tip={t.tip} onMouseDown={(e) => e.preventDefault()} onClick={() => void mark(t.kind)}><Icon name={t.icon} size={14} /></button>)}
             <i className="or-fmt-sep" />
@@ -259,6 +305,7 @@ export function OutreachComposer() {
             <div className="spacer" />
             <Switch checked={c.letterhead} onChange={(v) => s.patch({ letterhead: v })} label="ESB letterhead" />
           </div>
+          </>)}
 
           {(aiNote || promisesFile || missingCount > 0) && (
             <div className="or-warnings">

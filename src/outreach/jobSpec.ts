@@ -2,7 +2,8 @@ import type { Campaign, Contact } from './types'
 import type { EsbOutreachMail, JobMessage, JobSpec } from '../esb'
 import { buildMessage } from './compose'
 import { reviewRendered, actionableFlags } from './rendered'
-import { eligible, followUpLetter, followUpQueue, signatureOf } from './campaign'
+import { designFor, eligible, followUpLetter, followUpQueue, signatureOf } from './campaign'
+import { designPayload, designVars } from './design'
 import { useOutreachStore } from './outreachStore'
 import { letterFor } from './segments'
 
@@ -43,6 +44,9 @@ export function buildJobSpec(opts: BuildJobSpecOptions): JobSpec {
   })
 
   const fu = mode === 'followup' ? followUpLetter(campaign) : null
+  // the first letter goes as the designed page when there is one (throws if it is not loaded); a follow-up is always
+  // the short plain note
+  const design = mode === 'first' ? designFor(campaign) : null
 
   const messages: JobMessage[] = queue.map((c) => {
     const resolved = mode === 'first' ? letterFor(c, campaign) : null
@@ -58,6 +62,7 @@ export function buildJobSpec(opts: BuildJobSpecOptions): JobSpec {
       name: c.personName || undefined,
       org: c.organization || undefined,
       key: c.id || undefined,
+      ...(design ? { vars: designVars(c, design.html, opener) } : {}),
     }
   })
 
@@ -72,6 +77,7 @@ export function buildJobSpec(opts: BuildJobSpecOptions): JobSpec {
     stripeColors: st.stripeColors,
     signature: signature ?? signatureOf(campaign),
     followUp: mode === 'followup',
+    ...(design ? { design: designPayload(design) } : {}),
     ...(shared ?? {}),
   }
 

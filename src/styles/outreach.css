@@ -265,6 +265,16 @@
 .or-line-input:focus, .or-line-input:focus-visible { outline: none !important; box-shadow: none !important; border: 0 !important; }
 .or-text.bn { font-family: 'Hind Siliguri', var(--font-ui); line-height: 1.75; }
 .or-text::placeholder { color: var(--text-3); }
+/* Letter → Designed HTML: the page's card in place of the mark toolbar and editor */
+.or-design { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; padding-top: var(--s-5); border-top: 1px solid var(--card-line); margin-top: var(--s-4); }
+.or-design-head { display: flex; align-items: center; gap: var(--s-4); padding: 0 16px; }
+.or-design-ic { display: grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px; border-radius: var(--r-2); background: var(--fill); color: var(--text-2); }
+.or-design-meta { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.or-design-meta b { font-size: 13px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.or-design-meta span { font-size: 12px; color: var(--text-2); }
+.or-design-note { margin: var(--s-4) 16px 0; font-size: 12px; line-height: 18px; color: var(--text-2); }
+.or-design-note code { font: 500 11.5px/1 var(--font-ui); padding: 1px 4px; border-radius: var(--r-1); background: var(--fill); color: var(--text); }
+.or-design-text { min-height: 160px; margin-top: var(--s-4); color: var(--text-2); font-size: 13px; border-top: 1px dashed var(--card-line) !important; }
 .or-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--card-line); }
 .or-foot > .select { max-width: 260px; }
 .or-foot .spacer { flex: 1 1 0; }

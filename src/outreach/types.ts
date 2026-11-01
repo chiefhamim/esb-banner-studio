@@ -113,6 +113,10 @@ export interface Campaign {
   /** The gold-rail "official pad" frame (letterhead artwork + a contact QR), in place of the plain `letterhead`
    *  header when on — see officialPad.ts. Optional on the type so a campaign saved before this existed loads as off. */
   officialPad?: boolean
+  /** A designed HTML letter is in use (Letter → Designed HTML): the page and its pictures live in IndexedDB under
+   *  `design:{id}` (design.ts); this is only what the desk shows about it. While set, `body` is the page's plain-text
+   *  version, generated from it, and letterhead / official pad are not used. */
+  design?: { name: string; importedAt: number; images: number; bytes: number }
   sources: Source[]
   scheduledAt: number | null
   sent: Record<string, number>

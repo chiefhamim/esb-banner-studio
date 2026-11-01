@@ -113,6 +113,11 @@ export interface EsbOutreachMail {
   /** An id into EMAIL_FONTS — an unknown id falls back to the default, never passed through as written. */
   fontFamily?: string
   attachments?: { name: string; dataUrl: string }[]
+  /** A designed HTML letter (Letter → Designed HTML) in place of the marks: its page, cut down by the main process,
+   *  and its pictures carried inside the message as cid:esb-dN. `body` stays the plain-text version. */
+  design?: { html: string; images: { cid: string; dataUrl: string }[] }
+  /** The recipient's words for the designed letter's {placeholders}, one line each. */
+  vars?: Record<string, string>
   isTest?: boolean
   resend?: boolean
   /** A second letter to someone who did not answer: the main process checks there was a first one, threads it under it. */
@@ -151,6 +156,8 @@ export interface JobMessage {
   name?: string
   org?: string
   key?: string
+  /** A designed letter's per-recipient words; see EsbOutreachMail.vars. */
+  vars?: Record<string, string>
 }
 
 export interface JobSpec {

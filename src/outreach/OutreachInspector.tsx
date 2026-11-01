@@ -20,6 +20,7 @@ import { Icon } from '../ui/Icon'
 import { Dialog, Switch, Tabs } from '../ui/controls'
 import { buildMessage } from './compose'
 import { renderEmail, withViewerMargin } from './emailRender'
+import { designPreviewHtml } from './design'
 import { NeedsYou } from './NeedsYou'
 import { domainOf, roleMailbox, disposableDomain } from './addressCheck'
 
@@ -168,6 +169,7 @@ function ContactTab() {
   const personalPreview = useMemo(() => {
     if (!c || !active || !previewModal) return null
     const m = buildMessage(active, c.subject, c.body, c.lang)
+    if (c.design) return { subject: m.subject, html: s.design ? designPreviewHtml(s.design, active, c.lang, s.mail?.settings?.user, c.openers?.[active.email]?.text) : '' }
     return {
       subject: m.subject,
       html: withViewerMargin(renderEmail({
@@ -184,7 +186,7 @@ function ContactTab() {
         officialPad: c.officialPad,
       }).html, c.letterhead, c.officialPad)
     }
-  }, [c, active, previewModal, s.footerLine, s.fontFamily, s.headerBg, s.footerBg, s.stripeColors, s.signatures])
+  }, [c, active, previewModal, s.footerLine, s.fontFamily, s.headerBg, s.footerBg, s.stripeColors, s.signatures, s.design, s.mail])
   if (!active) return <div className="or-empty"><Icon name="user" size={22} /><p>Pick a contact in the list to see what the sheet says about them.</p></div>
   const reason = c ? skipReason(active, c.subject, c.body) : null
   const outside = c && !inAudience(active, c.audience)

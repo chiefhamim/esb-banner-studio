@@ -378,11 +378,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       if (!camp) return { ok: false, error: 'No active campaign found to start' }
 
       const sig = outreach.signatures.find((s) => s.id === camp.signatureId) ?? outreach.signatures[0]
-      const spec = buildJobSpec({
-        campaign: camp,
-        contacts: outreach.contacts,
-        signature: sig?.text,
-      })
+      let spec
+      try {
+        spec = buildJobSpec({
+          campaign: camp,
+          contacts: outreach.contacts,
+          signature: sig?.text,
+        })
+      } catch (e) { return { ok: false, error: (e as Error).message } }
       if (spec.messages.length === 0) {
         return { ok: false, error: 'No actionable or approved recipients to send' }
       }

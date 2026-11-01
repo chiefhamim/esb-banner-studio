@@ -122,6 +122,27 @@ describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on eve
     now += 120e3
     expect(await mailer.send({ to: 'md@example.com', subject: 'S', text: 'again' })).toMatchObject({ ok: false, duplicate: true })
   })
+  it('a designed letter goes as its own page: pictures inline by cid, words filled, no letterhead, opt-out linked', async () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
+    mailer.saveSettings(settings, 'abcdefghijklmnop')
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    const r = await mailer.send({
+      to: 'designed@example.com', subject: 'S', body: 'Dear {name|Reader}, plain version', letterhead: true, optOut: 'Reply unsubscribe',
+      design: { html: '<table><tr><td><img src="cid:esb-d1"><p>Dear {name|Reader},</p><img src="https://t.example/p.gif"><a href="{unsubscribe}">Unsubscribe</a><script>x()</script></td></tr></table>', images: [{ cid: 'esb-d1', dataUrl: png }] },
+      vars: { name: 'Rahim <b>' },
+    })
+    expect(r.ok).toBe(true)
+    const msg = sent[0]
+    const html = String(msg.html)
+    expect(html).toContain('src="cid:esb-d1"')
+    expect(html).toContain('Dear Rahim &lt;b&gt;,')
+    expect(html).toContain('href="mailto:desk@example.com?subject=unsubscribe"')
+    expect(html).not.toMatch(/t\.example|<script/)
+    const atts = msg.attachments as { cid?: string; contentType?: string }[]
+    expect(atts.map((a) => a.cid)).toEqual(['esb-d1']) // the picture, and no letterhead logo
+    expect(String(msg.text)).toContain('Dear Rahim <b>,')
+    expect(String(msg.text)).toContain('Reply unsubscribe')
+  })
   it('footer text: an unspecified footer defaults, an explicitly cleared one sends no footer at all', async () => {
     const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
     mailer.saveSettings(settings, 'abcdefghijklmnop')
