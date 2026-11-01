@@ -24,6 +24,7 @@ import { ask, useOutreachUi, type LeftTab } from './outreachUi'
 import { downloadText, eligible, inAudience, resultsCsv, resumeBatch } from './campaign'
 import { useEngineStore } from './engineStore'
 import { describeRun, fmtDay } from './activityFormat'
+import { useDesignFile } from './designImport'
 import { AiSettingsDialog } from '../editorial/AiSettingsDialog'
 import { EngineStatus } from '../editorial/EngineStatus'
 import { ProviderMark } from '../editorial/ProviderMark'
@@ -40,6 +41,7 @@ export function OutreachWorkspace() {
   const theme = useStore((x) => x.theme)
   const c = s.campaign()
   const file = useRef<HTMLInputElement>(null)
+  const designFile = useRef<HTMLInputElement>(null)
   const letterAi = aiFor('outreach', ai)
   const idle = s.run === 'idle'
 
@@ -110,6 +112,9 @@ export function OutreachWorkspace() {
       { label: 'Templates', icon: 'folder', hint: s.templates.length ? String(s.templates.length) : 'None yet', onClick: () => ui.set({ sheet: 'templates' }) },
       { label: 'Follow-up letter', icon: 'refresh', disabled: !c, onClick: () => ui.set({ sheet: 'follow-up' }) },
       { divider: true },
+      { label: c?.design ? 'Replace the designed HTML' : 'Designed HTML', icon: 'image', hint: c?.design ? 'In use' : 'File', disabled: !c, onClick: () => designFile.current?.click() },
+      ...(c?.design ? [{ label: 'Back to a written letter', icon: 'edit' as const, onClick: async () => { if (await ask({ title: 'Stop using the designed letter?', body: `${c.design!.name} is set aside; its plain-text version stays as the letter to edit. Pick the HTML file again to bring it back.`, ok: 'Use a written letter' })) void s.clearDesign() } }] : []),
+      { divider: true },
       { label: 'Signatures', icon: 'edit', onClick: () => ui.set({ sheet: 'signatures' }) },
       { label: 'ESB letterhead', checked: !!c?.letterhead && !c?.officialPad, disabled: !c || !!c?.officialPad, onClick: () => s.patch({ letterhead: !c?.letterhead }) },
       { label: 'Footer text', icon: 'edit', hint: s.footerBg || s.footerLine !== DEFAULT_FOOTER_LINE ? 'Edited' : s.footerLine ? 'Default' : 'Off', onClick: () => ui.set({ sheet: 'footer' }) },
@@ -179,6 +184,7 @@ export function OutreachWorkspace() {
           {set ? <span className="ed-avatar">{(set.name || set.user).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span> : <><Icon name="mail" size={14} /><span className="ed-account-label">Sender</span></>}
         </button>
         <input ref={file} type="file" accept=".xlsx,.csv,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void s.importList(f); e.target.value = '' }} />
+        <input ref={designFile} type="file" accept=".html,.htm,text/html" hidden onChange={(e) => { void useDesignFile(e.target.files?.[0]); e.target.value = '' }} />
       </header>
 
       {banner}

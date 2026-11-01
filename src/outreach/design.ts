@@ -1,4 +1,4 @@
-// A designed HTML letter (Letter → Designed HTML…): a finished email page built elsewhere (Figma, a generator, an
+// A designed HTML letter (Letter → Designed HTML): a finished email page built elsewhere (Figma, a generator, an
 // agency), sent as it is instead of the desk's marks. The file should be self-contained — pictures written into it as
 // data: URLs — and each picture is lifted out here and named cid:esb-dN, so it travels inside the message and nothing
 // is ever loaded from a server. Linked pictures (src="assets/…" or https://…) cannot be carried and are reported.
@@ -42,7 +42,7 @@ export function importDesign(name: string, raw: string): DesignImport {
   if (bytes > DESIGN_MAX_IMAGE_BYTES) throw new Error(`The pictures in ${name} come to ${(bytes / 1048576).toFixed(1)} MB; keep them under ${DESIGN_MAX_IMAGE_BYTES / 1048576} MB`)
   // pictures that are links (a file beside the page, or a server) cannot travel with the message
   const linked = [...html.matchAll(/\s(?:src|background)\s*=\s*["']?(?!cid:|#|["'])([^"'\s>]+)/gi)].map((m) => m[1])
-  if (linked.length) notes.push(`${linked.length} picture${linked.length === 1 ? ' is a link' : 's are links'} (${linked[0]}${linked.length > 1 ? ', …' : ''}) and will not show. Use the self-contained export of the page.`)
+  if (linked.length) notes.push(`${linked.length} picture${linked.length === 1 ? ' is a link' : 's are links'} (${linked[0]}${linked.length > 1 ? ` and ${linked.length - 1} more` : ''}) and will not show. Use the self-contained export of the page.`)
   if (/<script\b|\son[a-z]+\s*=/i.test(html)) notes.push('Scripts and event handlers were removed; mail clients never run them.')
   if (/<link\b[^>]*fonts\.googleapis/i.test(html)) notes.push('Web fonts are not loaded in email; the page falls back to its own font list (Gmail and Outlook show Arial).')
   html = html.replace(/\{\{\s*unsubscribe(?:_url)?\s*\}\}/gi, '{unsubscribe}')

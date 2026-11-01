@@ -43,6 +43,8 @@ interface UiState {
   sheet: Sheet
   showLog: boolean
   asking: (AskRequest & { resolve: (v: string | true | null) => void }) | null
+  /** What the last Designed HTML import noticed (linked pictures, web fonts, no unsubscribe link). */
+  designNotes: string[]
   set: (p: Partial<Omit<UiState, 'set'>>) => void
 }
 
@@ -54,6 +56,7 @@ export const useOutreachUi = create<UiState>((set) => ({
   sheet: null,
   showLog: false,
   asking: null,
+  designNotes: [],
   set: (p) => set(p),
 }))
 

@@ -38,7 +38,12 @@ try {
   await page.waitForTimeout(300)
   // the file input behind Letter → Designed HTML…
   const before = remote.length
-  await page.setInputFiles('.or-toolbar input[type=file]', design)
+  // the top Letter menu offers it too, and opens the same file picker
+  await page.locator('.menubar button').filter({ hasText: /^Letter$/ }).first().click()
+  const item = page.locator('.menu .menu-item').filter({ hasText: 'Designed HTML' })
+  check(await item.count() === 1, 'Letter menu has "Designed HTML" (no ellipsis)')
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 5000 }), item.click()])
+  await chooser.setFiles(design)
   await page.waitForSelector('.or-frame')
   await page.waitForTimeout(800)
   // the preview frame is sandboxed (no origin), so the page cannot reach into it; evaluate inside the frame itself
