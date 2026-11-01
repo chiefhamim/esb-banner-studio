@@ -5,7 +5,7 @@
 import { VideoSampleSink } from 'mediabunny'
 import { inputFor } from '../media'
 import { cacheKey, readCache, writeCache } from './mediaSource'
-import { yieldToPlayback } from './background'
+import { backgroundHeld, yieldToPlayback } from './background'
 
 export const THUMB_H = 48
 const SPRITE_W = 4096
@@ -32,7 +32,50 @@ export function tileRect(f: Pick<Filmstrip, 'tileW' | 'tileH' | 'cols'>, i: numb
 
 export type StripState = { state: 'ready' | 'partial'; strip: Filmstrip } | { state: 'pending' } | { state: 'none'; why: string }
 
+// Sprites in memory: an LRU capped by bytes; a project switch releases the strips of media it no longer uses. A strip
+// still being built is never evicted (its loop owns it).
 const known = new Map<string, StripState>()
+const urlOf = new Map<string, string>()
+let knownBytes = 0
+export const STRIP_BUDGET = 96 * 1024 * 1024
+const stripBytes = (s: StripState | undefined) => (s && (s.state === 'ready' || s.state === 'partial') && s.strip.image ? s.strip.image.width * s.strip.image.height * 4 : 0)
+
+/** Set a key's state, keeping the byte count and the LRU order (closing the sprite it replaces). */
+function setKnown(key: string, next: StripState) {
+  const old = known.get(key)
+  if (old && old !== next) {
+    knownBytes -= stripBytes(old)
+    const oi = old.state === 'ready' || old.state === 'partial' ? old.strip.image : null
+    const ni = next.state === 'ready' || next.state === 'partial' ? next.strip.image : null
+    if (oi && oi !== ni && old.state === 'ready') oi.close()
+  }
+  known.delete(key)
+  known.set(key, next)
+  knownBytes += stripBytes(next)
+  for (const [k, v] of known) {
+    if (knownBytes <= STRIP_BUDGET) break
+    if (k === key || v.state === 'pending' || v.state === 'partial') continue
+    forget(k)
+  }
+}
+
+function forget(key: string) {
+  const v = known.get(key)
+  if (!v || v.state === 'pending' || v.state === 'partial') return
+  knownBytes -= stripBytes(v)
+  if (v.state === 'ready') v.strip.image?.close()
+  known.delete(key)
+  urlOf.delete(key)
+}
+
+/** Release the sprites of every media URL not in `keep` (a different project is on the desk). They come back from
+ * the project cache when needed again. */
+export function releaseFilmstrips(keep: Set<string>) {
+  for (const [k, u] of [...urlOf]) if (!keep.has(u)) forget(k)
+}
+
+export const filmstripMemory = () => ({ count: known.size, bytes: knownBytes })
+
 const queue: { url: string; identity: string; key: string }[] = []
 let running = false
 const listeners = new Set<() => void>()
@@ -42,7 +85,8 @@ const notify = () => listeners.forEach((fn) => fn())
 export function filmstripFor(url: string, identity = url): StripState {
   const key = cacheKey('fs', identity)
   const s = known.get(key)
-  if (s) return s
+  if (s) { known.delete(key); known.set(key, s); return s }
+  urlOf.set(key, url)
   known.set(key, { state: 'pending' })
   queue.push({ url, identity, key })
   void pump()
@@ -82,10 +126,10 @@ async function pump() {
       try {
         const cached = await readCache(job.key)
         const f = cached ? await unpack(cached) : null
-        if (f) known.set(job.key, { state: 'ready', strip: f })
+        if (f) setKnown(job.key, { state: 'ready', strip: f })
         else await build(job.url, job.key)
       } catch (e) {
-        known.set(job.key, { state: 'none', why: (e as Error).message || 'could not read the picture' })
+        setKnown(job.key, { state: 'none', why: (e as Error).message || 'could not read the picture' })
       }
       notify()
     }
@@ -95,11 +139,11 @@ async function pump() {
 }
 
 async function build(url: string, key: string) {
-  if (typeof OffscreenCanvas === 'undefined') { known.set(key, { state: 'none', why: 'no canvas' }); return }
+  if (typeof OffscreenCanvas === 'undefined') { setKnown(key, { state: 'none', why: 'no canvas' }); return }
   const input = inputFor(url)
   try {
     const track = await input.getPrimaryVideoTrack()
-    if (!track || !(await track.canDecode())) { known.set(key, { state: 'none', why: 'the picture cannot be decoded here' }); return }
+    if (!track || !(await track.canDecode())) { setKnown(key, { state: 'none', why: 'the picture cannot be decoded here' }); return }
     const first = await track.getFirstTimestamp()
     const duration = await input.computeDuration()
     const step = stripStep(duration)
@@ -114,28 +158,41 @@ async function build(url: string, key: string) {
     const times = Array.from({ length: count }, (_, i) => first + i * step + Math.min(step / 2, 0.04))
     let i = 0
     let lastShow = performance.now()
-    for await (const s of sink.samplesAtTimestamps(times)) {
-      await yieldToPlayback()
-      if (s) {
-        const r = tileRect(strip, i)
-        try { s.draw(ctx, r.sx, r.sy, r.sw, r.sh) } finally { s.close() }
+    // the decode pipeline reads ahead; when playback, a scrub or an export takes the decoder it is closed at once (not
+    // left decoding its queue of key frames) and opened again from the next tile afterwards
+    while (i < count) {
+      const iter = sink.samplesAtTimestamps(times.slice(i))[Symbol.asyncIterator]()
+      let paused = false
+      try {
+        while (i < count) {
+          if (backgroundHeld().length) { paused = true; break }
+          const { value: s, done } = await iter.next()
+          if (done) { i = count; break }
+          if (s) {
+            const r = tileRect(strip, i)
+            try { s.draw(ctx, r.sx, r.sy, r.sw, r.sh) } finally { s.close() }
+          }
+          i++
+          strip.ready = i
+          if (performance.now() - lastShow > 400 && i < count) {
+            // show what is there while the rest is read
+            const old = strip.image
+            strip.image = await createImageBitmap(sprite)
+            old?.close()
+            setKnown(key, { state: 'partial', strip: { ...strip } })
+            notify()
+            lastShow = performance.now()
+          }
+        }
+      } finally {
+        try { await iter.return?.() } catch { /* closed */ }
       }
-      i++
-      strip.ready = i
-      if (performance.now() - lastShow > 400 && i < count) {
-        // show what is there while the rest is read
-        const old = strip.image
-        strip.image = await createImageBitmap(sprite)
-        old?.close()
-        known.set(key, { state: 'partial', strip: { ...strip } })
-        notify()
-        lastShow = performance.now()
-      }
+      if (paused) await yieldToPlayback()
     }
     const old = strip.image
     strip.image = await createImageBitmap(sprite)
     old?.close()
-    known.set(key, { state: 'ready', strip })
+    setKnown(key, { state: 'ready', strip })
     void pack(strip, sprite).then((bytes) => writeCache(key, bytes)).catch(() => {})
   } finally {
     input.dispose()

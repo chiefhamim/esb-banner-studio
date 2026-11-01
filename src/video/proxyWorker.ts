@@ -2,13 +2,15 @@
 // through its esb-media:// URL (range requests) and writes a 540p H.264 MP4 with a key frame every 0.5 s through
 // mediabunny's Conversion API. The bytes go back to the page in pieces (StreamTarget), which hands them to main
 // (`esb:video-proxy-write`); the next piece is produced only after the page acknowledges the last one, so memory stays
-// flat however long the source is. No ffmpeg at runtime.
+// flat however long the source is. The proxy keeps the original's timestamps (`trim.start = 0`), so a source time
+// means the same frame in the proxy and in the original. No ffmpeg at runtime.
 //
 // Messages in:  { type: 'start', url, width, height } · { type: 'ack', n } · { type: 'nack', n, error } · { type: 'cancel' }
 // Messages out: { type: 'write', n, position, data } · { type: 'progress', p } · { type: 'done', ms } ·
 //               { type: 'canceled' } · { type: 'error', error }
-import { ALL_FORMATS, Conversion, ConversionCanceledError, Input, Mp4OutputFormat, Output, QUALITY_MEDIUM, StreamTarget, UrlSource } from 'mediabunny'
+import { ALL_FORMATS, Conversion, ConversionCanceledError, Input, Mp4OutputFormat, Output, StreamTarget, UrlSource } from 'mediabunny'
 import type { StreamTargetChunk } from 'mediabunny'
+import { proxyConversionOptions } from './engine/proxyOptions'
 
 type Msg = { type: 'start'; url: string; width: number; height: number } | { type: 'ack'; n: number } | { type: 'nack'; n: number; error: string } | { type: 'cancel' }
 
@@ -42,10 +44,7 @@ async function run(m: { url: string; width: number; height: number }) {
     conversion = await Conversion.init({
       input,
       output,
-      video: { width: m.width, height: m.height, fit: 'fill', codec: 'avc', keyFrameInterval: 0.5, forceTranscode: true, quality: QUALITY_MEDIUM },
-      // the sound is kept (copied when the container allows) so a proxy previews like its original
-      audio: {},
-      showWarnings: false,
+      ...proxyConversionOptions(m.width, m.height),
     })
     if (!conversion.isValid || !conversion.utilizedTracks.some((t) => t.type === 'video')) {
       throw new Error('This file cannot be converted here: ' + (conversion.discardedTracks.map((d) => d.reason).join(', ') || 'no video track'))

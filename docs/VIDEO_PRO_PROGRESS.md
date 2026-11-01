@@ -330,3 +330,133 @@ track add / move / remove / undo through the UI; no page errors.
 ### Next step
 Phase 2 (pro editing) on top of the v2 model: speed and keyframes are already in the type; the compositor's layer pass
 takes them per frame.
+
+## Phase 1 fix round — Part B (2026-11-01, branch `video-p1-engine`)
+
+Review findings on the decode engine, compositor and playback, plus the lead's screenshot review (U-items), fixed on
+`video-p1-engine` (from f4e6d23). Measured on this PC (RTX 3060, headless Edge, dev server, 1366 × 768 unless said).
+
+### Correctness
+- **C1 frame-cache alias → closed bitmap (confirmed).** `aliasOf` made a second entry sharing the original's bitmap;
+  evicting the original closed it and the alias still answered "exact". Aliases are now part of `FrameCache`
+  (`alias(source, index, target)`): they point at the real entry, cost no bytes and are dropped with it (evicted,
+  replaced, cleared); `get`/`peek`/`nearestBefore` resolve through them and can never return a closed bitmap.
+  Unit test evicts the original, then hits the alias.
+- **C2 proxy timestamps (confirmed).** mediabunny's Conversion without a trim shifts a file to start at 0, so a
+  source whose first frame is at 1.5 s previewed 1.5 s ahead of its export and sound. The proxy now keeps the
+  source's timestamps (`trim: { start: 0 }`, settings in `engine/proxyOptions.ts`, used by `proxyWorker.ts`). e2e:
+  a fixture made with `-output_ts_offset 1.5` converted with the worker's settings: first video/audio timestamps
+  1.5 / 1.479 s in both, the frame at 3.0 s is the same frame.
+- **C4 proxy ready mid-playback (confirmed).** The clip switched to a decoder that had nothing yet (black) and the
+  original's decoder was never released. The engine remembers the URL each clip last drew from and keeps drawing
+  from it until the new decoder has a frame; a debounced prune (`schedulePrune`, also after every clip edit) then
+  disposes the old decoder. e2e: proxy made ready 1.2 s into playback → 761 draws, 0 blank, the clip on the proxy,
+  the original's decoder gone.
+- **C5 drain after dispose (confirmed).** `drain()` could hit a null sink (TypeError) and leave the waiting promise
+  unresolved (`still.ts` hung). Every exact request now resolves (null when disposed/replaced/failed), never rejects;
+  a `createImageBitmap` rejection closes the sample and its frame and resolves null. Unit tests for both.
+
+### Performance
+- **P1 cache thrash (confirmed; both named causes).** Preview frames are decoded at the monitor's device-pixel
+  height (steps 360/540/720/1080/1440/2160; the golden still and every export decode full size). While playing, the
+  cache is told which index windows each source still needs: frames behind the playhead go first, then — only if the
+  windows alone are over budget — the furthest-ahead ones. The look-ahead (≤ 0.5 s) is sized so all streams fill at
+  most half the budget. Found while measuring: `createImageBitmap(…, resizeQuality: 'medium')` capped the copy at
+  ~240 frames/s for the whole page (bench: 'low' 473/s; decode alone 453–530/s), so the scaled preview uses 'low';
+  playback started before the streams had frames, so the clock now waits (≤ 700 ms, typically 30–400 ms) until every
+  stream under the playhead is 0.5 s ahead; and a filmstrip being read now closes its decoder at once when
+  playback/scrub/export starts (it used to finish its queue of 4K key-frame decodes into the first frames of play).
+
+  Dropped frames, 8 s play at the default 640 MB budget, the reviewer's probe (`perf-probe.mjs`, his 4K fixtures):
+
+  | Case | Before | After (5 runs: min–max, median) |
+  |---|---|---|
+  | 3 × 1080p30 | 0 % | 0 % every run |
+  | 10 × 1080p30 | 97.5 % | 0–3.2 %, median 0.5 % |
+  | 2 × 4K30 | 99.2 % | 2.2–3.8 %, median 3.0 % |
+  | 1 × 4K60 | 99.6 % | 0.9–2.6 %, median 1.3 % |
+  | 1 × 4K30 | 36.6 % | 0.8–4.2 %, median 2.5 % |
+
+  The ≤ 2 % target is met at the median for 10 × 1080p and 4K60, not for 2 × 4K30 nor in every run of 4K30. What is
+  left is not the engine keeping up: in the instrumented e2e runs every dropped frame was a *skipped* draw (0 *held*
+  frames — every frame drawn was the exact one); a CPU profile of a 2 × 4K30 run shows the main thread ~95 % idle with
+  no long tasks; the drops are the first 0.1–0.2 s and scattered single frames. The page's animation frames are not
+  delivered while the GPU process is saturated decoding 4K at full size (headless Edge). Proxies remove that load.
+  `video-engine-test.mjs` runs the four cases on its own 4K fixtures (generated into `tools/out/video-fixtures`, not
+  committed): ≤ 2 % passes; 2–6 % with only skipped draws prints a NOTE; held frames or > 6 % fail.
+- **P2b scrub on 1 s-GOP originals.** Exact decodes are one `getSample` (walking the GOP frame by frame was measured
+  slower: p50 153–169 vs 116 ms on 3 layers) and are serialised across sources (parallel seeks of several layers
+  fight over the hardware decoder). While scrubbing fast on a long-GOP file the key frame before t is decoded first
+  (one decode) and held on screen. 1080p 1 s-GOP fixture, no proxy, seek → exact frame drawn: 1 layer p50 20 / p95
+  40 ms (60 seeks 300 ms apart), p50 19 / p95 37 ms (150 seeks 40 ms apart); 3 layers p50 117 / p95 240 →
+  p50 90 / p95 200 ms (the reviewer's figure before: p95 139 ms).
+- **P3 audio fallback (confirmed).** A file mediabunny cannot read is decoded whole by Web Audio once per URL for the
+  session (shared by every restart and loop; files ≤ 96 MB, ≤ 512 MB of PCM kept); a bigger file or a failed decode
+  marks the source "Sound not supported" and the status bar says so (no OOM, no retry each play). A file with no sound
+  track is no longer fetched at all (it used to be fetched and decoded whole on every play).
+- **P4 text textures evicted mid-frame (confirmed).** A static texture used in the frame being drawn is pinned
+  (frame counter), so a later upload in the same frame cannot delete it. Unit test (fake WebGL context).
+- **P5b background work during scrub/export.** Background holds are counted per reason (playback; scrub, until the
+  paused playhead has been still 400 ms; export). Playback and export also call Part A's `holdProxies(reason)`
+  (looked up by name on media.ts, a no-op without it).
+- **P7 filmstrip sprites.** An LRU capped at 96 MB of sprites; a project switch releases the strips (and the sound
+  fallback buffers) of media the new project does not use.
+- **P8 WebGL context loss.** The compositor rebuilds programs, buffers and textures on `webglcontextrestored`; the
+  monitor shows the slate while lost and redraws when restored (e2e with `WEBGL_lose_context`). The export checks
+  `isLost()` around each frame and fails with a clear message instead of encoding black frames.
+- **P10 export samples / late frames.** An export frame's decoded samples are closed in a `finally`; a frame a stream
+  decodes after `dropSource` is closed, never cached (unit tests for both late paths).
+- **P12 FrameStream polling.** A stream far enough ahead sleeps until its target moves (the engine moves it each
+  tick): no 4 ms wake-ups; a 250 ms timeout only as a safety net.
+
+### UI (the lead's screenshot review)
+- **U1** Root cause: with more tracks than fit, the ruler (a flex item) shrank to 1 px and every lane rose 27 px above
+  its header. The ruler and the "Tracks" corner are pinned (sticky) at the top of one scroller; the harness now checks
+  that every header is level with its lane and the ruler is on screen (`geometry` in manifest.json): 0 problems.
+- **U2 / U13** A monitor/timeline divider (drag, Up/Down keys, double-click = balanced), remembered in localStorage
+  `esb-banner-studio/video/timeline-height`. Until dragged, the timeline gets what the monitor's picture cannot use
+  (at 900 × 900 it grows to ~420 px instead of black bars over and under the picture), at least 280 px. A visible
+  vertical scrollbar and an "N more tracks" chip at the foot of the headers (click scrolls to them).
+- **U3** Waveforms on a dB scale (−48 dBFS floor), symmetric peak bars, ≥ 1 px for any sound; a span with no sound
+  says "Silent". A −18 dBFS tone now fills ~62 % of the band.
+- **U6 / U15 / U16** Link icon + title left-aligned in one band for every clip; on a short clip the duration hides
+  first (container query); the label stays inside the visible part of a clip whose start is scrolled away.
+- **U10** Track tools are 28 × 28 px; ⋯ stays pressed while its menu is open (and toggles it).
+- **U11** Add-track menu: an icon per kind and distinct one-liners; "+ Track" shows its open state.
+- **U12** Video menus are solid (`.popover.vw-solid`), no glass over the clips.
+- **U14** Filmstrip tiles have a 1 px gap and a hairline edge (light pictures such as banners read as tiles).
+- **U17** Editor-only monitor words (Media offline, the empty card's hint) have a legible minimum (11–15 CSS px).
+- **U18** While the inspector holds the bin's place, no bin tab reads as selected.
+- **U20** Restore card: "autosaved 10:00 AM" (no seconds).
+- **Harness** (`tools/e2e/video-shots.mjs`): the sample clip has real sound (the committed speech fixture's audio),
+  so the bin, the linked A1 clip and its waveform are true; the 4K stand-in reads 34 MB (6 s at ~45 Mb/s); seeded
+  Windows paths keep their backslashes (`String.raw`); `tab-media` dropped (same picture as `timeline`); monitor
+  states shot in the first theme only; new states `tracks-scrolled`, `tracks-below`, `bin-proxy-0`, `bin-proxy-99`
+  (`waveform-lane` is now footage with its real sound).
+
+### Files
+- Changed: `src/video/engine/{frameCache,decoder,previewEngine,still,glCompositor,background,filmstrip,audioEngine,laneCanvas}.ts`,
+  `src/video/{exportVideo,proxyWorker,compositor}.ts`, `src/video/VideoWorkspace.tsx`, `src/styles/video.css`,
+  `tools/e2e/{video-engine-test,video-shots}.mjs`, `tools/fixtures/video/engine-fixtures.mjs`.
+- New: `src/video/engine/proxyOptions.ts`, `tools/unit/video-engine-fixes.test.ts`.
+
+### Checks
+- `npm run lint`: 0 errors (warnings only, existing kinds).
+- `npm test`: 906 passed (78 files; +`video-engine-fixes.test.ts`: C1 ×3, P1 eviction ×2, C5 ×2, P10 ×2, P4).
+- `npm run build`: ok.
+- `npm run test:video`: 62 PASS, 0 FAIL — new: P8 context loss/restore, C2, C4, P1 ×4 (this run: 2 × 4K30 1.7 %,
+  4K60 1.3 %, 4K30 0 %, 10 × 1080p 0 %, all drops skipped draws, 0 held). Existing acceptance unchanged: 60 s 3-layer
+  1080p 0.33 % dropped, scrub (540p all-key) p50 20 / p95 37 ms, golden frames worst mean 0.72 %, A/V preview
+  −7…−10 ms, export 0 ms.
+- `npm run test:electron`: exits 0; video-electron-test all PASS; electron-test reports one FAIL, "signing out clears
+  the site session" (Editorial sign-out, electron/siteApi — not touched here; same on a rerun).
+- `node tools/audit/text-fit-audit.mjs`: 0 text-fit problems (clip titles ellipsise on purpose). `center-audit`: 0.
+- Screens: `OUT=tools/out/p1-fix PORT=5293 node tools/e2e/video-shots.mjs` — 204 shots, 0 n/a, 0 failed, 0 timeline
+  geometry problems.
+
+### Known gaps
+- 2 × 4K30 (and some runs of 4K30) without proxies stay above 2 % on this PC in headless Edge — skipped draws while
+  the GPU process decodes 4K at full size, not late frames (see P1). Not measured in the Electron window.
+- Preview frames are scaled with the cheap bilinear filter ('low'); a 4K source on a small monitor can alias slightly
+  in the preview (the export always decodes full size).
+- Scrub of three 1 s-GOP 1080p originals at once is still p95 200 ms without proxies (one layer: 40 ms).

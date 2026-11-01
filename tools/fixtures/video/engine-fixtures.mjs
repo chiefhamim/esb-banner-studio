@@ -7,6 +7,11 @@
 //   flash-beep.mp4       8 s 1280x720 30 fps: black, one white frame at 1, 3, 5, 7 s; a 40 ms 1 kHz beep starting
 //                        at exactly the same instants (48 kHz AAC)
 //   golden-src.mp4       12 s 1920x1080 30 fps testsrc2 (its frame counter changes every frame)
+//   offset-1500.mp4      6 s 1280x720 30 fps testsrc2 + tone whose FIRST timestamp is 1.5 s (-output_ts_offset):
+//                        a proxy must keep that offset (fix round C2)
+// Made only when asked for (UHD_FIXTURES; the fix round's playback cases, ~1 min of ffmpeg the first time):
+//   uhd-a-30.mp4 / uhd-b-30.mp4   12 s 3840x2160 30 fps H.264 (GOP 30) testsrc2 / bars + moving box
+//   uhd-c-60.mp4                  12 s 3840x2160 60 fps H.264 (GOP 60) testsrc2
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -33,10 +38,21 @@ const SPECS = {
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-g', '30', '-c:a', 'aac', '-b:a', '128k', '-ac', '2', '-movflags', '+faststart'],
   'golden-src.mp4': ['-f', 'lavfi', '-i', 'testsrc2=size=1920x1080:rate=30:duration=12',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-g', '30', '-an', '-movflags', '+faststart'],
+  'offset-1500.mp4': ['-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=6', '-f', 'lavfi', '-i', 'sine=f=660:d=6:sample_rate=48000',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-pix_fmt', 'yuv420p', '-g', '15', '-bf', '0', '-c:a', 'aac', '-b:a', '96k', '-ac', '2', '-output_ts_offset', '1.5'],
+  'uhd-a-30.mp4': ['-f', 'lavfi', '-i', 'testsrc2=size=3840x2160:rate=30:duration=12',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p', '-g', '30', '-bf', '2', '-an', '-movflags', '+faststart'],
+  'uhd-b-30.mp4': ['-f', 'lavfi', '-i', "smptehdbars=size=3840x2160:rate=30:duration=12,drawbox=x='mod(t*700,3400)':y=800:w=440:h=440:color=white@0.9:t=fill",
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '24', '-pix_fmt', 'yuv420p', '-g', '30', '-bf', '2', '-an', '-movflags', '+faststart'],
+  'uhd-c-60.mp4': ['-f', 'lavfi', '-i', 'testsrc2=size=3840x2160:rate=60:duration=12',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p', '-g', '60', '-bf', '2', '-an', '-movflags', '+faststart'],
 }
 
+/** The 4K fixtures (made only when a test asks for them by name). */
+export const UHD_FIXTURES = ['uhd-a-30.mp4', 'uhd-b-30.mp4', 'uhd-c-60.mp4']
+
 /** Paths of the engine fixtures, making any that are missing. */
-export function ensureEngineFixtures(names = Object.keys(SPECS)) {
+export function ensureEngineFixtures(names = Object.keys(SPECS).filter((n) => !UHD_FIXTURES.includes(n))) {
   fs.mkdirSync(engineFixtureDir, { recursive: true })
   const out = {}
   for (const n of names) {

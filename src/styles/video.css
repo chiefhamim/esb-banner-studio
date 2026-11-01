@@ -150,3 +150,62 @@
 .vw-gl-error svg { flex: none; color: #f5c26b; }
 /* the track header holds its name and three tools (show/sound, lock, more) without cutting "Captions" */
 .vw-track-headers { width: 184px; }
+
+/* ---------------------------------------------------------------- Phase 1 fix round: timeline layout
+   One scroller holds the track headers and the lanes, so a header always sits level with its lane; the ruler and the
+   "Tracks" corner stay pinned at the top while the tracks scroll under them (with more tracks than fit, the ruler
+   used to shrink to 1 px — a flex item — and every lane rose 27 px above its header). */
+.video-workspace { --vw-head-w: 192px; }
+.vw-timeline-footer { position: relative; min-height: 0; }
+.vw-tracks-scroll { overflow: auto; scrollbar-gutter: stable; align-items: flex-start; scrollbar-width: auto; scrollbar-color: color-mix(in srgb, var(--text) 32%, transparent) transparent; }
+.vw-track-headers { width: var(--vw-head-w); align-self: stretch; min-height: 100%; height: max-content; }
+.vw-lanes-area { min-height: 100%; height: max-content; }
+.vw-ruler, .vw-lanes-container, .vw-track-head, .vw-track-lane, .vw-ruler-header { flex: none; box-sizing: border-box; }
+.vw-ruler-header { position: sticky; top: 0; z-index: 12; }
+.vw-ruler { position: sticky; top: 0; z-index: 15; }
+.vw-track-head, .vw-track-lane { height: 48px; }
+/* a visible vertical scrollbar in the lanes (the desk's thin style) */
+.vw-tracks-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.vw-tracks-scroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 22%, transparent); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+.vw-tracks-scroll::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text) 36%, transparent); }
+.vw-tracks-scroll::-webkit-scrollbar-corner { background: transparent; }
+/* tracks below the fold: a chip at the foot of the headers says how many and scrolls to them */
+.vw-tracks-below { position: absolute; left: 8px; bottom: 8px; z-index: 30; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px 0 8px; font: 600 11px/1 var(--ui); color: var(--text); background: var(--card, var(--bg-1)); border: 0; border-radius: var(--r-pill); box-shadow: 0 0 0 1px var(--card-line), 0 2px 8px rgba(0, 0, 0, 0.16); cursor: pointer; }
+.vw-tracks-below:hover { background: var(--fill-hover); }
+.vw-tracks-below:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* the divider between monitor and timeline */
+.vw-tl-resize { position: absolute; left: 0; right: 0; top: -4px; height: 8px; z-index: 40; cursor: row-resize; touch-action: none; }
+.vw-tl-resize::after { content: ''; position: absolute; left: 50%; top: 2px; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: color-mix(in srgb, var(--text) 18%, transparent); opacity: 0; transition: opacity 120ms var(--ease, ease); }
+.vw-tl-resize:hover::after, .vw-tl-resize:focus-visible::after, .vw-tl-resize:active::after { opacity: 1; }
+.vw-tl-resize:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -3px; }
+
+/* track headers: 28 px tools with room between them; the ⋯ stays pressed while its menu is open */
+.vw-track-head { padding: 0 6px 0 12px; gap: 6px; }
+.vw-th-actions { gap: 2px; }
+.vw-th-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; color: var(--text-2); background: transparent; }
+.vw-th-btn:hover { color: var(--text); background: var(--fill-hover); }
+.vw-th-btn.active { color: var(--sel-ink, var(--on-accent)); background: var(--sel, var(--accent)); }
+.vw-th-btn.open, .vw-th-btn[aria-expanded=true] { color: var(--text); background: var(--fill-active, var(--fill-hover)); }
+.vw-th-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.vw-add-track.open { background: var(--fill-active, var(--fill-hover)); color: var(--text); }
+
+/* menus on the video desk are solid (house rule: no decorative glass over the clips) */
+.popover.vw-solid { background: var(--card, var(--bg-1)); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 0 0 1px var(--card-line), var(--shadow-2); }
+:root[data-theme=dark] .popover.vw-solid { background: #232328; }
+.popover.vw-add-track-menu .mi-label { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.popover.vw-add-track-menu .mi-label small { margin: 0; font-size: 11.5px; line-height: 15px; color: var(--text-3); white-space: nowrap; }
+.popover.vw-add-track-menu .menu-item { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
+
+/* clip blocks: link icon and name left-aligned in one band at the top (same for every clip); the duration goes first
+   when the block is short; the name stays inside the visible part of the clip when its start is scrolled away */
+.vw-clip-block { overflow: clip; container-type: inline-size; justify-content: flex-start; align-items: flex-start; padding: 1px 14px 0; }
+.vw-clip-label { position: sticky; left: calc(var(--vw-head-w) + 6px); display: flex; align-items: center; gap: 4px; flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.vw-clip-label .vw-clip-link { margin: 0; width: 14px; height: 14px; }
+.vw-clip-block .vw-clip-title, .vw-clip-block .vw-clip-duration { line-height: 14px; }
+.vw-clip-block .vw-clip-duration { flex: none; margin-left: auto; padding-left: 6px; }
+@container (max-width: 92px) { .vw-clip-duration { display: none; } }
+.vw-clip-block.stacked { align-items: center; padding-top: 0; }
+
+/* the bin's tabs while the inspector holds their place (narrow windows): no tab reads as selected */
+.vw-tabs-none .pill-slide { opacity: 0; }
+.vw-tabs-none button.on { color: var(--text-2); font-weight: inherit; }

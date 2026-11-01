@@ -82,7 +82,7 @@ export function attachLaneCanvas(canvas: HTMLCanvasElement, scroller: HTMLElemen
         const img = getCachedImage(clip.sourceUrl)
         if (img && img.complete && img.naturalWidth) {
           const tw = bh * (img.naturalWidth / img.naturalHeight)
-          for (let x = x0; x < visR; x += tw) if (x + tw > visL) ctx.drawImage(img, x, y0, tw, bh)
+          for (let x = x0; x < visR; x += tw) if (x + tw > visL) drawTile(ctx, img, 0, 0, img.naturalWidth, img.naturalHeight, x, y0, tw, bh)
           state.strips++
         }
       } else if (clip.kind === 'video') {
@@ -97,7 +97,7 @@ export function attachLaneCanvas(canvas: HTMLCanvasElement, scroller: HTMLElemen
               const i = Math.min(f.count - 1, Math.floor(st / f.step))
               if (i >= f.ready) continue
               const tr = tileRect(f, i)
-              ctx.drawImage(f.image, tr.sx, tr.sy, tr.sw, tr.sh, x0 + k * tw, y0, tw, bh)
+              drawTile(ctx, f.image, tr.sx, tr.sy, tr.sw, tr.sh, x0 + k * tw, y0, tw, bh)
             }
             state.strips++
           }
@@ -128,7 +128,28 @@ export function attachLaneCanvas(canvas: HTMLCanvasElement, scroller: HTMLElemen
   }
 }
 
-/** A waveform: one min/max bar per device pixel, from the level with at least one bin per pixel. */
+/** One filmstrip tile with a 1 px gap after it and a hairline inside its edge, so neighbouring tiles — and a light
+ * picture such as a banner — still read as separate frames. */
+function drawTile(ctx: CanvasRenderingContext2D, img: CanvasImageSource, sx: number, sy: number, sw: number, sh: number, x: number, y: number, w: number, h: number) {
+  const dw = Math.max(1, w - 1)
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, dw, h)
+  ctx.strokeStyle = 'rgba(0,0,0,0.28)'
+  ctx.lineWidth = 1
+  ctx.strokeRect(x + 0.5, y + 0.5, dw - 1, h - 1)
+}
+
+/** Waveform heights are drawn on a dB scale from this floor (dBFS) to 0 dBFS, so a quiet sound (a −18 dBFS tone,
+ * speech) fills a readable part of the lane instead of a 1–2 px hairline; anything above silence is at least 1 px. */
+export const WAVE_FLOOR_DB = -48
+/** Fraction of the half-height a peak of linear amplitude `a` (0..1) is drawn at. */
+export function waveHeight(a: number): number {
+  if (!(a > 0)) return 0
+  const db = 20 * Math.log10(Math.min(1, a))
+  return Math.max(0, Math.min(1, (db - WAVE_FLOOR_DB) / -WAVE_FLOOR_DB))
+}
+
+/** A waveform: one bar per device pixel (the peak over that pixel, both sides of the centre line, dB scale), from the
+ * level with at least one bin per pixel. A span with no sound at all says "Silent" instead of drawing a line. */
 function drawWave(ctx: CanvasRenderingContext2D, peaks: Peaks, clip: Clip, x0: number, y0: number, bh: number, visL: number, visR: number, pxPerSecDevice: number, dpr: number) {
   const level = levelFor(peaks, pxPerSecDevice)
   const data = peaks.levels[level]
@@ -136,10 +157,11 @@ function drawWave(ctx: CanvasRenderingContext2D, peaks: Peaks, clip: Clip, x0: n
   const bins = data.length / 2
   const mid = y0 + bh / 2
   const half = bh / 2 - 1
-  const gain = Math.max(0.15, Math.min(1, clip.volume ?? 1))
+  const gain = Math.max(0, Math.min(1, clip.volume ?? 1))
   ctx.fillStyle = clip.muted ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.82)'
   const step = 1 / dpr
   const zoom = pxPerSecDevice / dpr
+  let any = false
   for (let x = visL; x < visR; x += step) {
     const t0 = (clip.in || 0) + (x - x0) / zoom
     const t1 = t0 + step / zoom
@@ -148,11 +170,17 @@ function drawWave(ctx: CanvasRenderingContext2D, peaks: Peaks, clip: Clip, x0: n
     if (i0 >= bins) break
     i0 = Math.max(0, i0)
     i1 = Math.min(bins, i1)
-    let lo = 0
-    let hi = 0
-    for (let i = i0; i < i1; i++) { lo = Math.min(lo, data[i * 2]); hi = Math.max(hi, data[i * 2 + 1]) }
-    const top = mid - (hi / 127) * half * gain
-    const bot = mid - (lo / 127) * half * gain
-    ctx.fillRect(x, top, step, Math.max(step, bot - top))
+    let peak = 0
+    for (let i = i0; i < i1; i++) peak = Math.max(peak, -data[i * 2], data[i * 2 + 1])
+    if (peak <= 0) continue
+    any = true
+    const hh = Math.max(step, waveHeight((peak / 127) * Math.max(gain, 0.02)) * half)
+    ctx.fillRect(x, mid - hh, step, hh * 2)
+  }
+  if (!any && visR - visL > 40) {
+    ctx.fillStyle = 'rgba(255,255,255,0.72)'
+    ctx.font = '500 10px "ESB Sans", Inter, sans-serif'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('Silent', Math.max(visL, x0) + 6, mid)
   }
 }

@@ -6,8 +6,12 @@
 //   mix pass     two inputs: the outgoing and incoming footage are each drawn into their own framebuffer, then mixed
 //                by the crossfade's progress in one shader and laid over what is below
 //
-// Text and graphics come in as Canvas 2D rasters, uploaded once per change and kept by content key (texture LRU).
+// Text and graphics come in as Canvas 2D rasters, uploaded once per change and kept by content key (texture LRU; a
+// texture used in the frame being drawn is never evicted by a later upload in the same frame).
 // Without WebGL2 the constructor throws GLUnavailableError: the caller shows that, never a wrong frame.
+// A lost context (GPU reset, driver update) sets `lost`; when the browser restores it every program, buffer and
+// texture is made again and `onRestored` is called (the monitor redraws). An export checks `isLost()` each frame and
+// fails with a clear error rather than encode black frames.
 
 import type { Quad, UV } from './layerMath'
 import { vertices } from './layerMath'
@@ -51,7 +55,7 @@ out vec4 o;
 void main() { o = mix(texture(uA, vUv), texture(uB, vUv), uP); }`
 
 export interface TexHandle { tex: WebGLTexture; width: number; height: number }
-interface CachedTex extends TexHandle { key: string; bytes: number }
+interface CachedTex extends TexHandle { key: string; bytes: number; frame: number }
 
 /** What a layer draw needs: its texture and where it lands. */
 export interface LayerDraw { tex: TexHandle; quad: Quad; uv: UV; alpha: number }
@@ -61,13 +65,19 @@ export class GLCompositor {
   width = 0
   height = 0
   lost = false
-  private layerProg: WebGLProgram
-  private mixProg: WebGLProgram
-  private vao: WebGLVertexArrayObject
-  private vbo: WebGLBuffer
-  private fullVao: WebGLVertexArrayObject
-  private uLayer: { res: WebGLUniformLocation | null; tex: WebGLUniformLocation | null; alpha: WebGLUniformLocation | null }
-  private uMix: { a: WebGLUniformLocation | null; b: WebGLUniformLocation | null; p: WebGLUniformLocation | null }
+  /** The context was restored after a loss (resources are new; draw again). */
+  onRestored: () => void = () => {}
+  /** The context was lost. */
+  onLost: () => void = () => {}
+  private layerProg!: WebGLProgram
+  private mixProg!: WebGLProgram
+  private vao!: WebGLVertexArrayObject
+  private vbo!: WebGLBuffer
+  private fullVao!: WebGLVertexArrayObject
+  private uLayer!: { res: WebGLUniformLocation | null; tex: WebGLUniformLocation | null; alpha: WebGLUniformLocation | null }
+  private uMix!: { a: WebGLUniformLocation | null; b: WebGLUniformLocation | null; p: WebGLUniformLocation | null }
+  /** Frames begun (a static texture used in the current one is pinned). */
+  private frame = 0
   private fbos: { fb: WebGLFramebuffer; tex: WebGLTexture; w: number; h: number }[] = []
   /** Per-slot textures for moving pictures (a footage clip): re-uploaded only when its source object changes. */
   private slots = new Map<string, TexHandle & { src: unknown }>()
@@ -96,8 +106,24 @@ export class GLCompositor {
     if (!gl) throw new GLUnavailableError()
     this.gl = gl
     if ('addEventListener' in canvas) {
-      canvas.addEventListener('webglcontextlost', ((e: Event) => { e.preventDefault(); this.lost = true }) as EventListener)
+      canvas.addEventListener('webglcontextlost', ((e: Event) => { e.preventDefault(); this.lost = true; this.onLost() }) as EventListener)
+      canvas.addEventListener('webglcontextrestored', (() => {
+        // every old handle is dead: forget them and make the resources again
+        this.slots.clear()
+        this.statics.clear()
+        this.staticBytes = 0
+        this.fbos = []
+        try { this.init(); this.lost = false; this.onRestored() } catch { this.lost = true }
+      }) as EventListener)
     }
+    this.init()
+  }
+
+  /** The context is lost now (an event may not have arrived yet). */
+  isLost(): boolean { return this.lost || this.gl.isContextLost() }
+
+  private init() {
+    const gl = this.gl
     this.layerProg = program(gl, VS, FS_LAYER)
     this.mixProg = program(gl, VS_FULL, FS_MIX)
     this.uLayer = { res: gl.getUniformLocation(this.layerProg, 'uRes'), tex: gl.getUniformLocation(this.layerProg, 'uTex'), alpha: gl.getUniformLocation(this.layerProg, 'uAlpha') }
@@ -134,6 +160,7 @@ export class GLCompositor {
   /** Size the drawing buffer (device pixels) and start a frame: black. */
   begin(w: number, h: number) {
     const gl = this.gl
+    this.frame++
     if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h }
     this.width = w
     this.height = h
@@ -178,16 +205,18 @@ export class GLCompositor {
   /** A static texture by content key, made (rasterised and uploaded) only when it is not cached. */
   staticTexture(key: string, make: () => { src: TexImageSource; width: number; height: number } | null): TexHandle | null {
     const hit = this.statics.get(key)
-    if (hit) { this.statics.delete(key); this.statics.set(key, hit); return hit }
+    if (hit) { this.statics.delete(key); this.statics.set(key, hit); hit.frame = this.frame; return hit }
     const m = make()
     if (!m) return null
     const tex = this.newTexture()
     this.upload(tex, m.src)
-    const e: CachedTex = { key, tex, width: m.width, height: m.height, bytes: m.width * m.height * 4 }
+    const e: CachedTex = { key, tex, width: m.width, height: m.height, bytes: m.width * m.height * 4, frame: this.frame }
     this.statics.set(key, e)
     this.staticBytes += e.bytes
     for (const [k, v] of this.statics) {
-      if (this.staticBytes <= this.staticBudget || k === key) break
+      if (this.staticBytes <= this.staticBudget) break
+      // the textures of the frame being drawn stay (it may still draw them), even over budget for this frame
+      if (k === key || v.frame === this.frame) continue
       this.gl.deleteTexture(v.tex)
       this.statics.delete(k)
       this.staticBytes -= v.bytes

@@ -13,9 +13,15 @@ import { previewUrl } from './mediaSource'
 import type { FrameInput, FrameLookup } from './render'
 import { srcTime } from './render'
 
-/** How far ahead of the playhead streams decode (seconds), and how soon a coming clip starts decoding. */
-const AHEAD = 0.4
+/** How far ahead of the playhead streams decode at most (seconds; less when the budget is tight), and how soon a
+ * coming clip starts decoding. */
+const AHEAD = 0.5
+const MIN_AHEAD = 0.15
+/** Share of the cache budget the look-ahead of all streams may fill. */
+const AHEAD_SHARE = 0.5
 const PREROLL = 1.0
+/** Seconds of source each stream decodes before the clock starts (at most START_WAIT_MS, see the playback loop). */
+const PREROLL_AHEAD = 0.5
 /** A stream more than this behind the playhead is restarted at the playhead (it drops frames instead of lagging). */
 const BEHIND = 0.2
 
@@ -50,6 +56,17 @@ export class PreviewEngine {
   scrubLatencies: number[] = []
   /** Tests: when set, every monitor draw is logged (wall time, timeline time) for the A/V sync measurement. */
   drawLog: { perf: number; t: number }[] | null = null
+  /** Height decoded preview frames are scaled to (device pixels; one of PREVIEW_HEIGHTS), from the monitor's size. */
+  maxHeight = 720
+  /** How long the last play waited for its first frames before the clock started (ms). */
+  prerollMs = 0
+  /** The look-ahead the streams use now (seconds), sized to the budget. */
+  ahead = AHEAD
+  /** Per clip: the source URL it was last drawn from. A clip whose preview URL changes (a proxy became ready) keeps
+   * drawing from the old one until the new decoder has a frame, so the swap never flashes black. */
+  private shownUrl = new Map<string, string>()
+  private pruneTimer: ReturnType<typeof setTimeout> | null = null
+  private pruneKeep: (() => { urls: Set<string>; clips: Set<string> }) | null = null
 
   constructor(budgetBytes = 640 * 1024 * 1024) {
     this.cache = new FrameCache(budgetBytes)
@@ -58,11 +75,23 @@ export class PreviewEngine {
   decoderFor(url: string): SourceDecoder {
     let d = this.decoders.get(url)
     if (!d) {
-      d = new SourceDecoder(url, this.cache)
+      d = new SourceDecoder(url, this.cache, this.maxHeight)
+      d.onHold = () => this.onFrame()
       this.decoders.set(url, d)
       void d.ready.then(() => this.onFrame())
     }
     return d
+  }
+
+  /** The monitor's height in device pixels: decoded frames are scaled to the next step up (an export always decodes
+   * at full size). A bigger step drops the smaller frames so the paused picture is decoded again, sharp. */
+  setMonitorHeight(px: number) {
+    const h = PREVIEW_HEIGHTS.find((x) => x >= px) ?? 0
+    if (h === this.maxHeight) return
+    const bigger = h === 0 || (this.maxHeight !== 0 && h > this.maxHeight)
+    this.maxHeight = h
+    for (const d of this.decoders.values()) d.maxHeight = h
+    if (bigger) { this.cache.clear(); this.onFrame() }
   }
 
   /** The pictures for a draw at `t`. While paused, a missing exact frame is decoded now (and the monitor redrawn when
@@ -72,19 +101,37 @@ export class PreviewEngine {
     const frames: FrameLookup = (clip: Clip): FrameInput | null => {
       const url = previewUrl(clip)
       if (!url) return null
-      const dec = this.decoderFor(url)
       const st = srcTime(clip, t)
-      if (dec.state === 'failed') return this.elementFrame(url, st, playing)
-      if (dec.state === 'opening') { allExact = false; return null }
-      const idx = dec.index(st)
-      const e = this.cache.get(url, idx)
-      if (e) return asInput(e)
+      const shown = this.shownUrl.get(clip.id)
+      const now = this.frameOf(url, st, playing)
+      if (now.exact || !shown || shown === url) {
+        if (now.input) this.shownUrl.set(clip.id, url)
+        if (shown && shown !== url && now.input) this.schedulePrune()
+        if (!now.exact) allExact = false
+        return now.input
+      }
+      // the clip's URL changed (a proxy is ready) and the new decoder has nothing yet: keep the old picture
       allExact = false
-      if (!playing) void dec.exact(st).then((x) => { if (x) this.onFrame() })
-      const hold = this.cache.nearestBefore(url, idx, playing ? 30 : 600)
-      return hold ? asInput(hold.entry) : null
+      const old = this.decoders.get(shown)
+      if (!old || old.state !== 'ready') { if (now.input) this.shownUrl.set(clip.id, url); return now.input }
+      const e = this.cache.get(shown, old.index(st)) ?? this.cache.nearestBefore(shown, old.index(st), 30)?.entry
+      return e ? asInput(e) : now.input
     }
     return { frames, exact: () => allExact }
+  }
+
+  /** One clip's picture from `url` at source time `st`: exact (cached), or the nearest earlier frame held while the
+   * exact one decodes (paused: asked for now). */
+  private frameOf(url: string, st: number, playing: boolean): { input: FrameInput | null; exact: boolean } {
+    const dec = this.decoderFor(url)
+    if (dec.state === 'failed') { const f = this.elementFrame(url, st, playing); return { input: f, exact: !!f } }
+    if (dec.state === 'opening') return { input: null, exact: false }
+    const idx = dec.index(st)
+    const e = this.cache.get(url, idx)
+    if (e) return { input: asInput(e), exact: true }
+    if (!playing) void dec.exact(st).then((x) => { if (x) this.onFrame() })
+    const hold = this.cache.nearestBefore(url, idx, playing ? 30 : 600)
+    return { input: hold ? asInput(hold.entry) : null, exact: false }
   }
 
   /** A source mediabunny cannot decode: its <video> element, seeked to the frame while paused and run while playing. */
@@ -97,11 +144,14 @@ export class PreviewEngine {
     return v.readyState >= 2 && v.videoWidth > 0 && !v.seeking ? { image: v, width: v.videoWidth, height: v.videoHeight, live: true } : null
   }
 
-  /** Keep a stream running for every footage clip under (or about to reach) the playhead; stop the rest. */
+  /** Keep a stream running for every footage clip under (or about to reach) the playhead; stop the rest. The
+   * look-ahead is sized so all streams together fill at most AHEAD_SHARE of the cache, and the cache is told which
+   * frames are still needed (the ones behind the playhead go first). */
   updateStreams(project: VideoProject, t: number, playing: boolean) {
     if (!playing) { this.stopStreams(); return }
     const want = new Set<string>()
     const now = performance.now()
+    const live: { c: Clip; url: string; dec: SourceDecoder; from: number }[] = []
     for (const c of project.clips) {
       if (c.kind !== 'video' || c.still || !c.sourceUrl) continue
       const soon = isActive(c, t) || (c.start > t && c.start - t < PREROLL)
@@ -110,10 +160,16 @@ export class PreviewEngine {
       if (!url) continue
       const dec = this.decoderFor(url)
       if (dec.state !== 'ready') continue
+      live.push({ c, url, dec, from: srcTime(c, Math.max(t, c.start)) })
+    }
+    let perSecond = 0
+    for (const l of live) perSecond += l.dec.frameBytes() * l.dec.fps
+    this.ahead = perSecond > 0 ? Math.max(MIN_AHEAD, Math.min(AHEAD, (this.cache.budget * AHEAD_SHARE) / perSecond)) : AHEAD
+    const windows = new Map<string, [number, number][]>()
+    for (const { c, url, dec, from } of live) {
       want.add(c.id)
-      const from = srcTime(c, Math.max(t, c.start))
       let cur = this.streams.get(c.id)
-      const lost = cur && (cur.url !== url || cur.s.stopped || (cur.s.last < from - BEHIND && now - cur.at > 300) || cur.s.last > from + AHEAD + 0.6)
+      const lost = cur && (cur.url !== url || cur.s.stopped || (cur.s.last < from - BEHIND && now - cur.at > (cur.s.last === -Infinity ? 1000 : 300)) || cur.s.last > from + this.ahead + 0.6)
       if (lost) { cur!.s.stop(); this.streams.delete(c.id); cur = undefined }
       if (!cur) {
         const s = dec.stream(from)
@@ -121,14 +177,34 @@ export class PreviewEngine {
         cur = { s, url, at: now }
         this.streams.set(c.id, cur)
       }
-      cur.s.target = from + AHEAD
+      cur.s.target = from + this.ahead
+      const w = windows.get(url) ?? []
+      w.push([Math.max(0, dec.index(from) - 1), dec.index(from + this.ahead) + 2])
+      windows.set(url, w)
     }
+    this.cache.setWindows(windows)
     for (const [id, s] of this.streams) if (!want.has(id)) { s.s.stop(); this.streams.delete(id) }
+  }
+
+  /** Have the streams of every footage clip under `t` decoded their first frames (so the clock can start)? A clip
+   * whose decoder is not ready (opening, or the <video> fallback) does not hold the start. */
+  prerolled(project: VideoProject, t: number): boolean {
+    for (const c of project.clips) {
+      if (c.kind !== 'video' || c.still || !c.sourceUrl || !isActive(c, t)) continue
+      const url = previewUrl(c)
+      const dec = url ? this.decoders.get(url) : undefined
+      if (!dec || dec.state !== 'ready') continue
+      const s = this.streams.get(c.id)
+      if (!s || s.s.stopped) return false
+      if (s.s.last < srcTime(c, t) + Math.min(PREROLL_AHEAD, this.ahead) - 1.5 / dec.fps) return false
+    }
+    return true
   }
 
   stopStreams() {
     for (const s of this.streams.values()) s.s.stop()
     this.streams.clear()
+    this.cache.setWindows(null)
   }
 
   // ---------------------------------------------------------------- measurement
@@ -180,18 +256,42 @@ export class PreviewEngine {
     this.cache.clearSource(url)
   }
 
-  /** Release decoders whose URL no clip uses any more. */
+  /** Release decoders whose URL no clip uses any more (nor any clip still draws from while its new one opens). */
   prune(keep: Set<string>) {
+    for (const u of this.shownUrl.values()) keep.add(u)
     for (const url of [...this.decoders.keys()]) if (!keep.has(url)) this.dropSource(url)
   }
 
+  /** What a debounced prune keeps: the desk sets it to "every preview URL and clip id of the project". */
+  setPruneSource(fn: (() => { urls: Set<string>; clips: Set<string> }) | null) { this.pruneKeep = fn }
+
+  /** Prune soon (after edits settle, or once a clip has moved to its proxy). */
+  schedulePrune(ms = 1500) {
+    if (this.pruneTimer) clearTimeout(this.pruneTimer)
+    this.pruneTimer = setTimeout(() => {
+      this.pruneTimer = null
+      const keep = this.pruneKeep?.()
+      if (!keep) return
+      // a clip that is gone no longer pins the URL it drew from
+      for (const id of [...this.shownUrl.keys()]) if (!keep.clips.has(id)) this.shownUrl.delete(id)
+      this.prune(keep.urls)
+    }, ms)
+  }
+
+  /** Forget which URL each clip drew from (a different project is on the desk). */
+  forgetClips() { this.shownUrl.clear() }
+
   dispose() {
+    if (this.pruneTimer) clearTimeout(this.pruneTimer)
     this.stopStreams()
     for (const d of this.decoders.values()) d.dispose()
     this.decoders.clear()
     this.cache.clear()
   }
 }
+
+/** Preview frame heights (device pixels); 0 = full size (a monitor taller than 2160 px). */
+export const PREVIEW_HEIGHTS = [360, 540, 720, 1080, 1440, 2160]
 
 const asInput = (e: FrameEntry): FrameInput => ({ image: e.image, width: e.width, height: e.height })
 

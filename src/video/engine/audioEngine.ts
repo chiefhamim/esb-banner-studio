@@ -16,6 +16,14 @@ import { inputFor } from '../media'
 
 /** Schedule this far ahead of the playhead (seconds). */
 const LOOKAHEAD = 1.5
+/** A file mediabunny cannot read is decoded whole by Web Audio — only up to this size (its PCM can be ten times
+ * bigger); a bigger one plays without sound and the desk says so. */
+export const FALLBACK_MAX_BYTES = 96 * 1024 * 1024
+/** Decoded fallback sound kept for the session (bytes of PCM), oldest dropped first. */
+const FALLBACK_CACHE_BYTES = 512 * 1024 * 1024
+
+/** Why a source has no preview sound ('' = it has sound, or none was asked for). */
+export type SoundProblem = { url: string; why: string }
 
 /** The gain a clip plays at (0 when it or its track is muted). One rule for preview and export. */
 export function clipGain(project: Pick<VideoProject, 'tracks'>, c: Clip): number {
@@ -39,6 +47,13 @@ export class AudioEngine {
   /** Test tap: an analyser on the master (A/V sync measurement). */
   tap: ((buf: Float32Array, ctxTime: number) => void) | null = null
   private tapNode: ScriptProcessorNode | null = null
+  /** Whole-file decodes of sources mediabunny cannot read: one per URL for the session (shared by every restart). */
+  private fallback = new Map<string, Promise<AudioBuffer | null>>()
+  private fallbackBytes = new Map<string, number>()
+  /** Sources whose sound cannot be played here, with the reason. */
+  readonly unsupported = new Map<string, string>()
+  /** Called when a source turns out to have no playable sound (the desk shows a note). */
+  onUnsupported: (p: SoundProblem) => void = () => {}
 
   private ensure(): AudioContext {
     if (!this.ctx) {
@@ -113,7 +128,8 @@ export class AudioEngine {
     }
     const input = (() => { try { return inputFor(c.sourceUrl!) } catch { return null } })()
     try {
-      const track = input ? await input.getPrimaryAudioTrack().catch(() => null) : null
+      // undefined = the file could not be read by mediabunny; null = it was read and has no sound
+      const track = input ? await input.getPrimaryAudioTrack().catch(() => undefined) : undefined
       if (track && (await track.canDecode().catch(() => false))) {
         const sink = new AudioBufferSink(track)
         for await (const wb of sink.buffers(srcFrom, srcTo)) {
@@ -125,14 +141,58 @@ export class AudioEngine {
         }
         return
       }
-      if (!alive()) return
-      // a file mediabunny cannot read: decode it whole (Web Audio's own decoder) and play the clip's span
-      const bytes = await (await fetch(c.sourceUrl!)).arrayBuffer()
-      const buf = await ctx.decodeAudioData(bytes)
-      if (alive()) place(buf, 0)
+      if (!alive() || track === null) return
+      // a file mediabunny cannot read: decode it whole (Web Audio's own decoder) once, and play the clip's span
+      const buf = await this.wholeFile(c.sourceUrl!)
+      if (buf && alive()) place(buf, 0)
     } catch { /* no sound for this clip */ } finally {
       try { input?.dispose() } catch { /* gone */ }
     }
+  }
+
+  /** The whole file's sound through Web Audio's decoder, decoded once per URL (size-guarded). Null = no sound. */
+  private wholeFile(url: string): Promise<AudioBuffer | null> {
+    const hit = this.fallback.get(url)
+    if (hit) { this.fallback.delete(url); this.fallback.set(url, hit); return hit }
+    const ctx = this.ensure()
+    const p = (async () => {
+      try {
+        const res = await fetch(url)
+        const len = Number(res.headers.get('content-length') || 0)
+        if (len > FALLBACK_MAX_BYTES) { try { await res.body?.cancel() } catch { /* gone */ } throw new Error('too big') }
+        const bytes = await res.arrayBuffer()
+        if (bytes.byteLength > FALLBACK_MAX_BYTES) throw new Error('too big')
+        const buf = await ctx.decodeAudioData(bytes)
+        this.fallbackBytes.set(url, buf.length * buf.numberOfChannels * 4)
+        this.trimFallback(url)
+        return buf
+      } catch (e) {
+        const why = (e as Error)?.message === 'too big' ? 'Sound not supported: this file’s audio cannot be read here and the file is too big to decode whole' : 'Sound not supported: this file’s audio cannot be decoded here'
+        this.unsupported.set(url, why)
+        this.fallbackBytes.set(url, 0)
+        this.onUnsupported({ url, why })
+        return null
+      }
+    })()
+    this.fallback.set(url, p)
+    return p
+  }
+
+  private trimFallback(keep: string) {
+    let total = 0
+    for (const b of this.fallbackBytes.values()) total += b
+    for (const url of [...this.fallback.keys()]) {
+      if (total <= FALLBACK_CACHE_BYTES) break
+      if (url === keep) continue
+      total -= this.fallbackBytes.get(url) ?? 0
+      this.fallback.delete(url)
+      this.fallbackBytes.delete(url)
+    }
+  }
+
+  /** Forget decoded fallback sound of URLs not in `keep` (a different project is on the desk). */
+  releaseSound(keep: Set<string>) {
+    for (const url of [...this.fallback.keys()]) if (!keep.has(url)) { this.fallback.delete(url); this.fallbackBytes.delete(url); this.unsupported.delete(url) }
   }
 
   /** Move gains to the project's current volumes and mutes (no restart). */
