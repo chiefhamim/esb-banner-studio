@@ -4,7 +4,7 @@
 // on start (W:\E-Mail Marketing\…) through a bridge that read any file on the PC; the list is now always picked by
 // the editor.
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { ContactsTab } from './ContactsTab'
 import { CampaignsTab, STATUS_TEXT } from './CampaignsTab'
@@ -66,6 +66,14 @@ export function OutreachWorkspace() {
   const job = engine.jobForCampaign(c?.id)
   const settings = engine.settings
   const desc = describeRun(job, settings)
+  // the status-bar countdown ("Sending 3/282 · 2:14") redraws once a second while a next send is scheduled; the
+  // desk no longer re-renders on every store change, so it needs its own tick
+  const [, tickPill] = useState(0)
+  useEffect(() => {
+    if (!job?.until) return
+    const t = setInterval(() => tickPill((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [job?.until])
 
   let banner: React.ReactNode = null
   if (job?.status === 'paused' && job.reason === 'circuit') {
@@ -235,7 +243,7 @@ export function OutreachWorkspace() {
           <span className="sb-pill">
             <i className={'sb-dot ' + (desc.status === 'sending' ? 'cs-sending' : desc.status === 'waiting' || desc.status === 'paused' ? 'cs-paused' : desc.status === 'problem' ? 'bad' : '')} aria-hidden />
             <span className="sb-text or-ap-full-text">
-              {desc.status === 'sending'
+              {desc.status === 'sending' || (desc.status === 'waiting' && job?.why === 'gap')
                 ? `Sending ${job?.sent ?? 0}/${job?.total ?? 0}${desc.nextInText ? ` · ${desc.nextInText.replace('Next in ', '')}` : ''}`
                 : desc.status === 'waiting'
                 ? (job?.why === 'window' ? `Waiting · opens ${fmtDay(job.until || Date.now(), settings?.window?.tz)}` : desc.sentence)

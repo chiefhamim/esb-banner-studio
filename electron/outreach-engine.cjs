@@ -211,7 +211,9 @@ function createEngine(deps = {}) {
         if (candidate.startAt < earliestUntil) earliestUntil = candidate.startAt
         continue
       }
-      if (candidate.status === 'waiting' && candidate.until && now < candidate.until) {
+      // a spacing-out wait ('gap') is decided by the gap check below, which honours a pacing change made in
+      // Settings since the wait was announced; every other wait (window, cap, quota, offline…) holds here
+      if (candidate.status === 'waiting' && candidate.why !== 'gap' && candidate.until && now < candidate.until) {
         if (candidate.until < earliestUntil) earliestUntil = candidate.until
         continue
       }
@@ -283,7 +285,17 @@ function createEngine(deps = {}) {
 
     const elapsedSinceLastSendMs = now - lastSendAt
     const effectiveGapMs = Math.round((requiredGapSec * 1000) / speed)
-    if (lastSendAt > 0 && elapsedSinceLastSendMs < effectiveGapMs) {
+    const gapKey = `${cfg.pace}|${cfg.minDelaySec}|${cfg.maxDelaySec}`
+    if (job.why === 'gap' && job.until && job.gapKey === gapKey) {
+      // the gap after the last send was chosen once, when that send finished (step 8), and announced as job.until —
+      // wait it out exactly, never re-roll it (a re-roll made the countdown jump or vanish). A pacing change in
+      // Settings (different gapKey) falls through to the ordinary check below, so it applies from the next send.
+      if (now < job.until) {
+        job.status = 'waiting'
+        activeTimer = setTimer(tick, Math.max(50, Math.round(job.until - now)))
+        return
+      }
+    } else if (lastSendAt > 0 && elapsedSinceLastSendMs < effectiveGapMs) {
       job.status = 'waiting'
       job.why = 'gap'
       job.until = lastSendAt + effectiveGapMs
@@ -624,8 +636,16 @@ function createEngine(deps = {}) {
       }
     }
 
-    // 8. Schedule next tick
+    // 8. Schedule next tick — and say when: the desk's "Next in m:ss" countdown reads job.until
     const nextWaitMs = Math.max(100, Math.round((requiredGapSec * 1000) / speed))
+    if (job.status === 'running') {
+      job.status = 'waiting'
+      job.why = 'gap'
+      job.until = clock() + nextWaitMs
+      job.gapKey = `${cfg.pace}|${cfg.minDelaySec}|${cfg.maxDelaySec}`
+      jobs.saveState(job)
+      pushProgress(job)
+    }
     activeTimer = setTimer(tick, nextWaitMs)
   }
 
