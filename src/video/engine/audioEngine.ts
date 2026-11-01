@@ -13,6 +13,9 @@ import { AudioBufferSink } from 'mediabunny'
 import type { Clip, VideoProject } from '../timeline'
 import { audibleClips } from '../timeline'
 import { inputFor } from '../media'
+import { animated, isPlainSpeed, sampleProp } from './animation'
+import { PcmSource } from './pcmSource'
+import { ClipSpeedAudio } from './speedAudio'
 
 /** Schedule this far ahead of the playhead (seconds). */
 const LOOKAHEAD = 1.5
@@ -34,7 +37,7 @@ export function clipGain(project: Pick<VideoProject, 'tracks'>, c: Clip): number
 
 /** What changes the scheduled sound (any change restarts it; a volume change only moves a gain). */
 export function audioSignature(project: VideoProject): string {
-  return audibleClips(project).map((c) => `${c.id}|${c.sourceUrl}|${c.start}|${c.duration}|${c.in}`).join(';')
+  return audibleClips(project).map((c) => `${c.id}|${c.sourceUrl}|${c.start}|${c.duration}|${c.in}|${JSON.stringify(c.speed ?? 1)}|${(c as { reverse?: boolean }).reverse ? 1 : 0}|${(c as { preservePitch?: boolean }).preservePitch === false ? 0 : 1}|${c.keyframes?.volume ? JSON.stringify(c.keyframes.volume) : ''}`).join(';')
 }
 
 interface Running { stop(): void; gain: GainNode; clip: Clip }
@@ -100,6 +103,7 @@ export class AudioEngine {
       const nodes = new Set<AudioBufferSourceNode>()
       let alive = true
       this.running.push({ clip: c, gain: g, stop: () => { alive = false; for (const n of nodes) { try { n.stop() } catch { /* not started */ } n.disconnect() } nodes.clear(); g.disconnect() } })
+      this.volumeAutomation(c, g, Math.max(t0, c.start), (tl) => base + (tl - t0))
       void this.scheduleClip(c, t0, base, playhead, g, nodes, () => alive && session === this.session)
     }
   }
@@ -126,6 +130,7 @@ export class AudioEngine {
       n.onended = () => { nodes.delete(n); n.disconnect() }
       nodes.add(n)
     }
+    if (!isPlainSpeed(c)) { await this.scheduleSpeedClip(c, from, ctxOf, out, nodes, alive, playhead); return }
     const input = (() => { try { return inputFor(c.sourceUrl!) } catch { return null } })()
     try {
       // undefined = the file could not be read by mediabunny; null = it was read and has no sound
@@ -148,6 +153,64 @@ export class AudioEngine {
     } catch { /* no sound for this clip */ } finally {
       try { input?.dispose() } catch { /* gone */ }
     }
+  }
+
+  /** A speed-changed clip: its sound made by the same stretcher as the export (engine/timeStretch.ts; pitch kept
+   * unless the clip says otherwise), in half-second pieces each started at the context time of its first sample. */
+  private async scheduleSpeedClip(c: Clip, from: number, ctxOf: (tl: number) => number, out: GainNode, nodes: Set<AudioBufferSourceNode>, alive: () => boolean, playhead: () => number) {
+    const ctx = this.ctx!
+    const pcm = new PcmSource(c.sourceUrl!, (u) => this.wholeFile(u))
+    const sa = new ClipSpeedAudio(c, pcm, ctx.sampleRate)
+    const end = c.start + c.duration
+    const PIECE = 0.5
+    try {
+      // pieces on the clip's own sample grid, so consecutive pieces join without a gap or an overlap
+      let n = Math.max(0, Math.floor((from - c.start) * ctx.sampleRate))
+      while (alive()) {
+        const a = c.start + n / ctx.sampleRate
+        if (a >= end - 1e-6) break
+        const len = Math.max(1, Math.min(Math.round(PIECE * ctx.sampleRate), Math.ceil((end - a) * ctx.sampleRate)))
+        const b = a + len / ctx.sampleRate
+        const chans = await sa.render(a, b)
+        if (!alive()) break
+        if (chans && chans[0]?.length) {
+          const buf = ctx.createBuffer(2, chans[0].length, ctx.sampleRate)
+          buf.copyToChannel(chans[0] as Float32Array<ArrayBuffer>, 0)
+          buf.copyToChannel((chans[1] ?? chans[0]) as Float32Array<ArrayBuffer>, 1)
+          let when = ctxOf(a)
+          let offset = 0
+          const minWhen = ctx.currentTime + 0.005
+          if (when < minWhen) { offset = minWhen - when; when = minWhen }
+          if (offset < buf.duration) {
+            const node = ctx.createBufferSource()
+            node.buffer = buf
+            node.connect(out)
+            node.start(when, offset)
+            node.onended = () => { nodes.delete(node); node.disconnect() }
+            nodes.add(node)
+          }
+        }
+        n += len
+        while (alive() && b - playhead() > LOOKAHEAD) await new Promise((r) => setTimeout(r, 50))
+      }
+    } catch { /* no sound for this clip */ } finally {
+      pcm.dispose()
+    }
+  }
+
+  /** A clip's volume keyframes as a gain curve from timeline time `from` to its end (100 values a second). */
+  private volumeAutomation(c: Clip, g: GainNode, from: number, ctxOf: (tl: number) => number) {
+    if (!animated(c, 'volume') || !this.ctx) return
+    const end = c.start + c.duration
+    const startCtx = Math.max(this.ctx.currentTime + 0.01, ctxOf(from))
+    const t0 = from + (startCtx - ctxOf(from))
+    const dur = end - t0
+    if (dur <= 0.02) return
+    const n = Math.min(60000, Math.max(2, Math.ceil(dur * 100) + 1))
+    const curve = new Float32Array(n)
+    const mute = g.gain.value === 0 ? 0 : 1
+    for (let i = 0; i < n; i++) curve[i] = mute * Math.max(0, Math.min(1, sampleProp(c, 'volume', t0 + (dur * i) / (n - 1) - c.start, c.volume ?? 1)))
+    try { g.gain.setValueCurveAtTime(curve, startCtx, dur) } catch { /* keep the static gain */ }
   }
 
   /** The whole file's sound through Web Audio's decoder, decoded once per URL (size-guarded). Null = no sound. */
@@ -200,7 +263,8 @@ export class AudioEngine {
     for (const r of this.running) {
       const c = project.clips.find((x) => x.id === r.clip.id)
       const g = c ? clipGain(project, c) : 0
-      if (this.ctx) r.gain.gain.setTargetAtTime(g, this.ctx.currentTime, 0.01)
+      // a clip with volume keyframes follows its curve (scheduled at start); others move to the new gain
+      if (this.ctx && !(c && animated(c, 'volume'))) { try { r.gain.gain.setTargetAtTime(g, this.ctx.currentTime, 0.01) } catch { /* automation running */ } }
     }
   }
 

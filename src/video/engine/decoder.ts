@@ -55,7 +55,7 @@ export class SourceDecoder {
   private packets: EncodedPacketSink | null = null
   private busy = false
   private waiting: { t: number; resolve: (e: FrameEntry | null) => void } | null = null
-  private streams = new Set<FrameStream>()
+  private streams = new Set<FrameStream | ReverseStream>()
   disposed = false
   /** Decode time of the last exact frames, ms (scrub latency, for the stats). */
   lastExactMs = 0
@@ -221,6 +221,19 @@ export class SourceDecoder {
     return s
   }
 
+  /** Start backward decode from source time t (a reversed clip playing): GOP by GOP, each decoded forward from its
+   * key frame and kept in the cache, so the frames can be shown last first. */
+  reverseStream(t: number): ReverseStream | null {
+    if (this.state !== 'ready' || !this.sink || !this.packets || this.disposed) return null
+    const s = new ReverseStream(this, this.sink, this.packets, t)
+    this.streams.add(s)
+    s.done.then(() => this.streams.delete(s))
+    return s
+  }
+
+  /** @internal The cache index of a decoded sample. */
+  sampleIndex(ts: number) { return this.indexOfSample(ts) }
+
   /** @internal A frame a stream decoded. Closed instead once the decoder is disposed, so frames decoded after
    * dropSource never land in the cache. */
   async store(sample: VideoSample): Promise<FrameEntry | null> {
@@ -257,6 +270,9 @@ export class FrameStream {
   private wake: (() => void) | null = null
   private _target: number
   readonly from: number
+  /** Only these cache indexes are kept (a fast clip shows one frame in several; the rest are decoded and dropped
+   * without the copy). Null = keep every frame. The engine refills it as the playhead moves. */
+  want: Set<number> | null = null
   constructor(dec: SourceDecoder, sink: VideoSampleSink, from: number) {
     this.dec = dec
     this.from = from
@@ -286,13 +302,89 @@ export class FrameStream {
         if (done || !value) break
         if (this.stopped) { value.close(); break }
         const ts = value.timestamp
-        await this.dec.store(value)
+        if (this.want && !this.want.has(this.dec.sampleIndex(ts))) value.close()
+        else await this.dec.store(value)
         // counted only once the frame is in the cache (the clock waits on this before it starts)
         this.last = ts
       }
     } catch { /* the source went away */ } finally {
       this.stopped = true
       try { await this.iter.return?.() } catch { /* closed */ }
+    }
+  }
+
+  stop() { this.stopped = true; this.poke() }
+}
+
+/** Backward decode for a reversed clip. The playhead moves down through the source; this keeps the frames from
+ * `target` (the lowest source time the look-ahead needs) up to where the clip is now in the cache. It works a GOP at a
+ * time: from the key frame at or before `low`, decode forward up to `low` (only the wanted indexes are kept), then
+ * the GOP before that, and so on — each frame decoded once, shown last first. */
+export class ReverseStream {
+  stopped = false
+  /** Frames are decoded (as far as wanted) from here up to `top`. */
+  low: number
+  /** The bottom of the GOP being decoded now (its frames land in the cache before `low` moves down to it). */
+  pending: number
+  readonly top: number
+  readonly from: number
+  readonly done: Promise<void>
+  want: Set<number> | null = null
+  private _target: number
+  private dec: SourceDecoder
+  private sink: VideoSampleSink
+  private packets: EncodedPacketSink
+  private wake: (() => void) | null = null
+  constructor(dec: SourceDecoder, sink: VideoSampleSink, packets: EncodedPacketSink, from: number) {
+    this.dec = dec
+    this.sink = sink
+    this.packets = packets
+    this.from = from
+    this.top = from
+    // nothing decoded yet: the first GOP ends just after the frame at `from`
+    this.low = from + 0.5 / Math.max(1, dec.fps)
+    this.pending = this.low
+    this._target = from - 0.25
+    this.done = this.run()
+  }
+
+  /** `last` in the forward stream's sense: how far (down) it has decoded. */
+  get last() { return this.low }
+  get target() { return this._target }
+  set target(v: number) {
+    this._target = v
+    if (this.low > v) this.poke()
+  }
+
+  private poke() { const w = this.wake; this.wake = null; w?.() }
+
+  private async run() {
+    try {
+      while (!this.stopped) {
+        if (this.low <= this._target || this.low <= this.dec.first + 1e-6) {
+          await new Promise<void>((r) => { this.wake = r; setTimeout(() => { if (this.wake === r) this.poke() }, 250) })
+          continue
+        }
+        const hi = this.low
+        const key = await this.packets.getKeyPacket(Math.max(this.dec.first, hi - 1e-4)).catch(() => null)
+        let start = key ? key.timestamp : this.dec.first
+        if (start >= hi - 1e-6) {
+          // `hi` sits on a key frame: the GOP below starts at the key frame before it
+          const prev = await this.packets.getKeyPacket(Math.max(this.dec.first, start - 1e-3)).catch(() => null)
+          start = prev && prev.timestamp < start ? prev.timestamp : this.dec.first
+        }
+        if (start >= hi - 1e-6) break
+        this.pending = start
+        for await (const value of this.sink.samples(start, hi)) {
+          if (this.stopped) { value.close(); break }
+          if (this.want && !this.want.has(this.dec.sampleIndex(value.timestamp))) value.close()
+          else await this.dec.store(value)
+        }
+        if (this.stopped) break
+        this.low = start
+      }
+    } catch { /* the source went away */ } finally {
+      this.stopped = true
     }
   }
 

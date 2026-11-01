@@ -39,3 +39,13 @@ export function vertices(q: Quad, uv: UV): Float32Array {
 export function frameQuad(w: number, h: number, offX = 0, offY = 0, deg = 0, ax = 0.5, ay = 0.5): Quad {
   return layerQuad({ dx: offX * w, dy: offY * h, dw: w, dh: h }, deg, ax, ay)
 }
+
+/** `vertices` into a reused buffer (the compositor's per-draw upload; no allocation). */
+export function writeVertices(out: Float32Array, q: Quad, uv: UV): Float32Array {
+  const [u0, v0, u1, v1] = uv
+  out[0] = q[0]; out[1] = q[1]; out[2] = u0; out[3] = v0
+  out[4] = q[2]; out[5] = q[3]; out[6] = u1; out[7] = v0
+  out[8] = q[4]; out[9] = q[5]; out[10] = u1; out[11] = v1
+  out[12] = q[6]; out[13] = q[7]; out[14] = u0; out[15] = v1
+  return out
+}

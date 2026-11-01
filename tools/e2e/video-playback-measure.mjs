@@ -5,6 +5,7 @@
 // acceptance run in tools/e2e/video-engine-test.mjs uses the same function).
 //   node tools/e2e/video-playback-measure.mjs            this checkout
 //   LAYERS=1 SECONDS=60 node ...                         3 × 1080p30 footage layers + a title and a caption
+//   LAYERS=1 FX=1 SECONDS=60 node ...                    the same with colour + a 33-point LUT + blur (Phase 2 Part B)
 //   ROOT=<other checkout> PORT=5297 node ...             another checkout (its own node_modules or a junction)
 import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
@@ -78,7 +79,36 @@ export async function seedLayers(page, seconds) {
   }, seconds + 2)
 }
 
-if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` || process.argv[1].endsWith('video-playback-measure.mjs')) {
+/** A small synthetic .cube LUT (warm, lifted blacks, a soft S): non-linear, so trilinear interpolation matters. */
+export function testCube(size = 33) {
+  const lines = ['TITLE "ESB test warm"', `LUT_3D_SIZE ${size}`]
+  const f = (r, g, b) => [Math.min(1, Math.pow(r, 0.8) * 1.04), Math.pow(g, 0.95), Math.min(1, b * 0.82 + 0.06)]
+  for (let bi = 0; bi < size; bi++) for (let gi = 0; gi < size; gi++) for (let ri = 0; ri < size; ri++) {
+    const o = f(ri / (size - 1), gi / (size - 1), bi / (size - 1))
+    lines.push(o.map((v) => v.toFixed(6)).join(' '))
+  }
+  return lines.join('\n') + '\n'
+}
+
+/** Phase 2 — Part B performance case: seedLayers, then colour + a 33-point LUT + blur on the layers (colour and LUT
+ * on the full-frame layer, blur on the first inset, colour on the second). */
+export async function seedFxLayers(page, seconds) {
+  await seedLayers(page, seconds)
+  await page.evaluate((cube) => {
+    const st = window.__videoStore.getState()
+    const fx = (id, type, params) => ({ id, type, enabled: true, params })
+    const clips = st.project.clips.map((c) => {
+      if (c.id === 'L1') return { ...c, effects: [fx('pc', 'colour', { exposure: 0.2, contrast: 0.15, saturation: 0.2, temperature: 0.3 }), fx('pl', 'lut', { cube, name: 'test', intensity: 1 })] }
+      if (c.id === 'L2') return { ...c, effects: [fx('pb', 'blur', { radius: 10 })] }
+      if (c.id === 'L3') return { ...c, effects: [fx('pc3', 'colour', { saturation: -0.5, shadows: 0.3 })] }
+      return c
+    })
+    st.loadProject({ ...st.project, clips }, { assets: st.mediaAssets, dirty: true })
+    window.__videoStore.getState().seek(0)
+  }, testCube(33))
+}
+
+if (import.meta.url ===`file:///${process.argv[1].replace(/\\/g, '/')}` || process.argv[1].endsWith('video-playback-measure.mjs')) {
   let browser
   try {
     vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
@@ -95,7 +125,8 @@ if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` || proc
       await page.setInputFiles('.video-workspace input[type=file][multiple]', Object.values(fx))
       await page.waitForFunction(() => window.__videoStore.getState().mediaAssets.length >= 3, null, { timeout: 120000 })
       const secs = Number(process.env.SECONDS || 60)
-      await seedLayers(page, secs)
+      if (process.env.FX) await seedFxLayers(page, secs)
+      else await seedLayers(page, secs)
       await page.waitForTimeout(1500)
       console.log(JSON.stringify(await measureEngine(page, secs)))
     } else for (const n of [0, 60, 200]) console.log(JSON.stringify(await measure(page, n)))

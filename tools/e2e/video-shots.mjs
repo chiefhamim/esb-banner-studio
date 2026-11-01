@@ -39,6 +39,8 @@ const MEDIA = {
   clip: path.join(mediaDir, 'sample-clip.mp4'),
   still: path.join(mediaDir, 'sample-still.png'),
   tone: path.join(mediaDir, 'sample-tone.wav'),
+  // only the chroma-key state imports this one (the other states keep their three files)
+  green: path.join(mediaDir, 'sample-green.mp4'),
 }
 function makeMedia() {
   fs.mkdirSync(mediaDir, { recursive: true })
@@ -56,6 +58,7 @@ function makeMedia() {
     ? ff(['-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=6', '-i', speech, '-map', '0:v', '-map', '1:a', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-g', '1', '-bf', '0', '-c:a', 'aac', '-b:a', '96k', '-shortest'], MEDIA.clip)
     : ff(['-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30:duration=6', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-g', '1', '-bf', '0', '-an'], MEDIA.clip)
   const okStill = ff(['-f', 'lavfi', '-i', 'gradients=size=1600x900:seed=7:nb_colors=3:type=linear:duration=1', '-frames:v', '1'], MEDIA.still)
+  ff(['-f', 'lavfi', '-i', 'color=c=0x00b140:s=1280x720:r=30:d=4,noise=alls=6:allf=t,drawbox=x=440:y=160:w=400:h=400:color=0x7fae6e:t=fill,drawbox=x=448:y=168:w=384:h=384:color=0xc89678:t=fill,gblur=sigma=1.2', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-g', '1', '-an'], MEDIA.green)
   const okTone = ff(['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=8', '-c:a', 'pcm_s16le'], MEDIA.tone)
   // fall back to the checked-in fixtures if ffmpeg is missing
   const fx = path.join(root, 'tools', 'fixtures', 'media')
@@ -173,6 +176,23 @@ async function seedTimeline(page, { playhead = 1.0, select = null, zoom = null, 
     if (select) s2.selectClip(select)
     s2.seek(playhead)
   }, { playhead, select, zoom, extra })
+}
+
+/** Phase 2 helpers: put effects (and a blend mode) on a clip; open an inspector section (Effects / Colour). */
+const fxOf = (id, type, params) => ({ id, type, enabled: true, params })
+async function setEffects(page, clipId, effects, blendMode) {
+  await page.evaluate(({ clipId, effects, blendMode }) => {
+    const st = window.__videoStore.getState()
+    const c = st.project.clips.find((x) => x.id === clipId)
+    if (c) st.updateClip({ ...c, effects, ...(blendMode ? { blendMode } : {}) })
+  }, { clipId, effects, blendMode })
+}
+async function openSection(page, id) {
+  const head = page.locator(`.vw-${id}-panel .vw-fx-head`)
+  if (!(await head.count())) na(`no ${id} section in the inspector`)
+  if ((await head.first().getAttribute('aria-expanded')) !== 'true') await head.first().click()
+  // the section's header at the top of the inspector's scroller, so its controls are what the shot shows
+  await head.first().evaluate((el) => { el.scrollIntoView({ block: 'start' }); window.scrollTo(0, 0); document.scrollingElement.scrollTop = 0 })
 }
 
 async function clickTab(page, label) {
@@ -463,6 +483,68 @@ const STATES = {
     await page.waitForSelector('.dialog .vw-paste-attrs')
     await waitAnimations(page)
     return {}
+  },
+  // ---- Phase 2 — Part B: effects and colour (inspector sections, LUT, mask, chroma key, adjustment layer)
+  'effects-panel': async (page) => {
+    await seedTimeline(page, { select: 'shot-v1', playhead: 2.0 })
+    await setEffects(page, 'shot-v1', [fxOf('fx-m', 'mask', { shape: 'ellipse', x: 0.5, y: 0.5, w: 0.7, h: 0.8, feather: 0.12 }), fxOf('fx-b', 'blur', { radius: 6 }), fxOf('fx-v', 'vignette', { amount: 0.6, size: 0.45, softness: 0.5 })], 'screen')
+    await openSection(page, 'fx')
+    return { note: 'mask + blur + vignette, blend Screen' }
+  },
+  'colour-panel': async (page) => {
+    await seedTimeline(page, { select: 'shot-v1', playhead: 2.0 })
+    await setEffects(page, 'shot-v1', [fxOf('fx-c', 'colour', { exposure: 0.3, contrast: 0.2, saturation: 0.35, vibrance: 0.2, temperature: 0.4, tint: -0.1, highlights: -0.25, shadows: 0.2 })])
+    await openSection(page, 'colour')
+    return {}
+  },
+  'lut-loaded': async (page) => {
+    await seedTimeline(page, { select: 'shot-v1', playhead: 2.0 })
+    await openSection(page, 'colour')
+    const cube = path.join(mediaDir, 'sample-warm.cube')
+    if (!fs.existsSync(cube)) {
+      const N = 17
+      const lines = ['TITLE "Sample warm"', `LUT_3D_SIZE ${N}`]
+      for (let b = 0; b < N; b++) for (let g = 0; g < N; g++) for (let r = 0; r < N; r++) lines.push([Math.min(1, Math.pow(r / (N - 1), 0.8) * 1.05), Math.pow(g / (N - 1), 0.95), Math.min(1, (b / (N - 1)) * 0.8 + 0.05)].map((v) => v.toFixed(5)).join(' '))
+      fs.writeFileSync(cube, lines.join('\n') + '\n')
+    }
+    await page.setInputFiles('.vw-colour-panel input[type=file]', cube)
+    await page.waitForSelector('.vw-fx-lut', { timeout: 8000 }).catch(() => na('LUT did not load'))
+    await page.locator('.vw-fx-lut').first().evaluate((el) => { el.scrollIntoView({ block: 'center' }); window.scrollTo(0, 0); document.scrollingElement.scrollTop = 0 })
+    return {}
+  },
+  'monitor-mask': async (page) => {
+    await seedTimeline(page, { playhead: 2.0, extra: 'multi-track' })
+    await setEffects(page, 'shot-v3', [fxOf('fx-m1', 'mask', { shape: 'ellipse', x: 0.5, y: 0.5, w: 0.9, h: 0.9, feather: 0.15 })])
+    await setEffects(page, 'shot-v1', [fxOf('fx-m2', 'mask', { shape: 'rect', x: 0.5, y: 0.5, w: 0.6, h: 0.5, feather: 0.06, invert: true })])
+    return { el: page.locator('.vw-canvas').first(), note: 'ellipse mask on the inset, inverted feathered rectangle on V1' }
+  },
+  'chroma-key': async (page) => {
+    await seedTimeline(page, { playhead: 1.0 })
+    await page.locator('.video-workspace input[type=file][multiple]').first().setInputFiles([MEDIA.green])
+    await page.waitForFunction(() => window.__videoStore.getState().mediaAssets.length >= 4, null, { timeout: 15000 })
+    await page.evaluate(() => {
+      const st = window.__videoStore.getState()
+      const g = st.mediaAssets.find((a) => /green/.test(a.name))
+      if (!st.project.tracks.some((t) => t.id === 'v3')) st.addTrack('video')
+      const p = window.__videoStore.getState().project
+      st.loadProject({ ...p, clips: [...p.clips, { id: 'shot-key', trackId: 'v3', title: 'Green screen', kind: 'video', start: 0, duration: 4, in: 0, out: 4, color: '#0ea5e9', sourceUrl: g.url, mediaAssetId: g.id, fit: 'fit', scale: 0.9, effects: [{ id: 'fx-k', type: 'chromaKey', enabled: true, params: { color: '#00b140', tolerance: 0.3, softness: 0.15, spill: 0.8 } }] }] }, { dirty: true })
+      window.__videoStore.getState().selectClip('shot-key')
+      window.__videoStore.getState().seek(1.0)
+    })
+    await openSection(page, 'fx')
+    return { note: 'keyed green screen over the sample clip' }
+  },
+  'adjustment-layer': async (page) => {
+    await seedTimeline(page, { playhead: 2.0 })
+    await page.evaluate(() => {
+      const st = window.__videoStore.getState()
+      const p = st.project
+      st.loadProject({ ...p, clips: [...p.clips, { id: 'shot-adj', trackId: 'v2', title: 'Adjustment layer', kind: 'overlay', start: 1, duration: 3, in: 0, out: 3, color: '#64748b', adjustment: true, effects: [{ id: 'fx-ac', type: 'colour', enabled: true, params: { saturation: -1, contrast: 0.25 } }, { id: 'fx-av', type: 'vignette', enabled: true, params: { amount: 0.7, size: 0.4, softness: 0.5 } }] }] }, { dirty: true })
+      window.__videoStore.getState().selectClip('shot-adj')
+      window.__videoStore.getState().seek(2.0)
+    })
+    await openSection(page, 'colour')
+    return { note: 'black-and-white + vignette over everything below V2 from 1 s to 4 s' }
   },
 }
 
