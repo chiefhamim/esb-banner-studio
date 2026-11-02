@@ -189,11 +189,12 @@ async function setEffects(page, clipId, effects, blendMode) {
 }
 async function openSection(page, id) {
   const head = page.locator(`.vw-${id}-panel .vw-fx-head`)
-  if (!(await head.count())) na(`no ${id} section in the inspector`)
+  // a bare section (the title's own body) has no header: only the jump strip reaches it
+  if (!(await head.count()) && !(await page.locator(`.vw-${id}-panel.bare`).count())) na(`no ${id} section in the inspector`)
   // the jump strip under the sticky inspector header opens it and scrolls the inspector (only) to it
   const jump = page.locator(`.vw-jump button`, { hasText: JUMP_LABEL[id] ?? id })
   if (await jump.count()) await jump.first().click()
-  else if ((await head.first().getAttribute('aria-expanded')) !== 'true') await head.first().click()
+  else if (await head.count() && (await head.first().getAttribute('aria-expanded')) !== 'true') await head.first().click()
   await page.waitForTimeout(250)
 }
 const JUMP_LABEL = { title: /^Title$/, transform: /^(Transform|Sound|Opacity)$/, speed: /^Speed$/, colour: /^Colour$/, fx: /^Effects$/, keys: /^Keys$/ }
@@ -238,7 +239,16 @@ async function settle(page, { keepPointer = false } = {}) {
 const tabState = (label, seed = true) => async (page) => {
   if (seed) await seedTimeline(page)
   await clickTab(page, label)
-  return {}
+  // measured, not judged by eye: the six bin tabs are 28 px targets, and the Titles tab shows at least three kit entries
+  const m = await page.evaluate(() => {
+    const tabs = [...document.querySelectorAll('.vw-bin-panel .side-tabs button')].map((b) => { const r = b.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) } })
+    const pane = document.querySelector('.vw-bin-content')?.getBoundingClientRect()
+    const kit = pane ? [...document.querySelectorAll('.vw-titles-tab [data-preset]')].filter((c) => { const r = c.getBoundingClientRect(); return r.top >= pane.top - 1 && r.bottom <= pane.bottom + 1 }).length : 0
+    return { tabs, kit }
+  })
+  const small = m.tabs.filter((t) => t.h < 28 || t.w < 28)
+  if (small.length) throw new Error(`bin tab target under 28 px: ${JSON.stringify(small)}`)
+  return { note: label === 'Titles' ? `bin tabs ${m.tabs.map((t) => `${t.w}x${t.h}`).join(' ')}; ${m.kit} kit entries fully visible` : `bin tabs ${m.tabs.map((t) => `${t.w}x${t.h}`).join(' ')}` }
 }
 /** The bin with Phase 1 metadata (src/video/BinCard.tsx): wait for the media pipeline to read the real facts of the
  * imported files, then seed the proxy / folder / found-again state through the dev handle `window.__videoMeta`. The
@@ -269,13 +279,15 @@ async function seedBin(page, { extra = null, video = {}, folder = false, found =
 
 
 // ------------------------------------------------------------------ Phase 3: titles
+// Synthetic words typed into the kit by the harness (the product's kit starts empty); they read like real copy so the
+// pictures can be judged, and belong to nobody.
 const KIT_SAMPLE = {
-  'lower-third': { name: 'Sample name', role: 'Sample role' },
-  'name-strap': { name: 'Sample name' },
-  headline: { headline: 'Sample headline for a title card', kicker: 'Sample kicker' },
-  breaking: { headline: 'Sample breaking headline', sub: 'Sample supporting line' },
-  quote: { quote: 'Sample quote text, set word for word from the story.', speaker: 'Sample speaker', speakerRole: 'Sample role' },
-  source: { source: 'Sample source' },
+  'lower-third': { name: 'Nasrin Haque', role: 'Chief Engineer, Grid Operations' },
+  'name-strap': { name: 'Nasrin Haque' },
+  headline: { headline: 'Evening demand peaks near 15,600 MW', kicker: 'Power' },
+  breaking: { headline: 'Gas supply to two plants cut for repairs', sub: 'Generation is being rebalanced' },
+  quote: { quote: 'The grid held through the evening peak without load shedding.', speaker: 'Nasrin Haque', speakerRole: 'Chief Engineer' },
+  source: { source: 'Power Division' },
   'end-card': {},
 }
 const titleClip = (id, template, fields, extra = {}) => ({ id, trackId: 'v2', title: template, kind: 'overlay', start: 0, duration: 8, in: 0, out: 8, color: '#10b981', titleData: { template, fields, ...extra } })
@@ -304,17 +316,43 @@ TITLE_STATES['monitor-kit-anim-mid-16x9'] = async (page) => { await seedTitles(p
 TITLE_STATES['monitor-safe-9x16'] = async (page) => {
   await seedTitles(page, { aspect: '9:16', titles: [titleClip('t', 'lower-third', KIT_SAMPLE['lower-third'])] })
   await clickTab(page, 'Titles')
-  await page.locator('.vw-tt-guides .switch').first().click()
+  await page.locator('.vw-tt-chip[data-chip="guides"]').click()
   return {}
 }
 TITLE_STATES['monitor-safe-16x9'] = async (page) => {
   await seedTitles(page, { titles: [titleClip('t', 'breaking', KIT_SAMPLE.breaking)] })
   await clickTab(page, 'Titles')
-  await page.locator('.vw-tt-guides .switch').first().click()
+  await page.locator('.vw-tt-chip[data-chip="guides"]').click()
   return { el: page.locator('.vw-canvas').first() }
 }
+TITLE_STATES['monitor-safe-9x16-warn'] = async (page) => {
+  // a title that opted out of the feed's zones sits where Reels draws its caption: the chip warns and the title is outlined
+  await seedTitles(page, { aspect: '9:16', titles: [titleClip('t', 'lower-third', KIT_SAMPLE['lower-third'], { platform: 'none' })] })
+  await clickTab(page, 'Titles')
+  await page.locator('.vw-tt-chip[data-chip="guides"]').click()
+  await page.waitForSelector('.vw-guide-chip.warn', { timeout: 4000 }).catch(() => na('no warning chip'))
+  return {}
+}
+TITLE_STATES['monitor-placeholder-16x9'] = async (page) => {
+  await seedTitles(page, { titles: [titleClip('t', 'lower-third', {})] })
+  await page.waitForSelector('.vw-guide-chip[data-note="placeholder"]', { timeout: 4000 }).catch(() => na('no placeholder note'))
+  return {}
+}
+TITLE_STATES['tab-titles-916-guides'] = async (page) => {
+  await seedTitles(page, { aspect: '9:16', titles: [] })
+  await clickTab(page, 'Titles')
+  await page.locator('.vw-tt-chip[data-chip="guides"]').click()
+  return {}
+}
+TITLE_STATES['accent-picker-open'] = async (page) => {
+  await seedTitles(page, { titles: [] })
+  await clickTab(page, 'Titles')
+  await page.locator('.vw-tt-accent').click()
+  await page.waitForSelector('.menu .swatch-dot')
+  return {}
+}
 TITLE_STATES['monitor-stickers'] = async (page) => {
-  const st = (id, shape, x, y, color, extra = {}) => titleClip(id, 'sticker', shape === 'callout' ? { text: 'Sample callout' } : {}, { sticker: { shape, color, x, y, size: shape === 'callout' ? 0.36 : 0.22, rotation: 0, ...extra } })
+  const st = (id, shape, x, y, color, extra = {}) => titleClip(id, 'sticker', shape === 'callout' ? { text: 'Peak at 7 pm' } : {}, { sticker: { shape, color, x, y, size: shape === 'callout' ? 0.36 : 0.22, rotation: 0, ...extra } })
   await seedTitles(page, { titles: [st('s1', 'arrow', 0.2, 0.25, 'red', { rotation: 20 }), st('s2', 'circle', 0.5, 0.25, 'yellow'), st('s3', 'highlight', 0.8, 0.25, 'yellow'), st('s4', 'underline', 0.2, 0.7, 'orange'), st('s5', 'box', 0.5, 0.7, 'green'), st('s6', 'callout', 0.8, 0.7, 'white')] })
   return { el: page.locator('.vw-canvas').first() }
 }
@@ -334,12 +372,12 @@ TITLE_STATES['title-inspector-long-bn'] = async (page) => {
   return {}
 }
 TITLE_STATES['title-sticker-inspector'] = async (page) => {
-  await seedTitles(page, { titles: [titleClip('s', 'sticker', { text: 'Sample callout' }, { sticker: { shape: 'callout', color: 'red', x: 0.6, y: 0.4, size: 0.36, rotation: 0 } })], select: 's' })
+  await seedTitles(page, { titles: [titleClip('s', 'sticker', { text: 'Peak at 7 pm' }, { sticker: { shape: 'callout', color: 'red', x: 0.6, y: 0.4, size: 0.36, rotation: 0 } })], select: 's' })
   await openSection(page, 'title')
   return {}
 }
 TITLE_STATES['export-blocked-title'] = async (page) => {
-  await seedTitles(page, { titles: [titleClip('t', 'lower-third', { name: '', role: 'Sample role' }), { ...titleClip('q', 'quote', { quote: 'TBD', speaker: '', speakerRole: '' }), start: 4, duration: 4, out: 4 }] })
+  await seedTitles(page, { titles: [titleClip('t', 'lower-third', { name: '', role: 'Chief Engineer' }), { ...titleClip('q', 'quote', { quote: 'TBD', speaker: '', speakerRole: '' }), start: 4, duration: 4, out: 4 }] })
   await page.locator('.vw-header button', { hasText: /Export/ }).first().click()
   await page.waitForSelector('.vx-title-issues', { timeout: 8000 }).catch(() => na('no title issues in the export sheet'))
   return {}
@@ -713,6 +751,25 @@ const STATES = {
   'data-card-number-916': async (page) => dataCardState(page, '.vw-data-item[data-metric="eveningPeakGen"] .vw-data-add', '9:16'),
   'data-card-donut-916': async (page) => dataCardState(page, '.vw-data-item[data-series="fuelMix"] .vw-data-add', '9:16'),
   'data-card-zones-916': async (page) => dataCardState(page, '.vw-data-item[data-series="zone:demand"] .vw-data-add', '9:16'),
+  'data-formula-open': async (page) => {
+    await seedData(page); await clickTab(page, 'Data'); await page.waitForSelector('.vw-formula-toggle')
+    const t = page.locator('.vw-formula-toggle').first(); await t.scrollIntoViewIfNeeded(); await t.click()
+    await page.waitForSelector('.vw-formula')
+    return {}
+  },
+  'data-formula-tooltip': async (page) => {
+    await seedData(page); await clickTab(page, 'Data'); await page.waitForSelector('.vw-data-derived [data-tip]')
+    const t = page.locator('.vw-data-derived [data-tip]').first(); await t.scrollIntoViewIfNeeded(); await t.hover()
+    await page.waitForTimeout(900)
+    return { keepPointer: true }
+  },
+  'data-accent-picker': async (page) => {
+    await dataCardState(page, '.vw-data-item[data-metric="eveningPeakGen"] .vw-data-add')
+    await page.locator('.vw-data-accent').scrollIntoViewIfNeeded()
+    await page.locator('.vw-data-accent').click()
+    await page.waitForSelector('.menu .swatch-dot')
+    return {}
+  },
   'data-refresh-changed': async (page) => {
     await dataCardState(page, '.vw-data-item[data-metric="eveningPeakGen"] .vw-data-add')
     await page.evaluate(() => { window.__gridFakeBump = 7.56 })
@@ -737,7 +794,7 @@ async function seedData(page, { signedIn = true, aspect = null } = {}) {
     const answer = () => {
       const data = JSON.parse(JSON.stringify(fixture))
       if (window.__gridFakeBump) data.systemStats.eveningPeakGen = Math.round((data.systemStats.eveningPeakGen + window.__gridFakeBump) * 100) / 100
-      return { ok: true, iso: '2026-10-21', fetchedAt: '2026-01-15T04:00:00.000Z', source: 'https://esbpowerline.com/data/daily/2026-10-21.json', data, cached: false }
+      return { ok: true, iso: '2026-10-21', fetchedAt: '2026-10-22T04:00:00.000Z', source: 'https://esbpowerline.com/data/daily/2026-10-21.json', data, cached: false }
     }
     window.esb = {
       ...(window.esb || {}),
@@ -812,9 +869,9 @@ async function seedDraft(page) {
   const ok = await page.evaluate(() => {
     const ed = window.__editorialStore?.getState()
     if (!ed?.setDraftField) return false
-    ed.setDraftField('headline', 'Sample headline for a story video')
-    ed.setDraftField('deck', 'This is a sample deck sentence for the story video.')
-    ed.setDraftField('body', 'This is the first sample sentence of the body text. This is the second sample sentence of the body text.')
+    ed.setDraftField('headline', 'Evening demand peaks near 15,600 MW')
+    ed.setDraftField('deck', 'Grid operators say supply kept pace with the evening peak.')
+    ed.setDraftField('body', 'Demand reached its evening peak shortly after seven. Operators said supply kept pace without shedding load.')
     return true
   })
   if (!ok) na('window.__editorialStore dev handle missing')
@@ -839,8 +896,9 @@ try {
         if (state.startsWith('monitor-') && state !== 'monitor-mask' && theme !== THEMES[0]) continue
         const file = `${state}__${theme}__${width}.png`
         const ctx = await browser.newContext({ viewport: { width, height: heightFor(width) }, deviceScaleFactor: 1, reducedMotion: 'reduce', colorScheme: theme, acceptDownloads: true })
-        // a fixed wall clock: the story banner prints today's date, and nothing else should change between runs
-        await ctx.clock.setFixedTime(new Date('2026-01-15T10:00:00+06:00'))
+        // a fixed wall clock, the morning after the committed Grid data day (21 Oct 2026), so "fetched" dates read true:
+        // the story banner prints today's date, and nothing else should change between runs
+        await ctx.clock.setFixedTime(new Date('2026-10-22T10:00:00+06:00'))
         await ctx.addInitScript((th) => {
           try { localStorage.setItem('esb-banner-studio/theme', th) } catch { /* ignore */ }
           document.addEventListener('DOMContentLoaded', () => { document.documentElement.dataset.theme = th })

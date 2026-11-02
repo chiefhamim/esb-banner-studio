@@ -68,7 +68,7 @@ try {
 
   // 2. Overlay presets start empty; their labels show in the editor only
   await page.click('.vw-bin-panel .side-tabs button:has-text("Titles")')
-  check('ESB bug switch on the Titles tab', (await page.locator('.vw-bug-row input[type=checkbox]').isChecked()))
+  check('ESB bug switch on the Titles tab', ((await page.locator('.vw-tt-chip[data-chip="bug"]').getAttribute('aria-checked')) === 'true'))
   await page.click('.vw-preset-card[data-preset="lower-third"] button:has-text("Add")')
   const lt = await page.evaluate(() => window.__videoStore.getState().project.clips.find((c) => c.titleData?.template === 'lower-third'))
   check('A lower third is added with empty fields', !!lt && lt.titleData.fields.name === '' && lt.titleData.fields.role === '', JSON.stringify(lt && lt.titleData))
@@ -259,7 +259,7 @@ try {
   // back to the layers project of step 5 for the bug-off export
   await page.evaluate(() => { const s = window.__videoStore.getState(); s.loadProject(window.__layersProject, { assets: s.mediaAssets, dirty: true }) })
   await page.click('.vw-bin-panel .side-tabs button:has-text("Titles")')
-  await page.click('.vw-bug-row .switch')
+  await page.click('.vw-tt-chip[data-chip="bug"]')
   const noBug = await exportOnce()
   check('ESB bug switched off: nothing top right', pixelAt(noBug.file, 3.5, 1694, 42).every((v) => v < 12), JSON.stringify(pixelAt(noBug.file, 3.5, 1694, 42)))
   fs.rmSync(noBug.file, { force: true })

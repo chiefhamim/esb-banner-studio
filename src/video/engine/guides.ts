@@ -26,35 +26,33 @@ export function guideZones(g: Guides, w: number, h: number) {
   }
 }
 
+/** The guide picture: lines only, nothing to read (the legend and any warning are the monitor's own chip, outside the
+ * picture's pixels). 16:9 and other landscape frames get the title-safe frame alone; a portrait frame with a feed
+ * chosen gets the zone the feed's own buttons and caption cover, lightly shaded, with one dashed line at its edge. */
 export function rasterGuides(g: Guides, w: number, h: number): { src: TexImageSource; width: number; height: number } {
   const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h })
   const ctx = c.getContext('2d') as CanvasRenderingContext2D
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
   const z = guideZones(g, w, h)
-  const label = Math.round(Math.max(11 * dpr, Math.min(w, h) * 0.018))
-  ctx.font = `600 ${label}px "ESB Sans", Inter, sans-serif`
-  ctx.textBaseline = 'top'
-  for (const b of z.bands) {
-    ctx.fillStyle = 'rgba(229, 45, 45, 0.22)'
-    ctx.fillRect(b.x, b.y, b.w, b.h)
-    ctx.strokeStyle = 'rgba(255, 120, 120, 0.7)'
-    ctx.lineWidth = Math.max(1, dpr)
-    ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
-    if (b.w > label * 4) ctx.fillText(b.label, b.x + label * 0.6, b.y + label * 0.5, b.w - label * 1.2)
+  const line = Math.max(1, dpr)
+  const dashed = (r: { x: number; y: number; w: number; h: number }, alpha: number) => {
+    ctx.save()
+    ctx.setLineDash([6 * dpr, 5 * dpr])
+    ctx.lineWidth = line
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`
+    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1)
+    ctx.restore()
   }
-  ctx.setLineDash([6 * dpr, 5 * dpr])
-  ctx.lineWidth = Math.max(1, dpr)
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'
-  const r = z.titleSafe
-  ctx.strokeRect(r.x, r.y, r.w, r.h)
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'
-  ctx.setLineDash([])
-  ctx.fillText('Title safe', r.x + label * 0.4, r.y + label * 0.4)
   if (z.bands.length) {
     const k = z.critical
-    ctx.strokeStyle = 'rgba(254, 240, 138, 0.85)'
-    ctx.strokeRect(k.x, k.y, k.w, k.h)
+    ctx.fillStyle = 'rgba(229, 45, 45, 0.2)'
+    ctx.beginPath()
+    ctx.rect(0, 0, w, h)
+    ctx.rect(k.x, k.y, k.w, k.h)
+    ctx.fill('evenodd')
+    dashed(k, 0.85)
+  } else {
+    dashed(z.titleSafe, 0.6)
   }
   return { src: c as TexImageSource, width: w, height: h }
 }

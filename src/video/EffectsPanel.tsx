@@ -56,24 +56,26 @@ export function revealInInspector(el: HTMLElement) {
   sc.scrollTo({ top: Math.max(0, top), behavior: reduce ? 'auto' : 'smooth' })
 }
 
-export function FxSection({ id, title, icon, count, children }: { id: string; title: string; icon: IconName; count?: number; children: ReactNode }) {
-  const open = useSectionOpen(id)
+/** `bare`: the section is the clip's main body, always shown, with no header of its own (the jump strip still reaches it). */
+export function FxSection({ id, title, icon, count, bare, children }: { id: string; title: string; icon: IconName; count?: number; bare?: boolean; children: ReactNode }) {
+  const picked = useSectionOpen(id)
+  const open = picked || !!bare
   const reveal = useInspectorUi((s) => s.reveal)
   const ref = useRef<HTMLElement>(null)
   const seen = useRef(reveal)
   useLayoutEffect(() => {
     if (seen.current === reveal) return
     seen.current = reveal
-    if (open && ref.current) revealInInspector(ref.current)
-  }, [reveal, open])
+    if (picked && ref.current) revealInInspector(ref.current)
+  }, [reveal, picked])
   return (
-    <section ref={ref} className={`vw-fx-section vw-${id}-panel${open ? ' open' : ''}`} data-section={id}>
-      <button type="button" className="vw-fx-head" aria-expanded={open} onClick={() => { if (open) useInspectorUi.setState({ open: null }); else openSection(id) }}>
+    <section ref={ref} className={`vw-fx-section vw-${id}-panel${open ? ' open' : ''}${bare ? ' bare' : ''}`} data-section={id}>
+      {!bare && <button type="button" className="vw-fx-head" aria-expanded={open} onClick={() => { if (open) useInspectorUi.setState({ open: null }); else openSection(id) }}>
         <Icon name={icon} size={13} />
         <span className="vw-fx-title">{title}</span>
         {!!count && <span className="vw-fx-count">{count}</span>}
         <Icon name="chevDown" size={13} className="vw-fx-chev" />
-      </button>
+      </button>}
       {open && <div className="vw-fx-body">{children}</div>}
     </section>
   )

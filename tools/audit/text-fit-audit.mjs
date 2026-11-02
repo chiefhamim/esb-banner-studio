@@ -205,7 +205,7 @@ try {
     const BN_NAME = 'মোহাম্মদ আব্দুল্লাহ আল মামুন ক্ষিতীশ চন্দ্র স্ত্রীবর্গ বিশ্বাস মজুমদার চৌধুরী'
     const BN_ROLE = 'বাংলাদেশ বিদ্যুৎ উন্নয়ন বোর্ডের প্রধান প্রকৌশলী (সঞ্চালন ও বিতরণ পরিকল্পনা)'
     await tryStep('video-title-inspector-bn', async () => { await vtab('Titles'); await page.click('.vw-preset-card[data-preset="lower-third"] button:has-text("Add")'); await page.fill('#vw-tf-name', BN_NAME); await page.fill('#vw-tf-role', BN_ROLE) })
-    await tryStep('video-title-section', async () => { await page.click('.vw-title-panel .vw-fx-head[aria-expanded="false"]').catch(() => {}); await page.waitForSelector('.vw-title-panel.open') })
+    await tryStep('video-title-section', async () => { await page.waitForSelector('.vw-title-panel.open') })
     await tryStep('video-title-quote-bn', async () => { await page.keyboard.press('Escape'); await vtab('Titles'); await page.click('.vw-preset-card[data-preset="quote"] button:has-text("Add")'); await page.fill('#vw-tf-quote', `${BN_ROLE} ${BN_NAME} ${BN_ROLE}`); await page.fill('#vw-tf-speaker', BN_NAME) })
     await tryStep('video-title-export-blocked', async () => { await page.evaluate(() => { const st = window.__videoStore.getState(); for (const c of st.project.clips) if (c.titleData) st.updateClip({ ...c, titleData: { ...c.titleData, fields: Object.fromEntries(Object.keys(c.titleData.fields).map((k) => [k, ''])) } }) }); await page.click('.vw-header-actions button:has-text("Export")'); await page.waitForSelector('.vx-title-issues') })
     await page.keyboard.press('Escape')

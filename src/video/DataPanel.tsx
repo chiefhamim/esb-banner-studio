@@ -9,12 +9,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '../ui/Icon'
 import { Seg, Select } from '../ui/controls'
+import type { Opt } from '../ui/controls'
 import { getStoredStaffSession, type StaffSession } from '../editorial/siteApi'
 import { useVideoStore, viewOf } from './videoStore'
 import { trackForKind, type Clip } from './timeline'
 import { GRID_METRICS, readMetric, gridSourceLine } from './titles/grid'
 import { formatExact } from './titles/numbers'
-import { CATEGORY_PALETTE } from './titles/brand'
+import { CATEGORIES } from '../core/tokens'
 import {
   DATA_ANIM_IN, DATA_ANIM_OUT, DATA_SERIES, SERIES_LABEL, cardLabel, cardValueText, dataCardClip, dataCardFor, defaultChartKind, derivedFormula, readSeries, refreshDiff,
   type ChartKind, type DataCardRef, type DataCardStyle, type DataSeriesId, type FetchedDay, type RefreshDiff,
@@ -23,7 +24,22 @@ import { cachedGridDates, cachedGridDay, canFetchGrid, loadGridDay, loadLatestGr
 
 const fmtFetched = (iso: string) => {
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+/** A derived figure: what it is in words, the full formula one click (or hover) away, never raw code in the list. */
+function DerivedNote({ formula }: { formula: string }) {
+  const [open, setOpen] = useState(false)
+  const what = /×\s*100/.test(formula) ? 'share of total' : /\+/.test(formula) ? 'sum of published values' : 'calculated from the published values'
+  return (
+    <div className="vw-data-derived">
+      <p className="vw-hint">
+        <span data-tip={formula}>Derived: {what}</span>{' '}
+        <button type="button" className="vw-link-btn vw-formula-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>{open ? 'Hide formula' : 'Show formula'}</button>
+      </p>
+      {open && <p className="vw-hint vw-formula" data-role="formula">{formula}</p>}
+    </div>
+  )
 }
 
 function useStaffSession(): StaffSession | null {
@@ -108,16 +124,17 @@ export function DataPanel() {
     <div className="vw-preset-list vw-data-panel" data-state={load.state} data-signed-in={session ? '1' : '0'}>
       {!session && (
         <div className="vw-preset-card vw-data-note vw-data-signed-out">
-          <p className="vw-preset-desc"><Icon name="lock" size={12} /> <b>Not signed in.</b> Sign in to esbpowerline.com (the account button at the top right) to read the site's published Grid data.</p>
+          <p className="vw-preset-desc"><Icon name="lock" size={12} /> <b>Sign in to esbpowerline.com in the Studio</b> (the account button, top right) to read the site's published Grid data.</p>
+          <p className="vw-preset-desc">Live Grid data from the website is not enabled for the Studio yet: the site needs a change first. Until then no day can be loaded here, and no figures are shown.</p>
           <p className="vw-preset-desc">{saved.length ? `Saved days still open offline (${saved.length}). ` : ''}Cards already on the timeline keep their stored values and are never refetched on export.</p>
         </div>
       )}
       <div className="vw-preset-card vw-data-day">
         <div className="vw-data-row">
           <label className="vw-data-label" htmlFor="vw-data-date">Day</label>
-          <input id="vw-data-date" type="date" className="vw-data-date" value={date} min="2011-01-01" max="2030-12-31" onChange={(e) => setDate(e.target.value)} />
-          <button type="button" className="btn xs vw-data-load" disabled={busy || !date} onClick={() => void run(date, () => (session ? loadGridDay(date) : cachedGridDay(date)))}>Load</button>
-          <button type="button" className="btn xs subtle vw-data-latest" disabled={busy || !session} data-tip="The newest day the site has published" onClick={() => void run('the newest published day', () => loadLatestGridDay())}>Latest</button>
+          <input id="vw-data-date" type="date" className="vw-data-date" value={date} data-empty={date ? undefined : '1'} data-ph="Pick a day" min="2011-01-01" max="2030-12-31" onChange={(e) => setDate(e.target.value)} />
+          <button type="button" className="btn xs vw-data-load" disabled={busy || !date || (!session && !saved.includes(date))} data-tip={!session && !saved.includes(date) ? 'Sign in to load this day (only saved days open offline)' : undefined} onClick={() => void run(date, () => (session ? loadGridDay(date) : cachedGridDay(date)))}>Load</button>
+          <button type="button" className="btn xs subtle vw-data-latest" disabled={busy || !session} data-tip={session ? 'The newest day the site has published' : 'Sign in to ask the site for its newest day'} onClick={() => void run('the newest published day', () => loadLatestGridDay())}>Latest</button>
         </div>
         {load.state === 'loading' && <p className="vw-hint vw-data-status">Reading {load.what}…</p>}
         {load.state === 'error' && <p className="vw-hint vw-data-error" role="alert"><Icon name="alert" size={12} /> {load.error}</p>}
@@ -142,7 +159,7 @@ export function DataPanel() {
               ) : (
                 <p className="vw-hint">Not published in this day's file.</p>
               )}
-              {fig?.derived && <p className="vw-hint vw-data-derived">Derived: {fig.derived.formula}</p>}
+              {fig?.derived && <DerivedNote formula={fig.derived.formula} />}
             </div>
           ))}
           <div className="vw-data-head">Charts</div>
@@ -157,7 +174,7 @@ export function DataPanel() {
                 {s ? (
                   <>
                     <p className="vw-data-value vw-data-series">{s.items.slice(0, 6).map((i) => `${i.label} ${formatExact(i.value)}`).join(' · ')}{s.items.length > 6 ? ` · +${s.items.length - 6} more` : ''} ({s.unit}) <span className="vw-data-date-tag">{s.dateLabel}</span></p>
-                    {s.derived && <p className="vw-hint vw-data-derived">Derived: {s.derived.formula}</p>}
+                    {s.derived && <DerivedNote formula={s.derived.formula} />}
                     <Seg<ChartKind> className="vw-data-kind" label="Chart type" value={kind} onChange={(k) => setKinds((m) => ({ ...m, [id]: k }))} options={[{ value: 'bar', label: 'Bars' }, { value: 'line', label: 'Line' }, { value: 'donut', label: 'Donut' }]} />
                   </>
                 ) : (
@@ -175,7 +192,12 @@ export function DataPanel() {
 
 // ------------------------------------------------------------------ inspector
 
-const ACCENTS: { value: string; label: string }[] = [{ value: '', label: 'ESB stripes' }, ...Object.entries(CATEGORY_PALETTE).map(([id, c]) => ({ value: c.color, label: `${id} ${c.name}` }))]
+/** The site's ten story categories, the same accents titles take (tokens.ts), not the old sector palette. */
+const accentOptions = (current: string | null | undefined): Opt<string>[] => {
+  const opts: Opt<string>[] = [{ value: '', label: 'ESB stripes' }, ...CATEGORIES.map((c) => ({ value: c.accent, label: c.name, swatch: c.accent }))]
+  if (current && !opts.some((o) => o.value.toLowerCase() === current.toLowerCase())) opts.push({ value: current, label: 'Colour on this card', swatch: current })
+  return opts
+}
 
 type Refresh = { state: 'idle' } | { state: 'checking' } | { state: 'same'; at: string } | { state: 'changed'; diff: RefreshDiff; fresh: FetchedDay } | { state: 'error'; error: string }
 
@@ -205,12 +227,12 @@ export function DataCardInspector({ clip, locked, onChange }: { clip: Clip; lock
       <p className="vw-data-value vw-data-shown"><b className="vw-data-num">{cardValueText(card)}</b></p>
       <p className="vw-hint vw-data-meta">{cardLabel(card)} · {card.dateLabel} ({card.date})</p>
       {card.kind === 'number' && card.figure && <p className="vw-hint vw-data-field">Read from {card.figure.sourceField}</p>}
-      {derived && <p className="vw-hint vw-data-derived">Derived: {derived}</p>}
+      {derived && <DerivedNote formula={derived} />}
       <p className="vw-hint vw-data-src">Fetched {fmtFetched(card.fetchedAt)} from {card.source.replace(/^https?:\/\//, '')}</p>
 
       <div className="vw-field vw-field-row"><label>Language</label><Seg<'en' | 'bn'> value={card.style.lang} onChange={(v) => setStyle({ lang: v })} options={[{ value: 'en', label: 'English' }, { value: 'bn', label: 'বাংলা' }]} /></div>
       <div className="vw-field vw-field-row"><label>Digits</label><Seg<'latin' | 'bn'> value={card.style.digits} onChange={(v) => setStyle({ digits: v })} options={[{ value: 'latin', label: '123' }, { value: 'bn', label: '১২৩' }]} /></div>
-      <div className="vw-field vw-field-row"><label>Accent</label><Select<string> className="compact vw-data-accent" value={card.style.accent ?? ''} options={ACCENTS} onChange={(v) => setStyle({ accent: v || null })} /></div>
+      <div className="vw-field vw-field-row"><label>Accent</label><Select<string> className="compact vw-data-accent" value={card.style.accent ?? ''} options={accentOptions(card.style.accent)} onChange={(v) => setStyle({ accent: v || null })} /></div>
       {card.kind === 'chart' && (
         <div className="vw-field vw-field-row"><label>Chart</label><Seg<ChartKind> value={card.style.chart ?? 'bar'} onChange={(v) => setStyle({ chart: v })} options={[{ value: 'bar', label: 'Bars' }, { value: 'line', label: 'Line' }, { value: 'donut', label: 'Donut' }]} /></div>
       )}
@@ -235,8 +257,8 @@ export function DataCardInspector({ clip, locked, onChange }: { clip: Clip; lock
             <p className="vw-hint vw-data-before">On the card: {refresh.diff.before}</p>
             {!refresh.diff.missing && <p className="vw-hint vw-data-after">Published now: {refresh.diff.after}</p>}
             <div className="vw-btn-row">
-              {refresh.diff.next && <button type="button" className="btn xs primary vw-data-update" onClick={() => apply(refresh.diff.next!)}>Update the card</button>}
-              <button type="button" className="btn xs subtle vw-data-keep" onClick={() => setRefresh({ state: 'idle' })}>Keep the stored {card.kind === 'number' ? 'figure' : 'values'}</button>
+              {refresh.diff.next && <button type="button" className="btn sm primary vw-data-update" onClick={() => apply(refresh.diff.next!)}>Update the card</button>}
+              <button type="button" className="btn sm vw-data-keep" onClick={() => setRefresh({ state: 'idle' })}>Keep the stored {card.kind === 'number' ? 'figure' : 'values'}</button>
             </div>
           </div>
         )}

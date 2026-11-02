@@ -16,6 +16,17 @@ import { canvasMeasure, measureNow, titleProblems } from './titleClip'
 
 const DRAFT_SECONDS = 10
 
+/** What to do about one title problem, in the editor's words (the problem text itself comes from titleProblems). */
+export function fixFor(message: string): string {
+  const empty = /^“(.+)” is empty$/.exec(message)
+  if (empty) return /^speaker name$/i.test(empty[1]) ? 'Type the speaker’s name.' : `Type the words for “${empty[1]}”.`
+  if (/placeholder|filler|TBD|still says/i.test(message)) return 'Replace it with the real text.'
+  if (/does not fit|too long|cut/i.test(message)) return 'Shorten the text until it fits.'
+  if (/source line/i.test(message)) return 'Add the card again from the Data tab: it carries its Source line.'
+  if (/saved data|not a number/i.test(message)) return 'Delete this card and add it again from the Data tab.'
+  return 'Open the clip and check its fields.'
+}
+
 const mb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 
 /** Progress reaches React at most this often (every frame re-rendered the sheet and the desk under it). */
@@ -136,8 +147,13 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
                     <ul>
                       {titleIssues.map((p) => (
                         <li key={p.clipId} data-clip={p.clipId}>
-                          <span><b>{p.label} at {formatShortTime(p.at)}</b> — {p.messages.join('; ')}</span>
-                          <button type="button" className="btn xs vx-show-title" onClick={() => { useVideoStore.getState().seek(p.at); useVideoStore.getState().selectClip(p.clipId); onClose() }}>Show</button>
+                          <div className="vx-issue">
+                            <b>{p.label} at {formatShortTime(p.at)}</b>
+                            {p.messages.map((m) => (
+                              <p key={m} className="vx-problem"><span className="vx-what">{m}</span><span className="vx-fix"><Icon name="chevRight" size={11} />{fixFor(m)}</span></p>
+                            ))}
+                          </div>
+                          <button type="button" className="btn sm vx-show-title" onClick={() => { useVideoStore.getState().seek(p.at); useVideoStore.getState().selectClip(p.clipId); onClose() }}>Show clip</button>
                         </li>
                       ))}
                     </ul>

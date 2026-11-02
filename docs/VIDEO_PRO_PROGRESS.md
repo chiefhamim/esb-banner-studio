@@ -1514,3 +1514,57 @@ New harness states in `tools/e2e/video-shots.mjs` (a stand-in bridge answers wit
   half starts after the count-up and is settled from its first frame (unit test).
 - **9:16 ESB bug** (`compositor.ts renderStationBug`): on a frame at least 1.5 × taller than wide the plate sits below the
   Reels / Shorts header band (`DEFAULT_SAFE_ZONES` top, 8 % of the height) instead of inside it; 16:9, 4:5 and 1:1 unchanged.
+
+## Phase 3 UI fix round (2026-11-02, branch `video-p3-ui`)
+
+UI-only round on the merged Phase 3 (titles + data cards). Each item was re-checked on the shots / the app first.
+
+- **U1 swatches, accent picker.** Confirmed: the accent dot had no edge, so a pale or mid accent sank into a dark panel.
+  `.swatch-dot` (App.css) and `.vw-st-color` / `.cf-swatch` now carry a 1 px ring (`--swatch-ring`: light ring in dark,
+  dark ring in light). The data-card Accent select used the OLD sector palette (`CATEGORY_PALETTE`); it now lists the
+  site's ten story categories (`CATEGORIES`, same as titles) plus a "Colour on this card" row when an older card holds a
+  colour that is not one of them. The highlight sticker tile is drawn in its own yellow with an ink line, not in the
+  accent-tinted `currentColor` (it read as dull olive).
+- **U2 Data tab signed out.** Says "Sign in to esbpowerline.com in the Studio" and, separately and plainly, that live Grid
+  data from the website is not enabled for the Studio yet (site change pending); no figures shown. Latest is disabled
+  while signed out; Load is enabled only for a day that has a saved copy. The raw `dd-----yyyy` of the empty date field
+  is replaced by "Pick a day".
+- **U3 fetch date.** The fetch time shows its year ("fetched 22 Oct 2026, 10:00"). The harness clock was a fixed
+  2026-01-15, before the Grid fixture day; it is now 2026-10-22 10:00 (+06), the morning after the 21 Oct 2026 fixture, and the
+  stand-in bridge's `fetchedAt` matches.
+- **U4 formula.** A derived figure reads "Derived: share of total" (or "sum of published values") with the full formula
+  in a tooltip and behind "Show formula"; in the Data bin and in the data-card inspector.
+- **U5 safe zones.** The guide picture is lines only now: 16:9 = the dashed title-safe frame; a 9:16 frame with a feed
+  chosen = one dashed critical box with the feed's UI zones shaded lightly outside it (no bands, no pink line, no labels
+  in the picture). The meaning is a small legend chip over the monitor, and `guideWarn.ts` warns (amber chip "Title
+  overlaps the Reels caption area" + an amber outline around the title) when a title on screen reaches outside the
+  safe box. The monitor notes are HTML over the picture (`MonitorNotes`), never in an export. Known: the ESB bug sits
+  top-right, inside the Reels button column's shading; moving the bug is the compositor's (it already clears the header band).
+- **U6 inspector.** The title's own "TITLE" accordion header is gone (`FxSection bare`): Fields first (Required marks, the
+  live "Export is blocked until…" line), then accent / style / animation, reached by the sticky jump strip. A data card
+  gets a "Data" jump entry the same way. **U6b:** confirmed (the bin scroller kept the Data tab's offset, so the inspector
+  opened on Opacity); the inspector now scrolls its scroller to the top on a clip change and a data card opens on its
+  own Data section.
+- **U7 Titles bin.** ESB bug and Safe zones are two 28 px toggle chips on one row under the Accent select (Reels / Shorts
+  appears only when guides are on at 9:16); the kit shows 3 entries fully at 900 px (measured by the harness).
+- **U8 bin tabs.** All six stay visible, now 28 px tall targets (measured in the DOM at 900/1366/1920: 38-63 × 28 px); the
+  harness fails a tab state if any is under 28 px.
+- **U9 export-blocked.** Each problem has its fix under it ("“Speaker name” is empty → Type the speaker’s name."; a
+  placeholder/TBD → "Replace it with the real text."; does not fit → "Shorten the text until it fits."; a data card →
+  re-add it from the Data tab; fallback "Open the clip and check its fields."). `fixFor()` in ExportSheet.tsx maps the
+  problem text, so the logic fixer's wording keeps working through the fallback. The button reads "Show clip", 28 px+.
+- **U10 refresh prompt.** "Keep the stored figure/values" and "Update the card" are normal 28 px buttons (Keep was a low-contrast subtle one).
+- **U11** handed to the logic fixer by the lead (not done here).
+- **U12 placeholders.** Confirmed these were harness data, not the app: the kit starts empty, an empty field is drawn dimmed
+  with a dashed outline on the monitor and is never exported. The harness typed "Sample …" words into titles and the story
+  draft, which made them look like placeholders-as-values; the harness now types realistic synthetic copy. The monitor
+  also says "Dimmed labels are placeholders, not exported" while such a title is on screen. The Story shortcut shows the
+  real draft headline, or the existing "open a story" empty state.
+- **U13** skipped (chart spec is the logic fixer's).
+- **U14 harness.** New states: `tab-titles-916-guides`, `accent-picker-open`, `data-accent-picker`, `data-formula-open`,
+  `data-formula-tooltip`, `monitor-safe-9x16-warn`, `monitor-placeholder-16x9`; `tab-*` states assert the 28 px tabs and print the
+  visible kit count; `data-signed-out`, `export-blocked-title`, `monitor-safe-*` re-shot. Determinism: the clock and
+  the `fetchedAt` are fixed (above).
+
+Other edits: `FxSection` takes `bare`; `video-test.mjs` and `text-fit-audit.mjs` follow the new Titles-tab toggles and the
+header-less title section; `tools/unit/video-p3-ui.test.ts`.

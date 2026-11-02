@@ -1,4 +1,4 @@
-import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { useShellStore } from '../shell/shellStore'
@@ -38,6 +38,9 @@ import type { Snapshot } from './projectIO'
 import { fmtTime, useClockFormat } from '../ui/time'
 import { TitleFields, TitleSection, TitlesTab } from './TitlesPanel'
 import { guidesNow, useTitleUi } from './titleUi'
+import { titleGuideWarning, type GuideWarning } from './guideWarn'
+import { fieldsOf } from './titleModel'
+import type { Guides } from './engine/guides'
 import { migrateOverlayClip, titleWords } from './titleModel'
 import { titleRasterStats } from './engine/titleRaster'
 import '../styles/video.css'
@@ -265,7 +268,52 @@ function Monitor({ aspect }: { aspect: number }) {
     <>
       <canvas ref={canvasRef} className="vw-canvas" style={{ '--vw-ar': aspect } as React.CSSProperties} />
       {glError && <div className="vw-gl-error" role="alert"><Icon name="alert" size={16} /><span>{glError}</span></div>}
+      <MonitorNotes canvasRef={canvasRef} />
     </>
+  )
+}
+
+/** Editor-only notes over the monitor's picture (HTML, never in an export): what the safe-zone guides mean, a warning
+ * with a highlight when a title on screen reaches outside them, and a reminder that dimmed placeholder labels are not
+ * exported. Recomputed when the playhead, the project or the guide choice changes. */
+function MonitorNotes({ canvasRef }: { canvasRef: React.RefObject<HTMLCanvasElement | null> }) {
+  const [box, setBox] = useState<{ l: number; t: number; w: number; h: number } | null>(null)
+  const [note, setNote] = useState<{ guides: Guides | null; warn: GuideWarning | null; placeholder: boolean }>({ guides: null, warn: null, placeholder: false })
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const measure = () => setBox((b) => (b && b.l === canvas.offsetLeft && b.t === canvas.offsetTop && b.w === canvas.clientWidth && b.h === canvas.clientHeight ? b : { l: canvas.offsetLeft, t: canvas.offsetTop, w: canvas.clientWidth, h: canvas.clientHeight }))
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    ro?.observe(canvas)
+    measure()
+    let raf = 0
+    const compute = () => {
+      raf = 0
+      const st = useVideoStore.getState()
+      const p = viewOf(st)
+      const g = guidesNow()
+      const t = st.currentTime
+      const placeholder = p.clips.some((c) => !!c.titleData && c.titleData.template !== 'sticker' && t >= c.start && t < c.start + c.duration && fieldsOf(c.titleData).some((d) => !(c.titleData!.fields[d.key] ?? '').trim()))
+      const warn = g ? titleGuideWarning(p.clips, t, p.width, p.height, g) : null
+      setNote((n) => (n.guides?.platform === g?.platform && !!n.guides === !!g && n.placeholder === placeholder && n.warn?.zone === warn?.zone && n.warn?.box.x === warn?.box.x && n.warn?.box.y === warn?.box.y && n.warn?.box.w === warn?.box.w ? n : { guides: g, warn, placeholder }))
+    }
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(compute) }
+    const un1 = useVideoStore.subscribe((s, prev) => { if (s.project !== prev.project || s.currentTime !== prev.currentTime || s.compoundPath !== prev.compoundPath) schedule() })
+    const un2 = useTitleUi.subscribe(schedule)
+    schedule()
+    return () => { ro?.disconnect(); un1(); un2(); cancelAnimationFrame(raf) }
+  }, [canvasRef])
+  if (!box || (!note.guides && !note.placeholder)) return null
+  const feed = note.guides?.platform
+  return (
+    <div className="vw-monitor-notes" style={{ left: box.l, top: box.t, width: box.w, height: box.h }}>
+      {note.warn && <div className="vw-guide-hit" style={{ left: `${note.warn.box.x * 100}%`, top: `${note.warn.box.y * 100}%`, width: `${note.warn.box.w * 100}%`, height: `${note.warn.box.h * 100}%` }} />}
+      <div className="vw-guide-chips">
+        {note.warn && <span className="vw-guide-chip warn" role="status" data-warn="1"><Icon name="alert" size={11} />Title overlaps the {note.warn.zone}</span>}
+        {note.guides && <span className="vw-guide-chip" data-note="legend"><Icon name="info" size={11} />Safe area (dashed){box.h > box.w * 1.3 && feed ? ` · ${feed === 'shorts' ? 'Shorts' : 'Reels'} UI (shaded)` : ''}</span>}
+        {note.placeholder && <span className="vw-guide-chip" data-note="placeholder"><Icon name="eye" size={11} />Dimmed labels are placeholders, not exported</span>}
+      </div>
+    </div>
   )
 }
 
@@ -1294,7 +1342,7 @@ function kindWord(c: Clip): string {
 }
 
 /** The inspector's sections, in the order of the jump strip and of the column. */
-const SECTION_LABEL: Record<string, string> = { title: 'Title', transform: 'Transform', speed: 'Speed', colour: 'Colour', fx: 'Effects', keys: 'Keys' }
+const SECTION_LABEL: Record<string, string> = { title: 'Title', data: 'Data', transform: 'Transform', speed: 'Speed', colour: 'Colour', fx: 'Effects', keys: 'Keys' }
 
 function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, onGestureStart, closeLabel, linkedWith, flash, selectionCount }: { clip: Clip; locked: boolean; onChange: (c: Clip) => void; onDelete: () => void; onClose: () => void; onUnlink: () => void; onGestureStart: () => void; closeLabel: string; linkedWith?: Clip; flash: (s: string) => void; selectionCount: number }) {
   const isFootage = clip.kind === 'video' && !clip.compound
@@ -1311,14 +1359,25 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
   const visual = clip.kind !== 'audio' && !clip.compound
   // the sections this clip has (a compound has none: it is edited inside; its opacity is a plain row)
   const isTitle = !clip.compound && clip.kind === 'overlay' && !!clip.titleData
-  const ids = clip.compound ? [] : [...(isTitle ? ['title'] : []), 'transform', ...(timed ? ['speed'] : []), ...(visual ? ['colour', 'fx'] : []), 'keys']
+  const isData = !clip.compound && !!clip.dataCard
+  const ids = clip.compound ? [] : [...(isTitle ? ['title'] : []), ...(isData ? ['data'] : []), 'transform', ...(timed ? ['speed'] : []), ...(visual ? ['colour', 'fx'] : []), 'keys']
   const stored = useInspectorUi((s) => s.open)
   const open = stored == null ? null : ids.includes(stored) ? stored : ids[0] ?? null
   const transformTitle = clip.kind === 'audio' ? 'Sound' : clip.adjustment ? 'Opacity' : 'Transform'
   const name = clipLabel(clip)
+  const rootRef = useRef<HTMLDivElement>(null)
+  // another clip opens at the top of the inspector (the scroller keeps its offset from the clip before: a data card
+  // used to open scrolled down to Opacity), on the section that holds its own words
+  useLayoutEffect(() => {
+    let sc: HTMLElement | null = rootRef.current?.parentElement ?? null
+    while (sc && !/(auto|scroll)/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement
+    if (sc && !sc.classList.contains('video-workspace')) sc.scrollTop = 0
+    if (clip.dataCard && !clip.compound) useInspectorUi.setState({ open: 'data' })
+  }, [clip.id]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <InspectorSections.Provider value={{ ids, open }}>
       <div
+        ref={rootRef}
         className="vw-inspector"
         // a slider drag is one undo step: the step is taken when it starts and closed on release (window pointerup)
         onPointerDownCapture={(e) => { if ((e.target as HTMLElement).matches?.('input[type=range]')) onGestureStart() }}
@@ -1368,7 +1427,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
               )}
             </>
           )}
-          {clip.dataCard && !clip.compound && <DataCardInspector key={clip.id} clip={clip} locked={locked} onChange={onChange} />}
+          {isData && <FxSection id="data" title="Data card" icon="chart" bare><DataCardInspector key={clip.id} clip={clip} locked={locked} onChange={onChange} /></FxSection>}
           {textOverlay && labels && (
             <>
               <div className="vw-field">

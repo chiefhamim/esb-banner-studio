@@ -56,20 +56,20 @@ export function TitlesTab({ bug, onBug, onAddLogo }: { bug: boolean; onBug: (on:
 
   return (
     <div className="vw-preset-list vw-titles-tab">
-      <div className="vw-bug-row">
-        <Switch checked={bug} onChange={onBug} label="ESB bug, top right" />
-      </div>
-      <div className="vw-tt-row">
-        <span className="vw-tt-label">Accent</span>
-        <Select<string> className="vw-tt-accent" value={accent} options={accentOpts} onChange={(v) => useTitleUi.setState({ accent: v })} />
-      </div>
-      <div className="vw-tt-row vw-tt-guides">
-        <Switch checked={guides} onChange={(on) => useTitleUi.setState({ guides: on })} label="Safe zones on the monitor" />
-        {aspect === '9:16' && <Seg<Platform> className="vw-tt-platform" value={platform} onChange={(v) => useTitleUi.setState({ platform: v })} options={[{ value: 'reels', label: 'Reels' }, { value: 'shorts', label: 'Shorts' }]} />}
+      <div className="vw-tt-opts">
+        <div className="vw-tt-row vw-tt-accentrow">
+          <span className="vw-tt-label">Accent</span>
+          <Select<string> className="vw-tt-accent" value={accent} options={accentOpts} onChange={(v) => useTitleUi.setState({ accent: v })} />
+        </div>
+        <div className="vw-tt-chips vw-tt-guides">
+          <button type="button" role="switch" aria-checked={bug} className="vw-tt-chip" data-chip="bug" onClick={() => onBug(!bug)} data-tip="The ESB bug, top right of every frame">ESB bug</button>
+          <button type="button" role="switch" aria-checked={guides} className="vw-tt-chip" data-chip="guides" onClick={() => useTitleUi.setState({ guides: !guides })} data-tip="Safe zones on the monitor (never in the export)">Safe zones</button>
+          {aspect === '9:16' && guides && <Seg<Platform> className="vw-tt-platform" value={platform} onChange={(v) => useTitleUi.setState({ platform: v })} options={[{ value: 'reels', label: 'Reels' }, { value: 'shorts', label: 'Shorts' }]} />}
+        </div>
       </div>
 
       <div className="vw-subhead">ESB title kit</div>
-      <p className="vw-preset-intro">Each title starts empty: type its words in the inspector. Empty fields show their label on the monitor only.</p>
+      <p className="vw-preset-intro" data-tip="Empty fields show their label, dimmed, on the monitor only; they are never exported.">Starts empty: type its words in the inspector.</p>
       {KIT.map((t) => {
         const d = TITLE_TEMPLATES[t]
         return (
@@ -139,7 +139,7 @@ function StickerIcon({ shape }: { shape: StickerShape }) {
     <svg viewBox="0 0 32 20" width={32} height={20} aria-hidden="true">
       {shape === 'arrow' && <><path d="M3 10h22" {...p} /><path d="M20 4l7 6-7 6z" fill="currentColor" /></>}
       {shape === 'circle' && <ellipse cx="16" cy="10" rx="12" ry="7.5" {...p} />}
-      {shape === 'highlight' && <rect x="3" y="6" width="26" height="8" rx="2" fill="currentColor" opacity="0.45" />}
+      {shape === 'highlight' && <><rect x="3" y="5" width="26" height="10" rx="2" fill="#facc15" /><path d="M7 10h18" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" /></>}
       {shape === 'underline' && <path d="M4 15h24" {...p} strokeWidth={2.5} />}
       {shape === 'box' && <rect x="4" y="3" width="24" height="14" rx="3" {...p} />}
       {shape === 'callout' && <path d="M5 3h22a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H12l-5 4v-4H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" {...p} />}
@@ -235,7 +235,7 @@ export function TitleSection({ clip, onChange }: { clip: Clip; onChange: (c: Cli
     onChange({ ...clip, titleData: { template: tpl, fields, ...(td.categoryId ? { categoryId: td.categoryId } : {}) } })
   }
   return (
-    <FxSection id="title" title={td.template === 'sticker' ? 'Sticker' : 'Title'} icon="type">
+    <FxSection id="title" title={td.template === 'sticker' ? 'Sticker' : 'Title'} icon="type" bare>
       {classic ? (
         <div className="vw-title-classic">
           <p className="vw-hint">Classic look, from an earlier version of the desk: drawn exactly as before, without animation.</p>
