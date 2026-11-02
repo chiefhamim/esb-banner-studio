@@ -10,7 +10,7 @@
 
 import { CATEGORIES } from '../core/tokens'
 
-export type TitleTemplate = 'lower-third' | 'name-strap' | 'headline' | 'breaking' | 'quote' | 'source' | 'end-card' | 'text-card' | 'sticker'
+export type TitleTemplate = 'lower-third' | 'name-strap' | 'headline' | 'breaking' | 'quote' | 'source' | 'end-card' | 'text-card' | 'sticker' | 'data-number' | 'data-chart'
 export type ClassicType = 'lower-third' | 'headline' | 'breaking' | 'card'
 export type PlatformChoice = 'auto' | 'reels' | 'shorts' | 'none'
 export type AnimPresetId = 'none' | 'fade' | 'type-on' | 'word' | 'line' | 'slide-up' | 'slide-left' | 'slide-right' | 'scale' | 'mask' | 'blur'
@@ -104,6 +104,10 @@ export const TITLE_TEMPLATES: Record<TitleTemplate, TemplateDef> = {
   source: { label: 'Source line', desc: '“Source:” and the source you type, small at the bottom.', kit: true, color: '#64748b', seconds: 5, fields: [{ key: 'source', label: 'Source', required: true }] },
   'end-card': { label: 'End card', desc: 'The ESB logo, esbpowerline.com and the Facebook and YouTube handles.', kit: true, color: '#0ea5e9', seconds: 5, fields: [] },
   'text-card': { label: 'Text card', desc: 'A centred title and text (older projects).', kit: false, color: '#7c3aed', seconds: 5, fields: [{ key: 'title', label: 'Card title', required: false }, { key: 'text', label: 'Card text', required: false, multiline: true }] },
+  // Grid data cards (Phase 3 Part B): the clip carries `dataCard` (dataCardClip.ts), never `titleData`, and the words
+  // are built from it when the spec is built (titleClip.ts), so the template here only names the card for the UI.
+  'data-number': { label: 'Data card', desc: 'A Grid figure from esbpowerline.com, counted up (Data tab).', kit: false, color: '#0ea5e9', seconds: 6, fields: [] },
+  'data-chart': { label: 'Data chart', desc: 'A Grid chart from esbpowerline.com (Data tab).', kit: false, color: '#0ea5e9', seconds: 7, fields: [] },
   sticker: { label: 'Sticker', desc: 'An arrow, circle, highlight or callout, drawn in code.', kit: false, color: '#f59e0b', seconds: 4, fields: [{ key: 'text', label: 'Callout text', required: true }] },
 }
 
@@ -175,13 +179,16 @@ export function defaultOverride(preset: AnimPresetId, out = false): AnimOverride
 
 /** Seconds of title time a clip covers: its local time runs from `in` (a split's second half starts later) to here. */
 export const titleDuration = (c: { in: number; out: number; duration: number }) => Math.max(c.out, c.in + c.duration)
+/** The template name for a data card clip (UI labels). */
+export const dataTemplateOf = (card: { kind: string }): 'data-number' | 'data-chart' => (card.kind === 'number' ? 'data-number' : 'data-chart')
 /** A title clip's local time at timeline time t. */
 export const titleLocal = (c: { in: number; start: number }, t: number) => c.in + (t - c.start)
 
 // ------------------------------------------------------------------ project files
 
 const HEX = /^#[0-9a-f]{6}$/i
-const TEMPLATES = Object.keys(TITLE_TEMPLATES) as TitleTemplate[]
+// data-number / data-chart belong to `clip.dataCard`, never to a project file's titleData
+const TEMPLATES: TitleTemplate[] = (Object.keys(TITLE_TEMPLATES) as TitleTemplate[]).filter((t) => t !== 'data-number' && t !== 'data-chart')
 const CLASSICS: ClassicType[] = ['lower-third', 'headline', 'breaking', 'card']
 const PLATFORMS: PlatformChoice[] = ['auto', 'reels', 'shorts', 'none']
 const PRESETS = ANIM_PRESETS.map((p) => p.id)

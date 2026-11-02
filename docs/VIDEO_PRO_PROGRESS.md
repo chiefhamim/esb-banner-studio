@@ -1361,3 +1361,156 @@ test), `tools/e2e/video-shots.mjs` (+ title states), `video-test.mjs` / `video-f
   title clip by adding `data-number` / `data-chart` templates to `TITLE_TEMPLATES` and a branch in `buildTitleSpec`;
   `titleRaster` already redraws while a count-up runs (`titleIsStatic`) and `titleProblems` runs `validateTitleSpec`
   (source-line rule included).
+## Phase 3 — Part B: Grid data cards (2026-11-02, branch `video-p3-data`)
+
+Data cards from esbpowerline.com's published daily grid data: a Data tab in the bin, a main-process fetch with the
+staff session, data-card clips that carry their figure, a render adapter (until Part A's title path is merged) and an
+inspector section with style, animation and a refresh that asks before it changes anything.
+
+### Staff access to the data — a SITE CHANGE IS NEEDED (not made here)
+The site's gate for `/data/daily/<date>.json` and `/api/data/daily/<date>.json` (`middleware.ts`, block
+`isProtectedDataJsonPath`) checks, in this order: a non-bot user agent, then **a same-site Referer or Origin**
+(`isSameOriginDailyAccess`), and only after that the date window by tier (staff → `plan_999`, the full archive, via
+`resolveGridAccessTier`). The session is never consulted before the Referer/Origin check, so a desktop app — which has
+no page on esbpowerline.com — is refused 403 "Direct data access is restricted" whatever its session. The only ways
+past it from the Studio would be to forge a Referer/Origin or to drive a hidden page on the site; neither is done.
+`/api/members/grid-export` takes the session alone, but it is the member download feature (CSV/XLSX tables, 40 a day,
+logged as downloads), not the JSON the cards read.
+
+What the Studio sends (`electron/grid-data.cjs`): `GET https://esbpowerline.com/data/daily/<iso>.json` (then the
+`/api/data/daily/` twin on 404), `Cookie: sb-<ref>-auth-token=…` (the site's own `@supabase/ssr` session cookie, the
+same one `/api/upload` takes), `User-Agent: ESB-AI-Studio/<version> (desktop; +https://esbpowerline.com)`, no
+Referer/Origin, `redirect: manual`.
+
+**Proposed site change** (esbpowerline `middleware.ts`, inside `if (isProtectedDataJsonPath(pathname)) { … }`): let an
+active STAFF session stand in for the same-site check, and nothing else. Replace the `isSameOriginDailyAccess` denial
+with:
+
+```ts
+    const sameSite = isSameOriginDailyAccess(request.headers.get('referer'), request.headers.get('origin'), request.headers.get('host'));
+    // ESB AI Studio (the newsroom's desktop app) reads daily files as a signed-in staff member: it has no page origin
+    // to send, so an active staff session stands in for the same-site check. Bot UA check above, date checks below.
+    let staffClient: NextResponse | null = null;
+    if (!sameSite) {
+      if (!hasSupabaseAuthCookie(request)) return denyDailyJson('Access Denied: Direct data access is restricted.');
+      const { response, supabase, user } = await updateSession(request);
+      const { active, role } = await resolveEdgeSession(user, supabase);
+      if (!active || !isStaffRole(role ?? undefined)) return denyDailyJson('Access Denied: Direct data access is restricted.');
+      staffClient = response;
+    }
+```
+
+and, right after `isBeyondShippedArchive` is computed (before `isPublicDate`):
+
+```ts
+    if (staffClient) {
+      if (isoDate && latestDate && !isBeyondShippedArchive && !isDateAllowedForTier(isoDate, 'plan_999', latestDate)) {
+        return denyDailyJson('Subscription required for historical grid data access.');
+      }
+      staffClient.headers.set('Cache-Control', 'private, no-store');
+      return staffClient;
+    }
+```
+
+Site tests to add with it: no cookie + no Referer → 403; SUBSCRIBER cookie + no Referer → 403; staff cookie + no
+Referer → 200 for any archived day with `private, no-store`; a bot UA with a staff cookie → 403; the encoded-path
+bypass (`/data/d%61ily/…`) still gated. Until it ships the Studio says "esbpowerline.com does not accept the Studio's
+staff session for grid data yet (a site change is pending)" (code `refused`), and cards already made keep their
+stored values.
+
+### What was built
+- **`electron/grid-data.cjs`** (+ IPC `esb:grid-day`, `esb:grid-latest`, `esb:grid-cached`, `esb:grid-cached-dates`
+  in `main.cjs`, bridge in `preload.cjs`). The renderer names a date only: fixed origin, the two documented paths, the
+  date checked as a real day 2011–2030 and not after today in Dhaka, cookies checked like the banner upload
+  (`checkCookies`), no redirects, a 2 MB cap (declared length and streamed), a 15 s whole-request limit, at most 40 site
+  requests in any minute (a looping renderer cannot hammer the site), and the answer must be the report for that day
+  (`systemStats.date`). Cached per date in `userData/grid-cache/<iso>.json` (temp +
+  rename, `{ iso, fetchedAt, source, data }`, ≤ 400 files); a refresh bypasses the cache; `latest` probes today (Dhaka)
+  back 8 days, always fresh, and stops at the first refusal. Errors: "Not signed in", "Outside your access window:
+  latest N days" (N from the session's role: 7 visitor, 30 member; staff should never see it), "No data published for
+  <date>", `refused` (above), timeout, network, too large, bad data. Only an unpackaged build may point it at a
+  loopback test server (`ESB_GRID_TEST_ORIGIN=http://127.0.0.1:<port>`; anything else is the real site).
+- **`src/video/gridData.ts`** — the renderer side: fresh session (`ensureFreshSession`) → cookies → bridge; every
+  answer re-read by the prebuild's `parseGridDay`.
+- **`src/video/dataCardClip.ts`** — `DataCardRef` on the clip (`clip.dataCard`): `{ v, kind, date, dateLabel, metric,
+  value, unit, figure | series, fetchedAt, source, style }`, so a card is reproducible from the project alone.
+  `dataCardFor` (13 figures from `readMetric`; 9 series: fuel mix, fuel share (derived), zone demand / load shed /
+  shed % (derived) / generation, hourly generation / demand / load shed), `dataCardSpec` (the prebuild's
+  `gridNumberCard` / `gridChartCard` plus in/out presets from `anim.ts`: ESB, fade, slide, scale, blur, wipe / fade,
+  slide, blur, cut), `refreshDiff`, `sanitizeDataCard` (every field checked when a project opens; the shown value must
+  equal the stored figure; the source must be esbpowerline.com; ≤ 48 series items). `migrateTimeline` keeps a valid
+  card on an overlay clip only.
+- **`src/video/engine/dataCardAdapter.ts`** — THE ADAPTER the lead switches at the merge. `dataCardLayer(clip, t, w,
+  h, editor)` draws the spec with `renderTitleSpec` at clip-local time; while it moves (count-up, chart growth, in/out)
+  one per-clip canvas goes to `slotTexture` (no LRU churn); once `titleIsStatic`, one `staticTexture` by content key.
+  One call site: the `clip.dataCard` branch in `engine/render.ts` (before the overlay branch). `dataCardTextAt` gives
+  the words a card shows at t (tests).
+- **`src/video/DataPanel.tsx`** — bin → **Data**: signed-out and no-app explanations, a day picker (default: the newest
+  published day; offline: the newest saved copy), every figure with its exact value, unit, hour and date, every series
+  with its values and a chart-type choice, "Derived: formula" where computed, the Source line; Add puts a clip on the
+  overlay track at the playhead (6 s number, 7 s chart). **`DataCardInspector`** (in the clip inspector, keyed by
+  clip id): value, field, date, fetch time and URL; language, digits (Latin / Bangla), accent (ESB stripes or 01–08),
+  chart type, in/out animation; **Refresh data** → "Unchanged", or the change as "On the card / Published now" with
+  Update / Keep (Update is one undo step). Never refetched by itself or on export.
+- `timeline.ts`: `Clip.dataCard`, sanitised in `migrateTimeline`. `VideoWorkspace.tsx`: the Data tab, the inspector
+  section, "Data card" as the inspector's word. `titles/grid.ts`: `GRID_UNITS` (added). `styles/video.css`: the
+  `vw-data-*` block at the end. `package.json`: the new e2e in `test:electron`.
+
+### Acceptance
+- **The number equals the source JSON** (`tools/unit/video-p3-data.test.ts`, fixture `grid-daily-2026-10-21.json`):
+  every metric card's `value` is the file's value; at the end the shown text is `formatExact(value)` and, with commas
+  removed, `String(value)` (329.48744486 stays 329.48744486); Bangla digits ১৫,৫৫২.৫৪; every series item equal.
+- **The count-up's final exported frame**: the text state at the end (`dataCardTextAt`) and a golden frame
+  (`tools/golden/video/p3b-number-final-960x540.png`, napi canvas, ≤ 1 % pixels) of the settled card; the e2e exports
+  the card through the app and compares its frame at 4.0 s with `tools/golden/video/p3b-export-final-480x270.png`
+  (0.000 % off) and with the frame at 5.2 s (identical: the count-up has landed).
+- **The Source line carries the date**: "Source: esbpowerline.com Grid data, 21 Oct 2026" on every number and chart
+  card.
+- **The refresh prompt**: unit (unchanged; changed with before/after and the style kept; missing; a chart item moved)
+  and e2e (Unchanged → a change on the fake server → prompt → Keep → Update → Undo).
+- **IPC refusals**: unit (impossible dates, traversal, URLs, future days, cookies not of the site's form, redirects,
+  401/403/404/429, the per-minute budget, oversized by length and by stream, timeout, another day's file, a tampered cache, the origin
+  override only for loopback + unpackaged) and e2e through the real bridge.
+- e2e `tools/e2e/video-data-electron-test.mjs` (now in `npm run test:electron`): a fake local server stands in for the
+  site — never the real one. 25 checks.
+
+### Screens
+New harness states in `tools/e2e/video-shots.mjs` (a stand-in bridge answers with the fixture): `data-signed-out`,
+`data-day`, `data-card-number`, `data-card-donut`, `data-card-zones`, their `-916` versions, and
+`data-refresh-changed`.
+
+### Merge with Part A (titles, `video-p3-titles` e864710)
+- Switching the adapter to Part A's title path: add `data-number` / `data-chart` to `TITLE_TEMPLATES`
+  (`src/video/titleModel.ts`) and a branch in `buildTitleSpec` that returns `dataCardSpec(clip.dataCard, …)`
+  (`dataCardClip.ts`; it already applies the card's style and in/out presets). Mapping: `template` = `data-number` when
+  `dataCard.kind === 'number'`, else `data-chart`; `accent` = `dataCard.style.accent`; `anim` = `style.animIn/animOut`;
+  the data fields stay in `clip.dataCard` (`date, metric, value, unit, fetchedAt, source, figure | series`). Then delete
+  `engine/dataCardAdapter.ts` and the `clip.dataCard` branch in `engine/render.ts`; `titleProblems` (exportVideo.ts)
+  covers the Source-line check through `validateTitleSpec`.
+- Part A renamed the bin tab `overlays` → `titles`: keep `data` next to it in `BinTab` / `BIN_TAB_LABEL`; the
+  text-fit audit's tab list gains 'Data' here and 'Titles' there.
+
+### Known gaps
+- Live data needs the site change above; until it ships only saved copies (none on a new install) and cards already
+  made work.
+- A split data card restarts its count-up in the second half (each piece is its own card).
+- The bin's six tabs are tight at 900 px; with Part A's tab(s) the strip needs a decision (scroll or a menu).
+- Digits shift slightly while counting (no tabular figures in canvas; noted in the pre-build).
+
+## Phase 3 — merge of Part A (titles) and Part B (data cards) (2026-11-02, branch `video-pro`)
+
+- **Conflicts, resolved by keeping both:** `VideoWorkspace.tsx` (bin tabs Media · Titles · Captions · Audio · Story · Data;
+  inspector Title section and Data card section; "Data card" / "Title" / "Sticker" as the inspector's word),
+  `timeline.ts` (`Clip.titleData` and `Clip.dataCard`, both sanitised), `engine/render.ts`, `video.css` (both blocks),
+  `text-fit-audit.mjs` (tabs 'Titles' + 'Data'), this file. `package.json` and `video-shots.mjs` merged cleanly
+  (`test:video` has video-titles-test, `test:electron` has video-data-electron-test).
+- **Data cards now ride Part A's title path.** `TITLE_TEMPLATES` gains `data-number` / `data-chart` (labels only, not in
+  the Titles tab, refused by `sanitizeTitleData`); `buildTitleSpec` returns `dataCardSpec(clip.dataCard, …)` when a clip
+  has `dataCard` and no `titleData`; the words are derived from `clip.dataCard` each time a spec is built (nothing is
+  copied into `titleData`). `titleRaster.titleTexture` draws it (settled → cached static raster; count-up / chart growth →
+  the animating-title slot). `titleProblems` checks a data card's spec (Source line, figure, fit). `engine/dataCardAdapter.ts`
+  and render.ts's data-card branch are deleted; `dataCardTextAt` moved to `dataCardClip.ts`.
+- **Split data card:** local time is `titleLocal` (`in` + t − start) and the spec's length is `titleDuration`, so the second
+  half starts after the count-up and is settled from its first frame (unit test).
+- **9:16 ESB bug** (`compositor.ts renderStationBug`): on a frame at least 1.5 × taller than wide the plate sits below the
+  Reels / Shorts header band (`DEFAULT_SAFE_ZONES` top, 8 % of the height) instead of inside it; 16:9, 4:5 and 1:1 unchanged.

@@ -52,7 +52,7 @@ export function titleMeasurer(): Measurer {
 
 const specs = new Map<string, TitleSpec | null>()
 const contentKey = (clip: Clip, w: number, h: number, editor: boolean) =>
-  JSON.stringify([clip.titleData, titleAccent(clip), titleDuration(clip), w, h, editor, fontEpochNow(), stationLogo() ? 1 : 0])
+  JSON.stringify([clip.titleData ?? clip.dataCard, titleAccent(clip), titleDuration(clip), w, h, editor, fontEpochNow(), stationLogo() ? 1 : 0])
 
 /** The clip's spec for this frame size (cached by content). */
 export function titleSpecFor(clip: Clip, w: number, h: number, editor: boolean): TitleSpec | null {
@@ -119,14 +119,14 @@ const lastDrawn = new WeakMap<GLCompositor, Map<string, string>>()
  * title) to `slots`, so the frame keeps it. */
 export function titleTexture(comp: GLCompositor, clip: Clip, t: number, w: number, h: number, editor: boolean, slots: Set<string>): TexHandle | null {
   const td = clip.titleData
-  if (!td) return null
-  if (td.look === 'classic') {
+  if (!td && !clip.dataCard) return null
+  if (td?.look === 'classic') {
     // the Phase 0–2 drawing, exactly (an old project looks as it did); never animated
     const old = legacyView(clip)
     return comp.staticTexture(rasterKey(old, w, h, editor, 0), () => { const r = rasterLayer(old, w, h, editor, 0); if (r) titleRasterStats.static++; return r })
   }
   const tl = titleLocal(clip, t)
-  const sticker = td.template === 'sticker' ? stickerOf(clip, editor) : null
+  const sticker = td?.template === 'sticker' ? stickerOf(clip, editor) : null
   const spec = sticker ? null : titleSpecFor(clip, w, h, editor)
   if (!sticker && (!spec || !spec.elements.length)) return null
   const key = contentKey(clip, w, h, editor)

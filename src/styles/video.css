@@ -556,3 +556,29 @@
 .vx-blocked:has(.vx-title-issues) { flex-wrap: nowrap; align-items: flex-start; }
 .vx-blocked:has(.vx-title-issues) > svg { flex: none; margin-top: 1px; }
 .vx-title-issues { flex: 1 1 auto; }
+/* ---- Phase 3 Part B: Grid data cards (bin → Data, and the data card's inspector section) */
+.vw-data-panel .vw-data-note p + p { margin-top: 6px; }
+.vw-data-panel .vw-data-note svg { display: inline-block; vertical-align: -2px; margin-right: 2px; }
+.vw-data-row { display: flex; align-items: center; gap: 6px; }
+.vw-data-label { flex: none; font: 600 11.5px/16px var(--ui); color: var(--text-2); }
+.vw-data-date { flex: 1 1 auto; min-width: 0; height: 28px; padding: 0 8px; font: 500 12.5px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); color-scheme: light dark; }
+.vw-data-date:focus { outline: 0; box-shadow: 0 0 0 2px var(--focus-ring); }
+.vw-data-row .btn { flex: none; }
+.vw-data-day .vw-hint { margin-top: 6px; }
+.vw-data-error { color: var(--danger); display: flex; gap: 6px; align-items: flex-start; }
+.vw-data-error svg { flex: none; margin-top: 2px; }
+.vw-data-head { margin: 8px 2px 0; font: 600 10.5px/16px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+.vw-data-name { min-width: 0; font: 600 12.5px/18px var(--ui); color: var(--text); overflow-wrap: anywhere; }
+.vw-data-value { margin: 0; font: 400 12px/17px var(--ui); color: var(--text-2); overflow-wrap: anywhere; }
+.vw-data-num { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.vw-data-date-tag { color: var(--text-3); white-space: nowrap; }
+.vw-data-derived { margin-top: 4px; color: var(--warning); overflow-wrap: anywhere; }
+.vw-data-item[data-empty] .vw-data-name { color: var(--text-3); }
+.vw-data-item .vw-data-kind { margin-top: 6px; }
+.vw-data-source { margin: 6px 2px 4px; }
+.vw-data-inspector { display: flex; flex-direction: column; gap: 8px; padding-bottom: 6px; }
+.vw-data-inspector .vw-hint { margin: 0; overflow-wrap: anywhere; }
+.vw-data-inspector .vw-data-shown { font-size: 13px; }
+.vw-data-refresh { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.vw-data-changed { align-self: stretch; padding: 8px 10px; border-radius: var(--r-2); background: var(--warning-soft); display: flex; flex-direction: column; gap: 4px; }
+.vw-data-changed .vw-btn-row { margin-top: 4px; }

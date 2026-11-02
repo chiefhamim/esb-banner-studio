@@ -122,7 +122,7 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
       const r = footageRect(f.width, f.height, w, h, p)
       return { tex, quad: layerQuad(r, p.rotation, clip.anchorX, clip.anchorY), uv: uvOf(r, f.width, f.height), alpha, fx: fxOf(clip) }
     }
-    if (clip.kind === 'overlay' && clip.titleData) {
+    if (clip.kind === 'overlay' && (clip.titleData || clip.dataCard)) {
       const tex = titleTexture(comp, clip, t, w, h, editor, slots)
       if (!tex) return null
       const p = poseAt(clip, t)

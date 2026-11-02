@@ -6,6 +6,7 @@
 // is drawn as its label, dimmed ("Speaker name"), so the editor sees what to fill in; an export never draws them, and
 // an overlay with nothing filled in is left out of the file altogether. Nothing here supplies a name, title or figure.
 
+import { DEFAULT_SAFE_ZONES } from './titles/brand'
 import type { Clip } from './timeline'
 import logoUrl from '../assets/images/esb-logo.png'
 
@@ -473,7 +474,11 @@ function renderStationBug(ctx: Ctx, w: number, h: number) {
   const plateW = logoW + padX * 2
   const plateH = logoH + padY * 2
   const x = w - plateW - 36 * s
-  const y = 36 * s
+  // on a 9:16 frame the Reels / Shorts header icons own the top band: the bug sits just below it (titles/brand.ts
+  // DEFAULT_SAFE_ZONES, the same numbers the title kit keeps clear of); 16:9, 4:5 and 1:1 keep their old place
+  const portrait = h / w >= 1.5
+  const headerBand = portrait ? h * Math.max(DEFAULT_SAFE_ZONES.platforms.reels.top, DEFAULT_SAFE_ZONES.platforms.shorts.top) : 0
+  const y = Math.max(36 * s, headerBand + 10 * s)
   ctx.shadowColor = 'rgba(0, 0, 0, 0.28)'
   ctx.shadowBlur = 10 * s
   ctx.shadowOffsetY = 2 * s

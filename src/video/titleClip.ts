@@ -8,7 +8,8 @@
 import { getCategory } from '../core/tokens'
 import type { Clip, VideoProject } from './timeline'
 import { allClips, formatShortTime } from './timeline'
-import { CLASSIC_FIELDS, TITLE_TEMPLATES, fieldsOf, titleDuration, type AnimOverride, type TitleData } from './titleModel'
+import { dataCardSpec } from './dataCardClip'
+import { CLASSIC_FIELDS, TITLE_TEMPLATES, dataTemplateOf, fieldsOf, titleDuration, type AnimOverride, type TitleData } from './titleModel'
 import { blurIn, fade, lineByLine, maskReveal, scaleIn, slide, typeOn, wordByWord, type AnimPhase } from './titles/anim'
 import type { Easing } from './titles/easing'
 import { breakingStrap, endCard, headlineCard, lowerThird, nameStrap, quoteCard, sourceLine, type KitOptions } from './titles/kit'
@@ -48,6 +49,9 @@ const f = (td: TitleData, k: string) => td.fields[k] ?? ''
 
 /** Build a title clip's spec for a frame of w × h. `editor` draws empty fields as labels; an export never does. */
 export function buildTitleSpec(clip: Clip, w: number, h: number, editor: boolean, measure: Measurer): TitleSpec | null {
+  // a Grid data card: its words come from clip.dataCard at this moment (nothing is copied into titleData); a split's
+  // second half starts at titleLocal = in, so its count-up has already landed
+  if (clip.dataCard && !clip.titleData) return dataCardSpec(clip.dataCard, { frame: { w, h }, measure, editor, duration: titleDuration(clip) })
   const td = clip.titleData
   if (!td || td.look === 'classic' || td.template === 'sticker' || td.template === 'text-card') return null
   const o: KitOptions = {
@@ -64,6 +68,7 @@ export function buildTitleSpec(clip: Clip, w: number, h: number, editor: boolean
     case 'quote': spec = quoteCard({ quote: f(td, 'quote'), speaker: f(td, 'speaker'), speakerRole: f(td, 'speakerRole') }, o); break
     case 'source': spec = sourceLine({ source: f(td, 'source') }, o); break
     case 'end-card': spec = endCard(o); break
+    default: return null
   }
   return applyOverrides(spec, td, Math.min(w, h) / 1080)
 }
@@ -116,6 +121,15 @@ export function titleProblems(project: Pick<VideoProject, 'clips' | 'width' | 'h
   const m = measure ?? roughMeasure
   for (const c of allClips(project)) {
     const td = c.titleData
+    if (c.kind === 'overlay' && c.dataCard && !td && !c.compound) {
+      // a data card: the Source line, the figure and the fit are checked on the spec exactly as a title's are
+      const msgs: string[] = []
+      const spec = buildTitleSpec(c, project.width, project.height, false, m)
+      if (!spec) msgs.push('The data card cannot be drawn from its saved data')
+      else for (const i of validateTitleSpec(spec, { measure: measure ?? undefined })) if (!msgs.includes(i.message)) msgs.push(i.message)
+      if (msgs.length) out.push({ clipId: c.id, label: TITLE_TEMPLATES[dataTemplateOf(c.dataCard)].label, at: c.start, messages: msgs })
+      continue
+    }
     if (c.kind !== 'overlay' || !td || c.compound) continue
     const msgs: string[] = []
     const label = TITLE_TEMPLATES[td.template].label

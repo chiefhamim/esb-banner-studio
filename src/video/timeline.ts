@@ -15,6 +15,7 @@ import type { BlendMode } from './effects'
 import { BLEND_MODES, LUT_MAX_CHARS, lutText, lutsUsed, registerLut, sanitizeEffects } from './effects'
 import type { TitleData } from './titleModel'
 import { migrateOverlayClip, sanitizeTitleData } from './titleModel'
+import { sanitizeDataCard, type DataCardRef } from './dataCardClip'
 
 export type TrackKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio'
 export const TRACK_KINDS: readonly TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']
@@ -143,6 +144,9 @@ export interface Clip {
   titleData?: TitleData
   transitionIn?: ClipTransition
   transitionOut?: ClipTransition
+  /** Phase 3 (Part B): a Grid data card — the published figure or series it shows, with its day, source and fetch
+   * time (dataCardClip.ts). Drawn from these stored values only; an export never fetches. */
+  dataCard?: DataCardRef
 }
 
 export interface VideoProject {
@@ -818,6 +822,7 @@ export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unkno
     if (o.titleData !== undefined) { const td = kind === 'overlay' && !o.sourceUrl ? sanitizeTitleData(o.titleData) : null; if (td) clip.titleData = td; else delete clip.titleData }
     if (kind === 'overlay' && !clip.titleData) { const m = migrateOverlayClip({ ...clip, overlayText: typeof clip.overlayText === 'string' ? clip.overlayText : '', overlaySub: typeof clip.overlaySub === 'string' ? clip.overlaySub : '' }); if (m.titleData) clip.titleData = m.titleData }
     if (clip.titleData) { delete clip.overlayType; delete clip.overlayText; delete clip.overlaySub }
+    if (o.dataCard !== undefined) { const dc = kind === 'overlay' ? sanitizeDataCard(o.dataCard) : undefined; if (dc) clip.dataCard = dc; else delete clip.dataCard }
     if (!track) {
       // the clip's track is gone: give it one of its kind rather than lose the clip
       const want = typeof o.trackId === 'string' && /^[\w-]{1,40}$/.test(o.trackId) && !seen.has(o.trackId) ? o.trackId : undefined

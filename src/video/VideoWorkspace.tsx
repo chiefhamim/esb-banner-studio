@@ -25,6 +25,7 @@ import { holdBackground, holdProxies, noteScrub } from './engine/background'
 import { releaseFilmstrips } from './engine/filmstrip'
 import { ExportSheet } from './ExportSheet'
 import { StoryVideoPanel } from './StoryVideoPanel'
+import { DataCardInspector, DataPanel } from './DataPanel'
 import { EffectsPanel, FxSection, InspectorSections, openSection, useInspectorUi } from './EffectsPanel'
 import { ColourPanel } from './ColourPanel'
 import { lutText } from './effects'
@@ -41,8 +42,8 @@ import { migrateOverlayClip, titleWords } from './titleModel'
 import { titleRasterStats } from './engine/titleRaster'
 import '../styles/video.css'
 
-type BinTab = 'titles' | 'media' | 'captions' | 'audio' | 'story'
-const BIN_TAB_LABEL: Record<BinTab, string> = { media: 'Media', titles: 'Titles', captions: 'Captions', audio: 'Audio', story: 'Story' }
+type BinTab = 'titles' | 'media' | 'captions' | 'audio' | 'story' | 'data'
+const BIN_TAB_LABEL: Record<BinTab, string> = { media: 'Media', titles: 'Titles', captions: 'Captions', audio: 'Audio', story: 'Story', data: 'Data' }
 
 /** The picture overlays the Titles tab adds (titles themselves are TitlesPanel.tsx's kit). */
 const OVERLAY_PRESETS: { type: OverlayTemplate; tag: string; desc: string; color: string }[] = [
@@ -1079,6 +1080,7 @@ function VideoDesk() {
               )}
 
               {activeTab === 'story' && <StoryVideoPanel />}
+              {activeTab === 'data' && <DataPanel />}
               {activeTab === 'audio' && (
                 <div className="vw-preset-list">
                   <div className="vw-preset-card">
@@ -1286,6 +1288,7 @@ function kindWord(c: Clip): string {
   if (c.kind === 'video') return c.still ? 'Still' : 'Footage'
   if (c.kind === 'audio') return 'Sound'
   if (c.kind === 'caption') return 'Caption'
+  if (c.dataCard) return 'Data card'
   if (c.titleData) return c.titleData.template === 'sticker' ? 'Sticker' : 'Title'
   return 'Overlay'
 }
@@ -1365,6 +1368,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
               )}
             </>
           )}
+          {clip.dataCard && !clip.compound && <DataCardInspector key={clip.id} clip={clip} locked={locked} onChange={onChange} />}
           {textOverlay && labels && (
             <>
               <div className="vw-field">
