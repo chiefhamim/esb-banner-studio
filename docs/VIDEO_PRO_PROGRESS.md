@@ -1603,3 +1603,10 @@ new code). Goldens updated deliberately: `p3b-number-final-960x540.png` (unit te
 UI-review additions (kit.ts / dataCards.ts): lower third kicker 17 -> 22 px, role 27 -> 28 px; data cards: label/title >= 30, unit/derived/source/chart text >= 24 px at 1080 (chart base size 26 -> 32), portrait padding 48 -> 32 px, value column right after the label in the donut. The card already spans the full platform-safe width (885 px of 1080 on a Reels frame: the Reels right strip is 13 %), so it was not widened into the button column.
 
 Checks: lint (warnings only, none new), `npm test` 1175 passed, build ok, `test:video` all pass (one dropped-frame case, reverse 2x, failed once while vitest ran alongside and passed on rerun), `test:electron` all three pass, text-fit and center audits below.
+
+### Phase 3 UI fix round: after merging `video-p3-fix`
+`video-p3-ui` has `video-p3-fix` (d352ba0) merged in. The title fields now type through `updateClipCoalesced(clip, 'field:<key>')` and close the step with
+`endCoalesce()` on blur / Enter (one undo step per field edit). The derived note reads the data's own `short` ("share of total") and keeps
+the full formula behind "Show formula" and the tooltip. U11 sizes are the logic side's. Checks after the merge: lint (warnings only), `npm test`
+1178 passed, build ok, `test:video` all pass, text-fit 0 problems, center audit 0. Screenshots: the 20 touched states (plus `inspector-video`) in both themes at
+900/1366/1920 re-shot after the merge into `tools/out/p3-ui` (108 shots, 0 failed); the whole 513-shot set was not re-run end to end.

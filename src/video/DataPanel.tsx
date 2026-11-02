@@ -28,9 +28,9 @@ const fmtFetched = (iso: string) => {
 }
 
 /** A derived figure: what it is in words, the full formula one click (or hover) away, never raw code in the list. */
-function DerivedNote({ formula }: { formula: string }) {
+function DerivedNote({ formula, short }: { formula: string; short?: string }) {
   const [open, setOpen] = useState(false)
-  const what = /×\s*100/.test(formula) ? 'share of total' : /\+/.test(formula) ? 'sum of published values' : 'calculated from the published values'
+  const what = short ?? /×\s*100/.test(formula) ? 'share of total' : /\+/.test(formula) ? 'sum of published values' : 'calculated from the published values'
   return (
     <div className="vw-data-derived">
       <p className="vw-hint">
@@ -159,7 +159,7 @@ export function DataPanel() {
               ) : (
                 <p className="vw-hint">Not published in this day's file.</p>
               )}
-              {fig?.derived && <DerivedNote formula={fig.derived.formula} />}
+              {fig?.derived && <DerivedNote formula={fig.derived.formula} short={fig.derived.short} />}
             </div>
           ))}
           <div className="vw-data-head">Charts</div>
@@ -174,7 +174,7 @@ export function DataPanel() {
                 {s ? (
                   <>
                     <p className="vw-data-value vw-data-series">{s.items.slice(0, 6).map((i) => `${i.label} ${formatExact(i.value)}`).join(' · ')}{s.items.length > 6 ? ` · +${s.items.length - 6} more` : ''} ({s.unit}) <span className="vw-data-date-tag">{s.dateLabel}</span></p>
-                    {s.derived && <DerivedNote formula={s.derived.formula} />}
+                    {s.derived && <DerivedNote formula={s.derived.formula} short={s.derived.short} />}
                     <Seg<ChartKind> className="vw-data-kind" label="Chart type" value={kind} onChange={(k) => setKinds((m) => ({ ...m, [id]: k }))} options={[{ value: 'bar', label: 'Bars' }, { value: 'line', label: 'Line' }, { value: 'donut', label: 'Donut' }]} />
                   </>
                 ) : (
@@ -208,6 +208,7 @@ export function DataCardInspector({ clip, locked, onChange }: { clip: Clip; lock
   const [refresh, setRefresh] = useState<Refresh>({ state: 'idle' })
   const setStyle = (patch: Partial<DataCardStyle>) => onChange({ ...clip, dataCard: { ...card, style: { ...card.style, ...patch } } })
   const derived = derivedFormula(card)
+  const derivedShort = card.figure?.derived?.short ?? card.series?.derived?.short
   const signedIn = !!useStaffSession()
 
   const check = async () => {
@@ -227,7 +228,7 @@ export function DataCardInspector({ clip, locked, onChange }: { clip: Clip; lock
       <p className="vw-data-value vw-data-shown"><b className="vw-data-num">{cardValueText(card)}</b></p>
       <p className="vw-hint vw-data-meta">{cardLabel(card)} · {card.dateLabel} ({card.date})</p>
       {card.kind === 'number' && card.figure && <p className="vw-hint vw-data-field">Read from {card.figure.sourceField}</p>}
-      {derived && <DerivedNote formula={derived} />}
+      {derived && <DerivedNote formula={derived} short={derivedShort} />}
       <p className="vw-hint vw-data-src">Fetched {fmtFetched(card.fetchedAt)} from {card.source.replace(/^https?:\/\//, '')}</p>
 
       <div className="vw-field vw-field-row"><label>Language</label><Seg<'en' | 'bn'> value={card.style.lang} onChange={(v) => setStyle({ lang: v })} options={[{ value: 'en', label: 'English' }, { value: 'bn', label: 'বাংলা' }]} /></div>

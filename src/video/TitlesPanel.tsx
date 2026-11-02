@@ -150,12 +150,14 @@ function StickerIcon({ shape }: { shape: StickerShape }) {
 // ------------------------------------------------------------------ inspector
 
 /** The title's words, at the top of the inspector. */
-export function TitleFields({ clip, onChange }: { clip: Clip; onChange: (c: Clip) => void }) {
+export function TitleFields({ clip }: { clip: Clip; onChange?: (c: Clip) => void }) {
   const td = clip.titleData!
   const defs = fieldsOf(td)
   const w = useVideoStore((s) => s.project.width)
   const h = useVideoStore((s) => s.project.height)
-  const set = (key: string, v: string) => onChange({ ...clip, titleData: { ...td, fields: { ...td.fields, [key]: v } } })
+  // typing is one undo step per field (a run of keystrokes in one field coalesces); leaving the field closes the step
+  const set = (key: string, v: string) => useVideoStore.getState().updateClipCoalesced({ ...clip, titleData: { ...td, fields: { ...td.fields, [key]: v } } }, `field:${key}`)
+  const close = () => useVideoStore.getState().endCoalesce()
   const problems = useMemo(() => titleProblems({ clips: [clip], width: w, height: h }, measureNow())[0]?.messages ?? [], [clip, w, h])
   const anyEmpty = defs.some((d) => !(td.fields[d.key] ?? '').trim())
   return (
@@ -164,8 +166,8 @@ export function TitleFields({ clip, onChange }: { clip: Clip; onChange: (c: Clip
         <div key={d.key} className="vw-field" data-field={d.key}>
           <label htmlFor={`vw-tf-${d.key}`}>{d.label}{d.required && <em className="vw-req" aria-label="required">Required</em>}</label>
           {d.multiline
-            ? <textarea id={`vw-tf-${d.key}`} className="vw-tf" rows={3} value={td.fields[d.key] ?? ''} placeholder={d.label} onChange={(e) => set(d.key, e.target.value)} />
-            : <input id={`vw-tf-${d.key}`} type="text" className="vw-tf" value={td.fields[d.key] ?? ''} placeholder={d.label} onChange={(e) => set(d.key, e.target.value)} />}
+            ? <textarea id={`vw-tf-${d.key}`} className="vw-tf" rows={3} value={td.fields[d.key] ?? ''} placeholder={d.label} onChange={(e) => set(d.key, e.target.value)} onBlur={close} />
+            : <input id={`vw-tf-${d.key}`} type="text" className="vw-tf" value={td.fields[d.key] ?? ''} placeholder={d.label} onChange={(e) => set(d.key, e.target.value)} onBlur={close} onKeyDown={(e) => { if (e.key === 'Enter') close() }} />}
         </div>
       ))}
       {td.template === 'end-card' && <p className="vw-hint">The end card carries only the brand: the logo, esbpowerline.com and the Facebook and YouTube handles.</p>}
