@@ -14,6 +14,7 @@ import { useVideoStore } from './videoStore'
 import { videoBridge } from './media'
 import { canvasMeasure, measureNow, titleProblems } from './titleClip'
 import type { LoudnessTarget } from './audioAdapter'
+import { DenoiseError } from './engine/audioRender'
 import { LOUDNESS_CHOICES, PENDING_NOTE, capabilities, clipDenoise, projectDucking, projectMaster, projectTarget, writeTarget } from './audioAdapter'
 
 const DRAFT_SECONDS = 10
@@ -45,6 +46,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
   const [startedAt, setStartedAt] = useState(0)
   const [result, setResult] = useState<(ExportResult & { savedTo: string | null; chosen: string | null }) | null>(null)
   const [error, setError] = useState('')
+  const [errorKind, setErrorKind] = useState<'' | 'denoise'>('')
   const [audioStatus, setAudioStatus] = useState('')
   const abort = useRef<AbortController | null>(null)
   const lastTick = useRef(0)
@@ -99,6 +101,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
     }
     abort.current = new AbortController()
     setStep('running')
+    setErrorKind('')
     setStartedAt(performance.now())
     setFrames({ cur: 0, total: Math.round(duration * project.fps) })
     setExporting(true, 0)
@@ -124,6 +127,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
     } catch (err) {
       if (id) await b!.videoExportEnd!(id, false).catch(() => null)
       if ((err as Error).name === 'AbortError') { setStep('setup'); return }
+      setErrorKind(err instanceof DenoiseError || (err as Error).name === 'DenoiseError' ? 'denoise' : '')
       setError((err as Error).message || 'The render failed.')
       setStep('error')
     } finally {
@@ -239,6 +243,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
                 </span>
                 {result.loudness && result.loudness.target != null && <span className="vx-ba-gain">Gain {result.loudness.gainDb >= 0 ? '+' : '−'}{Math.abs(result.loudness.gainDb).toFixed(1)} dB{result.loudness.limited ? ', limiter worked' : ''}</span>}
                 {result.loudness?.note && <span className="vx-ba-gain">{result.loudness.note}</span>}
+                {(result.loudness?.warnings ?? []).map((w) => <span key={w} className="vx-ba-gain vx-ba-warn" role="status"><Icon name="alert" size={12} />{w}</span>)}
                 <em className={`vx-loud-verdict ${loudRep.ok ? 'ok' : 'check'}`}>{loudRep.ok ? 'Target and ceiling met' : 'Check: target or ceiling not met'}</em>
               </dd></div>}
               {!loudRep && <div className="vx-loud-report"><dt>Loudness</dt><dd>{result.audioCodec ? 'Not measured' : 'No sound'}</dd></div>}
@@ -252,7 +257,8 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
 
         {step === 'error' && (
           <>
-            <div className="signin-error" role="alert"><Icon name="info" size={14} /><span>{error}</span></div>
+            <div className="signin-error" role="alert"><Icon name="info" size={14} /><span>{errorKind === 'denoise' && <b className="vx-err-name">Noise reduction failed. </b>}{error}</span></div>
+            {errorKind === 'denoise' && <p className="vx-note">Open the clip's Audio section and switch noise reduction off, or pick another noise sample, then export again.</p>}
             <div className="vx-actions">
               <button type="button" className="btn" onClick={onClose}>Close</button>
               <button type="button" className="btn primary" onClick={() => setStep('setup')}>Try again</button>

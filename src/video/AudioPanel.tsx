@@ -6,9 +6,9 @@ import { Icon } from '../ui/Icon'
 import { IconButton, Select, Switch } from '../ui/controls'
 import { useVideoStore } from './videoStore'
 import { hasDiskMedia } from './media'
-import { WaveThumb, LevelBar } from './audioControls'
+import { WaveThumb, LevelBar, NumField } from './audioControls'
 import { identityOf } from './engine/laneCanvas'
-import { cancelVoiceover, setPunch, setTakeTrack, startVoiceover, stopVoiceover, useVoiceover } from './voiceover'
+import { cancelVoiceover, setPunch, setVoiceoverOffset, OFFSET_LIMIT_MS, setTakeTrack, startVoiceover, stopVoiceover, useVoiceover } from './voiceover'
 import { addMusicToTimeline, chooseMusicFolder, clearMusicFolder, dragMusic, fmtTrackLength, loadMusic, setLicenceNote, stopPreview, togglePreview, useMusic } from './musicLibrary'
 import type { MusicFile } from './musicLibrary'
 import { formatShortTime } from './timeline'
@@ -55,8 +55,15 @@ function Recorder() {
           />
         </div>
       </div>
+      <div className="vw-au-field vw-au-offset" data-row="vo-offset">
+        <label>Voiceover latency offset (ms)</label>
+        <NumField className="vw-f-vo-offset" label="Voiceover latency offset in milliseconds" unit="ms" min={-OFFSET_LIMIT_MS} max={OFFSET_LIMIT_MS} step={5} decimals={0} value={vo.offsetMs} onChange={setVoiceoverOffset} />
+        <small className="vw-au-offset-note">{vo.measuredMs != null ? `Last take: ${Math.round(vo.measuredMs)} ms measured. ` : ''}Positive places takes later. Applies on top of the measured latency.</small>
+      </div>
       <p className="vw-au-note">Starts after a 3-2-1 countdown at the playhead{hasDiskMedia() ? ' and keeps each take with the app' : ''}. Use headphones when punching in.</p>
       {vo.error && <p className="vw-au-err" role="alert"><Icon name="alert" size={12} />{vo.error}</p>}
+      {vo.interrupted && <p className="vw-au-err" role="alert"><Icon name="alert" size={12} />{vo.interrupted}</p>}
+      {vo.layered && <p className="vw-au-note vw-au-layered" role="status"><Icon name="info" size={12} />{vo.layered}</p>}
       {vo.note && <p className="vw-au-err" role="status"><Icon name="info" size={12} />{vo.note}</p>}
     </section>
   )

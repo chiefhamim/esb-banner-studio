@@ -262,3 +262,17 @@
 
 /* shortcuts sheet: the last group ends above the "more below" fade */
 .keys-groups.vw-keys { padding-bottom: 40px; }
+
+/* Phase 4 merge: wired fix-round states */
+.vw-au-offset { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 8px; }
+.vw-au-offset small { grid-column: 1 / -1; font: 500 11px/1.4 var(--ui); color: var(--text-2); }
+.vw-au-offset .vw-numfield input { min-height: 28px; }
+.vw-au-layered { color: var(--text-1, var(--text-2)); }
+.vw-au-xfade-why, .vw-au-beats-why, .vw-au-nr-err, .vw-au-nr-dropped { margin: 4px 0; }
+.vw-au-xfade[disabled] { cursor: not-allowed; }
+.vw-mx-warnings { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+.vw-mx-warnings li { display: flex; gap: 6px; align-items: flex-start; font: 500 11.5px/1.4 var(--ui); color: var(--warning); overflow-wrap: anywhere; }
+.vw-mx-warnings svg { flex: none; margin-top: 2px; }
+.vx-ba-warn { display: flex; gap: 6px; align-items: flex-start; color: var(--warning); }
+.vx-ba-warn svg { flex: none; margin-top: 2px; }
+.vx-err-name { font-weight: 700; }

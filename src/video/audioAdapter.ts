@@ -38,7 +38,7 @@ export const LOUDNESS_CHOICES: { value: LoudnessTarget; label: string; hint: str
 ]
 export type Ducking = DuckingSettings
 export interface Master { gain: number; limiter: boolean }
-export interface Denoise { amount: number; noiseRange?: [number, number] }
+export interface Denoise { amount: number; noiseRange?: [number, number]; /** The sample was cut away by an edit (the note asks for a new one). */ noiseDropped?: boolean }
 export interface ClipAudio { gain?: number | null; fadeIn?: Fade | null; fadeOut?: Fade | null; pan?: number | null; denoise?: Denoise | null }
 export interface TrackAudio { bus?: Bus | null; volume?: number | null; pan?: number | null; solo?: boolean | null; muted?: boolean }
 export interface LoudnessReading { integrated: number; truePeak: number; range?: number; gainDb?: number; wouldLimit?: boolean; target?: number | null; /** A very short mix: the level is ungated. */ shortMix?: boolean; /** Things worth saying next to the numbers (short mix, broken samples). */ warnings?: string[] }
@@ -83,7 +83,7 @@ export const clipFadeOut = (c: Clip) => fadeOf((c as unknown as Loose).fadeOut)
 export const clipDenoise = (c: Clip): Denoise => {
   const d = ((c as unknown as Loose).denoise ?? {}) as Loose
   const r = d.noiseRange
-  return { amount: Math.max(0, Math.min(1, num(d.amount, 0))), noiseRange: Array.isArray(r) && typeof r[0] === 'number' && typeof r[1] === 'number' ? [r[0], r[1]] : undefined }
+  return { amount: Math.max(0, Math.min(1, num(d.amount, 0))), noiseRange: Array.isArray(r) && typeof r[0] === 'number' && typeof r[1] === 'number' ? [r[0], r[1]] : undefined, ...(d.noiseDropped === true ? { noiseDropped: true } : {}) }
 }
 /** The bus a track is set to, or 'auto' when none is (the engine then decides per clip). */
 export const trackBus = (t: Track): BusChoice => { const b = (t as unknown as Loose).bus; return b === 'voice' || b === 'music' || b === 'fx' || b === 'none' ? b : 'auto' }
@@ -99,6 +99,12 @@ export const writeClip = (id: string, patch: ClipAudio) => { act('patchClipAudio
 export const writeTrack = (id: string, patch: TrackAudio) => { act('patchTrackAudio')?.(id, patch) }
 export const writeMaster = (patch: Partial<Master>) => { act('setMaster')?.(patch) }
 export const writeDucking = (patch: Partial<Ducking>) => { act('setDucking')?.(patch) }
+// Coalesced writers for sliders and number fields: keyboard steps and typing within ~1.2 s are ONE undo step
+// (a pointer drag is already one step through the gesture; these fold into it). `key` keeps different fields apart.
+export const writeClipC = (id: string, patch: ClipAudio, key?: string) => { act('patchClipAudioCoalesced')?.(id, patch, key ?? Object.keys(patch).join('+')) }
+export const writeTrackC = (id: string, patch: TrackAudio, key?: string) => { act('patchTrackAudioCoalesced')?.(id, patch, key ?? Object.keys(patch).join('+')) }
+export const writeMasterC = (patch: Partial<Master>) => { act('patchProjectAudioCoalesced')?.({ master: patch }, 'master:' + Object.keys(patch).join('+')) }
+export const writeDuckingC = (patch: Partial<Ducking>) => { act('patchProjectAudioCoalesced')?.({ ducking: patch }, 'ducking:' + Object.keys(patch).join('+')) }
 export const writeTarget = (t: LoudnessTarget) => { act('setLoudnessTarget')?.((t === 'off' ? null : t) as ModelTarget) }
 /** A slider or handle drag: the step is taken when it starts and closed when it ends (videoStore gestures). */
 export const gestureStart = () => st().beginGesture && (st().beginGesture as () => void)()
@@ -142,6 +148,7 @@ export async function proposeBeats(clip: Clip): Promise<BeatProposal | null> {
   return f ? ((await f(clip.id)) as BeatProposal | null) : null
 }
 /** Accept a proposal: one marker per beat (or per strong onset when no beat grid was found), one undo step. */
+export const beatsProblem = (p: BeatProposal): string | null => { const f = act('beatsProblem'); return f ? ((f(p) as string | null) ?? null) : null }
 export function acceptBeats(p: BeatProposal): number {
   const f = act('applyBeats')
   return f ? (f(p, p.beats.length ? 'beats' : 'onsets') as number) : 0

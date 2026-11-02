@@ -9,10 +9,11 @@ import { Select } from '../ui/controls'
 import type { Clip } from './timeline'
 import { formatShortTime } from './timeline'
 import { useVideoStore } from './videoStore'
+import { useAudioJobs } from './audioJobs'
 import { FxSection } from './EffectsPanel'
 import { GSlider, NumField } from './audioControls'
 import type { BeatProposal, FadeCurve } from './audioAdapter'
-import { FADE_CURVES, FADE_MAX, PENDING_NOTE, acceptBeats, capabilities, clipDenoise, clipFadeIn, clipFadeOut, clipGainDb, clipPan, fmtDb, neighbourAfter, crossfadeWithNext, proposeBeats, writeClip } from './audioAdapter'
+import { FADE_CURVES, FADE_MAX, PENDING_NOTE, acceptBeats, capabilities, clipDenoise, clipFadeIn, clipFadeOut, clipGainDb, clipPan, fmtDb, neighbourAfter, crossfadeBlocker, crossfadeWithNext, proposeBeats, beatsProblem, writeClip, writeClipC } from './audioAdapter'
 
 const panText = (p: number) => (Math.abs(p) < 0.02 ? 'Centre' : p < 0 ? `Left ${Math.round(-p * 100)}` : `Right ${Math.round(p * 100)}`)
 const curveOptions = FADE_CURVES.map((c) => ({ value: c.value, label: c.label, hint: c.hint }))
@@ -31,10 +32,12 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
   const fin = clipFadeIn(clip)
   const fout = clipFadeOut(clip)
   const dn = clipDenoise(clip)
+  const nrError = useAudioJobs((s) => s.errors[clip.id])
+  const blocker = crossfadeBlocker(clip) ?? (neighbourAfter(clip) ? crossfadeBlocker(neighbourAfter(clip)!) : null)
   const maxFade = (other: number) => Math.max(0, Math.min(FADE_MAX, clip.duration - other))
 
-  const setFadeIn = (patch: Partial<typeof fin>) => writeClip(clip.id, { fadeIn: { ...fin, ...patch, dur: Math.min(patch.dur ?? fin.dur, maxFade(fout.dur)) } })
-  const setFadeOut = (patch: Partial<typeof fout>) => writeClip(clip.id, { fadeOut: { ...fout, ...patch, dur: Math.min(patch.dur ?? fout.dur, maxFade(fin.dur)) } })
+  const setFadeIn = (patch: Partial<typeof fin>) => writeClipC(clip.id, { fadeIn: { ...fin, ...patch, dur: Math.min(patch.dur ?? fin.dur, maxFade(fout.dur)) } })
+  const setFadeOut = (patch: Partial<typeof fout>) => writeClipC(clip.id, { fadeOut: { ...fout, ...patch, dur: Math.min(patch.dur ?? fout.dur, maxFade(fin.dur)) } })
 
   // the range selection (timeline seconds) as a span of this clip's source file
   const rin = range.in
@@ -65,11 +68,11 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
       <div className="vw-au-duo">
         <div className="vw-field vw-au-row" data-row="gain">
           <label data-tip="Double-click the slider to reset to 0 dB">Gain <em>{fmtDb(gain)}</em>{gain !== 0 && !off && <IconButton icon="refresh" size={11} className="vw-au-reset" tip="Reset gain to 0 dB" onClick={() => writeClip(clip.id, { gain: 0 })} />}</label>
-          <GSlider className="vw-s-gain" label="Clip gain" min={-24} max={24} step={0.5} value={gain} defaultValue={0} disabled={off} onChange={(v) => writeClip(clip.id, { gain: v })} />
+          <GSlider className="vw-s-gain" label="Clip gain" min={-24} max={24} step={0.5} value={gain} defaultValue={0} disabled={off} onChange={(v) => writeClipC(clip.id, { gain: v })} />
         </div>
         <div className="vw-field vw-au-row" data-row="pan">
           <label data-tip="Double-click the slider to centre">Pan <em>{panText(pan)}</em>{Math.abs(pan) >= 0.02 && !off && <IconButton icon="refresh" size={11} className="vw-au-reset" tip="Centre the pan" onClick={() => writeClip(clip.id, { pan: 0 })} />}</label>
-          <GSlider className="vw-s-pan" label="Clip pan" min={-1} max={1} step={0.02} value={pan} defaultValue={0} disabled={off} onChange={(v) => writeClip(clip.id, { pan: v })} />
+          <GSlider className="vw-s-pan" label="Clip pan" min={-1} max={1} step={0.02} value={pan} defaultValue={0} disabled={off} onChange={(v) => writeClipC(clip.id, { pan: v })} />
         </div>
       </div>
       <button type="button" className="vw-subhead vw-au-fold" aria-expanded={fadesOpen} onClick={() => setFadesOpen((o) => !o)}>
@@ -87,16 +90,19 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
         <NumField className="vw-f-fadeout" label="Fade out seconds" unit="s" min={0} max={maxFade(fin.dur)} step={0.1} decimals={2} value={fout.dur} disabled={off} onChange={(v) => setFadeOut({ dur: v })} />
         <Select<FadeCurve> value={fout.curve} options={curveOptions} onChange={(v) => setFadeOut({ curve: v, dur: fout.dur || Math.min(0.5, maxFade(fin.dur)) })} className="compact vw-au-curve" title="Fade-out curve" />
       </div>
-      <button type="button" className="btn sm vw-au-xfade" disabled={off || !neighbourAfter(clip)} data-tip={neighbourAfter(clip) ? 'Fade this clip out while the next one fades in (equal power)' : 'No audio clip after this one on its track'} onClick={() => { const why = crossfadeWithNext(clip); if (why) flash(why); else flash('Crossfade made') }}>
+      <button type="button" className="btn sm vw-au-xfade" disabled={off || !neighbourAfter(clip) || !!blocker} aria-describedby={blocker ? 'vw-au-xfade-why' : undefined} data-tip={blocker ?? (neighbourAfter(clip) ? 'Fade this clip out while the next one fades in (equal power)' : 'No audio clip after this one on its track')} onClick={() => { const why = crossfadeWithNext(clip); if (why) flash(why); else flash('Crossfade made') }}>
         <Icon name="swap" size={12} />Crossfade with next clip
       </button>
+      {blocker && <p id="vw-au-xfade-why" className="vw-au-note vw-au-xfade-why"><Icon name="info" size={12} />{blocker}</p>}
       </>}
 
       <div className="vw-subhead">Noise reduction</div>
       <div className="vw-field vw-au-row" data-row="denoise">
         <label>Amount <em>{Math.round(dn.amount * 100)}%</em></label>
-        <GSlider className="vw-s-denoise" label="Noise reduction amount" min={0} max={1} step={0.05} value={dn.amount} defaultValue={0} disabled={off} onChange={(v) => writeClip(clip.id, { denoise: { ...dn, amount: v } })} />
+        <GSlider className="vw-s-denoise" label="Noise reduction amount" min={0} max={1} step={0.05} value={dn.amount} defaultValue={0} disabled={off} onChange={(v) => writeClipC(clip.id, { denoise: { ...dn, amount: v } })} />
       </div>
+      {nrError && <p className="vw-au-err vw-au-nr-err" role="alert"><Icon name="alert" size={12} />Noise reduction failed: {nrError}</p>}
+      {dn.noiseDropped && !dn.noiseRange && <p className="vw-au-err vw-au-nr-dropped" role="status"><Icon name="info" size={12} />The noise sample was cut away by an edit: pick a new one.</p>}
       <div className="vw-au-sample">
         <button type="button" className="btn sm vw-au-sample-btn" disabled={off || !sampleOk} data-tip={sampleOk ? 'Learn the noise from the in–out range on the timeline (a stretch with no one speaking)' : 'Set an in–out range on the timeline over a stretch with only noise (I and O keys)'} onClick={useSample}>Use selection as noise sample</button>
         {dn.noiseRange
@@ -108,11 +114,12 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
       <button type="button" className="btn sm vw-au-beats" disabled={!caps.beats || busy} data-tip={caps.beats ? 'Find the beats in this clip; you choose whether to add them as markers' : 'Beat detection needs the audio engine (pending)'} onClick={() => void mark()}>
         <Icon name="activity" size={12} />{busy ? 'Listening' : 'Mark beats'}
       </button>
+      {beats && beatsProblem(beats) && <p className="vw-au-err vw-au-beats-why" role="alert"><Icon name="alert" size={12} />{beatsProblem(beats)}</p>}
       {beats && (
         <div className="vw-au-proposal" role="group" aria-label="Beat proposal">
           <span><b>{beats.beats.length || beats.onsets.length}</b> {beats.beats.length ? 'beat' : 'strong onset'}{(beats.beats.length || beats.onsets.length) === 1 ? '' : 's'}{beats.tempo ? ` · about ${Math.round(beats.tempo.bpm)} BPM` : ''} found. Nothing is added yet.</span>
           <div className="vw-btn-row">
-            <button type="button" className="btn xs primary vw-au-accept" onClick={() => { const n = acceptBeats(beats); flash(n ? `Added ${n} markers` : 'Those markers are already there'); setBeats(null) }}>Add as markers</button>
+            <button type="button" className="btn xs primary vw-au-accept" onClick={() => { const why = beatsProblem(beats); if (why) { setBeats(null); flash(why); return } const n = acceptBeats(beats); flash(n ? `Added ${n} markers` : 'Those markers are already there'); setBeats(null) }}>Add as markers</button>
             <button type="button" className="btn xs vw-au-dismiss" onClick={() => setBeats(null)}>Dismiss</button>
           </div>
         </div>

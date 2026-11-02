@@ -13,7 +13,7 @@ import type { BusChoice, LoudnessTarget } from './audioAdapter'
 import { useLiveLevels } from './useAudioMeters'
 import {
   BUSES, LOUDNESS_CHOICES, PENDING_NOTE, capabilities, enginePending, fmtDb, fmtDbtp, fmtLufs, measureLoudnessNow, projectDucking, projectMaster, projectTarget,
-  trackBus, trackPan, trackSolo, trackVolumeDb, useLoudness, writeDucking, writeMaster, writeTarget, writeTrack,
+  trackBus, trackPan, trackSolo, trackVolumeDb, useLoudness, writeDucking, writeDuckingC, writeMaster, writeMasterC, writeTarget, writeTrack, writeTrackC,
 } from './audioAdapter'
 import { fmtDateTime, useClockFormat } from '../ui/time'
 import { trackLabels } from './trackLabels'
@@ -46,11 +46,11 @@ function Strip({ track, code, name, db, pending, dim }: { track: Track; code: st
         />
       </span>
       <div className="vw-mx-fader">
-        <GSlider className="vw-mx-vol" label={`${code} volume`} min={-60} max={12} step={0.5} value={vol} defaultValue={0} disabled={pending} onChange={(v) => writeTrack(track.id, { volume: v })} />
+        <GSlider className="vw-mx-vol" label={`${code} volume`} min={-60} max={12} step={0.5} value={vol} defaultValue={0} disabled={pending} onChange={(v) => writeTrackC(track.id, { volume: v })} />
         <span className="vw-mx-val mono">{fmtDb(vol)}</span>
       </div>
       <div className="vw-mx-pan">
-        <GSlider className="vw-mx-panner" label={`${code} pan`} min={-1} max={1} step={0.02} value={pan} defaultValue={0} disabled={pending} onChange={(v) => writeTrack(track.id, { pan: v })} />
+        <GSlider className="vw-mx-panner" label={`${code} pan`} min={-1} max={1} step={0.02} value={pan} defaultValue={0} disabled={pending} onChange={(v) => writeTrackC(track.id, { pan: v })} />
         <span className="vw-mx-val mono">{panText(pan)}</span>
       </div>
       <div className="vw-mx-btns">
@@ -75,7 +75,7 @@ function MasterStrip({ db, pending }: { db: number | null; pending: boolean }) {
     <div className="vw-mx-strip master" role="group" aria-label="Master">
       <div className="vw-mx-name"><b>M</b><span>Master</span></div>
       <div className="vw-mx-fader">
-        <GSlider className="vw-mx-master-vol" label="Master volume" min={-60} max={12} step={0.5} value={m.gain} defaultValue={0} disabled={pending} onChange={(v) => writeMaster({ gain: v })} />
+        <GSlider className="vw-mx-master-vol" label="Master volume" min={-60} max={12} step={0.5} value={m.gain} defaultValue={0} disabled={pending} onChange={(v) => writeMasterC({ gain: v })} />
         <span className="vw-mx-val mono">{fmtDb(m.gain)}</span>
       </div>
       <div className="vw-mx-limiter">
@@ -98,10 +98,10 @@ function DuckingCard({ pending }: { pending: boolean }) {
         <Switch checked={d.enabled} onChange={(v) => writeDucking({ enabled: v })} label="Music ducks under voice" />
       </div>
       <div className={`vw-mx-duck-grid${off ? ' off' : ''}`}>
-        <Slot label="Depth" value={`−${d.depthDb.toFixed(0)} dB`}><GSlider label="Ducking depth" min={3} max={30} step={1} value={d.depthDb} defaultValue={12} disabled={pending} onChange={(v) => writeDucking({ depthDb: v })} /></Slot>
-        <Slot label="Threshold" value={`${d.threshold.toFixed(0)} dB`}><GSlider label="Ducking threshold" min={-60} max={-10} step={1} value={d.threshold} defaultValue={-35} disabled={pending} onChange={(v) => writeDucking({ threshold: v })} /></Slot>
-        <Slot label="Attack" value={`${Math.round(d.attack * 1000)} ms`}><GSlider label="Ducking attack" min={0.01} max={0.5} step={0.01} value={d.attack} defaultValue={0.05} disabled={pending} onChange={(v) => writeDucking({ attack: v })} /></Slot>
-        <Slot label="Release" value={`${Math.round(d.release * 1000)} ms`}><GSlider label="Ducking release" min={0.1} max={2} step={0.05} value={d.release} defaultValue={0.4} disabled={pending} onChange={(v) => writeDucking({ release: v })} /></Slot>
+        <Slot label="Depth" value={`−${d.depthDb.toFixed(0)} dB`}><GSlider label="Ducking depth" min={3} max={30} step={1} value={d.depthDb} defaultValue={12} disabled={pending} onChange={(v) => writeDuckingC({ depthDb: v })} /></Slot>
+        <Slot label="Threshold" value={`${d.threshold.toFixed(0)} dB`}><GSlider label="Ducking threshold" min={-60} max={-10} step={1} value={d.threshold} defaultValue={-35} disabled={pending} onChange={(v) => writeDuckingC({ threshold: v })} /></Slot>
+        <Slot label="Attack" value={`${Math.round(d.attack * 1000)} ms`}><GSlider label="Ducking attack" min={0.01} max={0.5} step={0.01} value={d.attack} defaultValue={0.05} disabled={pending} onChange={(v) => writeDuckingC({ attack: v })} /></Slot>
+        <Slot label="Release" value={`${Math.round(d.release * 1000)} ms`}><GSlider label="Ducking release" min={0.1} max={2} step={0.05} value={d.release} defaultValue={0.4} disabled={pending} onChange={(v) => writeDuckingC({ release: v })} /></Slot>
       </div>
     </section>
   )
@@ -152,6 +152,11 @@ function LoudnessCard() {
         <div><span>Range</span><b className="mono">{reading?.range != null ? `${reading.range.toFixed(1)} LU` : '—'}</b></div>
       </div>
       {reading && reading.target != null && reading.gainDb != null && <p className="vw-mx-measure-note vw-mx-gain">The export would apply {reading.gainDb >= 0 ? '+' : '−'}{Math.abs(reading.gainDb).toFixed(1)} dB{reading.wouldLimit ? ' and the true-peak limiter' : ''}. The preview does not apply the target.</p>}
+      {reading && (reading.warnings?.length || reading.shortMix) ? (
+        <ul className="vw-mx-warnings" role="status" aria-label="Loudness warnings">
+          {(reading.warnings?.length ? reading.warnings : ['The mix is shorter than 0.4 s: its level was measured without gating, so the target is approximate.']).map((w) => <li key={w}><Icon name="alert" size={12} />{w}</li>)}
+        </ul>
+      ) : null}
       <div className="vw-mx-measure">
         <span className="vw-mx-measure-note vw-mx-when">
           {error ?? (silent ? 'Nothing audible to measure.' : reading ? `Whole mix · measured ${fmtDateTime(reading.at)}` : 'Not measured yet.')}
