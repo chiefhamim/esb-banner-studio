@@ -1890,3 +1890,61 @@ Engine API: `measureProjectLoudness(project, {signal,onProgress}): Promise<Proje
 ### Files
 New: `src/video/audioModel.ts`, `audioEdit.ts`, `audioJobs.ts`, `useAudioMeters.ts`, `src/video/engine/{audioGraph,audioRender,denoiseJob,denoiseWorker}.ts`, `src/video/audio/streamMeter.ts`, `tools/unit/video-p4-audio.test.ts` (14 tests), `tools/e2e/video-audio-test.mjs` (added to `test:video`).
 Changed: `timeline.ts` (types, migration/sanitising, `audibleClips` honours solo), `videoStore.ts` (actions), `engine/audioEngine.ts` (graph, denoised clips, ducking, `levels()`, `prepare`, `master` getter), `exportVideo.ts` (mix via `prepareMix`, `loudness`, `exportLoudnessReport`, `onAudioStatus`; the old `mixPiece` is gone, `mixAudio` re-exported), `audio/ducking.ts`, `audio/loudness.ts`, `package.json`.
+
+## Phase 4 UI fix round (2026-11-02, branch `video-p4-uifix`)
+
+Screen-review fixes to Phase 4's audio UI; UI only (the logic fixer works in `video-p4-fix`). Verified on the shots in
+`tools/out/p4-ui` (dark and light, 900 / 1366 / 1920). Every item below was re-checked against the earlier shots first;
+all were real.
+
+- **U1 mixer over the header (confirmed at 900):** the dock now carries `maxHeight: calc(100% - bottom - 60px)` so it
+  stops under the 46 px header at any window height, and at 1000 px or less it is a bottom sheet (left/right 12 px, full width).
+- **U2 countdown:** the words moved into their own opaque chip at the foot of the stage ("Recording starts at 0:01.0"),
+  with a Cancel take button on the overlay itself (pointer-enabled; Esc still works). The bin shows a red `RecorderBar`
+  (Cancel take / Recording m:ss + Stop) above the tabs whatever tab is open; the header button reads "Cancel take" /
+  "Stop take" so it is not confused with the export's Cancel.
+- **U3 loudness chip:** never hidden. At 1100 px or less the target and "not measured" tail drop; at 1000 or less the
+  peak drops; the readout stays. Wide: "-23.1 LUFS  -22.0 dBTP  target -14 · +9.1 dB needed" with a met / needs-gain / over-ceiling
+  glyph and colour, an `aria-label`, a hover fill and a focus ring.
+- **U4 fade handles:** 12 px dots at the top (the ramp's end), 70 % opaque, solid on a selected / hovered clip or when
+  set; ramp fill 50 % black with a 1.5 px white stroke; tooltip "Fade in 0.5 s · Equal power. Drag to change; double-click
+  or right-click for the curve"; a thin baseline through the wave; the clip name and length stay clear of both ramps
+  (`--fi` / `--fo` set per clip in `Lanes`). The curve menu opens on **double-click**, right-click, Enter, the Menu key
+  or Shift+F10 (double-click used to remove the fade; "Remove fade" is in the menu). Shot: `fade-curve-menu`.
+- **U5 loudness card:** status line ("Target met (+0.3 LU)" green / "+9.1 dB needed to reach -14 LUFS" amber), field-styled
+  target select with a "Target" prefix, Measure moved up beside it, true peak coloured against the -1 dBTP ceiling with
+  "Under / Over the -1 dBTP ceiling", and "Whole mix · measured Thu 22 Oct 10:00 AM" (date + scope, clock-format aware).
+- **U6 many tracks:** only the track strips scroll (min 92, max 212 px, they shrink first when the window is short);
+  Master sits right under them as its own strip and Ducking / Loudness stay put. Fader and pan sliders are wider (value
+  beside the slider, not under it); the dock is 760 px.
+- **U7 mute / solo:** unpressed = outlined; M pressed = red fill (`--danger`), S pressed = accent fill, a soloed strip gets a ring,
+  other strips dim to 50 % while any track is soloed; group label carries "muted" / "soloed"; light and dark checked.
+- **U8 bus / readouts:** the bus select is a badge in the bus's own colour (Voice blue, Music violet, FX amber, None grey);
+  readouts are 11.5 px at `--text-2` (4.5:1 or better on the strip fill), right-aligned in a fixed column.
+- **U9 recording:** red Record dot, red Stop button with a pulsing white dot and m:ss, REC chip (top centre of the stage,
+  clear of the timecode burn-in and the ESB bug), a red dot on the track head and a red-outlined, tinted lane for the A track being
+  recorded onto, mic meter green / amber above -12 dB / red above -3 dB with the dB readout coloured too.
+- **U10 library:** Refresh / Change / Forget are labelled buttons in their own row under the folder line (tooltips +
+  names); long Bangla names wrap at 1.6 line height; state `audio-tab-library-bangla` shows a very long name, tags, a
+  Bangla folder name and an open licence field.
+- **U11 bin audio tile:** speaker glyph in the corner, thin baseline, tooltips ("Waveform of the sound" / "Waveform
+  appears after first use" when no wave exists yet).
+- **U12 export sheet:** the Loudness row is a field-styled select; the timing claims are labelled "Estimate: ..."; the
+  Sound fact lists what is on (ducking depth, noise reduction, target, limiter); while running a "Sound stage" row shows
+  the audio-stage status; the done sheet has a Before / After table (integrated, true peak against the ceiling, gain,
+  limiter, verdict). Scrim blur removed for this dialog. Shots: `export-audio-setup`, `export-audio-running`, `export-audio-done`.
+- **U13 limiter:** "Limiter · on/off" label and an info icon carrying the safety-compressor text (the paragraph is gone).
+- **U14 clip Audio inspector:** Gain and Pan side by side; Fades fold (default closed at 1000 px or less, with an "In 0.5 s ·
+  Out 0 s" summary on the fold); the jump strip already lists Audio; bottom padding so the last row is not clipped.
+- **U15 labels:** a small reset button appears beside Gain / Pan when off the default, tooltip "Double-click the slider to
+  reset"; the Fade labels and values use full ink.
+- **U16 shortcuts:** the Audio group clears the "more below" fade (40 px bottom padding); Esc row reads "Cancels only
+  during the 3-2-1 countdown (it never stops a running take: press R)".
+- **U17 lane:** link glyph keeps clear of the title; fade dots now sit at the ramp ends (same vertical line as the ramps).
+- **U18 harness:** new states `mixer-many-tracks`, `mixer-mute-solo`, `mixer-loudness-measured`, `mixer-loudness-met`,
+  `fade-curve-menu`, `fade-handles-unselected`, `voiceover-recording-stage`, `voiceover-recording-clip`, `voiceover-complete`,
+  `audio-tab-library-bangla`, `inspector-audio-fades`, `export-audio-setup|running|done`, `shortcuts-sheet-audio`. A state may
+  save its own shot (`saved: true`) for the export mid-run capture.
+
+Logic touched (minimal): none in engine/model files. `TimelinePro.tsx` shortcut text, `VideoWorkspace.tsx` (header
+labels, rec tags, `--fi/--fo`), `audioControls.tsx` (LevelBar warm class, WaveThumb glyph).

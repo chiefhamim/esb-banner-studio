@@ -3,6 +3,7 @@
 // With no audio engine the controls are present but off, with the reason in words.
 
 import { useState } from 'react'
+import { IconButton } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/controls'
 import type { Clip } from './timeline'
@@ -23,6 +24,8 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
   const range = useVideoStore((s) => s.range)
   const [beats, setBeats] = useState<BeatProposal | null>(null)
   const [busy, setBusy] = useState(false)
+  // Fades fold away in narrow windows (Gain, Pan and the denoise stay above the fold); the choice is the editor's after that
+  const [fadesOpen, setFadesOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 1000)
   const gain = clipGainDb(clip)
   const pan = clipPan(clip)
   const fin = clipFadeIn(clip)
@@ -59,15 +62,21 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
   return (
     <FxSection id="audio" title="Audio" icon="sliders">
       {pending && <p className="vw-hint vw-au-pending"><Icon name="info" size={12} />Audio engine pending: these controls switch on when the audio graph is merged.</p>}
-      <div className="vw-field vw-au-row" data-row="gain">
-        <label>Gain <em>{fmtDb(gain)}</em></label>
-        <GSlider className="vw-s-gain" label="Clip gain" min={-24} max={24} step={0.5} value={gain} defaultValue={0} disabled={off} onChange={(v) => writeClip(clip.id, { gain: v })} />
+      <div className="vw-au-duo">
+        <div className="vw-field vw-au-row" data-row="gain">
+          <label data-tip="Double-click the slider to reset to 0 dB">Gain <em>{fmtDb(gain)}</em>{gain !== 0 && !off && <IconButton icon="refresh" size={11} className="vw-au-reset" tip="Reset gain to 0 dB" onClick={() => writeClip(clip.id, { gain: 0 })} />}</label>
+          <GSlider className="vw-s-gain" label="Clip gain" min={-24} max={24} step={0.5} value={gain} defaultValue={0} disabled={off} onChange={(v) => writeClip(clip.id, { gain: v })} />
+        </div>
+        <div className="vw-field vw-au-row" data-row="pan">
+          <label data-tip="Double-click the slider to centre">Pan <em>{panText(pan)}</em>{Math.abs(pan) >= 0.02 && !off && <IconButton icon="refresh" size={11} className="vw-au-reset" tip="Centre the pan" onClick={() => writeClip(clip.id, { pan: 0 })} />}</label>
+          <GSlider className="vw-s-pan" label="Clip pan" min={-1} max={1} step={0.02} value={pan} defaultValue={0} disabled={off} onChange={(v) => writeClip(clip.id, { pan: v })} />
+        </div>
       </div>
-      <div className="vw-field vw-au-row" data-row="pan">
-        <label>Pan <em>{panText(pan)}</em></label>
-        <GSlider className="vw-s-pan" label="Clip pan" min={-1} max={1} step={0.02} value={pan} defaultValue={0} disabled={off} onChange={(v) => writeClip(clip.id, { pan: v })} />
-      </div>
-      <div className="vw-subhead">Fades</div>
+      <button type="button" className="vw-subhead vw-au-fold" aria-expanded={fadesOpen} onClick={() => setFadesOpen((o) => !o)}>
+        <Icon name={fadesOpen ? 'chevDown' : 'chevRight'} size={12} />Fades
+        {!fadesOpen && <span className="vw-au-fold-sum">In {Math.round(fin.dur * 100) / 100} s · Out {Math.round(fout.dur * 100) / 100} s</span>}
+      </button>
+      {fadesOpen && <>
       <div className="vw-au-fade" data-row="fade-in">
         <span className="vw-au-fade-label">In</span>
         <NumField className="vw-f-fadein" label="Fade in seconds" unit="s" min={0} max={maxFade(fout.dur)} step={0.1} decimals={2} value={fin.dur} disabled={off} onChange={(v) => setFadeIn({ dur: v })} />
@@ -81,6 +90,7 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
       <button type="button" className="btn sm vw-au-xfade" disabled={off || !neighbourAfter(clip)} data-tip={neighbourAfter(clip) ? 'Fade this clip out while the next one fades in (equal power)' : 'No audio clip after this one on its track'} onClick={() => { const why = crossfadeWithNext(clip); if (why) flash(why); else flash('Crossfade made') }}>
         <Icon name="swap" size={12} />Crossfade with next clip
       </button>
+      </>}
 
       <div className="vw-subhead">Noise reduction</div>
       <div className="vw-field vw-au-row" data-row="denoise">

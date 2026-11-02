@@ -14,7 +14,7 @@ import { useVideoStore } from './videoStore'
 import { videoBridge } from './media'
 import { canvasMeasure, measureNow, titleProblems } from './titleClip'
 import type { LoudnessTarget } from './audioAdapter'
-import { LOUDNESS_CHOICES, PENDING_NOTE, capabilities, projectTarget, writeTarget } from './audioAdapter'
+import { LOUDNESS_CHOICES, PENDING_NOTE, capabilities, clipDenoise, projectDucking, projectMaster, projectTarget, writeTarget } from './audioAdapter'
 
 const DRAFT_SECONDS = 10
 
@@ -29,6 +29,7 @@ export function fixFor(message: string): string {
   return 'Open the clip and check its fields.'
 }
 
+const fmtN = (v: number | undefined, unit: string) => (v == null || !Number.isFinite(v) ? 'silent' : `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)} ${unit}`)
 const mb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`)
 
 /** Progress reaches React at most this often (every frame re-rendered the sheet and the desk under it). */
@@ -57,6 +58,17 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
   }, [project.width, project.height, project.fps])
 
   const audio = useMemo(() => audibleClips(project), [project])
+  // what the sound stage will do, in words: only the processing that is on
+  const processing = useMemo(() => {
+    const out: string[] = []
+    const d = projectDucking(project)
+    if (d.enabled) out.push(`ducking −${Math.round(d.depthDb)} dB`)
+    if (project.clips.some((c) => c.kind === 'audio' && clipDenoise(c).amount > 0)) out.push('noise reduction')
+    const t = projectTarget(project)
+    if (typeof t === 'number') out.push(`target ${t} LUFS`)
+    if (projectMaster(project).limiter) out.push('limiter')
+    return out
+  }, [project])
   const target = projectTarget(project)
   const canTarget = capabilities().target
   // the title check measures with the real fonts once the canvas measurer exists (made on first use)
@@ -150,11 +162,11 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
               />
             </div>
             {!canTarget && <p className="vx-loud-note">Loudness normalising switches on when the audio engine is merged; until then the mix is exported as it plays.</p>}
-            {canTarget && <p className="vx-loud-note">The target is applied to the exported file, not to the preview. Noise reduction, ducking, a target and the limiter add a sound-processing stage before the picture starts (about 14 s for 10 minutes of plain sound, up to about 90 s with all of them).</p>}
+            {canTarget && <p className="vx-loud-note">The target is applied to the exported file, not to the preview. {processing.length ? <>Sound processing (<b>{processing.join(', ')}</b>) runs as a stage before the picture starts. <em className="vx-estimate">Estimate: about 14 s for 10 minutes of plain sound, up to about 90 s with everything on; your PC may differ.</em></> : 'With no processing on, the sound is mixed while the picture renders.'}</p>}
             <dl className="vx-facts">
               <div><dt>Frame</dt><dd>{project.width} × {project.height} · {project.fps} fps</dd></div>
               <div><dt>Duration</dt><dd>{formatShortTime(duration)} · {Math.round(duration * project.fps)} frames</dd></div>
-              <div><dt>Sound</dt><dd>{audio.length ? `${audio.length} clip${audio.length === 1 ? '' : 's'} mixed${support?.audio ? ` · ${support.audio === 'aac' ? 'AAC' : 'Opus'}` : ''}` : 'Silent — nothing on the audio track'}</dd></div>
+              <div className="vx-sound"><dt>Sound</dt><dd>{audio.length ? `${audio.length} clip${audio.length === 1 ? '' : 's'} mixed${support?.audio ? ` · ${support.audio === 'aac' ? 'AAC' : 'Opus'}` : ''}${processing.length ? ` · ${processing.join(' · ')}` : ''}` : 'Silent — nothing on the audio track'}</dd></div>
               <div><dt>ESB bug</dt><dd>{project.bug !== false ? 'On (top right)' : 'Off'}</dd></div>
             </dl>
             {blocked && (
@@ -199,7 +211,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
               <span>Frame {frames.cur} of {frames.total}{left != null ? ` · about ${left < 60 ? `${Math.ceil(left)} s` : `${Math.ceil(left / 60)} min`} left` : ''}</span>
             </div>
             <div className="vw-progress-bar-bg"><div className="vw-progress-bar-fill" style={{ width: `${pct}%` }} /></div>
-            {audioStatus && <p className="vx-note vx-audio-status" role="status">Sound: {audioStatus}</p>}
+            <div className={`vx-stage vx-audio-status${audioStatus ? ' on' : ''}`} role="status"><span className="vx-stage-dot" aria-hidden="true" /><b>Sound stage</b><span>{audioStatus || (audio.length ? (processing.length ? 'Waiting for the picture to start' : 'Mixed while the picture renders') : 'No sound to prepare')}</span></div>
             <p className="vx-note">Every frame is drawn once its footage is at that exact instant, and stamped with its own time, so the file plays at true speed.</p>
             <div className="vx-actions">
               <button type="button" className="btn vx-cancel" onClick={() => abort.current?.abort()}>Stop</button>
@@ -219,7 +231,17 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
               <div><dt>File</dt><dd>{result.container.toUpperCase()} · {mb(result.size)}</dd></div>
               <div><dt>Length</dt><dd>{formatShortTime(result.duration)}</dd></div>
               <div><dt>Codecs</dt><dd>{result.videoCodec}{result.audioCodec ? ` + ${result.audioCodec}` : ' · no sound'}</dd></div>
-              <div className={`vx-loud-report${loudRep ? (loudRep.ok ? ' ok' : ' off') : ''}`}><dt>Loudness</dt><dd>{loudRep ? loudRep.lines.join(' · ') : result.audioCodec ? 'Not measured' : 'No sound'}{loudRep && <em className="vx-loud-verdict">{loudRep.ok ? ' · on target' : ' · check'}</em>}</dd></div>
+              <div className="vx-sound"><dt>Sound</dt><dd>{result.audioCodec ? `${result.audioCodec}${processing.length ? ` · ${processing.join(' · ')}` : ''}` : 'No sound'}</dd></div>
+              {loudRep && <div className={`vx-loud-report${loudRep.ok ? ' ok' : ' off'}`}><dt>Loudness</dt><dd>
+                <span className="vx-ba"><span className="vx-ba-head" /><span className="vx-ba-head">Before</span><span className="vx-ba-head">After</span>
+                  <span>Integrated</span><span className="mono">{fmtN(result.loudness?.before.integrated, 'LUFS')}</span><span className="mono vx-ba-after">{fmtN(result.loudness?.after.integrated, 'LUFS')}{result.loudness?.target != null ? ` · target ${result.loudness.target}` : ''}</span>
+                  <span>True peak</span><span className="mono">{fmtN(result.loudness?.before.truePeak, 'dBTP')}</span><span className={`mono vx-ba-after ${result.loudness && result.loudness.after.truePeak <= result.loudness.ceiling + 0.3 ? 'ok' : 'over'}`}>{fmtN(result.loudness?.after.truePeak, 'dBTP')} · ceiling {result.loudness?.ceiling}</span>
+                </span>
+                {result.loudness && result.loudness.target != null && <span className="vx-ba-gain">Gain {result.loudness.gainDb >= 0 ? '+' : '−'}{Math.abs(result.loudness.gainDb).toFixed(1)} dB{result.loudness.limited ? ', limiter worked' : ''}</span>}
+                {result.loudness?.note && <span className="vx-ba-gain">{result.loudness.note}</span>}
+                <em className={`vx-loud-verdict ${loudRep.ok ? 'ok' : 'check'}`}>{loudRep.ok ? 'Target and ceiling met' : 'Check: target or ceiling not met'}</em>
+              </dd></div>}
+              {!loudRep && <div className="vx-loud-report"><dt>Loudness</dt><dd>{result.audioCodec ? 'Not measured' : 'No sound'}</dd></div>}
             </dl>
             <div className="vx-actions">
               {result.savedTo && videoBridge()?.reveal && <button type="button" className="btn" onClick={() => void videoBridge()!.reveal!(result.savedTo!)}>Show in folder</button>}

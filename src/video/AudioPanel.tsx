@@ -16,6 +16,9 @@ import '../styles/video-audio.css'
 
 const ASSET_MIME = 'application/x-esb-asset'
 
+/** m:ss for a take's running time. */
+const recClock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
+
 function Recorder() {
   const vo = useVoiceover()
   const allTracks = useVideoStore((s) => s.project.tracks)
@@ -28,17 +31,17 @@ function Recorder() {
       <div className="vw-au-head">
         <span className="vw-tag" data-tag="voice">Voiceover</span>
         {vo.phase === 'recording' ? (
-          <button type="button" className="btn sm danger vw-au-stop" onClick={stopVoiceover}><span className="vw-recording-dot" />Stop · {vo.seconds}s</button>
+          <button type="button" className="btn sm vw-au-stop" onClick={stopVoiceover} aria-label={`Stop recording, ${recClock(vo.seconds)} so far`}><span className="vw-rec-dot" aria-hidden="true" />Stop<span className="vw-au-stop-time mono">{recClock(vo.seconds)}</span></button>
         ) : vo.phase === 'countdown' || vo.phase === 'asking' ? (
-          <button type="button" className="btn sm vw-au-cancel" onClick={cancelVoiceover}>Cancel</button>
+          <button type="button" className="btn sm vw-au-cancel" onClick={cancelVoiceover}>Cancel take</button>
         ) : (
-          <button type="button" className="btn sm primary vw-au-record" onClick={() => void startVoiceover()}><Icon name="mic" size={13} />Record</button>
+          <button type="button" className="btn sm vw-au-record" onClick={() => void startVoiceover()}><span className="vw-rec-dot idle" aria-hidden="true" />Record</button>
         )}
       </div>
       <div className="vw-au-meter-row">
         <span className="vw-au-meter-label">Mic level</span>
         <LevelBar db={busy ? db : null} vertical={false} label="Microphone level" idle={!busy} />
-        <span className="vw-au-meter-db mono">{busy ? (db <= -60 ? '−∞' : `${Math.round(db)} dB`) : '—'}</span>
+        <span className={`vw-au-meter-db mono${busy && db > -3 ? ' clip' : busy && db > -12 ? ' warm' : ''}`}>{busy ? (db <= -60 ? '−∞' : `${Math.round(db)} dB`) : '—'}</span>
       </div>
       <div className="vw-au-opts">
         <Switch checked={vo.punch} onChange={setPunch} label="Punch in: play the picture while I record" />
@@ -117,13 +120,6 @@ function Library() {
     <section className="vw-au-card vw-au-lib" aria-label="Music library">
       <div className="vw-au-head">
         <span className="vw-tag" data-tag="music">Music library</span>
-        {m.supported && m.folder && (
-          <div className="vw-au-lib-acts">
-            <IconButton icon="refresh" size={14} tip="Read the folder again" onClick={() => void loadMusic()} />
-            <IconButton icon="folder" size={14} tip="Choose another folder" onClick={() => void chooseMusicFolder()} />
-            <IconButton icon="x" size={14} tip="Forget this folder" onClick={() => void clearMusicFolder()} />
-          </div>
-        )}
       </div>
       {!m.supported ? (
         <p className="vw-au-note"><Icon name="info" size={12} />The music library needs the desktop app: it reads one folder you choose on this PC.</p>
@@ -135,6 +131,11 @@ function Library() {
       ) : (
         <>
           <div className="vw-au-folderline" data-tip={m.folder.path}><Icon name="folder" size={12} /><span>{m.folder.name}</span><em className="mono">{m.files.length} track{m.files.length === 1 ? '' : 's'}</em></div>
+          <div className="vw-au-lib-acts" role="group" aria-label="Music folder">
+            <button type="button" className="btn sm subtle vw-au-refresh" data-tip="Read the folder again" onClick={() => void loadMusic()}><Icon name="refresh" size={13} />Refresh</button>
+            <button type="button" className="btn sm subtle vw-au-folder-pick" data-tip="Choose another folder" onClick={() => void chooseMusicFolder()}><Icon name="folder" size={13} />Change</button>
+            <button type="button" className="btn sm subtle vw-au-forget" data-tip="Forget this folder (the files are not touched)" onClick={() => void clearMusicFolder()}><Icon name="x" size={13} />Forget</button>
+          </div>
           {m.files.length > 6 && <input type="search" className="vw-au-search" placeholder="Search title or tag" aria-label="Search the music library" value={q} onChange={(e) => setQ(e.target.value)} />}
           {m.loading && <p className="vw-au-note">Reading the folder</p>}
           {!m.loading && m.files.length === 0 && <p className="vw-au-note">No audio files here (MP3, WAV, M4A, AAC, OGG, Opus, FLAC). Put tracks in this folder and refresh.</p>}
@@ -157,10 +158,13 @@ export function AudioPanel() {
   )
 }
 
-/** The 3-2-1 overlay over the monitor while a take counts down (Esc cancels it). */
+/** The 3-2-1 overlay over the monitor while a take counts down. The words sit in their own opaque chip at the foot of
+ * the stage (never over the picture's captions) and the overlay carries its own Cancel. */
 export function CountdownOverlay() {
   const phase = useVoiceover((s) => s.phase)
   const count = useVoiceover((s) => s.count)
+  const at = useVoiceover((s) => s.at)
+  const t = useVideoStore((s) => s.currentTime)
   useEffect(() => {
     if (phase !== 'countdown' && phase !== 'asking') return
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); cancelVoiceover() } }
@@ -171,7 +175,45 @@ export function CountdownOverlay() {
   return (
     <div className="vw-au-countdown" role="status" aria-live="assertive" data-count={count}>
       <div className="vw-au-count-num" key={count}>{count}</div>
-      <p>Recording at the playhead. Esc cancels.</p>
+      <div className="vw-au-count-chip">
+        <span>Recording starts at {formatShortTime(at || t)}</span>
+        <button type="button" className="btn sm vw-au-count-cancel" onClick={cancelVoiceover}>Cancel take <kbd>Esc</kbd></button>
+      </div>
+    </div>
+  )
+}
+
+/** A REC chip with the running time in the stage's corner while a take records. */
+export function RecBadge() {
+  const phase = useVoiceover((s) => s.phase)
+  const seconds = useVoiceover((s) => s.seconds)
+  if (phase !== 'recording') return null
+  return <div className="vw-rec-badge" role="status" aria-label={`Recording ${recClock(seconds)}`}><span className="vw-rec-dot" aria-hidden="true" />REC<span className="mono">{recClock(seconds)}</span></div>
+}
+
+/** A thin REC tag on the track a take is being recorded onto. */
+export function RecLaneTag({ trackId, head }: { trackId: string; head?: boolean }) {
+  const phase = useVoiceover((s) => s.phase)
+  const want = useVoiceover((s) => s.trackId)
+  const tracks = useVideoStore((s) => s.project.tracks)
+  if (phase !== 'recording') return null
+  const audio = tracks.filter((t) => t.kind === 'audio')
+  const target = (audio.find((t) => t.id === want && !t.locked) ?? audio.find((t) => !t.locked) ?? audio[0])?.id
+  if (target !== trackId) return null
+  if (head) return <span className="vw-rec-dot vw-rec-head" role="img" aria-label="Recording onto this track" data-tip="Recording onto this track" />
+  return <span className="vw-rec-lane" aria-hidden="true" />
+}
+
+/** While a take counts down or records, the bin (whatever tab is open) carries its Stop / Cancel, so it never has to
+ * be hunted for in the header. */
+export function RecorderBar() {
+  const vo = useVoiceover()
+  if (vo.phase === 'idle') return null
+  return (
+    <div className="vw-rec-bar" role="group" aria-label="Voiceover take" data-phase={vo.phase}>
+      {vo.phase === 'recording'
+        ? <><span className="vw-rec-dot" aria-hidden="true" /><b>Recording</b><span className="mono">{recClock(vo.seconds)}</span><button type="button" className="btn sm vw-rec-stop" onClick={stopVoiceover}>Stop</button></>
+        : <><b>{vo.phase === 'asking' ? 'Waiting for the microphone' : `Starting in ${vo.count}`}</b><span className="vw-rec-spacer" /><button type="button" className="btn sm vw-rec-cancel" onClick={cancelVoiceover}>Cancel take</button></>}
     </div>
   )
 }
