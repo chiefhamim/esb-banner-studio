@@ -20,7 +20,8 @@ import { previewEngine } from './engine/previewEngine'
 import { audioEngine, audioSignature } from './engine/audioEngine'
 import { attachLaneCanvas } from './engine/laneCanvas'
 import { trackLabels } from './trackLabels'
-import { AudioPanel, CountdownOverlay } from './AudioPanel'
+import { AudioPanel, CountdownOverlay, RecBadge, RecLaneTag, RecorderBar } from './AudioPanel'
+import { clipFadeIn, clipFadeOut } from './audioAdapter'
 import { MixerPanel } from './MixerPanel'
 import { FadeHandles } from './FadeHandles'
 import { ClipAudioSection } from './ClipAudioSection'
@@ -462,6 +463,7 @@ const Lanes = memo(function Lanes({ tracks, clips, selectedIds, zoom, tool, onGr
         return (
           <Fragment key={t.id}>
             <div className={`vw-track-lane lane-${t.kind}${t.locked ? ' locked' : ''}${t.hidden ? ' hidden' : ''}`} data-track-id={t.id}>
+              {t.kind === 'audio' && <RecLaneTag trackId={t.id} />}
               {own.map((clip) => {
                 const row = rows.row.get(clip.id) ?? 0
                 const isLocked = locked.has(clip.trackId)
@@ -474,7 +476,7 @@ const Lanes = memo(function Lanes({ tracks, clips, selectedIds, zoom, tool, onGr
                     className={`vw-clip-block ${clip.id === selectedIds[0] ? 'selected' : isSel ? 'selected also' : partner ? 'linked-sel' : ''}${clip.sourceUrl || clip.compound || (clip.kind !== 'video' && clip.kind !== 'audio') ? '' : ' offline'}${rows.count > 1 ? ' stacked' : ''}${clip.sourceUrl && (clip.kind === 'video' || clip.kind === 'audio') && rows.count === 1 ? ' has-visual' : ''}${clip.compound ? ' compound' : ''}`}
                     data-clip-kind={clip.kind}
                     data-clip-id={clip.id}
-                    style={{ left: `${clip.start * zoom}px`, width: `${clip.duration * zoom}px`, backgroundColor: clip.color, '--row': row, '--rows': rows.count } as React.CSSProperties}
+                    style={{ left: `${clip.start * zoom}px`, width: `${clip.duration * zoom}px`, backgroundColor: clip.color, '--row': row, '--rows': rows.count, ...(clip.kind === 'audio' && !clip.compound ? { '--fi': `${Math.round(clipFadeIn(clip).dur * zoom)}px`, '--fo': `${Math.round(clipFadeOut(clip).dur * zoom)}px` } : {}) } as React.CSSProperties}
                     onClick={(e) => e.stopPropagation()}
                     onPointerDown={(e) => onGrab(e, clip, 'move')}
                     onDoubleClick={() => onOpen(clip)}
@@ -1031,9 +1033,9 @@ function VideoDesk() {
           <button type="button" className="btn sm subtle vw-open" onClick={doOpen} data-tip="Open a video project (.esbvideo)"><Icon name="folder" size={13} /><span className="vw-lbl">Open</span></button>
           <button type="button" className="btn sm subtle vw-save" onClick={() => void doSave()} data-tip="Save the project (Ctrl+S)"><Icon name="download" size={13} /><span className="vw-lbl">Save</span></button>
           {voPhase === 'recording' ? (
-            <button type="button" className="btn danger sm vw-hdr-stop" onClick={stopVoiceover} data-tip="Stop recording"><span className="vw-recording-dot" />Stop ({voSeconds}s)</button>
+            <button type="button" className="btn danger sm vw-hdr-stop" onClick={stopVoiceover} data-tip="Stop recording (R)"><span className="vw-rec-dot" aria-hidden="true" /><span className="vw-lbl">Stop take</span><span className="mono">{Math.floor(voSeconds / 60)}:{String(voSeconds % 60).padStart(2, '0')}</span></button>
           ) : voPhase !== 'idle' ? (
-            <button type="button" className="btn sm vw-hdr-cancel" onClick={cancelVoiceover} data-tip="Cancel the countdown (Esc)">Cancel</button>
+            <button type="button" className="btn sm vw-hdr-cancel" onClick={cancelVoiceover} data-tip="Cancel the countdown (Esc). This is the voiceover take, not the export">Cancel take</button>
           ) : (
             <button type="button" className="btn sm subtle vw-hdr-record" onClick={() => void startVoiceover()} data-tip="Record a voiceover (R): 3-2-1, then it records at the playhead"><Icon name="mic" size={13} /><span className="vw-lbl">Record</span></button>
           )}
@@ -1046,6 +1048,7 @@ function VideoDesk() {
       {/* 2. Bin + monitor (+ inspector) */}
       <div className={`vw-stage-row${selectedClip && wide ? ' with-inspector' : ''}`}>
         <aside className="vw-bin-panel">
+          <RecorderBar />
           {selectedClip && !wide ? (
             // narrow windows: the inspector holds the bin's place, and this bar says so (and goes back)
             <div className="vw-bin-back" role="navigation" aria-label="Clip inspector">
@@ -1111,6 +1114,7 @@ function VideoDesk() {
           <div className="vw-monitor-container">
             <Monitor aspect={project.width / project.height} />
             <CountdownOverlay />
+            <RecBadge />
             {empty && (
               <div className="vw-start" role="group" aria-label="Start a video">
                 {restore ? (
@@ -1183,7 +1187,7 @@ function VideoDesk() {
             {tl.tracks.map((t) => { const lb = labels.get(t.id) ?? { code: t.id.toUpperCase(), name: TRACK_KIND_LABEL[t.kind] }; return (
               <Fragment key={t.id}>
                 <div className={`vw-track-head${t.hidden ? ' hidden' : ''}`} data-track-id={t.id}>
-                  <span className="vw-th-title" data-tip={`${lb.code} · ${lb.name} (${TRACK_KIND_LABEL[t.kind].toLowerCase()} track)`}><b>{lb.code}</b>{lb.name}</span>
+                  <span className="vw-th-title" data-tip={`${lb.code} · ${lb.name} (${TRACK_KIND_LABEL[t.kind].toLowerCase()} track)`}>{t.kind === 'audio' && <RecLaneTag trackId={t.id} head />}<b>{lb.code}</b>{lb.name}</span>
                   <div className="vw-th-actions">
                     {t.kind === 'audio' ? (
                       <button type="button" className={`vw-th-btn ${t.muted ? 'active' : ''}`} onClick={() => toggleTrackMute(t.id)} aria-label={`${t.muted ? 'Unmute' : 'Mute'} ${lb.code}`} aria-pressed={!!t.muted} data-tip={t.muted ? 'Unmute track' : 'Mute track'}>

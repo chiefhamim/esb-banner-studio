@@ -26,6 +26,8 @@ function fadePath(kind: 'in' | 'out', w: number, h: number, curve: FadeCurve): s
 }
 
 type Which = 'in' | 'out'
+const fmtSec = (d: number) => `${Math.round(d * 100) / 100} s`
+const curveLabel = (c: FadeCurve) => FADE_CURVES.find((x) => x.value === c)?.label ?? c
 /** The dot sits this far in from the fade's end, so it clears the clip's trim handle at the edge. */
 const DOT_PAD = 11
 
@@ -70,8 +72,11 @@ export function FadeHandles({ clip, zoom, locked }: { clip: Clip; zoom: number; 
     el.addEventListener('pointercancel', up)
   }
 
-  const key = (which: Which) => (e: React.KeyboardEvent) => {
+  const openMenu = (which: Which, el: HTMLElement) => { const r = el.getBoundingClientRect(); setMenu({ x: r.left + r.width / 2, y: r.bottom + 4, which }) }
+
+  const key = (which: Which) => (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!editable) return
+    if (e.key === 'Enter' || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); e.stopPropagation(); openMenu(which, e.currentTarget); return }
     const cur = which === 'in' ? fin : fout
     const step = e.shiftKey ? 1 : 0.1
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
@@ -86,14 +91,15 @@ export function FadeHandles({ clip, zoom, locked }: { clip: Clip; zoom: number; 
       type="button" key={which}
       className={`vw-fade-dot ${which}${f.dur > 0 ? ' set' : ''}${editable ? '' : ' off'}`}
       style={which === 'in' ? { left: `${DOT_PAD + wpx}px` } : { right: `${DOT_PAD + wpx}px` }}
-      data-fade={which} data-tip={editable ? `Fade ${which}: ${f.dur.toFixed(2)} s · drag to change, right-click for the curve` : `Fade ${which}`}
-      aria-label={`Fade ${which} ${f.dur.toFixed(2)} seconds`}
+      data-fade={which} data-tip={editable ? `Fade ${which} ${fmtSec(f.dur)} · ${curveLabel(f.curve)}. Drag to change; double-click or right-click for the curve` : `Fade ${which} ${fmtSec(f.dur)}`}
+      aria-label={`Fade ${which} ${f.dur.toFixed(2)} seconds, ${curveLabel(f.curve)}`} aria-haspopup="menu"
+
       disabled={!editable}
       onPointerDown={down(which)}
       onKeyDown={key(which)}
       onPointerUp={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => { e.stopPropagation(); if (editable) setFade(which, { dur: 0, curve: f.curve }) }}
+      onDoubleClick={(e) => { e.stopPropagation(); if (editable) openMenu(which, e.currentTarget) }}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (editable) setMenu({ x: e.clientX, y: e.clientY, which }) }}
     ><i /></button>
   )

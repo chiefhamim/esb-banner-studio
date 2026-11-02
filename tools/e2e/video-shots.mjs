@@ -128,6 +128,7 @@ async function importMedia(page) {
 
 /** The fixed project used by most states: footage + still on V1, two overlays on V2, a caption on C1, tone on A1. */
 let thumbRetries = 0
+let currentFile = ''
 async function seedTimeline(page, { playhead = 1.0, select = null, zoom = null, extra = null } = {}) {
   thumbRetries = await importMedia(page)
   await page.evaluate(({ playhead, select, zoom, extra }) => {
@@ -442,6 +443,150 @@ const AUDIO_STATES = {
     await page.waitForSelector('.vw-au-countdown')
     return {}
   },
+
+  // ---- Phase 4 UI fix round
+  'mixer-many-tracks': async (page) => {
+    await seedMixer(page)
+    await page.evaluate(() => {
+      const st = window.__videoStore.getState()
+      for (let i = 0; i < 5; i++) st.addTrack('audio')
+      const ids = window.__videoStore.getState().project.tracks.filter((t) => t.kind === 'audio').map((t) => t.id)
+      const buses = ['voice', 'music', 'fx', 'none', 'music', 'voice', 'fx']
+      ids.forEach((id, i) => window.__videoStore.getState().patchTrackAudio(id, { bus: buses[i % buses.length], volume: -2 - i * 2, pan: (i - 3) * 0.2 }))
+    })
+    await page.waitForTimeout(200)
+    return {}
+  },
+  'mixer-mute-solo': async (page) => {
+    await seedMixer(page)
+    await page.evaluate(() => {
+      const st = window.__videoStore.getState()
+      st.addTrack('audio'); st.addTrack('audio')
+      const ids = window.__videoStore.getState().project.tracks.filter((t) => t.kind === 'audio').map((t) => t.id)
+      window.__videoStore.getState().toggleTrackMute(ids[1])
+      window.__videoStore.getState().patchTrackAudio(ids[2], { solo: true, bus: 'voice' })
+    })
+    await page.waitForTimeout(200)
+    return {}
+  },
+  'mixer-loudness-measured': async (page) => {
+    await seedMixer(page)
+    await page.locator('.vw-mx-measure-btn').click()
+    await page.waitForSelector('.vw-mx-status', { timeout: 20000 }).catch(() => na('the measurer gave no reading'))
+    return { el: page.locator('.vw-mixer') }
+  },
+  'mixer-loudness-met': async (page) => {
+    await seedMixer(page)
+    // the target the plain mix is closest to, so the card reads "met" or a small gain; either way a real reading
+    await page.locator('.vw-mx-measure-btn').click()
+    await page.waitForSelector('.vw-mx-status', { timeout: 20000 }).catch(() => na('the measurer gave no reading'))
+    const lufs = await page.evaluate(() => parseFloat(document.querySelector('.vw-mx-lufs').textContent.replace('−', '-')))
+    const pick = [-14, -16, -23].reduce((a, b) => (Math.abs(b - lufs) < Math.abs(a - lufs) ? b : a))
+    await page.evaluate((t) => window.__videoStore.getState().setLoudnessTarget(t), pick)
+    await page.waitForTimeout(200)
+    return { el: page.locator('.vw-mixer'), note: `measured ${lufs} LUFS, target ${pick}` }
+  },
+  'fade-curve-menu': async (page) => {
+    await seedTimeline(page, { select: 'shot-a1' })
+    await page.evaluate(() => { const s = window.__videoStore.getState(); s.patchClipAudio('shot-a1', { fadeIn: { dur: 1.2, curve: 'equal-power' }, fadeOut: { dur: 2, curve: 'log' } }); s.selectClip(null); s.selectClip('shot-a1') })
+    await page.waitForSelector('.vw-fade-dot.in')
+    await page.locator('.vw-fade-dot.out').dblclick()
+    await page.waitForSelector('.menu, [role=menu]', { timeout: 4000 }).catch(() => na('the curve menu did not open on double-click'))
+    await page.mouse.move(600, 300)
+    await page.waitForTimeout(250)
+    return {}
+  },
+  'fade-handles-unselected': async (page) => {
+    await seedTimeline(page)
+    await page.evaluate(() => { const s = window.__videoStore.getState(); s.patchClipAudio('shot-a1', { fadeIn: { dur: 1.2, curve: 'equal-power' }, fadeOut: { dur: 2, curve: 'log' } }); s.selectClip(null) })
+    await page.waitForSelector('.vw-fade-dot.in')
+    return { el: page.locator('.vw-tracks-scroll') }
+  },
+  'voiceover-recording-stage': async (page) => {
+    await seedTimeline(page)
+    await page.evaluate(() => window.__voiceover.setState({ phase: 'recording', seconds: 7, level: 0.7 }))
+    await page.waitForSelector('.vw-rec-badge')
+    return {}
+  },
+  'voiceover-recording-clip': async (page) => {
+    await seedTimeline(page)
+    await clickTab(page, 'Audio')
+    await page.evaluate(() => window.__voiceover.setState({ phase: 'recording', seconds: 7, level: 0.9 }))
+    return { el: page.locator('.vw-bin-panel') }
+  },
+  'voiceover-complete': async (page) => {
+    await seedTimeline(page)
+    await clickTab(page, 'Audio')
+    await page.evaluate(() => {
+      const st = window.__videoStore.getState()
+      const tracks = st.project.tracks.filter((t) => t.kind === 'audio')
+      st.addClip({ id: 'clip-vo-shot', trackId: tracks[0].id, title: 'Voiceover 1', kind: 'audio', start: 8, duration: 5.4, in: 0, out: 5.4, color: '#7c3aed', srcDuration: 5.4 })
+      st.selectClip('clip-vo-shot')
+      window.__voiceover.setState({ phase: 'idle', seconds: 0, level: 0, note: 'Take saved to the A1 track at 0:08 (5.4 s). It overlaps nothing.' })
+    })
+    return {}
+  },
+  'audio-tab-library-bangla': async (page) => {
+    await seedTimeline(page)
+    await page.evaluate(() => {
+      const LONG = 'অত্যন্ত দীর্ঘ বাংলা সংবাদ-প্রতিবেদনের পটভূমি সংগীত যেটির নাম অনেক অনেক লম্বা এবং একাধিক শব্দে বিভক্ত [শান্ত, ধীর, সংবাদ, নাটকীয়]'
+      const lib = [{ rel: LONG + '.wav', name: 'b.wav', size: 1, mtimeMs: 1 }, { rel: 'বিদ্যুৎ সংবাদ/শিরোনাম সংগীত #সংবাদ.flac', name: 'c.flac', size: 1, mtimeMs: 1 }, { rel: 'Morning Drive [upbeat, tech].mp3', name: 'a.mp3', size: 1, mtimeMs: 1 }]
+      window.esb = { videoMusicFolder: async () => ({ path: 'D:\\সংগীত\\ESB licensed', name: 'ESB লাইসেন্সপ্রাপ্ত সংগীত ফোল্ডার' }), videoMusicChoose: async () => null, videoMusicClear: async () => null, videoMusicList: async () => ({ files: lib, truncated: false }), videoMusicUse: async () => { throw new Error('preview needs the desktop app') } }
+      const st = window.__videoStore
+      st.setState((s) => ({ mediaAssets: [...s.mediaAssets, { id: 'music-2', name: 'c.flac', type: 'audio', url: '', duration: 60, size: 1, musicRel: 'বিদ্যুৎ সংবাদ/শিরোনাম সংগীত #সংবাদ.flac', licence: 'নিজস্ব রেকর্ডিং; ESB-এর মালিকানাধীন।' }, { id: 'music-1', name: 'b.wav', type: 'audio', url: '', duration: 95, size: 1, musicRel: LONG + '.wav', licence: 'এই ট্র্যাকটি স্থানীয় সুরকারের কাছ থেকে লাইসেন্স করা; সংবাদ ব্যবহারের অনুমতি আছে, পুনর্বিক্রয় নয়। চুক্তি নম্বর ESB-2026-14।' }] }))
+    })
+    await clickTab(page, 'Audio')
+    await page.waitForSelector('.vw-au-track')
+    await page.locator('.vw-au-lic-btn').nth(1).click()
+    await page.locator('.vw-bin-panel').evaluate((root) => { for (const el of root.querySelectorAll('*')) if (el.scrollHeight > el.clientHeight + 2) el.scrollTop = 0 })
+    await page.waitForTimeout(150)
+    return { el: page.locator('.vw-bin-panel') }
+  },
+  'inspector-audio-fades': async (page) => {
+    await seedTimeline(page, { select: 'shot-a1' })
+    await page.evaluate(() => { const s = window.__videoStore.getState(); s.patchClipAudio('shot-a1', { gain: 3, pan: -0.4, fadeIn: { dur: 0.5, curve: 'linear' } }); s.selectClip(null); s.selectClip('shot-a1') })
+    await openSection(page, 'audio')
+    const fold = page.locator('.vw-au-fold')
+    if (await fold.count() && (await fold.getAttribute('aria-expanded')) === 'false') await fold.click()
+    await page.waitForTimeout(200)
+    return {}
+  },
+  'export-audio-setup': async (page) => {
+    await seedMixer(page)
+    await page.evaluate(() => { const st = window.__videoStore.getState(); st.patchClipAudio('shot-a1', { denoise: { amount: 0.6 } }) })
+    await page.locator('.vw-mixer .vw-mx-close').click()
+    await page.locator('.vw-header button', { hasText: /Export/ }).first().click()
+    await page.waitForSelector('.vx-loud-row')
+    await waitAnimations(page)
+    return {}
+  },
+  'export-audio-running': async (page) => {
+    await seedMixer(page)
+    await page.evaluate(() => { const st = window.__videoStore.getState(); st.patchClipAudio('shot-a1', { denoise: { amount: 0.6 } }) })
+    await page.locator('.vw-mixer .vw-mx-close').click()
+    await page.locator('.vw-header button', { hasText: /Export/ }).first().click()
+    await page.waitForSelector('.vx-go')
+    await page.locator('.vx-go').click()
+    await page.waitForSelector('.vx-stage', { timeout: 10000 }).catch(() => na('export did not start'))
+    await waitAnimations(page)
+    await page.screenshot({ path: currentFile, animations: 'disabled', caret: 'hide' })
+    await page.locator('.vx-cancel').click().catch(() => {})
+    return { saved: true }
+  },
+  'export-audio-done': async (page) => {
+    await seedMixer(page)
+    await page.locator('.vw-mixer .vw-mx-close').click()
+    await page.locator('.vw-header button', { hasText: /Export/ }).first().click()
+    await page.waitForSelector('.vx-go')
+    const draft = page.locator('.vx button', { hasText: /First 10 s/ })
+    if (await draft.count()) await draft.click()
+    const dl = page.waitForEvent('download', { timeout: 120000 }).catch(() => null)
+    await page.locator('.vx-go').click()
+    await page.waitForSelector('.vw-export-success', { timeout: 120000 }).catch(() => na('the export did not finish in time'))
+    await dl
+    await waitAnimations(page)
+    return {}
+  },
   'voiceover-recording': async (page) => {
     await seedTimeline(page)
     await clickTab(page, 'Audio')
@@ -662,6 +807,15 @@ const STATES = {
     await seedTimeline(page)
     await page.click('.vw-keys-btn')
     await page.waitForSelector('.dialog .vw-keys')
+    await waitAnimations(page)
+    return {}
+  },
+  // Phase 4 UI fix round: the sheet scrolled to its foot, the Audio group whole above the "more below" fade
+  'shortcuts-sheet-audio': async (page) => {
+    await seedTimeline(page)
+    await page.click('.vw-keys-btn')
+    await page.waitForSelector('.dialog .vw-keys')
+    await page.evaluate(() => { const b = document.querySelector('.dialog .dialog-body'); if (b) b.scrollTop = b.scrollHeight })
     await waitAnimations(page)
     return {}
   },
@@ -979,12 +1133,12 @@ try {
         try {
           await openVideo(page)
           await page.evaluate((th) => { if (window.__store?.getState().theme !== th) window.__store?.getState().setTheme(th) }, theme)
+          currentFile = path.join(outDir, file)
           const r = (await STATES[state](page)) || {}
-          await settle(page, { keepPointer: !!r.keepPointer })
-          await waitAnimations(page)
+          if (!r.saved) { await settle(page, { keepPointer: !!r.keepPointer }); await waitAnimations(page) }
           const geo = await timelineGeometry(page)
           const opts = { path: path.join(outDir, file), animations: 'disabled', caret: 'hide' }
-          if (r.el) await r.el.screenshot(opts)
+          if (r.saved) { /* the state took its own shot */ } else if (r.el) await r.el.screenshot(opts)
           else await page.screenshot(opts)
           entry = { ...entry, ok: true, geometry: geo, note: [r.note, geo?.problems?.length ? `TIMELINE: ${geo.problems.join(', ')}` : '', thumbRetries ? `black bin thumbnail on import, re-imported ${thumbRetries}x` : '', pageErrors.length ? `page errors: ${pageErrors.join(' | ')}` : ''].filter(Boolean).join('; ') }
           console.log(`ok   ${file}${entry.note ? '  (' + entry.note + ')' : ''}`)

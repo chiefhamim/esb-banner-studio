@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react'
 import { levelFor, onPeaks, peaksFor } from './engine/peaks'
 import { waveHeight } from './engine/laneCanvas'
 import { gestureEnd, gestureStart } from './audioAdapter'
+import { Icon } from '../ui/Icon'
 
 /** A range slider: pressing it starts an undo gesture, releasing anywhere ends it, so a whole drag is one step. */
 export function GSlider({ value, min, max, step = 1, onChange, label, disabled, className = '', onCommit, defaultValue }: {
@@ -112,20 +113,23 @@ export function WaveThumb({ url, identity, duration, className = '', width = 64,
     if (silent) state = 'silent'
   }
   return (
-    <div className={`vw-wave ${className}`} data-wave={state} style={{ width, height }}>
+    <div className={`vw-wave ${className}`} data-wave={state} style={{ width, height }} data-tip={state === 'none' ? 'Waveform appears after first use' : state === 'ready' ? 'Waveform of the sound' : undefined}>
       {state === 'ready' && <canvas ref={ref} style={{ width, height }} aria-label="Waveform" role="img" />}
+      {state === 'ready' && <span className="vw-wave-base" aria-hidden="true" />}
+      {state !== 'silent' && state !== 'pending' && <Icon name="volume" size={state === 'none' ? 16 : 11} className="vw-wave-glyph" />}
       {state === 'silent' && <span className="vw-wave-word">Silent</span>}
       {state === 'pending' && <span className="vw-wave-word dim">Reading</span>}
     </div>
   )
 }
 
-/** A horizontal level bar: peak in dBFS (−60..0) as a fill, with a red tail above −3 dB. */
+/** A horizontal level bar: peak in dBFS (−60..0) as a fill: green, amber above −12 dB, red above −3 dB (clipping). */
 export function LevelBar({ db, vertical = true, label, idle }: { db: number | null; vertical?: boolean; label: string; idle?: boolean }) {
   const f = db == null ? 0 : Math.max(0, Math.min(1, (db + 60) / 60))
   const hot = db != null && db > -3
+  const warm = db != null && db > -12 && !hot
   return (
-    <span className={`vw-level${vertical ? ' v' : ''}${hot ? ' hot' : ''}${idle ? ' idle' : ''}`} role="meter" aria-label={label} aria-valuemin={-60} aria-valuemax={0} aria-valuenow={db == null ? undefined : Math.round(db)} data-db={db == null ? '' : db.toFixed(1)}>
+    <span className={`vw-level${vertical ? ' v' : ''}${hot ? ' hot' : ''}${warm ? ' warm' : ''}${idle ? ' idle' : ''}`} role="meter" aria-label={label} aria-valuemin={-60} aria-valuemax={0} aria-valuenow={db == null ? undefined : Math.round(db)} data-db={db == null ? '' : db.toFixed(1)}>
       <i style={vertical ? { height: `${f * 100}%` } : { width: `${f * 100}%` }} />
     </span>
   )
