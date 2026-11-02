@@ -24,6 +24,9 @@ const CACHE_DIR = 'grid-cache'
 const CACHE_MAX_FILES = 400
 const MAX_PER_MINUTE = 40
 const PROBE_DAYS = 8 // the newest published day is always inside the site's 7-day public window
+const LATEST_DEADLINE_MS = 20000 // the whole 'newest day' search, however many days it probes
+const TOP_KEYS = ['systemStats', 'generationData', 'zoneGenerationData', 'regionalDemandData', 'regionalDemandSource', 'hourlyLoadData', 'borderImportsData', 'sourceFiles']
+const MAX_DEPTH = 6 // a day is object > list > object > object > number; anything deeper is not a daily report
 
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})$/
 
@@ -63,6 +66,24 @@ function labelToIso(label) {
   if (!m) return null
   const mi = MONTHS.indexOf(m[2])
   return mi < 0 ? null : `${m[3]}-${String(mi + 1).padStart(2, '0')}-${m[1].padStart(2, '0')}`
+}
+
+function withinDepth(v, left) {
+  if (v === null || typeof v !== 'object') return true
+  if (left <= 0) return false
+  for (const k of Object.keys(v)) if (!withinDepth(v[k], left - 1)) return false
+  return true
+}
+
+/** Only the report's known top-level parts, and only if they are plain, shallow JSON that crosses IPC: a nested bomb
+ * that parses fine would otherwise fail (or hang) when the answer is cloned to the renderer. Null = refuse. */
+function pickDay(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null
+  const out = {}
+  for (const k of TOP_KEYS) if (k in data) out[k] = data[k]
+  if (!withinDepth(out, MAX_DEPTH)) return null
+  try { JSON.stringify(out) } catch { return null }
+  return out
 }
 
 /** The answer is a daily report for exactly this day (the renderer checks every field again with parseGridDay). */
@@ -119,8 +140,9 @@ function createGridData(o) {
   function readCache(iso) {
     try {
       const j = JSON.parse(fs.readFileSync(cacheFile(iso), 'utf8'))
-      if (!j || j.iso !== iso || typeof j.fetchedAt !== 'string' || typeof j.source !== 'string' || !isDayFor(j.data, iso)) return null
-      return { ok: true, iso, fetchedAt: j.fetchedAt, source: j.source, data: j.data, cached: true }
+      const data = j && pickDay(j.data)
+      if (!j || j.iso !== iso || typeof j.fetchedAt !== 'string' || typeof j.source !== 'string' || !isDayFor(data, iso)) return null
+      return { ok: true, iso, fetchedAt: j.fetchedAt, source: j.source, data, cached: true }
     } catch {
       return null
     }
@@ -142,11 +164,13 @@ function createGridData(o) {
   }
 
   /** One GET with the fixed origin, no redirects, a whole-request time limit and a body cap. */
-  async function get(pathname, cookies) {
+  async function get(pathname, cookies, outer) {
     const url = origin + pathname
+    if (outer && outer.aborted) return { url, status: 0, error: 'timeout' }
     if (overBudget()) return { url, status: 429, local: true }
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+    if (outer) outer.addEventListener('abort', () => ctrl.abort(), { once: true })
     try {
       const res = await fetchImpl(url, {
         method: 'GET',
@@ -185,7 +209,7 @@ function createGridData(o) {
    * The day's report. Uses the cached copy unless `refresh`; otherwise asks the site (static path, then the runtime
    * twin when the static one is not there) and caches what it gets. Resolves, never throws.
    */
-  async function fetchDay(cookies, isoIn, opts) {
+  async function fetchDay(cookies, isoIn, opts, outer) {
     const iso = validDate(isoIn)
     if (!iso) return fail('bad-date', 'Pick a valid date (YYYY-MM-DD).')
     if (iso > dhakaToday(now())) return fail('not-published', `No data published for ${iso} (that day has not happened yet).`)
@@ -193,28 +217,38 @@ function createGridData(o) {
     if (!refresh) { const hit = readCache(iso); if (hit) return hit }
     if (cookies == null || (Array.isArray(cookies) && cookies.length === 0)) return fail('signed-out', 'Not signed in.')
     if (!checkCookies(cookies)) return fail('signed-out', 'Not signed in (the session could not be read).')
-    let r = await get(`/data/daily/${iso}.json`, cookies)
-    if (r.status === 404) r = await get(`/api/data/daily/${iso}.json`, cookies)
+    let r = await get(`/data/daily/${iso}.json`, cookies, outer)
+    if (r.status === 404) r = await get(`/api/data/daily/${iso}.json`, cookies, outer)
     if (r.status !== 200 || r.text === undefined) return explain(r, iso)
     let data
     try { data = JSON.parse(r.text) } catch { return fail('bad-data', 'The site\'s answer was not JSON.', 200) }
+    data = pickDay(data)
     if (!isDayFor(data, iso)) return fail('bad-data', `The site's answer is not the daily report for ${iso}.`, 200)
     const entry = { ok: true, iso, fetchedAt: new Date(now()).toISOString(), source: r.url, data, cached: false }
     writeCache(entry)
     return entry
   }
 
-  /** The newest published day: today (Dhaka) and back, at most PROBE_DAYS days. Stops at the first refusal. */
+  /** The newest published day: today (Dhaka) and back, at most PROBE_DAYS days. The days are asked together (one
+   * round of waiting, not eight in a row), read newest first, and the search stops at the first answer that settles
+   * it: a day found, a refusal, or the network being down. The whole search has one deadline. */
   async function latest(cookies) {
     const today = dhakaToday(now())
-    for (let i = 0; i < PROBE_DAYS; i++) {
-      const iso = minusDays(today, i)
-      // always asked fresh: the newest day is the one most likely to be corrected and republished
-      const r = await fetchDay(cookies, iso, { refresh: true })
-      if (r.ok) return { ok: true, iso, fetchedAt: r.fetchedAt, source: r.source, data: r.data, cached: r.cached }
-      if (r.code !== 'not-published') return { ...r, cachedLatest: newestCached() }
+    const all = new AbortController()
+    const timer = setTimeout(() => all.abort(), o.latestDeadlineMs || LATEST_DEADLINE_MS)
+    try {
+      const days = Array.from({ length: PROBE_DAYS }, (_, i) => minusDays(today, i))
+      const asked = days.map((iso) => fetchDay(cookies, iso, { refresh: true }, all.signal))
+      for (let i = 0; i < PROBE_DAYS; i++) {
+        const r = await asked[i]
+        if (r.ok) return { ok: true, iso: days[i], fetchedAt: r.fetchedAt, source: r.source, data: r.data, cached: r.cached }
+        if (r.code !== 'not-published') return { ...r, cachedLatest: newestCached() }
+      }
+      return { ...fail('not-published', `No data published in the last ${PROBE_DAYS} days.`), cachedLatest: newestCached() }
+    } finally {
+      clearTimeout(timer)
+      all.abort() // whatever is still in flight is not needed
     }
-    return { ...fail('not-published', `No data published in the last ${PROBE_DAYS} days.`), cachedLatest: newestCached() }
   }
 
   function newestCached() {
@@ -245,4 +279,4 @@ function createGridData(o) {
   return { fetchDay, latest, cached, cachedDates, origin }
 }
 
-module.exports = { createGridData, validDate, dhakaToday, resolveOrigin, labelToIso, SITE_ORIGIN, MAX_BYTES, TIMEOUT_MS }
+module.exports = { createGridData, pickDay, validDate, dhakaToday, resolveOrigin, labelToIso, SITE_ORIGIN, MAX_BYTES, TIMEOUT_MS }

@@ -93,8 +93,20 @@ export function renderTitleSpec(ctx: Ctx, spec: TitleSpec, t: number, opts: Rend
   }
 }
 
+const timesMemo = new WeakMap<TitleSpec, { measure: Measurer; settle: number; exit: number }>()
+function timesOf(spec: TitleSpec, measure: Measurer) {
+  const hit = timesMemo.get(spec)
+  // keyed by measurer: after fonts load the measurer is a new function and the times are worked out again
+  if (hit && hit.measure === measure) return hit
+  const v = { measure, settle: settleTimeRaw(spec, measure), exit: exitTimeRaw(spec, measure) }
+  timesMemo.set(spec, v)
+  return v
+}
+
 /** The last moment anything in the spec moves before its out phase (count-ups and chart growth included). */
-export function settleTime(spec: TitleSpec, measure: Measurer): number {
+export const settleTime = (spec: TitleSpec, measure: Measurer): number => timesOf(spec, measure).settle
+
+function settleTimeRaw(spec: TitleSpec, measure: Measurer): number {
   let end = 0
   for (const el of spec.elements) {
     if (el.anim?.in) {
@@ -108,7 +120,9 @@ export function settleTime(spec: TitleSpec, measure: Measurer): number {
 }
 
 /** The start of the earliest out phase (Infinity without one). */
-export function exitTime(spec: TitleSpec, measure: Measurer): number {
+export const exitTime = (spec: TitleSpec, measure: Measurer): number => timesOf(spec, measure).exit
+
+function exitTimeRaw(spec: TitleSpec, measure: Measurer): number {
   let start = Infinity
   for (const el of spec.elements) {
     if (!el.anim?.out) continue

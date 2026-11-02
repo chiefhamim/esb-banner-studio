@@ -90,5 +90,5 @@ export interface TitleSpec {
   /** Built for the editor (placeholders drawn) or for export (never). */
   editor: boolean
   /** Data cards: the day the figures are for and the source line that must be on the card. */
-  data?: { isoDate: string; dateLabel: string; sourceLine: string }
+  data?: { isoDate: string; dateLabel: string; sourceLine: string; /** The full formula of a derived figure (the card shows its short form). */ derived?: string }
 }

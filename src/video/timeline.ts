@@ -14,7 +14,7 @@ import { clipDurationFor, cutFreezes, isRetimed, rampOf, sanitizeFreezes, saniti
 import type { BlendMode } from './effects'
 import { BLEND_MODES, LUT_MAX_CHARS, lutText, lutsUsed, registerLut, sanitizeEffects } from './effects'
 import type { TitleData } from './titleModel'
-import { migrateOverlayClip, sanitizeTitleData } from './titleModel'
+import { migrateOverlayClip, sanitizeTitleData, titleDuration } from './titleModel'
 import { sanitizeDataCard, type DataCardRef } from './dataCardClip'
 
 export type TrackKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio'
@@ -147,6 +147,9 @@ export interface Clip {
   /** Phase 3 (Part B): a Grid data card — the published figure or series it shows, with its day, source and fetch
    * time (dataCardClip.ts). Drawn from these stored values only; an export never fetches. */
   dataCard?: DataCardRef
+  /** Title and data-card clips: the whole title's length in seconds when a split cut it (titleModel.ts titleDuration).
+   * Both halves keep it, so the out animation plays once, at the title's true end, never at the cut. */
+  titleLen?: number
 }
 
 export interface VideoProject {
@@ -427,8 +430,10 @@ export function splitClip(timeline: VideoProject, clipId: string, atTime: number
   for (const c of timeline.clips) {
     if (!group.has(c.id) || atTime <= c.start || atTime >= c.start + c.duration) { out.push(c); continue }
     const first = atTime - c.start
-    out.push(subClip(c, 0, first))
-    out.push({ ...subClip(c, first, c.duration), id: `${c.id}-split-${stamp}`, title: c.title.replace(/ \(Part \d+\)$/, '') + ' (Part 2)', start: atTime, linkId: newLink })
+    // a title or data card keeps its whole length: the first half is not "the end" of the title
+    const whole = c.titleData || c.dataCard ? { titleLen: titleDuration(c) } : {}
+    out.push({ ...subClip(c, 0, first), ...whole })
+    out.push({ ...subClip(c, first, c.duration), ...whole, id: `${c.id}-split-${stamp}`, title: c.title.replace(/ \(Part \d+\)$/, '') + ' (Part 2)', start: atTime, linkId: newLink })
   }
   return { ...timeline, clips: out }
 }
@@ -823,6 +828,7 @@ export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unkno
     if (kind === 'overlay' && !clip.titleData) { const m = migrateOverlayClip({ ...clip, overlayText: typeof clip.overlayText === 'string' ? clip.overlayText : '', overlaySub: typeof clip.overlaySub === 'string' ? clip.overlaySub : '' }); if (m.titleData) clip.titleData = m.titleData }
     if (clip.titleData) { delete clip.overlayType; delete clip.overlayText; delete clip.overlaySub }
     if (o.dataCard !== undefined) { const dc = kind === 'overlay' ? sanitizeDataCard(o.dataCard) : undefined; if (dc) clip.dataCard = dc; else delete clip.dataCard }
+    if (o.titleLen !== undefined) { const tl = o.titleLen; if (typeof tl === 'number' && Number.isFinite(tl) && tl > 0 && tl <= MAX_TIME && (clip.titleData || clip.dataCard)) clip.titleLen = tl; else delete clip.titleLen }
     if (!track) {
       // the clip's track is gone: give it one of its kind rather than lose the clip
       const want = typeof o.trackId === 'string' && /^[\w-]{1,40}$/.test(o.trackId) && !seen.has(o.trackId) ? o.trackId : undefined
@@ -891,6 +897,8 @@ export function subClip(c: Clip, a: number, b: number): Clip {
   const D = c.duration
   const d = Math.max(0.05, b - a)
   const keyframes = a === 0 && b >= D - EPS ? c.keyframes : cutKeyframes(c.keyframes, a, b)
+  // a changed tail is a new end for a title: its carried whole length no longer holds (a split sets it again)
+  if (c.titleLen !== undefined && Math.abs(b - D) > EPS) { c = { ...c }; delete c.titleLen }
   if (!isRetimed(c)) {
     // a clip at normal speed: exactly the Phase 0 arithmetic (in follows the head, out the tail)
     return { ...c, duration: d, in: Math.max(0, c.in + a), out: Math.abs(b - D) < EPS ? c.out : c.in + b, ...(c.keyframes ? { keyframes } : {}) }

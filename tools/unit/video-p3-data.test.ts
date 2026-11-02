@@ -159,7 +159,7 @@ describe('grid-data.cjs — the main-process fetch', () => {
     const refused = server(() => new Response('Access Denied: Direct data access is restricted.', { status: 403 }))
     const x = await make(refused.fn).latest(cookies)
     expect(x.code).toBe('refused')
-    expect(refused.calls).toHaveLength(1)
+    expect(refused.calls.length).toBeLessThanOrEqual(8) // the days are asked together (one round of waiting), the refusal settles it
   })
 })
 
@@ -211,7 +211,7 @@ describe('data cards — the figure is the source JSON value for that date', () 
       expect(card!.series!.items.map((i) => i.value)).toEqual(s.items.map((i) => i.value))
       const spec = dataCardSpec(card!, { frame: frame169, measure: fake, editor: false, duration: 7 })!
       const derived = spec.elements.find((e) => e.id === 'derived')
-      if (s.derived) expect(derived && derived.type === 'text' && derived.text).toBe(`Derived: ${s.derived.formula}`)
+      if (s.derived) { expect(derived && derived.type === 'text' && derived.text).toMatch(/^Derived: /); expect(spec.data?.derived).toBe(s.derived.formula) }
       else expect(derived).toBeUndefined()
       expect(spec.elements.some((e) => e.type === 'text' && e.text === 'Source: esbpowerline.com Grid data, 21 Oct 2026')).toBe(true)
     }

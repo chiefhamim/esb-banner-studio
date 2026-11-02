@@ -177,8 +177,10 @@ export function defaultOverride(preset: AnimPresetId, out = false): AnimOverride
   return { preset, duration, delay: 0, stagger, ease: preset === 'fade' ? 'easeInOut' : 'esb' }
 }
 
-/** Seconds of title time a clip covers: its local time runs from `in` (a split's second half starts later) to here. */
-export const titleDuration = (c: { in: number; out: number; duration: number }) => Math.max(c.out, c.in + c.duration)
+/** Seconds of title time a clip covers: its local time runs from `in` (a split's second half starts later) to here.
+ * `titleLen` is the whole title's length carried through a split, so the first half does not play its out animation
+ * at the cut: the exit happens only at the title's true end. */
+export const titleDuration = (c: { in: number; out: number; duration: number; titleLen?: number }) => Math.max(c.out, c.in + c.duration, c.titleLen ?? 0)
 /** The template name for a data card clip (UI labels). */
 export const dataTemplateOf = (card: { kind: string }): 'data-number' | 'data-chart' => (card.kind === 'number' ? 'data-number' : 'data-chart')
 /** A title clip's local time at timeline time t. */

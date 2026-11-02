@@ -9,10 +9,10 @@
 import type { Clip } from './timeline'
 import type { ChartSpec } from './titles/charts'
 import { gridChartCard, gridNumberCard } from './titles/dataCards'
-import { GRID_METRICS, GRID_UNITS, fuelMix, hourlySeries, readMetric, sharesOf, zoneSeries, zoneShedPct, type GridDay, type GridFigure, type GridMetricId, type GridSeries, type GridUnit } from './titles/grid'
+import { GRID_METRICS, GRID_UNITS, fuelMix, labelToIso, metricMeta, hourlySeries, readMetric, sharesOf, zoneSeries, zoneShedPct, type GridDay, type GridFigure, type GridMetricId, type GridSeries, type GridUnit } from './titles/grid'
 import { blurIn, fade, maskReveal, scaleIn, slide, type AnimPhase, type TextAnimSpec } from './titles/anim'
 import type { Measurer } from './titles/layout'
-import { countUpText, formatExact } from './titles/numbers'
+import { countUpText, formatExact, isShowableNumber } from './titles/numbers'
 import { titleDuration, titleLocal } from './titleModel'
 import type { TitleSpec } from './titles/spec'
 
@@ -107,7 +107,7 @@ export function dataCardFor(f: FetchedDay, metric: string, style: Partial<DataCa
   }
   if (isSeriesId(metric)) {
     const s = readSeries(f.day, metric)
-    if (!s) return null
+    if (!s || !s.items.every((i) => isShowableNumber(i.value))) return null
     return { ...base, kind: 'chart', value: null, unit: s.unit, series: s, style: { ...DEFAULT_STYLE, chart: defaultChartKind(metric), ...style } }
   }
   return null
@@ -222,44 +222,96 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/
 const HEX = /^#[0-9a-fA-F]{6}$/
 const pick = <T extends string>(v: unknown, list: readonly T[], dflt: T): T => (list.includes(v as T) ? (v as T) : dflt)
 
-function cleanFigure(f: unknown, date: string, dateLabel: string): GridFigure | null {
+/** The origin a stored card's data may come from: the real site. A loopback test origin is accepted only when the
+ * desktop app says its main process was started with one (the e2e's stand-in for the site), never otherwise. */
+let testOriginOverride: string | null | undefined
+export function allowTestOrigin(origin: string | null | undefined) { testOriginOverride = origin }
+const testOrigin = (): string | null => {
+  const o = testOriginOverride !== undefined ? testOriginOverride : typeof window !== 'undefined' ? ((window as unknown as { esb?: { gridTestOrigin?: string | null } }).esb?.gridTestOrigin ?? null) : null
+  return o && /^http:\/\/127\.0\.0\.1:\d{2,5}$/.test(o) ? o : null
+}
+const SITE_SOURCE = /^https:\/\/esbpowerline\.com\/(?:api\/)?data\/daily\/(\d{4}-\d{2}-\d{2})\.json$/
+/** True for the site's own daily-file URL of `date` (or the test origin's, when one is allowed). */
+export function validSource(src: string, date: string): boolean {
+  const m = SITE_SOURCE.exec(src)
+  if (m) return m[1] === date
+  const to = testOrigin()
+  if (to && src.startsWith(to + '/')) { const t = /\/(?:api\/)?data\/daily\/(\d{4}-\d{2}-\d{2})\.json$/.exec(src); return !!t && t[1] === date }
+  return false
+}
+
+const TIME = /^\d{1,2}:\d{2}(:\d{2})?$/
+
+function cleanDerived(d: unknown, max: number): { formula: string; short?: string } | undefined {
+  const o = d as Record<string, unknown> | undefined
+  if (!o || !isStr(o.formula, max)) return undefined
+  return { formula: o.formula, ...(isStr(o.short, 60) && o.short ? { short: o.short } : {}) }
+}
+
+function cleanFigure(f: unknown, metric: string, date: string, dateLabel: string): GridFigure | null {
   if (!f || typeof f !== 'object') return null
   const o = f as Record<string, unknown>
   const label = o.label as Record<string, unknown> | undefined
-  if (!isStr(o.id, 40) || !isNum(o.value) || !UNITS.includes(o.unit as GridUnit) || !isStr(o.sourceField, 120) || !label || !isStr(label.en, 120) || !isStr(label.bn, 120)) return null
+  if (!isStr(o.id, 40) || !isNum(o.value) || !isShowableNumber(o.value) || !UNITS.includes(o.unit as GridUnit) || !isStr(o.sourceField, 120) || !label || !isStr(label.en, 120) || !isStr(label.bn, 120)) return null
+  // the figure must be the metric the card names, with the site's own label, unit and field: a crafted file cannot
+  // put one number under another's name
+  if (!isMetricId(metric) || o.id !== metric) return null
+  const meta = metricMeta(metric)
+  if (o.unit !== meta.unit || !meta.field.test(o.sourceField)) return null
+  if (meta.labelPrefix ? !label.en.startsWith(meta.en) || !label.bn.startsWith(meta.bn) : label.en !== meta.en || label.bn !== meta.bn) return null
   const fig: GridFigure = { id: o.id, label: { en: label.en, bn: label.bn }, value: o.value, unit: o.unit as GridUnit, sourceField: o.sourceField, isoDate: date, dateLabel }
-  if (isStr(o.time, 12)) fig.time = o.time
-  const d = o.derived as Record<string, unknown> | undefined
-  if (d && isStr(d.formula, 600)) fig.derived = { formula: d.formula }
+  if (o.time !== undefined) { if (!isStr(o.time, 12) || !TIME.test(o.time)) return null; fig.time = o.time }
+  const d = cleanDerived(o.derived, 600)
+  if (d) fig.derived = d
   return fig
 }
 
-function cleanSeries(s: unknown, date: string, dateLabel: string): GridSeries | null {
+/** What each series is, as the site's parser publishes it (grid.ts): title, unit, the file field its items come from,
+ * and whether it is derived (a derived series must say so). */
+const SERIES_EXPECT: Record<DataSeriesId, { en: string; unit: GridUnit; field: RegExp; derived: boolean }> = {
+  fuelMix: { en: 'Generation by fuel', unit: 'MKWh', field: /^generationData\[\d+\]\.gen$/, derived: false },
+  'fuelMix:share': { en: 'Generation by fuel (share)', unit: '%', field: /^generationData\[\d+\]\.gen$/, derived: true },
+  'zone:demand': { en: 'Demand by zone', unit: 'MW', field: /^regionalDemandData\[\d+\]\.demand$/, derived: false },
+  'zone:loadShed': { en: 'Load shedding by zone', unit: 'MW', field: /^regionalDemandData\[\d+\]\.loadShed$/, derived: false },
+  'zone:pct': { en: 'Load shedding share by zone', unit: '%', field: /^regionalDemandData\[\d+\]\.pct$/, derived: true },
+  zoneGeneration: { en: 'Generation by zone', unit: 'MKWh', field: /^zoneGenerationData\[\d+\]\.total$/, derived: false },
+  'hourly:generation': { en: 'Hourly generation', unit: 'MW', field: /^hourlyLoadData\[\d+\]\.generation$/, derived: false },
+  'hourly:demand': { en: 'Hourly demand', unit: 'MW', field: /^hourlyLoadData\[\d+\]\.demand$/, derived: false },
+  'hourly:loadShed': { en: 'Hourly load shedding', unit: 'MW', field: /^hourlyLoadData\[\d+\]\.loadShed$/, derived: false },
+}
+
+function cleanSeries(s: unknown, metric: string, date: string, dateLabel: string): GridSeries | null {
   if (!s || typeof s !== 'object') return null
   const o = s as Record<string, unknown>
   const title = o.title as Record<string, unknown> | undefined
   if (!isStr(o.id, 40) || !UNITS.includes(o.unit as GridUnit) || !title || !isStr(title.en, 120) || !isStr(title.bn, 120) || !Array.isArray(o.items) || o.items.length < 1 || o.items.length > 48) return null
+  if (!isSeriesId(metric) || o.id !== metric) return null
+  const want = SERIES_EXPECT[metric]
+  if (o.unit !== want.unit || title.en !== want.en) return null
   const items = []
   for (const it of o.items) {
     if (!it || typeof it !== 'object') return null
     const i = it as Record<string, unknown>
-    if (!isStr(i.label, 80) || !isNum(i.value) || !isStr(i.sourceField, 120)) return null
+    if (!isStr(i.label, 80) || !isNum(i.value) || !isShowableNumber(i.value) || !isStr(i.sourceField, 120) || !want.field.test(i.sourceField)) return null
     items.push({ label: i.label, value: i.value, sourceField: i.sourceField, ...(isStr(i.color, 30) && /^#[0-9a-fA-F]{3,8}$/.test(i.color) ? { color: i.color } : {}) })
   }
   const out: GridSeries = { id: o.id, title: { en: title.en, bn: title.bn }, unit: o.unit as GridUnit, items, isoDate: date, dateLabel }
-  const d = o.derived as Record<string, unknown> | undefined
-  if (d && isStr(d.formula, 1200)) out.derived = { formula: d.formula }
+  const d = cleanDerived(o.derived, 1200)
+  if (d) out.derived = d
+  if (want.derived && !out.derived) return null
   return out
 }
 
 /** A data card read from a project file: every field checked (a crafted file must not throw in the renderer or put
- * an unlabelled figure on screen). Undefined when it is not a valid card. */
+ * an unlabelled or mislabelled figure on screen): the date label must be the date, the source the site's own file
+ * for that day, the figure the metric the card names with its label and unit. Undefined when it is not a valid card. */
 export function sanitizeDataCard(raw: unknown): DataCardRef | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const o = raw as Record<string, unknown>
   if (o.v !== 1 || (o.kind !== 'number' && o.kind !== 'chart')) return undefined
   if (!isStr(o.date, 10) || !ISO.test(o.date) || !isStr(o.dateLabel, 20) || !isStr(o.metric, 40) || !isStr(o.fetchedAt, 40) || !isStr(o.source, 200) || !UNITS.includes(o.unit as GridUnit)) return undefined
-  if (!/^(https:\/\/esbpowerline\.com|http:\/\/127\.0\.0\.1:\d+)\//.test(o.source)) return undefined
+  if (labelToIso(o.dateLabel) !== o.date) return undefined
+  if (!validSource(o.source, o.date)) return undefined
   const st = (o.style ?? {}) as Record<string, unknown>
   const style: DataCardStyle = {
     lang: pick(st.lang, ['en', 'bn'] as const, 'en'),
@@ -270,12 +322,12 @@ export function sanitizeDataCard(raw: unknown): DataCardRef | undefined {
   }
   const base = { v: 1 as const, date: o.date, dateLabel: o.dateLabel, metric: o.metric, unit: o.unit as GridUnit, fetchedAt: o.fetchedAt, source: o.source }
   if (o.kind === 'number') {
-    const figure = cleanFigure(o.figure, o.date, o.dateLabel)
-    if (!figure || !isMetricId(o.metric) || figure.value !== o.value) return undefined
+    const figure = cleanFigure(o.figure, o.metric, o.date, o.dateLabel)
+    if (!figure || figure.value !== o.value || figure.unit !== o.unit) return undefined
     return { ...base, kind: 'number', value: figure.value, figure, style }
   }
-  const series = cleanSeries(o.series, o.date, o.dateLabel)
-  if (!series || !isSeriesId(o.metric)) return undefined
-  style.chart = pick(st.chart, ['bar', 'line', 'donut'] as const, defaultChartKind(o.metric))
+  const series = cleanSeries(o.series, o.metric, o.date, o.dateLabel)
+  if (!series || series.unit !== o.unit) return undefined
+  style.chart = pick(st.chart, ['bar', 'line', 'donut'] as const, defaultChartKind(o.metric as DataSeriesId))
   return { ...base, kind: 'chart', value: null, series, style }
 }

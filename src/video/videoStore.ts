@@ -117,6 +117,12 @@ interface VideoState {
   /** Clips put on the timeline by a drop or a paste, by the edit mode (insert or overwrite). */
   placeClips: (clips: Clip[], mode?: EditMode) => boolean
   updateClip: (clip: Clip) => void
+  /** Replace a clip for an edit that arrives in many small steps (typing in a field): the steps of one `key` on one
+   * clip, with nothing else edited between them and none more than COALESCE_MS apart, make ONE undo step. Use
+   * `endCoalesce()` on blur / Enter to close the step at once. Sliders and colour drags use beginGesture / endGesture. */
+  updateClipCoalesced: (clip: Clip, key: string) => void
+  /** Close the open coalesced edit: the next `updateClipCoalesced` starts a new undo step. */
+  endCoalesce: () => void
   moveClip: (clipId: string, newStart: number, newTrackId?: string) => void
   trimClip: (clipId: string, newStart: number, newDuration: number) => void
   trimClipLeftDelta: (clipId: string, deltaSeconds: number) => void
@@ -240,6 +246,10 @@ const edit = (s: VideoState, next: VideoProject): Partial<VideoState> => {
   return { history: pushHistory(s.project, s.history), future: [] as Step[], project: root, dirty: true, rev: s.rev + 1 }
 }
 
+/** A pause longer than this ends a coalesced typing step (the next keystroke is a new undo step). */
+export const COALESCE_MS = 1200
+let coalesceMark: { key: string; rev: number; at: number } | null = null
+
 /** Makes marker ids unique when several are added in the same millisecond. */
 let markerSeq = 0
 
@@ -345,6 +355,21 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   },
 
   updateClip: (clip) => set((s) => { const v = viewOf(s); return edit(s, { ...v, clips: v.clips.map((c) => (c.id === clip.id ? clip : c)) }) }),
+
+  updateClipCoalesced: (clip, key) => set((s) => {
+    const v = viewOf(s)
+    const next = { ...v, clips: v.clips.map((c) => (c.id === clip.id ? clip : c)) }
+    const now = Date.now()
+    const id = `${clip.id}|${key}`
+    const same = !!coalesceMark && coalesceMark.key === id && coalesceMark.rev === s.rev && now - coalesceMark.at < COALESCE_MS && !s.gesture && s.history.length > 0
+    // inside an open step the earlier undo entry already holds the state before the first keystroke: change the project only
+    const r = same ? edit({ ...s, gesture: true }, next) : edit(s, next)
+    const rev = (r.rev as number | undefined) ?? s.rev
+    coalesceMark = { key: id, rev, at: now }
+    return r
+  }),
+
+  endCoalesce: () => { coalesceMark = null },
 
   moveClip: (clipId, newStart, newTrackId) => set((s) => edit(s, moveClip(viewOf(s), clipId, newStart, newTrackId))),
 

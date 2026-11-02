@@ -12,8 +12,11 @@ import { dataCardSpec } from './dataCardClip'
 import { CLASSIC_FIELDS, TITLE_TEMPLATES, dataTemplateOf, fieldsOf, titleDuration, type AnimOverride, type TitleData } from './titleModel'
 import { blurIn, fade, lineByLine, maskReveal, scaleIn, slide, typeOn, wordByWord, type AnimPhase } from './titles/anim'
 import type { Easing } from './titles/easing'
-import { breakingStrap, endCard, headlineCard, lowerThird, nameStrap, quoteCard, sourceLine, type KitOptions } from './titles/kit'
-import { canvasMeasurer, type Measurer } from './titles/layout'
+import { breakingStrap, clean, endCard, headlineCard, isBlank, lowerThird, nameStrap, quoteCard, sourceLine, type KitOptions } from './titles/kit'
+import type { Measurer } from './titles/layout'
+import { titleMeasurerOrNull } from './titleMeasure'
+import { renderTitleSpec, settleTime } from './titles/render'
+import { calloutBox } from './titles/stickers'
 import type { TextElement, TitleSpec } from './titles/spec'
 import { looksLikeFiller, validateTitleSpec } from './titles/validate'
 
@@ -100,17 +103,27 @@ export function applyOverrides(spec: TitleSpec, td: TitleData, s: number): Title
 /** A rough width (no canvas: tests, workers): ~0.55 em per character. Layout only; never used for the fit check. */
 export const roughMeasure: Measurer = (text, font) => text.length * font.size * 0.55 + Math.max(0, text.length - 1) * (font.letterSpacing ?? 0)
 
-let realMeasure: Measurer | null | undefined
-/** A canvas measurer when the platform has one (the browser, the app), else null. */
+/** A canvas measurer when the platform has one (the browser, the app), else null. It is the engine's own, remade when
+ * fonts finish loading (titleMeasure.ts), so an export check never uses widths measured before the fonts arrived. */
 export async function canvasMeasure(): Promise<Measurer | null> {
-  if (realMeasure !== undefined) return realMeasure
-  const c = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(8, 8) : typeof document !== 'undefined' ? document.createElement('canvas') : null
-  const ctx = c?.getContext('2d') as CanvasRenderingContext2D | null | undefined
-  realMeasure = ctx ? canvasMeasurer(ctx) : null
-  return realMeasure
+  return titleMeasurerOrNull()
 }
-/** The canvas measurer if it was made already (sync callers). */
-export const measureNow = (): Measurer | null => realMeasure ?? null
+/** The canvas measurer, sync (null where there is no canvas). */
+export const measureNow = (): Measurer | null => titleMeasurerOrNull()
+
+/** Draw the spec at a few instants onto a scratch canvas: a title that throws while drawing must stop the export with a
+ * named problem, never abort it half way. Null when it draws (or when there is no canvas to try on). */
+function drawProblem(spec: TitleSpec, measure: Measurer): string | null {
+  if (typeof OffscreenCanvas === 'undefined') return null
+  try {
+    const ctx = new OffscreenCanvas(8, 8).getContext('2d')
+    if (!ctx) return null
+    for (const t of [0, 0.4, settleTime(spec, measure), spec.duration]) renderTitleSpec(ctx, spec, t, { measure, image: () => null })
+    return null
+  } catch (e) {
+    return `could not be drawn (${e instanceof Error ? e.message : 'unknown error'})`
+  }
+}
 
 export interface TitleProblem { clipId: string; label: string; at: number; messages: string[] }
 
@@ -126,7 +139,14 @@ export function titleProblems(project: Pick<VideoProject, 'clips' | 'width' | 'h
       const msgs: string[] = []
       const spec = buildTitleSpec(c, project.width, project.height, false, m)
       if (!spec) msgs.push('The data card cannot be drawn from its saved data')
-      else for (const i of validateTitleSpec(spec, { measure: measure ?? undefined })) if (!msgs.includes(i.message)) msgs.push(i.message)
+      else {
+        for (const i of validateTitleSpec(spec, { measure: measure ?? undefined })) if (!msgs.includes(i.message)) msgs.push(i.message)
+        // the exact figure must be on screen at some moment of the clip: it ends no earlier than the card settles
+        const need = settleTime(spec, m) - c.in
+        if (c.in + c.duration < settleTime(spec, m) - 1e-6) msgs.push(`The card ends before its figure is fully shown: lengthen it to at least ${(Math.ceil(need * 10) / 10).toFixed(1)} s`)
+        const bad = measure ? drawProblem(spec, measure) : null
+        if (bad) msgs.push(`The card ${bad}`)
+      }
       if (msgs.length) out.push({ clipId: c.id, label: TITLE_TEMPLATES[dataTemplateOf(c.dataCard)].label, at: c.start, messages: msgs })
       continue
     }
@@ -135,11 +155,16 @@ export function titleProblems(project: Pick<VideoProject, 'clips' | 'width' | 'h
     const label = TITLE_TEMPLATES[td.template].label
     if (td.look === 'classic' && td.classic) {
       // as before Phase 3: an old title with nothing typed in is left out; one with words exports them
-      for (const def of CLASSIC_FIELDS[td.classic]) { const v = f(td, def.key).trim(); if (v && looksLikeFiller(v)) msgs.push(`“${def.label}” holds placeholder text: ${v}`) }
+      for (const def of CLASSIC_FIELDS[td.classic]) { const v = clean(f(td, def.key)); if (v && looksLikeFiller(v)) msgs.push(`“${def.label}” holds placeholder text: ${v}`) }
     } else if (td.template === 'sticker') {
-      if (td.sticker?.shape === 'callout') { const v = f(td, 'text').trim(); if (!v) msgs.push('“Callout text” is empty'); else if (looksLikeFiller(v)) msgs.push(`“Callout text” holds placeholder text: ${v}`) }
+      if (td.sticker?.shape === 'callout') {
+        const v = clean(f(td, 'text'))
+        if (!v) msgs.push('“Callout text” is empty')
+        else if (looksLikeFiller(v)) msgs.push(`“Callout text” holds placeholder text: ${v}`)
+        else if (measure && calloutBox(v, td.sticker.size, project.width, project.height, measure).truncated) msgs.push('“Callout text” does not fit in its callout: shorten it')
+      }
     } else {
-      for (const def of fieldsOf(td)) if (def.required && !f(td, def.key).trim()) msgs.push(`“${def.label}” is empty`)
+      for (const def of fieldsOf(td)) if (def.required && isBlank(f(td, def.key))) msgs.push(`“${def.label}” is empty`)
       const spec = buildTitleSpec(c, project.width, project.height, false, m)
       if (spec) {
         for (const i of validateTitleSpec(spec, { measure: measure ?? undefined })) {
@@ -147,6 +172,8 @@ export function titleProblems(project: Pick<VideoProject, 'clips' | 'width' | 'h
           const text = i.code === 'overflow' ? `${fieldLabel(td, i.elementId)} does not fit in its lines: shorten it` : i.message
           if (!msgs.includes(text)) msgs.push(text)
         }
+        const bad = measure ? drawProblem(spec, measure) : null
+        if (bad) msgs.push(`The title ${bad}`)
       }
     }
     if (msgs.length) out.push({ clipId: c.id, label, at: c.start, messages: msgs })
