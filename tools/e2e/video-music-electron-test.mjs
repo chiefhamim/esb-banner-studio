@@ -84,7 +84,7 @@ try {
   await page.screenshot({ path: path.join(OUT, 'library-electron.png') })
   const folder = await page.evaluate(() => window.esb.videoMusicFolder())
   check('main remembers the chosen folder', folder?.name === 'ESB licensed music')
-  await page.click('.vw-au-lib-acts .ibtn[aria-label="Forget this folder"]')
+  await page.click('.vw-au-lib-acts .vw-au-forget')
   await page.waitForSelector('.vw-au-choose')
   const after = await page.evaluate(async () => ({ f: await window.esb.videoMusicFolder(), u: await window.esb.videoMusicUse('Calm/Piano.wav').then(() => 'ALLOWED', () => 'refused') }))
   check('forgetting the folder closes access', after.f === null && after.u === 'refused', JSON.stringify(after))

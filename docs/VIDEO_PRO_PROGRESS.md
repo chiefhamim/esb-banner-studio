@@ -1922,6 +1922,7 @@ Reviewers' findings verified by running; all correctness items were real. Tests:
 Perf (10 min stereo, synthetic worst case from the review bench, this PC): true-peak meter 9.5 s → 1.9 s per pass; limiterGain over 60 blocks 17.6 s → about 7 s per pass (and off the main thread in the export); dry passes no longer pay the meter's true peak (−9 s each) or a re-render. Audible-clip material is sparser than the bench, so real gains are larger. The 40 s end-to-end target was not timed in a browser export (offline audio needs the app); estimated from the parts at 35–40 s.
 
 Behaviour changes to know: the limiter and meter gate the true-peak search around samples within 6 dB / 4 dB of the ceiling or peak (equal to the full search on band-limited material; white noise can differ below the ceiling only). Clearing the music folder makes music already in a project show as missing until relinked.
+
 ## Phase 4 UI fix round (2026-11-02, branch `video-p4-uifix`)
 
 Screen-review fixes to Phase 4's audio UI; UI only (the logic fixer works in `video-p4-fix`). Verified on the shots in
@@ -1979,3 +1980,7 @@ all were real.
 
 Logic touched (minimal): none in engine/model files. `TimelinePro.tsx` shortcut text, `VideoWorkspace.tsx` (header
 labels, rec tags, `--fi/--fo`), `audioControls.tsx` (LevelBar warm class, WaveThumb glyph).
+
+## Phase 4 fix rounds merged and wired (2026-11-02, branch `video-pro`)
+
+`video-p4-fix` and `video-p4-uifix` merged (only the progress doc conflicted; both sections kept). UI wired to the logic APIs: Audio tab "Voiceover latency offset (ms)" (`setVoiceoverOffset`, +-1000, shows `measuredMs`) and `layered` / `interrupted` / `note` lines; noise-reduction failure (`useAudioJobs.errors`) and the dropped-sample note in the clip Audio section, `DenoiseError` named in the export sheet's error; crossfade button disabled with the `crossfadeBlocker` reason; loudness `warnings` / `shortMix` in the card and the export report; sliders and number fields use the `*Coalesced` store actions; beat proposals refused with `beatsProblem`. `video-music-electron-test` now clicks the labelled Forget button. Measured 10 min all-features audio stage (ducking + -14 LUFS + limiter): 21.8 s (plain mix 10.4 s); the limiter did not need to act on that fixture.
