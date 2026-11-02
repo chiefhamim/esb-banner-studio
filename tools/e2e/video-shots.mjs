@@ -196,7 +196,7 @@ async function openSection(page, id) {
   else if ((await head.first().getAttribute('aria-expanded')) !== 'true') await head.first().click()
   await page.waitForTimeout(250)
 }
-const JUMP_LABEL = { transform: /^(Transform|Sound|Opacity)$/, speed: /^Speed$/, colour: /^Colour$/, fx: /^Effects$/, keys: /^Keys$/ }
+const JUMP_LABEL = { title: /^Title$/, transform: /^(Transform|Sound|Opacity)$/, speed: /^Speed$/, colour: /^Colour$/, fx: /^Effects$/, keys: /^Keys$/ }
 
 async function clickTab(page, label) {
   const bin = page.locator('.vw-bin-panel')
@@ -267,6 +267,84 @@ async function seedBin(page, { extra = null, video = {}, folder = false, found =
   return {}
 }
 
+
+// ------------------------------------------------------------------ Phase 3: titles
+const KIT_SAMPLE = {
+  'lower-third': { name: 'Sample name', role: 'Sample role' },
+  'name-strap': { name: 'Sample name' },
+  headline: { headline: 'Sample headline for a title card', kicker: 'Sample kicker' },
+  breaking: { headline: 'Sample breaking headline', sub: 'Sample supporting line' },
+  quote: { quote: 'Sample quote text, set word for word from the story.', speaker: 'Sample speaker', speakerRole: 'Sample role' },
+  source: { source: 'Sample source' },
+  'end-card': {},
+}
+const titleClip = (id, template, fields, extra = {}) => ({ id, trackId: 'v2', title: template, kind: 'overlay', start: 0, duration: 8, in: 0, out: 8, color: '#10b981', titleData: { template, fields, ...extra } })
+/** Footage on V1 and the given title clips, at an aspect; the playhead past every in phase. */
+async function seedTitles(page, { aspect = '16:9', titles = [], playhead = 3, select = null } = {}) {
+  thumbRetries = await importMedia(page)
+  await page.evaluate(({ aspect, titles, playhead, select }) => {
+    const vs = window.__videoStore
+    vs.getState().setAspect(aspect)
+    const st = vs.getState()
+    const vid = st.mediaAssets.find((x) => x.type === 'video')
+    const clips = [{ id: 'shot-v1', trackId: 'v1', title: 'Sample clip', kind: 'video', start: 0, duration: 8, in: 0, out: 8, color: '#2563eb', sourceUrl: vid?.url, mediaAssetId: vid?.id }, ...titles]
+    st.loadProject({ ...vs.getState().project, name: 'Sample project', duration: 12, clips }, { dirty: true })
+    if (select) vs.getState().selectClip(select)
+    vs.getState().seek(playhead)
+  }, { aspect, titles, playhead, select })
+}
+const TITLE_STATES = {}
+for (const [tpl, fields] of Object.entries(KIT_SAMPLE)) {
+  for (const aspect of ['16:9', '9:16']) {
+    TITLE_STATES[`monitor-kit-${tpl}-${aspect.replace(':', 'x')}`] = async (page) => { await seedTitles(page, { aspect, titles: [titleClip('t', tpl, fields)] }); return { el: page.locator('.vw-canvas').first() } }
+  }
+}
+TITLE_STATES['monitor-kit-bangla-lower-third-16x9'] = async (page) => { await seedTitles(page, { titles: [titleClip('t', 'lower-third', { name: 'নমুনা নাম ক্ষমতা স্ত্রী', role: 'নমুনা পদবি' }, { categoryId: '04' })] }); return { el: page.locator('.vw-canvas').first() } }
+TITLE_STATES['monitor-kit-anim-mid-16x9'] = async (page) => { await seedTitles(page, { titles: [titleClip('t', 'lower-third', KIT_SAMPLE['lower-third'], { animIn: { preset: 'type-on', duration: 0, delay: 0, stagger: 0.06, ease: 'esb' } })], playhead: 0.45 }); return { el: page.locator('.vw-canvas').first() } }
+TITLE_STATES['monitor-safe-9x16'] = async (page) => {
+  await seedTitles(page, { aspect: '9:16', titles: [titleClip('t', 'lower-third', KIT_SAMPLE['lower-third'])] })
+  await clickTab(page, 'Titles')
+  await page.locator('.vw-tt-guides .switch').first().click()
+  return {}
+}
+TITLE_STATES['monitor-safe-16x9'] = async (page) => {
+  await seedTitles(page, { titles: [titleClip('t', 'breaking', KIT_SAMPLE.breaking)] })
+  await clickTab(page, 'Titles')
+  await page.locator('.vw-tt-guides .switch').first().click()
+  return { el: page.locator('.vw-canvas').first() }
+}
+TITLE_STATES['monitor-stickers'] = async (page) => {
+  const st = (id, shape, x, y, color, extra = {}) => titleClip(id, 'sticker', shape === 'callout' ? { text: 'Sample callout' } : {}, { sticker: { shape, color, x, y, size: shape === 'callout' ? 0.36 : 0.22, rotation: 0, ...extra } })
+  await seedTitles(page, { titles: [st('s1', 'arrow', 0.2, 0.25, 'red', { rotation: 20 }), st('s2', 'circle', 0.5, 0.25, 'yellow'), st('s3', 'highlight', 0.8, 0.25, 'yellow'), st('s4', 'underline', 0.2, 0.7, 'orange'), st('s5', 'box', 0.5, 0.7, 'green'), st('s6', 'callout', 0.8, 0.7, 'white')] })
+  return { el: page.locator('.vw-canvas').first() }
+}
+TITLE_STATES['title-inspector'] = async (page) => {
+  await seedTitles(page, { titles: [titleClip('t', 'lower-third', KIT_SAMPLE['lower-third'], { categoryId: '05', animIn: { preset: 'word', duration: 0.42, delay: 0, stagger: 0.08, ease: 'esb' } })], select: 't' })
+  if (!(await page.locator('.vw-title-fields').count())) na('no title fields')
+  return {}
+}
+TITLE_STATES['title-inspector-style'] = async (page) => {
+  await seedTitles(page, { titles: [titleClip('t', 'headline', KIT_SAMPLE.headline, { style: { fill: '#ffffff', fill2: '#ec8e3c', stroke: '#0e0e12', strokeWidth: 3, shadow: true }, animIn: { preset: 'word', duration: 0.42, delay: 0, stagger: 0.08, ease: 'esb' } })], select: 't' })
+  await openSection(page, 'title')
+  await page.locator('.vw-anim-in').scrollIntoViewIfNeeded().catch(() => {})
+  return {}
+}
+TITLE_STATES['title-inspector-long-bn'] = async (page) => {
+  await seedTitles(page, { titles: [titleClip('t', 'lower-third', { name: 'মোহাম্মদ আব্দুল্লাহ আল মামুন ক্ষিতীশ চন্দ্র স্ত্রীবর্গ বিশ্বাস মজুমদার চৌধুরী', role: 'বাংলাদেশ বিদ্যুৎ উন্নয়ন বোর্ডের প্রধান প্রকৌশলী (সঞ্চালন ও বিতরণ পরিকল্পনা)' })], select: 't' })
+  return {}
+}
+TITLE_STATES['title-sticker-inspector'] = async (page) => {
+  await seedTitles(page, { titles: [titleClip('s', 'sticker', { text: 'Sample callout' }, { sticker: { shape: 'callout', color: 'red', x: 0.6, y: 0.4, size: 0.36, rotation: 0 } })], select: 's' })
+  await openSection(page, 'title')
+  return {}
+}
+TITLE_STATES['export-blocked-title'] = async (page) => {
+  await seedTitles(page, { titles: [titleClip('t', 'lower-third', { name: '', role: 'Sample role' }), { ...titleClip('q', 'quote', { quote: 'TBD', speaker: '', speakerRole: '' }), start: 4, duration: 4, out: 4 }] })
+  await page.locator('.vw-header button', { hasText: /Export/ }).first().click()
+  await page.waitForSelector('.vx-title-issues', { timeout: 8000 }).catch(() => na('no title issues in the export sheet'))
+  return {}
+}
+
 const STATES = {
   empty: async (page) => {
     const newBtn = page.locator('.vw-header button', { hasText: /^\s*New( project)?\s*$/i })
@@ -312,7 +390,10 @@ const STATES = {
   'bin-proxy-cancelled': async (page) => seedBin(page, { video: { codec: 'avc1.640033', fps: 30, keyframeInterval: 3, proxyNeeded: true, proxy: 'none', proxyCancelled: true } }),
   'bin-missing': async (page) => seedBin(page, { extra: 'missing', uhd: false }),
   'bin-missing-found': async (page) => seedBin(page, { extra: 'missing', uhd: false, found: true }),
-  'tab-overlays': tabState('Overlays'),
+  'tab-titles': tabState('Titles'),
+  'tab-titles-story': async (page) => { await seedTimeline(page); await seedDraft(page); await clickTab(page, 'Titles'); await page.locator('.vw-tt-story').scrollIntoViewIfNeeded().catch(() => na('no From the story card')); return {} },
+  'tab-titles-stickers': async (page) => { await seedTimeline(page); await clickTab(page, 'Titles'); await page.locator('.vw-sticker-grid').scrollIntoViewIfNeeded().catch(() => na('no sticker grid')); return {} },
+  ...TITLE_STATES,
   'tab-captions': tabState('Captions'),
   'tab-audio': tabState('Audio'),
   'tab-story': async (page) => {
@@ -555,7 +636,7 @@ const STATES = {
   'adjustment-layer': async (page) => {
     await seedTimeline(page, { playhead: 1.0 })
     // the Overlays tab's card: a 5 s adjustment layer at the playhead on its own "Adjustment" track
-    await clickTab(page, 'Overlays')
+    await clickTab(page, 'Titles')
     await page.click('.vw-adjust-add')
     await page.evaluate(() => {
       const st = window.__videoStore.getState()

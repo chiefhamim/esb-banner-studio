@@ -25,6 +25,7 @@ import { audibleClips, clipsMissingMedia, contentEnd, isActive } from './timelin
 import { getCachedImage, getCachedVideo, picturesReady } from './compositor'
 import { inputFor } from './media'
 import { GLCompositor } from './engine/glCompositor'
+import { canvasMeasure, measureNow, titleProblemText, titleProblems } from './titleClip'
 import { renderFrame } from './engine/render'
 import type { FrameInput } from './engine/render'
 import { exportUrl } from './engine/mediaSource'
@@ -77,7 +78,8 @@ export function exportBlocker(project: VideoProject): string | null {
   if (!project.clips.length || contentEnd(project) <= 0) return 'The timeline is empty. Import media or build a video from a story first.'
   const missing = clipsMissingMedia(project)
   if (missing.length) return `${missing.length} clip${missing.length === 1 ? '' : 's'} ${missing.length === 1 ? 'has' : 'have'} no media (${missing.slice(0, 2).map((c) => c.title).join(', ')}${missing.length > 2 ? ', …' : ''}). Relink the files in the Media tab first.`
-  return null
+  // titles: an empty required field, placeholder or filler text, words cut by their lines (titleClip.ts)
+  return titleProblemText(titleProblems(project, measureNow()))
 }
 
 /** Overlay and caption clips with nothing typed in: they are left out of the export (their labels are editor-only). */
@@ -85,6 +87,7 @@ export function emptyTextClips(project: VideoProject): Clip[] {
   return project.clips.filter((c) => {
     if (c.kind === 'caption') return !(c.captionText ?? '').trim()
     if (c.kind === 'overlay' && c.overlayType && c.overlayType !== 'logo' && !c.sourceUrl) return !(c.overlayText ?? '').trim() && !(c.overlaySub ?? '').trim()
+    if (c.kind === 'overlay' && c.titleData?.look === 'classic') return !Object.values(c.titleData.fields).some((v) => v.trim())
     return false
   })
 }
@@ -341,6 +344,8 @@ export async function exportTimelineVideo(
   onProgress: (current: number, total: number) => void,
   options: ExportOptions = {},
 ): Promise<ExportResult> {
+  await canvasMeasure() // the title fit check measures with the real fonts
+  await fontsReady()
   const blocked = exportBlocker(timeline)
   if (blocked) throw new Error(blocked)
   const fps = options.fps || timeline.fps || 30

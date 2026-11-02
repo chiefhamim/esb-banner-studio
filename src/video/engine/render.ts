@@ -16,6 +16,9 @@ import type { GLCompositor, LayerDraw, LayerFx } from './glCompositor'
 import { frameQuad, layerQuad, uvOf } from './layerMath'
 import { hasKeyframes, sampleProp, srcAt } from './animation'
 import { beginFxFrame, resolveFx } from './fxResolve'
+import { titleTexture, titleTop } from './titleRaster'
+import { legacyView } from '../titleModel'
+import { guidesKey, rasterGuides, type Guides } from './guides'
 
 /** A footage picture for this instant: a decoded frame (ImageBitmap / VideoFrame) or, for a file the decoder cannot
  * read, its <video> element (`live`: the picture changes under the same object). */
@@ -26,6 +29,8 @@ export interface RenderOptions {
   /** The monitor: draw labels for empty fields and a "Media offline" slate. Off for an export. */
   editor?: boolean
   frames: FrameLookup
+  /** Editor only: safe-zone guides drawn over the picture (never in an export). */
+  guides?: Guides | null
 }
 
 export interface RenderReport {
@@ -81,7 +86,13 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
   comp.begin(w, h)
   beginFxFrame()
   const layers = layersAt(project, t)
-  const captionBottom = captionLimit(layers.map((l) => l.clip), w, h, editor)
+  // a caption sits above a lower third or strap on screen at the same time (classic titles as before; kit titles by
+  // their own top edge)
+  let captionBottom = captionLimit(layers.map((l) => legacyView(l.clip)), w, h, editor)
+  for (const l of layers) {
+    const top = l.clip.titleData ? titleTop(l.clip, w, h, editor) : null
+    if (top != null) captionBottom = Math.min(captionBottom, top - 18 * (Math.min(w, h) / 1080))
+  }
   const report: RenderReport = { footage: 0, missing: [] }
   const slots = new Set<string>()
   const fxOf = (clip: Clip): LayerFx | null => resolveFx(comp, clip, t, h, project.height, false, editor)
@@ -110,6 +121,12 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
       const tex = comp.slotTexture(clip.id, f.image, f.width, f.height, f.live)
       const r = footageRect(f.width, f.height, w, h, p)
       return { tex, quad: layerQuad(r, p.rotation, clip.anchorX, clip.anchorY), uv: uvOf(r, f.width, f.height), alpha, fx: fxOf(clip) }
+    }
+    if (clip.kind === 'overlay' && clip.titleData) {
+      const tex = titleTexture(comp, clip, t, w, h, editor, slots)
+      if (!tex) return null
+      const p = poseAt(clip, t)
+      return { tex, quad: frameQuad(w, h, p.offX, p.offY, p.rotation, clip.anchorX, clip.anchorY), uv: FULL_UV, alpha, fx: fxOf(clip) }
     }
     if (clip.kind === 'overlay' || clip.kind === 'caption') {
       const tex = comp.staticTexture(rasterKey(clip, w, h, editor, captionBottom), () => rasterLayer(clip, w, h, editor, captionBottom))
@@ -169,6 +186,11 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
   // empty timeline (nothing to brand: the monitor stays black behind the start card)
   if (project.bug !== false && !branded && project.clips.length > 0) {
     const tex = comp.staticTexture(bugKey(w, h), () => rasterBug(w, h))
+    if (tex) comp.draw({ tex, quad: frameQuad(w, h), uv: FULL_UV, alpha: 1 })
+  }
+  if (editor && opts.guides) {
+    const g = opts.guides
+    const tex = comp.staticTexture(guidesKey(g, w, h), () => rasterGuides(g, w, h))
     if (tex) comp.draw({ tex, quad: frameQuad(w, h), uv: FULL_UV, alpha: 1 })
   }
   comp.pruneSlots(slots)

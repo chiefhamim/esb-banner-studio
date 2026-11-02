@@ -67,12 +67,12 @@ try {
   await page.evaluate(() => { const st = window.__videoStore.getState(); st.loadProject({ ...st.project, clips: [] }); st.seek(0) })
 
   // 2. Overlay presets start empty; their labels show in the editor only
-  await page.click('.vw-bin-panel .side-tabs button:has-text("Overlays")')
-  check('ESB bug switch on the Overlays tab', (await page.locator('.vw-bug-row input[type=checkbox]').isChecked()))
+  await page.click('.vw-bin-panel .side-tabs button:has-text("Titles")')
+  check('ESB bug switch on the Titles tab', (await page.locator('.vw-bug-row input[type=checkbox]').isChecked()))
   await page.click('.vw-preset-card[data-preset="lower-third"] button:has-text("Add")')
-  const lt = await page.evaluate(() => window.__videoStore.getState().project.clips.find((c) => c.overlayType === 'lower-third'))
-  check('A lower third is added with empty fields', !!lt && lt.overlayText === '' && lt.overlaySub === '', JSON.stringify(lt && { t: lt.overlayText, s: lt.overlaySub }))
-  check('Inspector shows the labels as placeholders', (await page.getAttribute('.vw-f-text', 'placeholder')) === 'Speaker name' && (await page.inputValue('.vw-f-text')) === '')
+  const lt = await page.evaluate(() => window.__videoStore.getState().project.clips.find((c) => c.titleData?.template === 'lower-third'))
+  check('A lower third is added with empty fields', !!lt && lt.titleData.fields.name === '' && lt.titleData.fields.role === '', JSON.stringify(lt && lt.titleData))
+  check('Inspector shows the labels as placeholders', (await page.getAttribute('#vw-tf-name', 'placeholder')) === 'Speaker name' && (await page.inputValue('#vw-tf-name')) === '')
   await page.click('.vw-clip-block[data-clip-kind="overlay"]')
   await page.keyboard.press('Delete')
   check('Play / pause transport', await (async () => { await page.click('.play-btn'); await page.waitForTimeout(200); const on = await page.locator('.play-btn.playing').count(); await page.click('.play-btn'); return on === 1 })())
@@ -258,7 +258,7 @@ try {
   check('Esc closes it back to the main timeline', (await page.locator('.vw-compound-bar').count()) === 0 && (await page.evaluate(() => window.__videoStore.getState().compoundPath.length)) === 0)
   // back to the layers project of step 5 for the bug-off export
   await page.evaluate(() => { const s = window.__videoStore.getState(); s.loadProject(window.__layersProject, { assets: s.mediaAssets, dirty: true }) })
-  await page.click('.vw-bin-panel .side-tabs button:has-text("Overlays")')
+  await page.click('.vw-bin-panel .side-tabs button:has-text("Titles")')
   await page.click('.vw-bug-row .switch')
   const noBug = await exportOnce()
   check('ESB bug switched off: nothing top right', pixelAt(noBug.file, 3.5, 1694, 42).every((v) => v < 12), JSON.stringify(pixelAt(noBug.file, 3.5, 1694, 42)))

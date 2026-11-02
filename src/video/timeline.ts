@@ -13,6 +13,8 @@ import { clipDurationFor, cutFreezes, isRetimed, rampOf, sanitizeFreezes, saniti
 
 import type { BlendMode } from './effects'
 import { BLEND_MODES, LUT_MAX_CHARS, lutText, lutsUsed, registerLut, sanitizeEffects } from './effects'
+import type { TitleData } from './titleModel'
+import { migrateOverlayClip, sanitizeTitleData } from './titleModel'
 
 export type TrackKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio'
 export const TRACK_KINDS: readonly TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']
@@ -136,6 +138,9 @@ export interface Clip {
    * `flattenCompounds`; opened in place on the timeline to edit. */
   compound?: CompoundTimeline
   effects?: ClipEffect[]
+  /** Phase 3: a title clip (an overlay with no file): the kit template, the editor's words and its look/motion
+   * (titleModel.ts). Phase 0–2 text overlays are migrated to this with `look: 'classic'` when a file is opened. */
+  titleData?: TitleData
   transitionIn?: ClipTransition
   transitionOut?: ClipTransition
 }
@@ -809,6 +814,10 @@ export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unkno
     if (o.preservePitch !== undefined && o.preservePitch !== false) delete clip.preservePitch
     if (o.blendMode !== undefined && (!BLEND_MODES.includes(o.blendMode as BlendMode) || o.blendMode === 'normal')) delete clip.blendMode
     if (o.adjustment !== undefined && !(o.adjustment === true && kind === 'overlay')) delete clip.adjustment
+    // titles (Phase 3): known templates and safe values only; a Phase 0–2 text overlay becomes a classic title clip
+    if (o.titleData !== undefined) { const td = kind === 'overlay' && !o.sourceUrl ? sanitizeTitleData(o.titleData) : null; if (td) clip.titleData = td; else delete clip.titleData }
+    if (kind === 'overlay' && !clip.titleData) { const m = migrateOverlayClip({ ...clip, overlayText: typeof clip.overlayText === 'string' ? clip.overlayText : '', overlaySub: typeof clip.overlaySub === 'string' ? clip.overlaySub : '' }); if (m.titleData) clip.titleData = m.titleData }
+    if (clip.titleData) { delete clip.overlayType; delete clip.overlayText; delete clip.overlaySub }
     if (!track) {
       // the clip's track is gone: give it one of its kind rather than lose the clip
       const want = typeof o.trackId === 'string' && /^[\w-]{1,40}$/.test(o.trackId) && !seen.has(o.trackId) ? o.trackId : undefined

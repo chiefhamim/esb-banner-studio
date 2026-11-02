@@ -1251,3 +1251,113 @@ number 9:16, zone bars 4:5, fuel donut 1:1, end card.
   Editorial stories carry (`src/core/tokens.ts`); an explicit story accent already wins in `resolveAccent`.
 - Karaoke captions need Phase 5 word timings; the intro/outro bumper, stickers and shapes are not started.
 - Tabular numerals: canvas cannot switch on Inter's `tnum`, so digits may shift slightly while a figure counts up.
+
+## Phase 3 — Part A: titles and motion graphics wired into the editor (2026-11-02, branch `video-p3-titles`)
+
+The pre-built title libraries (`src/video/titles/`) are now on the timeline, in the engine and in the UI. Data cards
+(Grid fetch, Data tab) are Part B's (`video-p1-engine` worktree) and are not touched here.
+
+### What changed
+- **Title clips** (`titleModel.ts`, `Clip.titleData`): an overlay clip with no file carries `{ template, fields,
+  categoryId?, platform?, animIn?, animOut?, style?, sticker?, look? }`. Templates: lower third, name strap, headline
+  card, breaking strap, quote card, source line, end card (the kit), plus `sticker` and the classic `text-card`. The
+  editor types every field; nothing is filled in by the app. `sanitizeTitleData` (in `migrateTimeline`) keeps only
+  known templates, the template's own field keys (≤ 1,200 chars each), known presets/eases, `#rrggbb` colours and
+  clamped numbers; title data on a non-overlay clip is dropped.
+- **Accents follow the site's 10 story categories** (`src/core/tokens.ts`, lead's decision): `titleData.categoryId`
+  → that category's accent; else the clip's own accent (a story's); else the ESB stripes. `titles/brand.ts`'s
+  01–08 palette is not used by title clips (left untouched for Part B).
+- **Migration of Phase 0–2 overlays** (`migrateOverlayClip`): lower third / headline / text card / breaking become
+  title clips with `look: 'classic'` and the same two fields when a project is opened (and Story → video makes them
+  so). A classic title is drawn by the unchanged Phase 0–2 code (`legacyView` → `compositor.ts rasterLayer`), so an
+  old project looks exactly as before (golden: 0 % difference); the caption-above-lower-third rule still applies. The
+  inspector offers "Use the ESB kit look" (lower third, headline, breaking). Logo and picture overlays are unchanged.
+- **Engine** (`engine/titleRaster.ts`, `engine/render.ts`): `buildTitleSpec` (`titleClip.ts`) → `renderTitleSpec` into
+  a frame-sized canvas. Settled (`titleIsStatic`): one raster, cached by content in the compositor's static cache.
+  Moving (in/out phases): redrawn per new instant into one slot texture per clip (`GLCompositor.slotTexture`, new
+  `hasSlot`); a redraw of the same instant uploads nothing. Measurer and layout cache are remade when fonts finish
+  loading. Title time = `clip.in + (t − clip.start)`, length `max(out, in + duration)`, so a split title keeps its
+  motion. Kit lower thirds / straps / source lines push captions above them (`titleTop`). Karaoke: a
+  `setKaraokeSource` hook only (Phase 5 supplies word timings; none are faked; with a source the title redraws per
+  frame).
+- **Stickers and shapes** (`titles/stickers.ts`): arrow, circle, highlight bar, underline, box, callout — drawn in
+  code in the ESB palette (stripes, caption yellow, white, ink, story accent); each writes on over 0.5 s, holds
+  (cached), fades over 0.3 s. A callout's words are the editor's (required).
+- **Titles tab** (`TitlesPanel.tsx`, `titleUi.ts`; replaces "Overlays"): ESB bug switch, accent for new titles (the
+  open story's category / ESB stripes / any of the 10), "Safe zones on the monitor" (+ Reels / Shorts on 9:16), the
+  seven kit titles, **From the story** (Headline card from the Editorial draft's headline; Quote card from a quote
+  the editor picks among the draft's quoted passages or selects in the read-only story text — verbatim, marks
+  stripped), the sticker grid, Logo, **Intro bumper: "Planned — needs the approved intro render"** (no placeholder
+  animation), and the adjustment layer card.
+- **Inspector**: a title shows its fields at the top (required ones marked, live "Export is blocked until: …" line),
+  then a **Title** section (first in the jump strip, opened when a title is selected): accent, "Keep clear of"
+  Reels / Shorts / None on 9:16, style of the words (fill, gradient, outline + width, shadow, box), Words in / Words
+  out (ESB kit default, none, fade, type on, word by word, line by line, slide up/left/right, scale, mask reveal, blur
+  in; duration, delay, stagger / per-letter, ease). Panels, bars and brand words keep the kit's motion. Stickers:
+  shape, colour swatches, across / down / size / turn.
+- **Safe zones** (`engine/guides.ts`): editor-only overlay drawn by `renderFrame` (never in an export): title-safe
+  90 %, and on 9:16 the Reels/Shorts bottom band, right button column and header band from `DEFAULT_SAFE_ZONES`, with
+  the critical-text rectangle the kit lays out by.
+- **Export** (`exportBlocker` → `titleProblems`): refused while a title has an empty required field, placeholder or
+  filler text, or words cut by their line limit (real fonts measured); the sheet lists each title with its time and
+  problems and a **Show** button that selects it. Classic titles keep the old rule (all empty = left out, as before;
+  filler refused).
+
+### Files
+New: `src/video/titleModel.ts`, `titleClip.ts`, `titleUi.ts`, `TitlesPanel.tsx`, `engine/titleRaster.ts`,
+`engine/guides.ts`, `titles/stickers.ts`, `tools/unit/video-titles-wired.test.ts`, `tools/e2e/video-titles-test.mjs`.
+Changed: `timeline.ts` (field + sanitizer), `engine/render.ts`, `engine/glCompositor.ts` (`hasSlot`), `compositor.ts`
+(`fontEpochNow`, `stationLogo`), `exportVideo.ts`, `ExportSheet.tsx`, `storyVideo.ts`, `VideoWorkspace.tsx` (tab,
+inspector hooks, monitor guides, dev handles), `styles/video.css`, `package.json` (`test:video` runs the titles
+test), `tools/e2e/video-shots.mjs` (+ title states), `video-test.mjs` / `video-fx-test.mjs` / `video-engine-test.mjs`
+("Titles" tab, title fields), `tools/audit/text-fit-audit.mjs` (title states with long Bangla), two unit tests.
+
+### Acceptance (measured 2026-11-02, `tools/e2e/video-titles-test.mjs`, headless Edge, RTX 3060)
+- Animated + Bangla titles (ক্ষ, স্ত্র, ন্ত্র in a type-on lower third; a line-by-line headline card with its out fade),
+  preview still vs exported H.264 frame at 5 timestamps (frames 6, 15, 60, 125, 205): ≤ 0.01 % pixels off by > 48,
+  mean ≤ 0.05 % (limit 1 %). The typing frames differ from each other and from the settled frame (0.26 %).
+- Raster counter: 30 seeks across a settled title → 1 static raster, 0 moving; 10 frames of its typing → 10 moving
+  rasters; a redraw of the same frame → 0.
+- Export refuses an empty "Speaker name" and "Lorem ipsum" in a quote, naming "Lower third at 0:00.0" and "Quote card
+  at 0:03.0"; filled in, it is allowed.
+- Migrated Phase 0–2 overlays (lower third + caption, headline, text card, breaking) vs the same timeline before
+  migration: 0 % difference at 4 timestamps.
+- 9:16 lower third with a long Bangla name and role: 0 drawn pixels in the Reels bottom 20 % and right 13 %.
+- Title inspector with a long Bangla name and role: 0 text-fit problems (in the e2e and in `audit:text-fit`).
+
+### Known gaps
+- Quote card speaker photo: the kit has the slot, but picking a bin picture for it is not wired (asset URLs change on
+  reopen/relink; needs the same remap as `sourceUrl`). The card is drawn without a photo.
+- ESB intro bumper: shown as "Planned — needs the approved intro render" (no owner-approved render yet); no outro.
+- Karaoke: only the `setKaraokeSource` hook; word timings come with Phase 5 transcripts.
+- Classic (migrated) titles do not animate; "Use the ESB kit look" converts lower third / headline / breaking (the
+  classic text card has no kit equivalent).
+- Stickers are placed with sliders (across / down / size / turn), not dragged on the monitor.
+- Title fields are one undo step per keystroke, as the Phase 0–2 overlay fields were.
+- On 9:16 the safe-zone guide shows the ESB bug (top right) inside the Reels/Shorts header band; the bug's place is
+  unchanged (Phase 0 rule), worth a decision before Reels go out.
+- Quote card: the opening quote mark sits close to the short accent bar above it (kit layout, `titles/kit.ts`).
+
+### Checks (2026-11-02, `ESB_PORT_OFFSET=40`; Part B and other agents were running suites on the same GPU)
+- `npm run lint`: exit 0 (no findings in the new files). `npm test`: 1110 passed (87 files). `npm run build`: ok.
+- `npm run test:video`: `video-test` all passed; `video-engine-test` failed its playback/P1 cases in the first chain
+  (0 draws while another worktree's suite held the GPU), then passed in full on its own (exit 0; P1 2 × 4K30 at
+  2.6 % logged as the existing "GPU busy" NOTE); `video-fx-test` passed (exit 0); `video-titles-test` ALL PASSED.
+- `npm run test:electron`: exit 0 on the first run.
+- `audit:text-fit`: 0 text-fit problems (incl. the new long-Bangla title states; some Editorial steps were skipped
+  on timeouts under load). `audit:center`: 0.
+- Screenshots: `tools/out/p3a` (117 + 24 re-shot after fixes, 0 n/a, 0 failed): Titles tab (kit, From the story,
+  stickers), title inspector (fields, style, long Bangla), sticker inspector, every kit item on the monitor in 16:9
+  and 9:16, a Bangla lower third, a frame mid-typing, the stickers, safe zones 16:9 and 9:16, export blocked by
+  empty / placeholder titles — light and dark, 900 / 1366 / 1920, looked at.
+
+### For the lead (merge with Part B)
+- Shared files touched here: `VideoWorkspace.tsx` (BinTab `overlays` → `titles`, the Titles tab, inspector `title`
+  section, Monitor `guides`, dev handles), `engine/render.ts` (title branch + guides + caption limit), `timeline.ts`
+  (`titleData` + sanitizer lines in `migrateTimeline`), `exportVideo.ts` (`exportBlocker` → `titleProblems`),
+  `package.json` (`test:video`), `styles/video.css` (appended block). Part B's Data tab goes beside "Titles" in
+  `BIN_TAB_LABEL`; six tabs must still fit the 285 px well at 900 px (check the tab labels in the shots).
+- `titles/brand.ts`, `kit.ts`, `render.ts`, `dataCards.ts`, `grid.ts` are unchanged here. A data card can become a
+  title clip by adding `data-number` / `data-chart` templates to `TITLE_TEMPLATES` and a branch in `buildTitleSpec`;
+  `titleRaster` already redraws while a count-up runs (`titleIsStatic`) and `titleProblems` runs `validateTitleSpec`
+  (source-line rule included).

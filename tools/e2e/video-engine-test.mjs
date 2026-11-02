@@ -492,7 +492,7 @@ try {
     fs.writeFileSync(f, JSON.stringify(v1))
     await page.setInputFiles('.video-workspace input[type=file][accept=".esbvideo"]', f)
     await page.waitForFunction(() => window.__videoStore.getState().project.id === 'p-v1')
-    const got = await page.evaluate(() => { const p = window.__videoStore.getState().project; return { clips: p.clips.map((c) => ({ id: c.id, trackId: c.trackId, start: c.start, duration: c.duration, text: c.overlayText ?? c.captionText })), tracks: p.tracks.map((t) => t.id) } })
+    const got = await page.evaluate(() => { const p = window.__videoStore.getState().project; return { clips: p.clips.map((c) => ({ id: c.id, trackId: c.trackId, start: c.start, duration: c.duration, text: c.overlayText ?? (c.titleData ? Object.values(c.titleData.fields)[0] : undefined) ?? c.captionText })), tracks: p.tracks.map((t) => t.id) } })
     const same = got.clips.length === 3 && v1.clips.every((c) => got.clips.some((g) => g.id === c.id && g.trackId === c.trackId && g.start === c.start && g.duration === c.duration && g.text === (c.overlayText ?? c.captionText)))
     check('ACCEPT v1 project opens with every clip unchanged (same track, time and words)', same, JSON.stringify(got))
     // drawn as v1 drew it: the caption above the lower third, over it

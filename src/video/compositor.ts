@@ -125,6 +125,11 @@ if (typeof document !== 'undefined' && document.fonts) {
   document.fonts.addEventListener?.('loadingdone', () => { fontEpoch++; if (typeof window !== 'undefined') window.dispatchEvent(new Event('esb:video-media-ready')) })
 }
 
+/** Bumped whenever web fonts finish loading (a raster or a measurement made before is stale). */
+export const fontEpochNow = () => fontEpoch
+/** The ESB logo, once loaded (titles' end card draws it as-is). */
+export const stationLogo = (): HTMLImageElement | null => (stationLogoImg && stationLogoImg.complete && stationLogoImg.naturalWidth > 0 ? stationLogoImg : null)
+
 function makeCanvas(w: number, h: number): HTMLCanvasElement | OffscreenCanvas {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h)
   const c = document.createElement('canvas')

@@ -395,11 +395,11 @@ try {
     const afterUndo = await page.evaluate(() => window.__videoStore.getState().project.clips[0].effects.map((e) => e.type))
     check('Ctrl+Z takes the added effect back', !afterUndo.includes('mask'), JSON.stringify(afterUndo))
     await page.evaluate(() => window.__videoStore.getState().selectClip(null))
-    await page.click('.video-workspace [role=tab]:has-text("Overlays"), .video-workspace button:has-text("Overlays")')
+    await page.click('.video-workspace [role=tab]:has-text("Titles"), .video-workspace button:has-text("Titles")')
     const before = await page.evaluate(() => window.__videoStore.getState().project.clips.length)
     await page.click('.vw-adjust-add')
     const adj = await page.evaluate(() => window.__videoStore.getState().project.clips.find((c) => c.adjustment))
-    check('Overlays tab: “Adjustment layer” adds an adjustment clip over the footage', !!adj && adj.kind === 'overlay' && (await page.evaluate(() => window.__videoStore.getState().project.clips.length)) === before + 1, JSON.stringify(adj && { track: adj.trackId, effects: adj.effects?.map((e) => e.type) }))
+    check('Titles tab: “Adjustment layer” adds an adjustment clip over the footage', !!adj && adj.kind === 'overlay' && (await page.evaluate(() => window.__videoStore.getState().project.clips.length)) === before + 1, JSON.stringify(adj && { track: adj.trackId, effects: adj.effects?.map((e) => e.type) }))
   }
 
   // ---------------------------------------------------------------- ACCEPT: performance — 3 layers + colour + LUT + blur
