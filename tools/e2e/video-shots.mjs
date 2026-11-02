@@ -190,10 +190,13 @@ async function setEffects(page, clipId, effects, blendMode) {
 async function openSection(page, id) {
   const head = page.locator(`.vw-${id}-panel .vw-fx-head`)
   if (!(await head.count())) na(`no ${id} section in the inspector`)
-  if ((await head.first().getAttribute('aria-expanded')) !== 'true') await head.first().click()
-  // the section's header at the top of the inspector's scroller, so its controls are what the shot shows
-  await head.first().evaluate((el) => { el.scrollIntoView({ block: 'start' }); window.scrollTo(0, 0); document.scrollingElement.scrollTop = 0 })
+  // the jump strip under the sticky inspector header opens it and scrolls the inspector (only) to it
+  const jump = page.locator(`.vw-jump button`, { hasText: JUMP_LABEL[id] ?? id })
+  if (await jump.count()) await jump.first().click()
+  else if ((await head.first().getAttribute('aria-expanded')) !== 'true') await head.first().click()
+  await page.waitForTimeout(250)
 }
+const JUMP_LABEL = { transform: /^(Transform|Sound|Opacity)$/, speed: /^Speed$/, colour: /^Colour$/, fx: /^Effects$/, keys: /^Keys$/ }
 
 async function clickTab(page, label) {
   const bin = page.locator('.vw-bin-panel')
@@ -204,8 +207,8 @@ async function clickTab(page, label) {
 }
 
 /** Fonts, images and video decode, then a forced redraw of the monitor at the same playhead. */
-async function settle(page) {
-  await page.mouse.move(1, 1)
+async function settle(page, { keepPointer = false } = {}) {
+  if (!keepPointer) await page.mouse.move(1, 1)
   await page.evaluate(async () => {
     await document.fonts.ready
     await Promise.all([...document.images].map((im) => (im.complete ? null : new Promise((r) => { im.onload = im.onerror = r; setTimeout(r, 3000) }))))
@@ -433,10 +436,10 @@ const STATES = {
       for (const c of st.project.clips) if (c.linkId === 'link-shot') st.updateClip({ ...st.project.clips.find((x) => x.id === c.id), srcDuration: 8 })
       st.selectClip('shot-v1')
     })
+    await openSection(page, 'speed')
     await page.waitForSelector('.vw-speed')
     await page.click('.vw-speed-chips button:has-text("2×")')
     await page.click('.vw-freeze')
-    await page.locator('.vw-speed').scrollIntoViewIfNeeded()
     return { note: 'footage at 2× with a 2 s freeze at the playhead; its sound follows' }
   },
   'speed-ramp': async (page) => {
@@ -444,7 +447,7 @@ const STATES = {
     await page.click('.vw-ramp-menu')
     await page.click('.menu .menu-item:has-text("Hero moment")')
     await page.waitForSelector('.vw-ramp-svg')
-    await page.locator('.vw-ramp').scrollIntoViewIfNeeded()
+    await openSection(page, 'speed')
     return {}
   },
   'compound-open': async (page) => {
@@ -509,7 +512,8 @@ const STATES = {
     }
     await page.setInputFiles('.vw-colour-panel input[type=file]', cube)
     await page.waitForSelector('.vw-fx-lut', { timeout: 8000 }).catch(() => na('LUT did not load'))
-    await page.locator('.vw-fx-lut').first().evaluate((el) => { el.scrollIntoView({ block: 'center' }); window.scrollTo(0, 0); document.scrollingElement.scrollTop = 0 })
+    // the LUT row in view inside the inspector's own scroller
+    await page.locator('.vw-fx-lut').first().evaluate((el) => { const sc = el.closest('.vw-inspector-panel .vw-inspector, .vw-inspector-host'); if (sc) sc.scrollTop += el.getBoundingClientRect().top - sc.getBoundingClientRect().top - sc.clientHeight / 2 })
     return {}
   },
   'monitor-mask': async (page) => {
@@ -535,17 +539,75 @@ const STATES = {
     return { note: 'keyed green screen over the sample clip' }
   },
   'adjustment-layer': async (page) => {
-    await seedTimeline(page, { playhead: 2.0 })
+    await seedTimeline(page, { playhead: 1.0 })
+    // the Overlays tab's card: a 5 s adjustment layer at the playhead on its own "Adjustment" track
+    await clickTab(page, 'Overlays')
+    await page.click('.vw-adjust-add')
     await page.evaluate(() => {
       const st = window.__videoStore.getState()
-      const p = st.project
-      st.loadProject({ ...p, clips: [...p.clips, { id: 'shot-adj', trackId: 'v2', title: 'Adjustment layer', kind: 'overlay', start: 1, duration: 3, in: 0, out: 3, color: '#64748b', adjustment: true, effects: [{ id: 'fx-ac', type: 'colour', enabled: true, params: { saturation: -1, contrast: 0.25 } }, { id: 'fx-av', type: 'vignette', enabled: true, params: { amount: 0.7, size: 0.4, softness: 0.5 } }] }] }, { dirty: true })
-      window.__videoStore.getState().selectClip('shot-adj')
+      const c = st.project.clips.find((x) => x.adjustment)
+      st.updateClip({ ...c, duration: 3, out: 3, effects: [{ id: 'fx-ac', type: 'colour', enabled: true, params: { saturation: -1, contrast: 0.25 } }, { id: 'fx-av', type: 'vignette', enabled: true, params: { amount: 0.7, size: 0.4, softness: 0.5 } }] })
+      window.__videoStore.getState().selectClip(c.id)
       window.__videoStore.getState().seek(2.0)
     })
     await openSection(page, 'colour')
-    return { note: 'black-and-white + vignette over everything below V2 from 1 s to 4 s' }
+    return { note: 'black-and-white + vignette on its own track over every picture track from 1 s to 4 s' }
   },
+  // the same layer, its track in the timeline (the inspector closed): its own labelled lane, full height
+  'adjustment-track': async (page) => {
+    await STATES['adjustment-layer'](page)
+    await page.evaluate(() => window.__videoStore.getState().selectClip(null))
+    return {}
+  },
+  // the inspector scrolled down: the head (kind, name, close) and the jump strip stay on top
+  'inspector-scrolled': async (page) => {
+    await seedTimeline(page, { select: 'shot-v1', playhead: 2.0 })
+    await page.evaluate(() => { const sc = document.querySelector('.vw-inspector-panel .vw-inspector') ?? document.querySelector('.vw-inspector-host'); if (sc) sc.scrollTop = 260 })
+    return {}
+  },
+  // the jump strip: Effects picked from it (the column scrolls to it; the shell does not move)
+  'section-jump': async (page) => {
+    await seedTimeline(page, { select: 'shot-v1', playhead: 2.0 })
+    await setEffects(page, 'shot-v1', [fxOf('fx-b', 'blur', { radius: 6 })])
+    await openSection(page, 'fx')
+    const shell = await page.evaluate(() => { let n = 0; for (let el = document.querySelector('.vw-fx-panel'); el; el = el.parentElement) if (el.scrollTop && !el.matches('.vw-inspector, .vw-bin-content')) n += el.scrollTop; return n + window.scrollY })
+    if (shell) return { note: `SHELL SCROLLED by ${shell}px` }
+    return {}
+  },
+  // the mask being edited: its outline, corner grips and feather grip over the monitor
+  'mask-handles': async (page) => {
+    await seedTimeline(page, { playhead: 2.0, select: 'shot-v1' })
+    await setEffects(page, 'shot-v1', [fxOf('fx-m2', 'mask', { shape: 'rect', x: 0.5, y: 0.5, w: 0.6, h: 0.5, feather: 0.06, invert: true })])
+    await openSection(page, 'fx')
+    await page.waitForSelector('.vw-mask-layer .vw-mask-handle')
+    return {}
+  },
+  // picking the key colour: the banner and the loupe over the monitor
+  'chroma-pick': async (page) => {
+    await STATES['chroma-key'](page)
+    await page.click('.vw-fx-pick')
+    const box = await page.locator('.vw-canvas').first().boundingBox()
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.3)
+    await page.waitForSelector('.vw-pick-loupe', { timeout: 3000 }).catch(() => {})
+    return { keepPointer: true }
+  },
+  // the narrow toolbar's icon-only buttons say what they are (and their keys) on hover
+  'toolbar-tip': async (page) => {
+    await seedTimeline(page)
+    await page.hover('.vw-markers-btn')
+    await page.waitForSelector('.tip, [role=tooltip]', { timeout: 3000 }).catch(() => {})
+    return { keepPointer: true }
+  },
+  // the curve editor's numbers typed in (x1 0.10 → the curve follows)
+  'curve-numeric': async (page) => {
+    await STATES['curve-editor'](page)
+    const f = page.locator('.vw-bz-num').first()
+    await f.click()
+    await f.fill('0.10')
+    await f.press('Enter')
+    return {}
+  },
+
 }
 
 /** The timeline's geometry: every track header level with its lane (±1 px), the ruler on screen. */
@@ -561,9 +623,25 @@ async function timelineGeometry(page) {
       const a = h.getBoundingClientRect(), b = lane.getBoundingClientRect()
       if (Math.abs(a.top - b.top) > 1 || Math.abs(a.height - b.height) > 1) problems.push(`${h.dataset.trackId}: header ${Math.round(a.top)}+${Math.round(a.height)} vs lane ${Math.round(b.top)}+${Math.round(b.height)}`)
     }
+    const kfh = document.querySelector('.vw-kf-head'), kfl = document.querySelector('.vw-kf-lane')
+    if (kfh || kfl) {
+      const a = kfh?.getBoundingClientRect(), b = kfl?.getBoundingClientRect()
+      if (!a || !b || Math.abs(a.top - b.top) > 1 || Math.abs(a.height - b.height) > 1) problems.push(`keyframe lane: header ${a ? Math.round(a.top) + '+' + Math.round(a.height) : 'none'} vs lane ${b ? Math.round(b.top) + '+' + Math.round(b.height) : 'none'}`)
+      // the first and last keys whole inside the lane (not cut by its left edge)
+      for (const k of document.querySelectorAll('.vw-kf-key i')) {
+        const r = k.getBoundingClientRect()
+        if (b && (r.left < b.left - 0.5 || r.right > b.right + 0.5)) problems.push('a keyframe diamond is cut by the lane edge')
+      }
+    }
     const ruler = document.querySelector('.vw-ruler')?.getBoundingClientRect()
     if (!ruler || ruler.bottom <= sb.top + 1 || ruler.top < sb.top - 1) problems.push('ruler not on screen')
     const below = [...document.querySelectorAll('.vw-track-head[data-track-id]')].filter((h) => h.getBoundingClientRect().top >= sb.bottom - 2).length
+    // a track cut at the foot of the scroller (more than 8 px of it hidden) must be announced by the cue
+    const visBottom = sb.top + scroller.clientHeight
+    const cut = [...document.querySelectorAll('.vw-track-head[data-track-id]')].filter((h) => h.getBoundingClientRect().bottom > visBottom + 8)
+    if (cut.length && !document.querySelector('.vw-tracks-below')) problems.push(`${cut.map((h) => h.dataset.trackId).join(', ')} cut below the fold with no "more tracks" cue`)
+    // the desk itself never scrolls (only its own scrollers do)
+    for (const el of [document.querySelector('.video-workspace'), document.querySelector('.vw-stage-row'), document.scrollingElement]) if (el && el.scrollTop) problems.push(`${el.className || 'document'} scrolled by ${el.scrollTop}px`)
     return { problems, scrollTop: scroller.scrollTop, scrollHeight: scroller.scrollHeight, clientHeight: scroller.clientHeight, tracksBelow: below }
   }).catch(() => null)
 }
@@ -604,7 +682,7 @@ try {
     for (const width of WIDTHS) {
       for (const state of wanted) {
         // the monitor is drawn the same in both themes (it is always dark): shoot it in the first theme only
-        if (state.startsWith('monitor-') && theme !== THEMES[0]) continue
+        if (state.startsWith('monitor-') && state !== 'monitor-mask' && theme !== THEMES[0]) continue
         const file = `${state}__${theme}__${width}.png`
         const ctx = await browser.newContext({ viewport: { width, height: heightFor(width) }, deviceScaleFactor: 1, reducedMotion: 'reduce', colorScheme: theme, acceptDownloads: true })
         // a fixed wall clock: the story banner prints today's date, and nothing else should change between runs
@@ -623,7 +701,7 @@ try {
           await openVideo(page)
           await page.evaluate((th) => { if (window.__store?.getState().theme !== th) window.__store?.getState().setTheme(th) }, theme)
           const r = (await STATES[state](page)) || {}
-          await settle(page)
+          await settle(page, { keepPointer: !!r.keepPointer })
           await waitAnimations(page)
           const geo = await timelineGeometry(page)
           const opts = { path: path.join(outDir, file), animations: 'disabled', caret: 'hide' }

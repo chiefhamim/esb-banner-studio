@@ -62,7 +62,7 @@ export function ColourPanel({ clip, onChange }: { clip: Clip; onChange: (c: Clip
         <div className="vw-fx-lut">
           <Icon name="palette" size={13} />
           <span className="vw-fx-lut-name" data-tip={String(lut?.params?.name ?? '')}>{String(lut?.params?.name || 'LUT')}</span>
-          {lutSize && <span className="vw-fx-lut-size">{lutSize}³</span>}
+          {lutSize && <span className="vw-fx-lut-size" data-tip={`A ${lutSize}×${lutSize}×${lutSize} colour table`}>{lutSize}-point cube</span>}
           <IconButton icon="trash" size={13} tip="Remove the LUT" className="vw-fx-remove" onClick={() => onChange({ ...clip, effects: all.filter((e) => e !== lut) })} />
         </div>
       ) : <p className="vw-hint">A 3D .cube file (17, 33 or 65 points), applied after the sliders.</p>}

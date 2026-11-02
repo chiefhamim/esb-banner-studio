@@ -22,8 +22,8 @@ export const EASE_BEZIER: Record<'easeIn' | 'easeOut' | 'easeInOut', BezierPoint
   easeOut: [0, 0, 0.58, 1],
   easeInOut: [0.42, 0, 0.58, 1],
 }
-export const EASE_LABEL: Record<'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'bezier', string> = {
-  linear: 'Linear', easeIn: 'Ease in', easeOut: 'Ease out', easeInOut: 'Ease in and out', bezier: 'Custom curve',
+export const EASE_LABEL: Record<'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'bezier' | 'hold', string> = {
+  linear: 'Linear', easeIn: 'Ease in', easeOut: 'Ease out', easeInOut: 'Ease in and out', bezier: 'Custom curve', hold: 'Hold',
 }
 /** The default custom curve (a gentle S) offered when the editor first picks "Custom curve". */
 export const DEFAULT_BEZIER: BezierPoints = [0.25, 0.1, 0.25, 1]
@@ -98,7 +98,7 @@ export function cubicBezier(x: number, b: readonly number[]): number {
 }
 
 /** The ease of a key as one of the named shapes (older spellings 'ease-in'… are read too). */
-export function easeName(k: Pick<Keyframe, 'ease' | 'bezier'>): 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'bezier' {
+export function easeName(k: Pick<Keyframe, 'ease' | 'bezier'>): 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'bezier' | 'hold' {
   const e = k.ease as unknown
   if (Array.isArray(e)) return 'bezier'
   switch (e) {
@@ -106,6 +106,7 @@ export function easeName(k: Pick<Keyframe, 'ease' | 'bezier'>): 'linear' | 'ease
     case 'easeOut': case 'ease-out': return 'easeOut'
     case 'easeInOut': case 'ease-in-out': return 'easeInOut'
     case 'bezier': return 'bezier'
+    case 'hold': return 'hold'
     default: return 'linear'
   }
 }
@@ -117,6 +118,8 @@ export function easePoints(k: Pick<Keyframe, 'ease' | 'bezier'>): BezierPoints {
   const n = easeName(k)
   if (n === 'bezier') return (Array.isArray(k.bezier) && k.bezier.length === 4 ? k.bezier : DEFAULT_BEZIER) as BezierPoints
   if (n === 'linear') return [0, 0, 1, 1]
+  // a hold has no curve; the editor starts from a straight line if it is turned into one
+  if (n === 'hold') return [0, 0, 1, 1]
   return EASE_BEZIER[n]
 }
 
@@ -124,6 +127,8 @@ export function easePoints(k: Pick<Keyframe, 'ease' | 'bezier'>): BezierPoints {
 export function applyEase(k: Pick<Keyframe, 'ease' | 'bezier'>, u: number): number {
   const n = easeName(k)
   if (n === 'linear') return u
+  // hold: the key's value stays until the next key
+  if (n === 'hold') return u >= 1 ? 1 : 0
   return cubicBezier(u, easePoints(k))
 }
 
@@ -241,7 +246,7 @@ export function moveKey(clip: Clip, prop: string, from: number, to: number): Cli
 }
 
 /** Set the ease of the key of `prop` at `t` (the shape of the segment after it). */
-export function setKeyEase(clip: Clip, prop: string, t: number, ease: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'bezier', bezier?: BezierPoints): Clip {
+export function setKeyEase(clip: Clip, prop: string, t: number, ease: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'bezier' | 'hold', bezier?: BezierPoints): Clip {
   const keys = clip.keyframes?.[prop] ?? []
   let hit = false
   const out = keys.map((k) => {

@@ -855,3 +855,101 @@ Merge with Part A, then rerun `npm run test:video` against Part A's speed.ts and
 - An adjustment layer or blend mode inside a compound acts on everything below it on the flattened timeline,
   including the parent's clips under the compound (an NLE would composite the compound first). A compound's own
   transform, keyframes and effects are not applied (opacity and volume are).
+
+## Phase 2 UI fix round (2026-11-02, branch `video-p2-ui`)
+
+Worked from the reviewer's notes on `phase-2/after`. Every item re-checked on the shots first, then in the app at
+900 / 1366 / 1920 in both themes. Files: `EffectsPanel.tsx`, `ColourPanel.tsx`, `TimelinePro.tsx` (visual parts),
+the inspector and timeline display in `VideoWorkspace.tsx`, `styles/video.css`, `tools/e2e/video-shots.mjs`, one
+line in `tools/audit/text-fit-audit.mjs`.
+
+### What changed
+1. **The shell no longer scrolls.** `.video-workspace`, the stage row, bin, monitor, inspector and timeline columns
+   are `overflow: clip` (Outreach's fix), and the inspector never calls `scrollIntoView`: opening a section scrolls
+   the inspector's own scroller (`revealInInspector`) so the section sits under the sticky head. The harness no
+   longer scrolls anything itself; `section-jump` and every state's geometry check report any desk scroll.
+2. **Compound clips** read "Compound · N clips" on the block and in the status bar (a renamed one keeps its name).
+   The inspector header says COMPOUND with the name; the body is name, Open / Break apart, Opacity, metrics — no
+   caption field, no sections. (Data: see "For the lead".)
+3. **Chroma key row**: label · 24 px swatch · hex · Pick on one 32 px grid row (the hex field keeps a half-typed
+   value). Picking shows a banner on the monitor ("Click the screen colour · Esc cancels") and a loupe beside the
+   pointer with the current key and the colour under it.
+4. **Adjustment layer** (Overlays tab card): it goes on its own track named "Adjustment", made at the top of the
+   picture tracks (captions stay above) the first time and reused after; track + clip are one undo step. So it no
+   longer stacks on V2 with the titles (17 px rows) and it only greys what is below it.
+5. **Inspector at 1366×768**: a sticky head (kind word, clip name, delete, close) with a jump strip under it
+   (Transform/Sound/Opacity · Speed · Colour · Effects · Keys — the shared segmented control, only the sections the
+   clip has). Every section is an accordion (`useInspectorUi`, one open at a time, Transform on launch; a section
+   the next clip lacks falls back to the first). New Keyframes section: previous / next key, each animated property
+   with its key count and "Show" (the lane shows just that property, with its curve). At 900 the tabs are replaced,
+   while a clip is open, by a bar "‹ Media · CLIP INSPECTOR" that goes back.
+6. **Keyframe lane**: 34 px lane and head, 28 px targets, 10–12 px shapes (diamond linear, dot eased, `--warning`
+   diamond custom, square hold) ringed in the page colour, keys at the clip's ends drawn 8 px inside it, a legend
+   held at the lane's right edge, 28 px property select. The balanced timeline height grows by the lane, and the
+   "N more tracks" cue now counts a track more than 8 px cut (it counted only tracks wholly below).
+7. **Curve editor**: 240 px square, 28 px grips (a transparent 14 px-radius hit circle), grid, x1 y1 x2 y2 number
+   fields (Enter / blur commit, Esc reverts), presets Linear · Ease in · Ease out · S-curve · Overshoot (the current
+   one shown selected) and Hold, Done. It opens over the bin column under the header, so it never covers the
+   monitor's transport. Hold is also in the ease menu.
+8. **Speed**: field (32 px) + 0.5× 1× 2× 4× as the shared segmented control (the selected one is the raised chip,
+   dark-mode chip in dark); "Add a ramp / Change ramp" + "Freeze frame" share the next 32 px row. Freeze stays
+   hoverable when it cannot act: its tooltip and a one-line hint say why (outside the clip, already on a freeze,
+   locked). While a ramp runs the field reads "Varies" (typing a speed makes it constant).
+9. **Ramp graph**: 11 px labels in a 40 px gutter, a time axis (0, middle, end in seconds), the end point clear of
+   the labels; the hint uses non-breaking hyphens so "right-click" never splits.
+10. **Masks on the monitor**: with Effects open, the mask being edited (the first enabled one, or the one last
+    clicked; marked "On the monitor") draws its outline, the feather edge (dashed) and four corner grips plus a
+    feather grip over the monitor, placed by the clip's pose at the playhead (fit/scale/offset/crop/rotation, the
+    still's slow zoom). Drag inside to move, a corner to resize (the opposite corner stays), the round grip sideways
+    to feather; each drag is one undo step.
+11. **Markers**: flags and names live in the ruler's lower band, so "0:05.0" is never covered; a name stops before
+    the next flag (hidden when there is < 28 px). The in–out band is labelled "In–out · 3.0 s" with a tooltip.
+12. **One time format**: the markers list and flag tooltips use the header's timecode (00:00:08:06); the separate
+    "6f" column is gone.
+13. **Track names** (display only): picture tracks are numbered from the bottom (V1 lowest), text / caption / sound
+    tracks from the top, so the numbers follow the order on screen; a default name is the kind, numbered when two
+    share it ("Footage", "Footage 2"); a name the editor gave (or "Adjustment") is kept. Used in the headers, their
+    aria labels, the track menu heading, "Added …" and the linked-clip note. Track ids are unchanged.
+14. **Compound breadcrumb**: neutral surface (no lavender), 36 px bar, 28 px Back and crumbs, "Plays on its own" at
+    narrow widths.
+15. **Shortcuts sheet**: mouse actions are words, keys are keycaps ("Enter / double-click"); a "More below" fade
+    shows while the list scrolls.
+16. **900 px toolbar**: Markers and Delete have aria labels and tooltips with their keys (Delete says to select a
+    clip first when disabled).
+17. **LUT row**: "17-point cube" (tooltip 17×17×17); Load/Replace .cube, Reset colour and Add effect are 28 px.
+
+### Harness (`tools/e2e/video-shots.mjs`)
+- New states: `adjustment-track`, `inspector-scrolled`, `section-jump`, `mask-handles`, `chroma-pick`,
+  `curve-numeric`, `toolbar-tip`. `monitor-mask` is shot in both themes. `openSection` uses the jump strip (as an
+  editor would) and no longer scrolls anything; the speed states open Speed first; `adjustment-layer` adds the layer
+  with the Overlays tab's card.
+- Geometry check (every state): keyframe lane level with its header, no diamond cut by the lane edge, a track cut
+  more than 8 px at the foot must come with the "more tracks" cue (it missed A1 under the keyframe lane), and the
+  desk / document never scrolled.
+
+### For the lead (logic side)
+- **Compound kind**: `makeCompound` gives a compound of titles + caption `kind: 'caption'` and puts it on C1 (its
+  `home` is the first used track when none is footage, and `kind` follows that track). The UI now checks
+  `clip.compound` first everywhere it labels or inspects, but the clip's kind is still "caption" in the data (a
+  caption-only lane holds a picture compound). Suggest: a compound of mixed kinds = `overlay` on the top picture
+  track among them.
+- **Adjustment layer on its own track**: confirmed the render only greys what is below. In the old shots the layer
+  sat on V2 with the lower third and greyed it too (same track, earlier in the list) — the per-spec answer is that a
+  layer affects tracks below only; a clip on the same track is not "below". With the card now making its own track
+  this no longer happens from the UI, but the engine still applies an adjustment to a clip on its own track that
+  starts before it (`layersAt` orders a track's clips by start, and `renderFrame` adjusts everything drawn so far).
+  An adjustment layer placed by hand on a title track still greys those titles. Engine is yours.
+- **Data change made (smallest)**: a `hold` ease, for the curve editor's Hold preset — `Ease` type (`timeline.ts`),
+  `EASE_LABEL` / `easeName` / `easePoints` / `applyEase` / `setKeyEase` (`keyframes.ts`), the fallback `ease()` in
+  `engine/animation.ts`. Unit test `tools/unit/video-p2-ui.test.ts`. Nothing else in the data model changed.
+- The marker-name input (your undo fix) was not touched; the time button and frame column next to it were.
+
+### Checks (2026-11-02, `ESB_PORT_OFFSET=80`)
+- `npm run lint`: 0 errors. `npm test`: 993 passed (83 files, +3 in `video-p2-ui.test.ts`); one run of four had a single
+  unrelated failure that did not repeat (timing). `npm run build`: ok.
+- `npm run test:video`: 91 PASS, 0 FAIL; 1 NOTE = the known Phase 1 10 × 1080p drop note (2.6 %, skipped draws while
+  the GPU is busy).
+- `text-fit-audit`: 0 text-fit problems (21 deliberate ellipses, incl. the inspector head's clip name, which has a
+  tooltip). `center-audit`: 0.
+- `video-shots.mjs` → `tools/out/p2-ui`: 354 shots, 0 n/a, 0 failed, 0 geometry findings. Looked at every touched state
+  in both themes at 900 / 1366 / 1920.

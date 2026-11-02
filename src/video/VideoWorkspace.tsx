@@ -10,7 +10,7 @@ import { TRACK_KIND_LABEL, allClips, canPlaceOn, clipsForAsset, contentEnd, flat
 import { useVideoStore, viewOf } from './videoStore'
 import type { EditTool } from './videoStore'
 import { constantSpeed } from './speed'
-import { CompoundBar, KeyframeHead, KeyframeLane, MarkersButton, PROP_RANGES, PasteAttributesDialog, PropRow, RulerMarkers, ShortcutsSheet, SpeedSection, TOOLS, ToolMenu } from './TimelinePro'
+import { CompoundBar, KeyframeHead, KeyframeLane, KeyframesSummary, MarkersButton, PROP_RANGES, PasteAttributesDialog, PropRow, RulerMarkers, ShortcutsSheet, SpeedSection, TOOLS, ToolMenu } from './TimelinePro'
 import { OVERLAY_LABELS, dropCachedMedia, pruneMediaCache } from './compositor'
 import { GLCompositor } from './engine/glCompositor'
 import { renderFrame } from './engine/render'
@@ -23,7 +23,7 @@ import { holdBackground, holdProxies, noteScrub } from './engine/background'
 import { releaseFilmstrips } from './engine/filmstrip'
 import { ExportSheet } from './ExportSheet'
 import { StoryVideoPanel } from './StoryVideoPanel'
-import { AdjustmentPresetCard, EffectsPanel } from './EffectsPanel'
+import { AdjustmentPresetCard, EffectsPanel, FxSection, InspectorSections, openSection, useInspectorUi } from './EffectsPanel'
 import { ColourPanel } from './ColourPanel'
 import { animationSource } from './engine/animation'
 import { PROBE_CONCURRENCY, assetFromEntry, assetFromFile, hasDiskMedia, importOptions, keepTake, mapLimit, patchMeta, probeMedia, takeImportErrors, videoBridge } from './media'
@@ -35,6 +35,7 @@ import { fmtTime, useClockFormat } from '../ui/time'
 import '../styles/video.css'
 
 type BinTab = 'overlays' | 'media' | 'captions' | 'audio' | 'story'
+const BIN_TAB_LABEL: Record<BinTab, string> = { media: 'Media', overlays: 'Overlays', captions: 'Captions', audio: 'Audio', story: 'Story' }
 
 /** The overlay presets: a kind of title with empty fields. The editor types every word; nothing is filled in here. */
 const OVERLAY_PRESETS: { type: OverlayTemplate; tag: string; desc: string; color: string }[] = [
@@ -289,6 +290,8 @@ const MONITOR_CHROME = 76
 const MONITOR_MIN = 200
 const TL_MIN = 160
 const TL_AUTO_MIN = 280
+/** The keyframe lane's height (video.css .vw-kf-lane). */
+const KF_LANE_H = 34
 function readTimelineHeight(): number | null {
   try { const v = Number(localStorage.getItem(TL_KEY)); return Number.isFinite(v) && v > 0 ? v : null } catch { return null }
 }
@@ -330,16 +333,21 @@ function TracksBelowCue({ scrollerRef, count }: { scrollerRef: React.RefObject<H
     const sc = scrollerRef.current
     if (!sc) return
     const measure = () => {
-      const bottom = sc.getBoundingClientRect().bottom
+      // the visible bottom (above a horizontal scrollbar); a track cut by more than 8 px counts as below
+      const bottom = sc.getBoundingClientRect().top + sc.clientHeight
       let n = 0
-      for (const h of sc.querySelectorAll<HTMLElement>('.vw-track-head[data-track-id]')) if (h.getBoundingClientRect().top + 12 >= bottom) n++
+      for (const h of sc.querySelectorAll<HTMLElement>('.vw-track-head[data-track-id]')) if (h.getBoundingClientRect().bottom > bottom + 8) n++
       setBelow(n)
     }
     measure()
     sc.addEventListener('scroll', measure, { passive: true })
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
     ro?.observe(sc)
-    return () => { sc.removeEventListener('scroll', measure); ro?.disconnect() }
+    // the keyframe lane opening or closing moves the tracks without a scroll or a resize of the scroller
+    const mo = new MutationObserver(measure)
+    const heads = sc.querySelector('.vw-track-headers')
+    if (heads) mo.observe(heads, { childList: true })
+    return () => { sc.removeEventListener('scroll', measure); ro?.disconnect(); mo.disconnect() }
   }, [scrollerRef, count])
   if (!below) return null
   return (
@@ -923,9 +931,11 @@ export function VideoWorkspace() {
   const room = Math.max(320, viewH - HEADER_H - STATUS_H)
   const tlMax = Math.max(TL_MIN, room - MONITOR_MIN)
   const tlAuto = monitorW > 0 ? Math.min(room * 0.55, Math.max(TL_AUTO_MIN, room - (monitorW / (project.width / project.height) + MONITOR_CHROME))) : TL_AUTO_MIN
-  const timelineH = Math.round(Math.max(TL_MIN, Math.min(tlMax, timelineUser ?? tlAuto)))
+  // the keyframe lane under a selected animated clip adds a row: the balanced height grows by it (room allowing)
+  const timelineH = Math.round(Math.max(TL_MIN, Math.min(tlMax, timelineUser ?? tlAuto + (kfClipOf(tl.clips, selectedIds) ? KF_LANE_H : 0))))
   const showTab = (t: BinTab) => { setActiveTab(t); selectClip(null) }
   const kfClip = kfClipOf(tl.clips, selectedIds)
+  const labels = trackLabels(tl.tracks)
   const editMode = useVideoStore((s) => s.editMode)
 
   const inspector = selectedClip && (
@@ -994,18 +1004,19 @@ export function VideoWorkspace() {
       {/* 2. Bin + monitor (+ inspector) */}
       <div className={`vw-stage-row${selectedClip && wide ? ' with-inspector' : ''}`}>
         <aside className="vw-bin-panel">
-          <Tabs<BinTab>
-            value={activeTab}
-            className={selectedClip && !wide ? 'vw-tabs-none' : ''}
-            onChange={showTab}
-            options={[
-              { value: 'media', label: 'Media' },
-              { value: 'overlays', label: 'Overlays' },
-              { value: 'captions', label: 'Captions' },
-              { value: 'audio', label: 'Audio' },
-              { value: 'story', label: 'Story' },
-            ]}
-          />
+          {selectedClip && !wide ? (
+            // narrow windows: the inspector holds the bin's place, and this bar says so (and goes back)
+            <div className="vw-bin-back" role="navigation" aria-label="Clip inspector">
+              <button type="button" className="btn sm subtle vw-back-bin" onClick={() => selectClip(null)} data-tip={`Back to ${BIN_TAB_LABEL[activeTab]} (Esc)`}><Icon name="chevLeft" size={13} />{BIN_TAB_LABEL[activeTab]}</button>
+              <span className="vw-bin-back-title">Clip inspector</span>
+            </div>
+          ) : (
+            <Tabs<BinTab>
+              value={activeTab}
+              onChange={showTab}
+              options={(Object.keys(BIN_TAB_LABEL) as BinTab[]).map((value) => ({ value, label: BIN_TAB_LABEL[value] }))}
+            />
+          )}
 
           {selectedClip && !wide ? (
             <div className="vw-bin-content vw-inspector-host" ref={binRef}>{inspector}</div>
@@ -1136,14 +1147,14 @@ export function VideoWorkspace() {
         <div className="vw-timeline-toolbar">
           <div className="vw-tl-tools-left">
             <SplitButton />
-            <button type="button" className="btn sm subtle vw-delete" disabled={!selectedClipId} onClick={removeSelected} data-tip="Delete the selected clip (Del · Shift+Del closes the gap)"><Icon name="trash" size={13} /><span className="vw-del-lbl">Delete</span></button>
+            <button type="button" className="btn sm subtle vw-delete" disabled={!selectedClipId} onClick={removeSelected} aria-label="Delete the selected clip" data-tip={selectedClipId ? 'Delete the selected clip (Del · Shift+Del closes the gap)' : 'Delete: select a clip first (Del · Shift+Del closes the gap)'}><Icon name="trash" size={13} /><span className="vw-del-lbl">Delete</span></button>
             <span className="vw-tl-sep" />
             <ToolMenu />
             <IconButton icon="magnet" className={`vw-magnet${project.magnetic ? ' on' : ''}`} active={!!project.magnetic} tip={project.magnetic ? 'Magnetic main track is on: V1 closes its gaps (Ctrl+M)' : 'Magnetic main track: V1 closes its gaps (Ctrl+M)'} onClick={() => { getState().toggleMagnetic(); flash(getState().project.magnetic ? 'Magnetic main track on: V1 closes its gaps' : 'Magnetic main track off') }} />
           </div>
           <div className="vw-tl-tools-right">
             <MarkersButton focusId={markerFocus} onFocusDone={() => setMarkerFocus(null)} />
-            <MenuButton label="Track" icon="plus" className="sm subtle vw-add-track" menuClassName="vw-solid vw-add-track-menu" items={ADD_TRACK.map((k) => ({ label: `${TRACK_KIND_LABEL[k]} track`, icon: ADD_ICON[k], hint: ADD_HINT[k], onClick: () => { const id = getState().addTrack(k); flash(`Added ${id.toUpperCase()} · ${TRACK_KIND_LABEL[k]}`) } }))} align="end" />
+            <MenuButton label="Track" icon="plus" className="sm subtle vw-add-track" menuClassName="vw-solid vw-add-track-menu" items={ADD_TRACK.map((k) => ({ label: `${TRACK_KIND_LABEL[k]} track`, icon: ADD_ICON[k], hint: ADD_HINT[k], onClick: () => { const id = getState().addTrack(k); const lb = trackLabels(view().tracks).get(id); flash(`Added ${lb ? `${lb.code} · ${lb.name}` : TRACK_KIND_LABEL[k]}`) } }))} align="end" />
             <span className="vw-tl-sep" />
             <IconButton icon="minus" tip="Zoom out" onClick={() => setZoom(zoom - 10)} />
             <span className="vw-zoom-label mono">{zoom} px/s</span>
@@ -1155,31 +1166,31 @@ export function VideoWorkspace() {
         <div className="vw-tracks-scroll" ref={tracksScrollRef}>
           <div className="vw-track-headers">
             <div className="vw-ruler-header">{inCompound ? 'Compound' : 'Tracks'}</div>
-            {tl.tracks.map((t) => (
+            {tl.tracks.map((t) => { const lb = labels.get(t.id) ?? { code: t.id.toUpperCase(), name: TRACK_KIND_LABEL[t.kind] }; return (
               <Fragment key={t.id}>
                 <div className={`vw-track-head${t.hidden ? ' hidden' : ''}`} data-track-id={t.id}>
-                  <span className="vw-th-title" data-tip={t.name}><b>{t.id.toUpperCase()}</b>{TRACK_KIND_LABEL[t.kind]}</span>
+                  <span className="vw-th-title" data-tip={`${lb.code} · ${lb.name} (${TRACK_KIND_LABEL[t.kind].toLowerCase()} track)`}><b>{lb.code}</b>{lb.name}</span>
                   <div className="vw-th-actions">
                     {t.kind === 'audio' ? (
-                      <button type="button" className={`vw-th-btn ${t.muted ? 'active' : ''}`} onClick={() => toggleTrackMute(t.id)} aria-label={`${t.muted ? 'Unmute' : 'Mute'} ${t.id.toUpperCase()}`} aria-pressed={!!t.muted} data-tip={t.muted ? 'Unmute track' : 'Mute track'}>
+                      <button type="button" className={`vw-th-btn ${t.muted ? 'active' : ''}`} onClick={() => toggleTrackMute(t.id)} aria-label={`${t.muted ? 'Unmute' : 'Mute'} ${lb.code}`} aria-pressed={!!t.muted} data-tip={t.muted ? 'Unmute track' : 'Mute track'}>
                         <Icon name={t.muted ? 'volumeX' : 'volume'} size={13} />
                       </button>
                     ) : (
-                      <button type="button" className={`vw-th-btn vw-th-hide ${t.hidden ? 'active' : ''}`} onClick={() => toggleTrackHidden(t.id)} aria-label={`${t.hidden ? 'Show' : 'Hide'} ${t.id.toUpperCase()}`} aria-pressed={!!t.hidden} data-tip={t.hidden ? 'Show track (drawn again)' : 'Hide track (not drawn or exported)'}>
+                      <button type="button" className={`vw-th-btn vw-th-hide ${t.hidden ? 'active' : ''}`} onClick={() => toggleTrackHidden(t.id)} aria-label={`${t.hidden ? 'Show' : 'Hide'} ${lb.code}`} aria-pressed={!!t.hidden} data-tip={t.hidden ? 'Show track (drawn again)' : 'Hide track (not drawn or exported)'}>
                         <Icon name={t.hidden ? 'eyeOff' : 'eye'} size={13} />
                       </button>
                     )}
-                    <button type="button" className={`vw-th-btn ${t.locked ? 'active' : ''}`} onClick={() => toggleTrackLock(t.id)} aria-label={`${t.locked ? 'Unlock' : 'Lock'} ${t.id.toUpperCase()}`} aria-pressed={!!t.locked} data-tip={t.locked ? 'Unlock track' : 'Lock track'}>
+                    <button type="button" className={`vw-th-btn ${t.locked ? 'active' : ''}`} onClick={() => toggleTrackLock(t.id)} aria-label={`${t.locked ? 'Unlock' : 'Lock'} ${lb.code}`} aria-pressed={!!t.locked} data-tip={t.locked ? 'Unlock track' : 'Lock track'}>
                       <Icon name={t.locked ? 'lock' : 'unlock'} size={13} />
                     </button>
-                    <button type="button" className={`vw-th-btn vw-th-more${trackMenu?.id === t.id ? ' open' : ''}`} aria-expanded={trackMenu?.id === t.id} aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setTrackMenu((m) => (m?.id === t.id ? null : { id: t.id, x: r.left, y: r.bottom + 4 })) }} aria-label={`More for ${t.id.toUpperCase()}`} data-tip="Move or remove the track">
+                    <button type="button" className={`vw-th-btn vw-th-more${trackMenu?.id === t.id ? ' open' : ''}`} aria-expanded={trackMenu?.id === t.id} aria-haspopup="menu" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setTrackMenu((m) => (m?.id === t.id ? null : { id: t.id, x: r.left, y: r.bottom + 4 })) }} aria-label={`More for ${lb.code}`} data-tip="Move or remove the track">
                       <Icon name="more" size={13} />
                     </button>
                   </div>
                 </div>
                 {kfClip && kfClip.trackId === t.id && <KeyframeHead clip={kfClip} />}
               </Fragment>
-            ))}
+            ) })}
           </div>
 
           <div className="vw-lanes-area" style={{ width: `${tl.duration * zoom + 300}px` }}>
@@ -1213,7 +1224,7 @@ export function VideoWorkspace() {
         if (!t) return null
         const n = st.project.clips.filter((c) => c.trackId === t.id).length
         const items: MenuEntry[] = [
-          { heading: t.name },
+          { heading: (() => { const lb = trackLabels(st.project.tracks).get(t.id); return lb ? `${lb.code} · ${lb.name}` : t.name })() },
           { label: 'Move up', icon: 'chevUp', disabled: i === 0, onClick: () => getState().moveTrack(t.id, i - 1) },
           { label: 'Move down', icon: 'chevDown', disabled: i === st.project.tracks.length - 1, onClick: () => getState().moveTrack(t.id, i + 1) },
           { divider: true },
@@ -1258,16 +1269,30 @@ function laneRows(clips: Clip[]): { row: Map<string, number>; count: number } {
 
 /** What a clip is called on the timeline: its words when an overlay or caption has them, else its title. */
 function clipLabel(c: Clip): string {
+  if (c.compound) return `${c.title && c.title !== 'Compound clip' ? c.title : 'Compound'} · ${c.compound.clips.length} clip${c.compound.clips.length === 1 ? '' : 's'}`
   if (c.kind === 'caption') return (c.captionText ?? '').trim() || 'Caption (empty)'
   if (c.kind === 'overlay' && c.overlayType && c.overlayType !== 'logo' && !c.sourceUrl) return (c.overlayText ?? '').trim() || `${c.title} (empty)`
   return c.title
 }
 
+/** What kind of clip the inspector shows (its header word). */
+function kindWord(c: Clip): string {
+  if (c.compound) return 'Compound'
+  if (c.adjustment) return 'Adjustment'
+  if (c.kind === 'video') return c.still ? 'Still' : 'Footage'
+  if (c.kind === 'audio') return 'Sound'
+  if (c.kind === 'caption') return 'Caption'
+  return 'Overlay'
+}
+
+/** The inspector's sections, in the order of the jump strip and of the column. */
+const SECTION_LABEL: Record<string, string> = { transform: 'Transform', speed: 'Speed', colour: 'Colour', fx: 'Effects', keys: 'Keys' }
+
 function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, onGestureStart, closeLabel, linkedWith, flash, selectionCount }: { clip: Clip; locked: boolean; onChange: (c: Clip) => void; onDelete: () => void; onClose: () => void; onUnlink: () => void; onGestureStart: () => void; closeLabel: string; linkedWith?: Clip; flash: (s: string) => void; selectionCount: number }) {
   const isFootage = clip.kind === 'video' && !clip.compound
   const labels = clip.overlayType ? OVERLAY_LABELS[clip.overlayType] : null
   const set = (patch: Partial<Clip>) => onChange({ ...clip, ...patch })
-  const textOverlay = clip.kind === 'overlay' && clip.overlayType && clip.overlayType !== 'logo' && !clip.sourceUrl
+  const textOverlay = !clip.compound && clip.kind === 'overlay' && clip.overlayType && clip.overlayType !== 'logo' && !clip.sourceUrl
   const anyEmpty = textOverlay && (!(clip.overlayText ?? '').trim() || !(clip.overlaySub ?? '').trim())
   const pctF = (v: number) => pct(v)
   const row = (prop: keyof typeof PROP_RANGES, cls: string, format: (v: number) => string = pctF) => (
@@ -1275,116 +1300,194 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
   )
   // speed is for footage and sound read from a file (not stills, titles or compounds)
   const timed = !clip.compound && !clip.still && clip.srcDuration != null && (clip.kind === 'video' || clip.kind === 'audio')
+  const visual = clip.kind !== 'audio' && !clip.compound
+  // the sections this clip has (a compound has none: it is edited inside; its opacity is a plain row)
+  const ids = clip.compound ? [] : ['transform', ...(timed ? ['speed'] : []), ...(visual ? ['colour', 'fx'] : []), 'keys']
+  const stored = useInspectorUi((s) => s.open)
+  const open = stored == null ? null : ids.includes(stored) ? stored : ids[0] ?? null
+  const transformTitle = clip.kind === 'audio' ? 'Sound' : clip.adjustment ? 'Opacity' : 'Transform'
+  const name = clipLabel(clip)
   return (
-    <div
-      className="vw-inspector"
-      // a slider drag is one undo step: the step is taken when it starts and closed on release (window pointerup)
-      onPointerDownCapture={(e) => { if ((e.target as HTMLElement).matches?.('input[type=range]')) onGestureStart() }}
-    >
-      <div className="vw-inspector-head">
-        <span className="vw-inspector-title">{clip.compound ? 'COMPOUND' : isFootage ? (clip.still ? 'STILL' : 'FOOTAGE') : clip.kind === 'audio' ? 'SOUND' : clip.kind === 'caption' ? 'CAPTION' : clip.adjustment ? 'ADJUSTMENT' : 'OVERLAY'}</span>
-        <div className="vw-inspector-actions">
-          <IconButton icon="trash" size={14} tip={locked ? 'On a locked track' : 'Delete clip (Del)'} disabled={locked} onClick={onDelete} />
-          <IconButton icon="x" size={14} tip={closeLabel} onClick={onClose} className="vw-inspector-close" />
+    <InspectorSections.Provider value={{ ids, open }}>
+      <div
+        className="vw-inspector"
+        // a slider drag is one undo step: the step is taken when it starts and closed on release (window pointerup)
+        onPointerDownCapture={(e) => { if ((e.target as HTMLElement).matches?.('input[type=range]')) onGestureStart() }}
+      >
+        <div className="vw-inspector-head">
+          <div className="vw-ih-row">
+            <span className="vw-inspector-title">{kindWord(clip)}</span>
+            <span className="vw-ih-name" data-tip={name}>{name}</span>
+            <div className="vw-inspector-actions">
+              <IconButton icon="trash" size={14} tip={locked ? 'On a locked track' : 'Delete clip (Del)'} disabled={locked} onClick={onDelete} />
+              <IconButton icon="x" size={14} tip={closeLabel} onClick={onClose} className="vw-inspector-close" />
+            </div>
+          </div>
+          {ids.length > 1 && (
+            <Seg<string>
+              className="vw-jump"
+              label="Jump to a section"
+              value={open ?? ''}
+              onChange={(id) => openSection(id)}
+              options={ids.map((id) => ({ value: id, label: id === 'transform' ? transformTitle : SECTION_LABEL[id], tip: `Open ${(id === 'transform' ? transformTitle : id === 'keys' ? 'keyframes' : SECTION_LABEL[id]).toLowerCase()}` }))}
+            />
+          )}
+        </div>
+        <div className="vw-inspector-body">
+          {selectionCount > 1 && <p className="vw-hint vw-multi-hint"><Icon name="info" size={12} />{selectionCount} clips selected. Ctrl+G groups them, Ctrl+Alt+G makes a compound clip; this shows the first.</p>}
+          {locked && <p className="vw-hint vw-locked-hint"><Icon name="lock" size={12} />On a locked track{linkedWith ? ' (or linked to one)' : ''}: it cannot be moved, trimmed, split or deleted.</p>}
+          {!textOverlay && (clip.kind !== 'caption' || clip.compound) && (
+            <div className="vw-field">
+              <label htmlFor="vw-f-title">Name on the timeline</label>
+              <input id="vw-f-title" type="text" value={clip.title} onChange={(e) => set({ title: e.target.value })} />
+            </div>
+          )}
+          {clip.compound && (
+            <>
+              <div className="vw-compound-actions">
+                <p className="vw-hint">A nested timeline of {clip.compound.clips.length} clip{clip.compound.clips.length === 1 ? '' : 's'}. Open it to edit inside; it plays here as one clip.</p>
+                <div className="vw-btn-row">
+                  <button type="button" className="btn sm vw-open-compound" onClick={() => getState().openCompound(clip.id)}><Icon name="layers" size={12} />Open (Enter)</button>
+                  <button type="button" className="btn sm subtle vw-break-compound" disabled={locked} onClick={() => { if (!getState().breakCompound(clip.id)) flash('Unlock the track first.') }}>Break apart</button>
+                </div>
+              </div>
+              <div className="vw-field"><label>Opacity <em>{pct(clip.opacity ?? 1)}</em></label><Slider className="vw-s-opacity" min={0} max={1} step={0.05} value={clip.opacity ?? 1} onChange={(v) => set({ opacity: v })} /></div>
+            </>
+          )}
+          {textOverlay && labels && (
+            <>
+              <div className="vw-field">
+                <label htmlFor="vw-f-text">{labels.text}</label>
+                <input id="vw-f-text" type="text" className="vw-f-text" value={clip.overlayText ?? ''} placeholder={labels.text} onChange={(e) => set({ overlayText: e.target.value })} />
+              </div>
+              <div className="vw-field">
+                <label htmlFor="vw-f-sub">{labels.sub}</label>
+                {clip.overlayType === 'card'
+                  ? <textarea id="vw-f-sub" className="vw-f-sub" rows={3} value={clip.overlaySub ?? ''} placeholder={labels.sub} onChange={(e) => set({ overlaySub: e.target.value })} />
+                  : <input id="vw-f-sub" type="text" className="vw-f-sub" value={clip.overlaySub ?? ''} placeholder={labels.sub} onChange={(e) => set({ overlaySub: e.target.value })} />}
+              </div>
+              {anyEmpty && <p className="vw-hint">An empty field shows its label on the monitor only; it is never drawn into the export.</p>}
+            </>
+          )}
+          {clip.kind === 'caption' && !clip.compound && (
+            <div className="vw-field">
+              <label htmlFor="vw-f-cap">Caption text</label>
+              <textarea id="vw-f-cap" className="vw-f-cap" rows={3} value={clip.captionText ?? ''} placeholder="Caption text" onChange={(e) => set({ captionText: e.target.value })} />
+            </div>
+          )}
+          {!clip.compound && (
+            <FxSection id="transform" title={transformTitle} icon={clip.kind === 'audio' ? 'volume' : 'dimension'}>
+              {isFootage && (
+                <>
+                  <div className="vw-field vw-field-row">
+                    <label>Frame</label>
+                    <Seg<'fill' | 'fit'> value={clip.fit ?? 'fill'} onChange={(v) => set({ fit: v })} options={[{ value: 'fill', label: 'Fill' }, { value: 'fit', label: 'Fit' }]} />
+                  </div>
+                  {row('scale', 'vw-s-scale')}
+                  {row('x', 'vw-s-x')}
+                  {row('y', 'vw-s-y')}
+                </>
+              )}
+              {clip.kind === 'audio' && (
+                <>
+                  {row('volume', 'vw-s-vol')}
+                  <Switch checked={!clip.muted} onChange={(on) => set({ muted: !on })} label="Sound on" />
+                </>
+              )}
+              {clip.kind !== 'audio' && !isFootage && !clip.adjustment && (
+                <>
+                  {row('x', 'vw-s-x')}
+                  {row('y', 'vw-s-y')}
+                </>
+              )}
+              {clip.kind !== 'audio' && !clip.adjustment && row('rotation', 'vw-s-rot', (v) => `${Math.round(v)}°`)}
+              {clip.kind !== 'audio' && row('opacity', 'vw-s-opacity')}
+              {isFootage && (
+                <>
+                  <div className="vw-subhead">Crop</div>
+                  {row('cropL', 'vw-s-cropL')}
+                  {row('cropR', 'vw-s-cropR')}
+                  {row('cropT', 'vw-s-cropT')}
+                  {row('cropB', 'vw-s-cropB')}
+                  <button type="button" className="btn sm vw-reset-transform" onClick={() => set({ fit: undefined, scale: undefined, offX: undefined, offY: undefined, cropL: undefined, cropR: undefined, cropT: undefined, cropB: undefined, rotation: undefined, anchorX: undefined, anchorY: undefined, keyframes: clip.keyframes?.volume ? { volume: clip.keyframes.volume } : undefined })}><Icon name="reset" size={12} />Reset frame</button>
+                </>
+              )}
+            </FxSection>
+          )}
+          {timed && (
+            <FxSection id="speed" title="Speed" icon="trendingUp" count={clip.speed != null || clip.freezes?.length || clip.reverse ? 1 : 0}>
+              <SpeedSection clip={clip} locked={locked} flash={flash} />
+            </FxSection>
+          )}
+          {/* effects and colour act on a layer's own pixels; a compound is flattened into its clips, so it has none of its own */}
+          {visual && <><ColourPanel clip={clip} onChange={onChange} /><EffectsPanel clip={clip} onChange={onChange} /></>}
+          {!clip.compound && (
+            <FxSection id="keys" title="Keyframes" icon="activity" count={keyCount(clip)}>
+              <KeyframesSummary clip={clip} />
+            </FxSection>
+          )}
+          {linkedWith && (
+            <div className="vw-linked">
+              <Icon name="link" size={12} />
+              <span>Linked to {linkedWith.kind === 'audio' ? 'its sound' : 'its footage'} on {trackCodeOf(linkedWith.trackId)}: they move, trim, split and change speed together.</span>
+              <button type="button" className="btn xs vw-unlink" onClick={onUnlink}>Unlink</button>
+            </div>
+          )}
+          {clip.groupId && (
+            <div className="vw-linked">
+              <Icon name="grid" size={12} />
+              <span>In a group: it moves and deletes with the others.</span>
+              <button type="button" className="btn xs vw-ungroup" onClick={() => { getState().selectClip(clip.id); getState().ungroupSelected() }}>Ungroup</button>
+            </div>
+          )}
+          <div className="vw-metrics">
+            <span>Start {formatShortTime(clip.start)}</span>
+            <span>Length {clip.duration.toFixed(1)} s</span>
+            {(clip.kind === 'video' || clip.kind === 'audio') && !clip.still && !clip.compound && <span>From {clip.in.toFixed(1)} s of the file</span>}
+          </div>
         </div>
       </div>
-      <div className="vw-inspector-body">
-        {selectionCount > 1 && <p className="vw-hint vw-multi-hint"><Icon name="info" size={12} />{selectionCount} clips selected. Ctrl+G groups them, Ctrl+Alt+G makes a compound clip; this shows the first.</p>}
-        {locked && <p className="vw-hint vw-locked-hint"><Icon name="lock" size={12} />On a locked track{linkedWith ? ' (or linked to one)' : ''}: it cannot be moved, trimmed, split or deleted.</p>}
-        {!textOverlay && clip.kind !== 'caption' && (
-          <div className="vw-field">
-            <label htmlFor="vw-f-title">Name on the timeline</label>
-            <input id="vw-f-title" type="text" value={clip.title} onChange={(e) => set({ title: e.target.value })} />
-          </div>
-        )}
-        {clip.compound && (
-          <div className="vw-compound-actions">
-            <p className="vw-hint">A nested timeline of {clip.compound.clips.length} clip{clip.compound.clips.length === 1 ? '' : 's'}. Open it to edit inside; it plays here as one clip.</p>
-            <div className="vw-btn-row">
-              <button type="button" className="btn sm vw-open-compound" onClick={() => getState().openCompound(clip.id)}><Icon name="layers" size={12} />Open (Enter)</button>
-              <button type="button" className="btn sm subtle vw-break-compound" disabled={locked} onClick={() => { if (!getState().breakCompound(clip.id)) flash('Unlock the track first.') }}>Break apart</button>
-            </div>
-          </div>
-        )}
-        {textOverlay && labels && (
-          <>
-            <div className="vw-field">
-              <label htmlFor="vw-f-text">{labels.text}</label>
-              <input id="vw-f-text" type="text" className="vw-f-text" value={clip.overlayText ?? ''} placeholder={labels.text} onChange={(e) => set({ overlayText: e.target.value })} />
-            </div>
-            <div className="vw-field">
-              <label htmlFor="vw-f-sub">{labels.sub}</label>
-              {clip.overlayType === 'card'
-                ? <textarea id="vw-f-sub" className="vw-f-sub" rows={3} value={clip.overlaySub ?? ''} placeholder={labels.sub} onChange={(e) => set({ overlaySub: e.target.value })} />
-                : <input id="vw-f-sub" type="text" className="vw-f-sub" value={clip.overlaySub ?? ''} placeholder={labels.sub} onChange={(e) => set({ overlaySub: e.target.value })} />}
-            </div>
-            {anyEmpty && <p className="vw-hint">An empty field shows its label on the monitor only; it is never drawn into the export.</p>}
-          </>
-        )}
-        {clip.kind === 'caption' && (
-          <div className="vw-field">
-            <label htmlFor="vw-f-cap">Caption text</label>
-            <textarea id="vw-f-cap" className="vw-f-cap" rows={3} value={clip.captionText ?? ''} placeholder="Caption text" onChange={(e) => set({ captionText: e.target.value })} />
-          </div>
-        )}
-        {isFootage && (
-          <>
-            <div className="vw-field vw-field-row">
-              <label>Frame</label>
-              <Seg<'fill' | 'fit'> value={clip.fit ?? 'fill'} onChange={(v) => set({ fit: v })} options={[{ value: 'fill', label: 'Fill' }, { value: 'fit', label: 'Fit' }]} />
-            </div>
-            {row('scale', 'vw-s-scale')}
-            {row('x', 'vw-s-x')}
-            {row('y', 'vw-s-y')}
-            <div className="vw-subhead">Crop</div>
-            {row('cropL', 'vw-s-cropL')}
-            {row('cropR', 'vw-s-cropR')}
-            {row('cropT', 'vw-s-cropT')}
-            {row('cropB', 'vw-s-cropB')}
-            <button type="button" className="btn sm vw-reset-transform" onClick={() => set({ fit: undefined, scale: undefined, offX: undefined, offY: undefined, cropL: undefined, cropR: undefined, cropT: undefined, cropB: undefined, rotation: undefined, anchorX: undefined, anchorY: undefined, keyframes: clip.keyframes?.volume ? { volume: clip.keyframes.volume } : undefined })}><Icon name="reset" size={12} />Reset frame</button>
-          </>
-        )}
-        {clip.kind === 'audio' && (
-          <>
-            {row('volume', 'vw-s-vol')}
-            <Switch checked={!clip.muted} onChange={(on) => set({ muted: !on })} label="Sound on" />
-          </>
-        )}
-        {clip.kind !== 'audio' && !isFootage && !clip.compound && !clip.adjustment && (
-          <>
-            {row('x', 'vw-s-x')}
-            {row('y', 'vw-s-y')}
-          </>
-        )}
-        {clip.kind !== 'audio' && !clip.compound && !clip.adjustment && row('rotation', 'vw-s-rot', (v) => `${Math.round(v)}°`)}
-        {clip.kind !== 'audio' && (clip.compound
-          ? <div className="vw-field"><label>Opacity <em>{pct(clip.opacity ?? 1)}</em></label><Slider className="vw-s-opacity" min={0} max={1} step={0.05} value={clip.opacity ?? 1} onChange={(v) => set({ opacity: v })} /></div>
-          : row('opacity', 'vw-s-opacity'))}
-        {/* effects and colour act on a layer's own pixels; a compound is flattened into its clips, so it has none of its own */}
-        {clip.kind !== 'audio' && !clip.compound && <><EffectsPanel clip={clip} onChange={onChange} /><ColourPanel clip={clip} onChange={onChange} /></>}
-        {timed && <SpeedSection clip={clip} locked={locked} flash={flash} />}
-        {linkedWith && (
-          <div className="vw-linked">
-            <Icon name="link" size={12} />
-            <span>Linked to {linkedWith.kind === 'audio' ? `its sound on ${linkedWith.trackId.toUpperCase()}` : `its footage on ${linkedWith.trackId.toUpperCase()}`}: they move, trim, split and change speed together.</span>
-            <button type="button" className="btn xs vw-unlink" onClick={onUnlink}>Unlink</button>
-          </div>
-        )}
-        {clip.groupId && (
-          <div className="vw-linked">
-            <Icon name="grid" size={12} />
-            <span>In a group: it moves and deletes with the others.</span>
-            <button type="button" className="btn xs vw-ungroup" onClick={() => { getState().selectClip(clip.id); getState().ungroupSelected() }}>Ungroup</button>
-          </div>
-        )}
-        <div className="vw-metrics">
-          <span>Start {formatShortTime(clip.start)}</span>
-          <span>Length {clip.duration.toFixed(1)} s</span>
-          {(clip.kind === 'video' || clip.kind === 'audio') && !clip.still && !clip.compound && <span>From {clip.in.toFixed(1)} s of the file</span>}
-        </div>
-      </div>
-    </div>
+    </InspectorSections.Provider>
   )
+}
+
+/** How many keyframes the clip has (every property). */
+const keyCount = (c: Clip) => Object.values(c.keyframes ?? {}).reduce((n, k) => n + (k?.length ?? 0), 0)
+
+/** The track a clip sits on, as the track headers name it (V2, A1…: numbered by order, see trackLabels). */
+function trackCodeOf(trackId: string): string {
+  const v = view()
+  return trackLabels(v.tracks).get(trackId)?.code ?? trackId.toUpperCase()
+}
+
+/** What the track headers call each track: picture tracks numbered from the bottom (V1 is the lowest), text,
+ * caption and sound tracks from the top, so the numbers follow the order on screen; a default name is the kind,
+ * with a number when two tracks share it ("Footage", "Footage 2"); a name the editor gave is kept. */
+function trackLabels(tracks: Track[]): Map<string, { code: string; name: string }> {
+  const out = new Map<string, { code: string; name: string }>()
+  const group = (t: Track) => (t.kind === 'video' || t.kind === 'overlay' ? 'V' : t.kind === 'text' ? 'T' : t.kind === 'caption' ? 'C' : 'A')
+  const fromBottom = (g: string) => g === 'V'
+  const byGroup = new Map<string, Track[]>()
+  for (const t of tracks) { const g = group(t); byGroup.set(g, [...(byGroup.get(g) ?? []), t]) }
+  const kindSeen = new Map<string, number>()
+  const kindTotal = new Map<string, number>()
+  for (const t of tracks) kindTotal.set(t.kind, (kindTotal.get(t.kind) ?? 0) + 1)
+  for (const [g, list] of byGroup) {
+    const ordered = fromBottom(g) ? [...list].reverse() : list
+    ordered.forEach((t, i) => {
+      const code = `${g}${i + 1}`
+      const custom = t.name.replace(/^[A-Z]\d+\s*·\s*/, '').trim()
+      const isDefault = !custom || custom === TRACK_KIND_LABEL[t.kind] || /^[A-Z]\d+$/.test(t.name.trim())
+      let name = custom
+      if (isDefault) {
+        const n = (kindSeen.get(t.kind) ?? 0) + 1
+        kindSeen.set(t.kind, n)
+        name = n > 1 && (kindTotal.get(t.kind) ?? 0) > 1 ? `${TRACK_KIND_LABEL[t.kind]} ${n}` : TRACK_KIND_LABEL[t.kind]
+      }
+      out.set(t.id, { code, name })
+    })
+  }
+  return out
 }
 
 const ADD_TRACK: TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']
