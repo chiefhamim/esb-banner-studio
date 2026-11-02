@@ -2022,3 +2022,102 @@ In (Story tab; all editable after they are applied; text only ever comes from th
 Checks: unit 1452; `tools/e2e/video-templates-test.mjs` (14, in `test:video`) builds each template through the real Story tab, checks the platform settings, the quote refusal, blocked empty cards, sizes sharing a caption edit, the logo corner and own templates stripped and blocked; `video-ai-electron-test` 7 (desktop app, file URLs); all other scripts unchanged and green (test:video 172 + 14, test:electron 105 + 7); text-fit 0, centre audit 0.
 
 Not done / limits: Grid figure cards need the website change for live data (handoff 4a) or hand-typed figures; "Export all sizes" in one click is the Phase 7 render queue.
+
+## Phase 7 pre-build (backend) (2026-11-02, branch `video-pre-publish`)
+
+Publishing backend for YouTube and Facebook as tested main-process libraries. **Nothing is wired to IPC or the UI
+yet**, and nothing has been sent to a real platform: every test runs against local fake servers, and the http layer
+refuses any origin that is not a configured endpoint.
+
+### What exists (`electron/video-publish/`)
+- `validators.mjs` (+ `validators.d.mts`): pure checks shared with the renderer. `validateReel(facts)` (9:16,
+  ≥540×960, 24–60 fps fixed, 3–90 s, H.264/H.265, closed GOP 2–5 s, AAC-LC 48 kHz stereo ≥128 kbps),
+  `validateYouTubeMedia(facts)` (length, size, 15-min unverified note, `short` flag at ≤180 s vertical),
+  `buildYouTubeResource(meta)` (title ≤100 chars, description ≤5000 UTF-8 bytes, tags ≤500 by YouTube's count,
+  categoryId, defaultLanguage, publishAt forces private, `selfDeclaredMadeForKids: false`, `containsSyntheticMedia`
+  and an "AI voice" note in the text when an AI voice is used), `checkFacebookPost(meta)` (state, schedule 10 min–29
+  days). Facts the Phase 7 session reads from mediabunny: `{ durationSec, width, height, fps, fpsMode|fpsMin/fpsMax,
+  videoCodec, gopSec, closedGop, audioCodec, audioProfile, audioSampleRate, audioChannels, audioBitrate, fileSize }`.
+  An unreadable fact is a problem or a warning, never a pass.
+- `credentials.cjs`: YouTube OAuth client + tokens and a copy of the Page token, each sealed with safeStorage;
+  refuses to save when the OS cannot encrypt; `status()` carries no secret; `redact()` scrubs every held secret from
+  error text. A dry run uses its own file.
+- `http.cjs`: the only network door — allowed origins only, no redirects followed, tokens in Authorization only (a
+  URL with a token or `access_token=` is refused before sending), whole-request timeout, redacted errors.
+- `youtube.cjs`: loopback OAuth on 127.0.0.1:<random> + PKCE S256 (`youtube.upload`, `youtube.force-ssl` only for
+  captions), refresh a minute early and once on 401; resumable `videos.insert` in 256 KiB-multiple chunks (8 MiB
+  default) with `Content-Range: bytes */N` resume, backoff on 5xx/429/broken connection; `findRecentUpload` (uploads
+  playlist by title, 2 units) before any new session once one existed; `thumbnails.set`, `captions.insert` (SRT,
+  multipart/related).
+- `facebook.cjs`: Reels start → rupload (`Authorization: OAuth`, `offset`, `file_size`, the rest of the file
+  streamed) → `?fields=status` (resume from `bytes_transferred`) → finish (PUBLISHED | SCHEDULED | DRAFT); feed video
+  via the resumable upload API (`/{app-id}/uploads`, `file_offset` resume) → graph-video `/{page}/videos`
+  (`fbuploader_video_file_chunk`); first comment; `findRecent` on the Page. POSTs are never re-sent after a broken
+  connection; the engine asks Facebook first.
+- `guards.cjs`: YouTube uploads per Pacific day (config `ytDailyUploads`, default 100) and Reels per Page per moving
+  24 h (config `reelsPer24h`, default 30), both persisted.
+- `engine.cjs`: the job model and the Approve gate. `approve()` hashes the render file itself (SHA-256), runs the
+  validators, waits for `confirmApproval(summary)` and only then issues a random, single-use, 30-minute token bound to
+  that render hash + metadata hash (in memory only). `submit()` refuses a missing/forged/reused/expired token, changed
+  metadata or a changed render; `run()` re-hashes before sending. Per destination: an upload key, steps with status
+  and the platform's own error text, persisted platform state (session URI / video id / upload id / handle) after
+  every step and chunk, so `retry()` and `resumeAll()` after a restart resume and never re-post. A ledger keyed by
+  upload key records each post and its URL. `cancel()`, `stopAll()` (quit), `list()`, `get()`, `status()`.
+- `endpoints.cjs`: production defaults (never reached by tests) and `ESB_VIDEO_PUBLISH_DRYRUN=1` +
+  `ESB_VIDEO_PUBLISH_FAKE_BASE=http://127.0.0.1:<port>` → every endpoint on the fake; a dry run without a loopback
+  base refuses to start. `index.cjs` `createVideoPublishing({...})` wires it all.
+- `tools/fixtures/publish/fake-platforms.mjs`: fake Google OAuth (checks PKCE), YouTube (resumable sessions,
+  channels, playlistItems, thumbnails, captions with a scope check), Graph/rupload/graph-video; injectable cut at
+  50 %, 5xx, 429, expired session, expired access token, lost final answers, expired Page token; records any URL that
+  carried a token (`leaks`). `node tools/fixtures/publish/fake-platforms.mjs` serves a dry run.
+
+### Tests (`tools/unit/video-publish.test.ts`, 50)
+95 s Reel and variable-fps file rejected (plus 11 other Reel rules); YouTube mapping limits; FB schedule window;
+credentials encrypted on disk, absent from status, refused without encryption; http refuses foreign origins and
+tokens in URLs; quota reset at Pacific midnight and the 30/24 h window; OAuth + PKCE + refresh against the fake;
+**Approve gate**: no token / forged / reused / changed metadata / changed render / owner says no / failing validator
+→ refused, nothing uploaded; **YouTube** resume after a 50 % cut with a byte-exact result, 503 + 429 + token expiry,
+lost final answer (no second post), expired session (uploads checked, then one new session), video landed + session
+gone (found by title, no re-upload), stop at 50 % and resume in a NEW engine (one session), thumbnail + captions + AI
+disclosure, captions without force-ssl (video kept, step red, retry does not re-upload), daily guard; **Facebook**
+Reel resume after a 50 % cut + finish once + link comment, lost finish answer (finished once), transient 500s and a
+scheduled Reel (comment waits), the per-Page guard, expired token in plain words, feed video resume + publish +
+comment, lost publish answer (found, not re-posted), all three destinations in one job; dry run from the environment
+with separate files. Every run asserts `leaks` is empty.
+
+### Proposed IPC surface (not wired)
+All `ipcMain.handle`, checked in main as if the renderer were hostile; none returns a secret.
+- `esb:vpub-status` → `{ credentials.status(), engine.status(), dryRun }`
+- `esb:vpub-yt-client` `{ clientId, clientSecret }` → status · `esb:vpub-yt-connect` `{ captions: boolean }` → status
+  (main opens the browser with `shell.openExternal`) · `esb:vpub-forget` `'youtube' | 'youtube-client' | 'facebook'`
+- `esb:vpub-fb-use-page` `{ pageId, token, pageName }` → status (the renderer hands over its saved Page token once)
+- `esb:vpub-validate` `{ facts, metadata, destinations, schedule }` → problems/warnings (also importable directly)
+- `esb:vpub-approve` `{ projectId, render: 'renders/<name>', renderHash, metadata, destinations, schedule, facts }`
+  → `{ ok, approvalToken, renderHash, metadataHash, expiresAt } | { ok: false, problems | cancelled }`. Main resolves
+  the path via the project registry (`video-project.cjs` `safeRel` + `confinedFile`); the thumbnail likewise.
+- `esb:vpub-start` `{ approvalToken, ...same payload }` → `{ jobId }` (submit, then run in the background)
+- `esb:vpub-jobs` → list · `esb:vpub-job` `jobId` · `esb:vpub-retry` `jobId` · `esb:vpub-cancel` `jobId`
+- push `esb:vpub-update` (public job) from `onUpdate`
+
+### What the Phase 7 session must still do
+- Wire the IPC above in `main.cjs`/`preload.cjs`; `confirmApproval` = a native main-process dialog
+  (`dialog.showMessageBox` naming the title, destinations, time and "AI voice"), so the renderer alone cannot approve;
+  `stopAll()` on quit, `resumeAll()` at launch.
+- Publish sheet UI, render queue, facts from mediabunny (GOP / closed GOP and the audio profile may need a demux
+  pass), Activity entries with the URL from the ledger, "Planned" labels for anything not built.
+- Scheduled posts: cancel on the platform until they go out (YouTube `videos.delete` / update, Graph delete or
+  unschedule) and add the link comment when a scheduled/draft Facebook post goes live (the step shows `waiting`).
+- Meta app id for the feed-video resumable upload (config `metaAppId`); confirm whether a Page token is accepted by
+  `/{app-id}/uploads` (Meta documents a user token) — else use Reels or the non-resumable `/videos` upload.
+- Check the Page token's permissions (`pages_show_list`, `pages_read_engagement`, `pages_manage_posts`) without putting
+  it in a URL (`debug_token` takes the token as a query parameter).
+- Verify at implementation (plan): Testing-mode refresh tokens expiring after 7 days, the thumbnail rule for
+  unverified channels, the current Shorts length (180 s assumed), that `status.containsSyntheticMedia` is accepted by
+  `videos.insert` on the live API.
+- A link comment whose answer is lost is not re-sent automatically (it fails red), to avoid a double comment.
+- First real post only when the owner asks: a private YouTube upload and a Facebook DRAFT.
+
+### Checks
+- `npm run lint`: exit 0, no findings in the new files.
+- `npm test`: 973 passed (80 files; +50 in `video-publish.test.ts`; that file passed 3 runs in a row).
+- `npm run build`: ok. `validators.d.mts` type-checks from a renderer-style import (tsc, bundler resolution).
