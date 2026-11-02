@@ -3,7 +3,11 @@
 // pieces by mediabunny (AudioBufferSink) a short way ahead of the playhead, and every piece is started at the exact
 // AudioContext time that matches its timeline time:
 //
-//   clip gain (volume, clip mute) → track gain (track mute) → master → speakers
+//   clip gain (gain dB × volume × fades) → clip pan → track (fader, mute/solo, pan) → bus → ducking → master → speakers
+//
+// that is the ONE graph of audioGraph.ts, which the export builds again offline (audioRender.ts). Noise-reduced clips
+// play their cached render (made in a worker, denoiseJob.ts); the ducking curve is made in the background from the voice
+// bus (the same code as the export) and applied as automation on the music bus when it is ready.
 //
 // The clock maps wall time to context time with getOutputTimestamp() (the time the speakers are playing now), so a
 // sound is heard at the same wall-clock instant its picture is drawn. The export mixes with the same gain rules
@@ -13,9 +17,17 @@ import { AudioBufferSink } from 'mediabunny'
 import type { Clip, VideoProject } from '../timeline'
 import { audibleClips } from '../timeline'
 import { inputFor } from '../media'
-import { animated, isPlainSpeed, sampleProp } from './animation'
+import { isPlainSpeed } from './animation'
 import { PcmSource } from './pcmSource'
 import { ClipSpeedAudio } from './speedAudio'
+import { applyStatic, automate, automateDuck, buildMixGraph, clipGainFn, clipStrip, readLevel } from './audioGraph'
+import type { Level, MixGraph } from './audioGraph'
+import { cachedDuck, denoiseClip, denoisedFor, needsDuck, prepareDuckForPreview } from './audioRender'
+import type { GainCurve } from '../audio/ducking'
+import { busOf, duckingOf, masterOf } from '../audioModel'
+import type { Bus } from '../audioModel'
+import { useVideoStore } from '../videoStore'
+import { flattenCompounds } from '../timeline'
 
 /** Schedule this far ahead of the playhead (seconds). */
 const LOOKAHEAD = 1.5
@@ -28,7 +40,8 @@ const FALLBACK_CACHE_BYTES = 512 * 1024 * 1024
 /** Why a source has no preview sound ('' = it has sound, or none was asked for). */
 export type SoundProblem = { url: string; why: string }
 
-/** The gain a clip plays at (0 when it or its track is muted). One rule for preview and export. */
+/** The plain volume a clip plays at (0 when it or its track is muted): the Phase 0–3 rule, kept for the callers that read
+ * it. The mix itself is the graph (audioGraph.ts `clipGainFn`: also clip gain and fades, track fader, solo). */
 export function clipGain(project: Pick<VideoProject, 'tracks'>, c: Clip): number {
   const track = project.tracks.find((t) => t.id === c.trackId)
   if (c.muted || track?.muted) return 0
@@ -37,17 +50,28 @@ export function clipGain(project: Pick<VideoProject, 'tracks'>, c: Clip): number
 
 /** What changes the scheduled sound (any change restarts it; a volume change only moves a gain). */
 export function audioSignature(project: VideoProject): string {
-  return audibleClips(project).map((c) => `${c.id}|${c.sourceUrl}|${c.start}|${c.duration}|${c.in}|${JSON.stringify(c.speed ?? 1)}|${JSON.stringify((c as { freezes?: unknown }).freezes ?? null)}|${(c as { reverse?: boolean }).reverse ? 1 : 0}|${(c as { preservePitch?: boolean }).preservePitch === false ? 0 : 1}|${c.keyframes?.volume ? JSON.stringify(c.keyframes.volume) : ''}`).join(';')
+  return audibleClips(project).map((c) => `${c.id}|${c.trackId}|${busOf(project, c)}|${c.sourceUrl}|${c.start}|${c.duration}|${c.in}|${JSON.stringify(c.speed ?? 1)}|${JSON.stringify((c as { freezes?: unknown }).freezes ?? null)}|${(c as { reverse?: boolean }).reverse ? 1 : 0}|${(c as { preservePitch?: boolean }).preservePitch === false ? 0 : 1}|${c.keyframes?.volume ? JSON.stringify(c.keyframes.volume) : ''}|${denoisedFor(c) ? 1 : 0}`).join(';') + (masterOf(project).limiter ? '|lim' : '')
 }
 
 /** Idle source readers kept for the next start. */
 const PCM_KEEP = 4
 
-interface Running { stop(): void; gain: GainNode; clip: Clip }
+interface Running { stop(): void; strip: ReturnType<typeof clipStrip>; clip: Clip }
+
+/** What preview needs to re-time automation: timeline time t0 is context time `base`. */
+interface Mapping { t0: number; base: number }
 
 export class AudioEngine {
   ctx: AudioContext | null = null
-  private master: GainNode | null = null
+  /** The node the graph's output joins (and the test tap sits behind): connected to the speakers. */
+  private sink: GainNode | null = null
+  /** The output node (tests connect a calibration burst to it). */
+  get master(): GainNode | null { return this.sink }
+  private graph: MixGraph | null = null
+  private map: Mapping = { t0: 0, base: 0 }
+  private last: { project: VideoProject; playhead: () => number } | null = null
+  private prepTimer: ReturnType<typeof setTimeout> | undefined
+  private prepUnsub: (() => void) | null = null
   private running: Running[] = []
   private session = 0
   /** Test tap: an analyser on the master (A/V sync measurement). */
@@ -86,8 +110,11 @@ export class AudioEngine {
   private ensure(): AudioContext {
     if (!this.ctx) {
       this.ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' })
-      this.master = this.ctx.createGain()
-      this.master.connect(this.ctx.destination)
+    }
+    // (a test may hand the engine an OfflineAudioContext as `ctx`: the preview graph is then rendered, not played)
+    if (!this.sink) {
+      this.sink = this.ctx.createGain()
+      this.sink.connect(this.ctx.destination)
     }
     return this.ctx
   }
@@ -117,23 +144,88 @@ export class AudioEngine {
     const session = ++this.session
     // one mapping for the whole start (re-reading the output timestamp per piece would jitter the joins)
     const base = this.ctxTimeAt(originPerf)
-    const trackGains = new Map<string, GainNode>()
+    this.map = { t0, base }
+    this.last = { project, playhead }
+    const ctxOf = (tl: number) => base + (tl - t0)
+    const g = buildMixGraph(ctx, project, this.sink!, { analysers: true, limiter: true })
+    this.graph = g
+    this.watch()
     for (const c of audibleClips(project)) {
       if (c.start + c.duration <= t0) continue
-      let tg = trackGains.get(c.trackId)
-      if (!tg) { tg = ctx.createGain(); tg.connect(this.master!); trackGains.set(c.trackId, tg) }
-      const g = ctx.createGain()
-      g.gain.value = clipGain(project, c)
-      g.connect(tg)
+      const strip = clipStrip(g, project, c, true)
       const nodes = new Set<AudioBufferSourceNode>()
       let alive = true
-      this.running.push({ clip: c, gain: g, stop: () => { alive = false; for (const n of nodes) { try { n.stop() } catch { /* not started */ } n.disconnect() } nodes.clear(); g.disconnect() } })
-      this.volumeAutomation(c, g, Math.max(t0, c.start), (tl) => base + (tl - t0))
-      void this.scheduleClip(c, t0, base, playhead, g, nodes, () => alive && session === this.session)
+      this.running.push({ clip: c, strip, stop: () => { alive = false; for (const n of nodes) { try { n.stop() } catch { /* not started */ } n.disconnect() } nodes.clear(); strip.input.disconnect(); strip.pan.disconnect() } })
+      automate(strip.input.gain, strip.fn, this.fromFor(c, t0), c.start + c.duration, ctxOf)
+      const dn = denoisedFor(c)
+      if (c.denoise && !dn) void denoiseClip(c, flattenCompounds(project)).then((b) => { if (b && session === this.session) this.refresh() })
+      void this.scheduleClip(c, t0, base, playhead, strip.input, nodes, () => alive && session === this.session, dn)
     }
+    // ducking: the cached curve now, or when the background job has made it
+    const duck = needsDuck(project) ? cachedDuck(project) : null
+    if (duck) automateDuck(g.duck.gain, duck, t0, this.endOf(project), ctxOf)
+    else if (needsDuck(project)) void prepareDuckForPreview(project).then((curve) => { if (curve && session === this.session && this.graph === g) this.applyDuck(curve, project) })
   }
 
-  private async scheduleClip(c: Clip, t0: number, base: number, playhead: () => number, out: GainNode, nodes: Set<AudioBufferSourceNode>, alive: () => boolean) {
+  /** Where a clip's automation starts: its start, or the playhead when it began earlier (an event in the past is skipped). */
+  private fromFor(c: Clip, t0: number) {
+    const ctx = this.ctx!
+    const nowTl = this.map.t0 + (ctx.currentTime + 0.01 - this.map.base)
+    return Math.max(c.start, t0, Math.min(nowTl, c.start + c.duration - 0.001))
+  }
+  private endOf(project: VideoProject) { let e = 0; for (const c of project.clips) e = Math.max(e, c.start + c.duration); return e }
+
+  /** Schedule a ducking curve on the music bus from now to the end of the project (re-done after any change). */
+  private applyDuck(curve: GainCurve | null, project: VideoProject) {
+    const g = this.graph
+    const ctx = this.ctx
+    if (!g || !ctx) return
+    const now = ctx.currentTime
+    const hold = g.duck.gain as AudioParam & { cancelAndHoldAtTime?: (t: number) => void }
+    try { if (hold.cancelAndHoldAtTime) hold.cancelAndHoldAtTime(now); else g.duck.gain.cancelScheduledValues(now) } catch { /* nothing scheduled */ }
+    const ctxOf = (tl: number) => this.map.base + (tl - this.map.t0)
+    const nowTl = this.map.t0 + (now + 0.01 - this.map.base)
+    if (!curve || !duckingOf(project).enabled) { g.duck.gain.setTargetAtTime(1, now, 0.02); return }
+    automateDuck(g.duck.gain, curve, nowTl, Math.max(nowTl + 0.01, this.endOf(project)), ctxOf)
+  }
+
+  /** The sound is restarted at the playhead (a noise-reduced render became ready). */
+  private refresh() {
+    const l = this.last
+    if (!l || !this.graph) return
+    void this.start(l.project, l.playhead(), performance.now(), l.playhead)
+  }
+
+  /** Background work for the preview: the noise-reduced renders and the ducking curve of the project on the desk are made
+   * as soon as it changes (a short pause after the last edit), so pressing play finds them ready. */
+  prepare(project: VideoProject) {
+    const p = flattenCompounds(project)
+    for (const c of p.clips) if (c.kind === 'audio' && c.denoise && c.sourceUrl) void denoiseClip(c, p)
+    if (needsDuck(p) && !cachedDuck(p)) void prepareDuckForPreview(p).then((curve) => { if (curve && this.graph && this.last) this.applyDuck(curve, this.last.project) })
+  }
+
+  /** Watch the store: prepare the background renders after edits. Installed once. */
+  private watch() {
+    if (this.prepUnsub) return
+    this.prepUnsub = useVideoStore.subscribe((s, prev) => {
+      if (s.project === prev.project) return
+      clearTimeout(this.prepTimer)
+      this.prepTimer = setTimeout(() => this.prepare(useVideoStore.getState().project), 500)
+    })
+  }
+
+  /** Peak and RMS (dBFS) of the master, every bus and every audio track while the sound plays (null when it is not). */
+  levels(): { master: Level; buses: Partial<Record<Bus, Level>>; tracks: Record<string, Level> } | null {
+    const g = this.graph
+    if (!g || !g.masterAnalyser || !this.running.length) return null
+    const buses: Partial<Record<Bus, Level>> = {}
+    for (const [b, a] of Object.entries(g.busAnalysers)) buses[b as Bus] = readLevel(a!)
+    const tracks: Record<string, Level> = {}
+    for (const t of g.tracks.values()) if (t.analyser) { const l = readLevel(t.analyser); const o = tracks[t.trackId]; if (!o || l.peak > o.peak) tracks[t.trackId] = l }
+    return { master: readLevel(g.masterAnalyser), buses, tracks }
+  }
+
+  private async scheduleClip(c: Clip, t0: number, base: number, playhead: () => number, out: GainNode, nodes: Set<AudioBufferSourceNode>, alive: () => boolean, denoised: AudioBuffer | null = null) {
     const ctx = this.ctx!
     const from = Math.max(t0, c.start)
     const srcFrom = (c.in || 0) + (from - c.start)
@@ -154,6 +246,20 @@ export class AudioEngine {
       n.start(when, offset, dur)
       n.onended = () => { nodes.delete(n); n.disconnect() }
       nodes.add(n)
+    }
+    if (denoised) {
+      // the noise-reduced render: one buffer for the whole clip, started at the playhead's offset into it
+      const when = Math.max(ctx.currentTime + 0.005, ctxOf(from))
+      const offset = (from - c.start) + (when - ctxOf(from))
+      if (offset < denoised.duration) {
+        const n = ctx.createBufferSource()
+        n.buffer = denoised
+        n.connect(out)
+        n.start(when, offset, Math.min(denoised.duration - offset, clipEndCtx - when))
+        n.onended = () => { nodes.delete(n); n.disconnect() }
+        nodes.add(n)
+      }
+      return
     }
     if (!isPlainSpeed(c)) { await this.scheduleSpeedClip(c, from, ctxOf, out, nodes, alive, playhead); return }
     const input = (() => { try { return inputFor(c.sourceUrl!) } catch { return null } })()
@@ -224,21 +330,6 @@ export class AudioEngine {
     }
   }
 
-  /** A clip's volume keyframes as a gain curve from timeline time `from` to its end (100 values a second). */
-  private volumeAutomation(c: Clip, g: GainNode, from: number, ctxOf: (tl: number) => number) {
-    if (!animated(c, 'volume') || !this.ctx) return
-    const end = c.start + c.duration
-    const startCtx = Math.max(this.ctx.currentTime + 0.01, ctxOf(from))
-    const t0 = from + (startCtx - ctxOf(from))
-    const dur = end - t0
-    if (dur <= 0.02) return
-    const n = Math.min(60000, Math.max(2, Math.ceil(dur * 100) + 1))
-    const curve = new Float32Array(n)
-    const mute = g.gain.value === 0 ? 0 : 1
-    for (let i = 0; i < n; i++) curve[i] = mute * Math.max(0, Math.min(1, sampleProp(c, 'volume', t0 + (dur * i) / (n - 1) - c.start, c.volume ?? 1)))
-    try { g.gain.setValueCurveAtTime(curve, startCtx, dur) } catch { /* keep the static gain */ }
-  }
-
   /** The whole file's sound through Web Audio's decoder, decoded once per URL (size-guarded). Null = no sound. */
   private wholeFile(url: string): Promise<AudioBuffer | null> {
     const hit = this.fallback.get(url)
@@ -284,24 +375,40 @@ export class AudioEngine {
     for (const url of [...this.fallback.keys()]) if (!keep.has(url)) { this.fallback.delete(url); this.fallbackBytes.delete(url); this.unsupported.delete(url) }
   }
 
-  /** Move gains to the project's current volumes and mutes (no restart). */
+  /** Move gains, pans, faders, the master and the ducking to the project's current values (no restart). */
   updateGains(project: VideoProject) {
+    const ctx = this.ctx
+    const g = this.graph
+    if (!ctx || !g) return
+    const now = ctx.currentTime
+    const ctxOf = (tl: number) => this.map.base + (tl - this.map.t0)
+    const nowTl = this.map.t0 + (now + 0.01 - this.map.base)
+    if (this.last) this.last = { ...this.last, project }
     for (const r of this.running) {
       const c = project.clips.find((x) => x.id === r.clip.id)
-      const g = c ? clipGain(project, c) : 0
-      // a clip with volume keyframes follows its curve (scheduled at start); others move to the new gain
-      if (this.ctx && !(c && animated(c, 'volume'))) { try { r.gain.gain.setTargetAtTime(g, this.ctx.currentTime, 0.01) } catch { /* automation running */ } }
+      const param = r.strip.input.gain
+      const hold = param as AudioParam & { cancelAndHoldAtTime?: (t: number) => void }
+      try { if (hold.cancelAndHoldAtTime) hold.cancelAndHoldAtTime(now); else param.cancelScheduledValues(now) } catch { /* nothing scheduled */ }
+      if (!c) { param.setTargetAtTime(0, now, 0.01); continue }
+      r.clip = c
+      r.strip.fn = clipGainFn(c)
+      if (r.strip.fn.ranges.length === 0) param.setTargetAtTime(r.strip.fn.at(nowTl), now, 0.01)
+      else automate(param, r.strip.fn, Math.max(nowTl, c.start), Math.max(c.start + c.duration, nowTl + 0.01), ctxOf)
+      try { r.strip.pan.pan.setTargetAtTime(c.pan ?? 0, now, 0.01) } catch { /* gone */ }
     }
+    applyStatic(g, project, now)
+    this.applyDuck(needsDuck(project) ? cachedDuck(project) : null, project)
   }
 
   stop() {
     this.session++
     for (const r of this.running) r.stop()
     this.running = []
+    if (this.graph) { try { this.graph.out.disconnect(); this.graph.master.disconnect() } catch { /* gone */ } this.graph = null }
   }
 
   private installTap() {
-    if (!this.tap || this.tapNode || !this.ctx || !this.master) return
+    if (!this.tap || this.tapNode || !this.ctx || !this.sink) return
     const n = this.ctx.createScriptProcessor(1024, 2, 2)
     n.onaudioprocess = (e) => {
       const inp = e.inputBuffer.getChannelData(0)
@@ -309,8 +416,8 @@ export class AudioEngine {
       e.outputBuffer.getChannelData(1).set(e.inputBuffer.getChannelData(1))
       this.tap?.(inp, e.playbackTime)
     }
-    this.master.disconnect()
-    this.master.connect(n)
+    this.sink.disconnect()
+    this.sink.connect(n)
     n.connect(this.ctx.destination)
     this.tapNode = n
   }
@@ -321,7 +428,10 @@ export class AudioEngine {
     this.pcms.clear()
     void this.ctx?.close().catch(() => {})
     this.ctx = null
-    this.master = null
+    this.sink = null
+    this.graph = null
+    this.prepUnsub?.()
+    this.prepUnsub = null
     this.tapNode = null
   }
 }

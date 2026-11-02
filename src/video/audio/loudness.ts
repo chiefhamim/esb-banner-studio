@@ -92,25 +92,10 @@ export interface LoudnessOptions {
   truePeak?: boolean
 }
 
-/** Measure a whole signal. `channels` are equal-length Float32Arrays. */
-export function measureLoudness(channels: Float32Array[], sampleRate: number, opts: LoudnessOptions = {}): LoudnessReport {
-  const weights = opts.weights ?? channelWeights(channels.length)
-  const n = channels[0]?.length ?? 0
-  const step = Math.round(sampleRate / 10) // 100 ms sub-blocks
-  const blocks = Math.floor(n / step)
-  // weighted mean-square energy per 100 ms sub-block, summed over channels
-  const sub = new Float64Array(blocks)
-  channels.forEach((ch, c) => {
-    const w = weights[c] ?? 1
-    if (!w) return
-    const k = kWeigh(ch, sampleRate)
-    for (let b = 0; b < blocks; b++) {
-      let s = 0
-      const o = b * step
-      for (let i = 0; i < step; i++) { const v = k[o + i]; s += v * v }
-      sub[b] += w * s
-    }
-  })
+/** From the weighted mean-square energy of each 100 ms sub-block (`step` samples long): momentary and short-term
+ * loudness, the gated integrated loudness and the loudness range. Shared by the whole-signal and streaming meters. */
+export function summarizeBlocks(sub: Float64Array, step: number) {
+  const blocks = sub.length
   const windowed = (len: number) => {
     const out = new Float32Array(blocks).fill(SILENCE)
     const pw = new Float64Array(blocks).fill(-1)
@@ -154,6 +139,30 @@ export function measureLoudness(channels: Float32Array[], sampleRate: number, op
       range = rangeHigh - rangeLow
     }
   }
+
+  return { m, s, integrated, range, rangeLow, rangeHigh }
+}
+
+/** Measure a whole signal. `channels` are equal-length Float32Arrays. */
+export function measureLoudness(channels: Float32Array[], sampleRate: number, opts: LoudnessOptions = {}): LoudnessReport {
+  const weights = opts.weights ?? channelWeights(channels.length)
+  const n = channels[0]?.length ?? 0
+  const step = Math.round(sampleRate / 10) // 100 ms sub-blocks
+  const blocks = Math.floor(n / step)
+  // weighted mean-square energy per 100 ms sub-block, summed over channels
+  const sub = new Float64Array(blocks)
+  channels.forEach((ch, c) => {
+    const w = weights[c] ?? 1
+    if (!w) return
+    const k = kWeigh(ch, sampleRate)
+    for (let b = 0; b < blocks; b++) {
+      let s = 0
+      const o = b * step
+      for (let i = 0; i < step; i++) { const v = k[o + i]; s += v * v }
+      sub[b] += w * s
+    }
+  })
+  const { m, s, integrated, range, rangeLow, rangeHigh } = summarizeBlocks(sub, step)
 
   let samplePeak = 0
   for (const ch of channels) for (let i = 0; i < ch.length; i++) { const a = Math.abs(ch[i]); if (a > samplePeak) samplePeak = a }

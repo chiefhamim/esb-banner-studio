@@ -16,6 +16,8 @@ import { BLEND_MODES, LUT_MAX_CHARS, lutText, lutsUsed, registerLut, sanitizeEff
 import type { TitleData } from './titleModel'
 import { migrateOverlayClip, sanitizeTitleData, titleDuration } from './titleModel'
 import { sanitizeDataCard, type DataCardRef } from './dataCardClip'
+import type { Bus, ClipDenoise, ClipFade, DuckingSettings, LoudnessTarget, MasterSettings } from './audioModel'
+import { sanitizeClipAudio, sanitizeProjectAudio, sanitizeTrackAudio, soloActive } from './audioModel'
 
 export type TrackKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio'
 export const TRACK_KINDS: readonly TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']
@@ -55,6 +57,14 @@ export interface Track {
   locked: boolean
   /** A visual track switched off: not drawn in the preview or the export (its clips stay). */
   hidden?: boolean
+  /** Phase 4 (audio tracks): the bus the track's sound goes to; unset = automatic (a footage clip's own sound on 'voice',
+   * everything else on 'music'; audioModel.ts busOf). */
+  bus?: Bus
+  /** Phase 4: the track fader, dB (default 0), and its pan −1..1. `muted` above is the mixer's mute. */
+  volume?: number
+  pan?: number
+  /** Phase 4: solo — while any audio track is soloed the others are silent. */
+  solo?: boolean
 }
 
 /** The shape of a keyframe segment (keyframes.ts). The hyphenated spellings are read as the same eases. */
@@ -150,6 +160,12 @@ export interface Clip {
   /** Title and data-card clips: the whole title's length in seconds when a split cut it (titleModel.ts titleDuration).
    * Both halves keep it, so the out animation plays once, at the title's true end, never at the cut. */
   titleLen?: number
+  /** Phase 4 (audio clips): clip gain in dB (default 0; multiplies `volume`), fades, pan −1..1, noise reduction. */
+  gain?: number
+  fadeIn?: ClipFade
+  fadeOut?: ClipFade
+  pan?: number
+  denoise?: ClipDenoise
 }
 
 export interface VideoProject {
@@ -172,6 +188,12 @@ export interface VideoProject {
   /** Ripple edits (ripple delete/trim, insert, extract, speed changes) move the markers after the edit too. On unless
    * false. */
   rippleMarkers?: boolean
+  /** Phase 4: master fader (dB) and limiter; ducking of the music bus under the voice bus; the loudness an export is
+   * normalised to (null/unset = not normalised); bus faders (dB). All unset = the sound of a Phase 0–3 project. */
+  master?: MasterSettings
+  ducking?: DuckingSettings
+  loudnessTarget?: LoudnessTarget
+  busVolume?: Partial<Record<Bus, number>>
 }
 
 /** A marker on the timeline: a named, coloured point the editor can jump to (chapters later come from these). */
@@ -260,7 +282,9 @@ export const isActive = (c: Clip, time: number) => time >= c.start && time < c.s
  * track that is not muted. A footage clip's own sound is its linked clip on A1, so it follows the same rules. */
 export function audibleClips(project: VideoProject): Clip[] {
   const mutedTracks = new Set(project.tracks.filter((t) => t.muted).map((t) => t.id))
-  return project.clips.filter((c) => c.kind === 'audio' && !!c.sourceUrl && !c.muted && (c.volume ?? 1) > 0 && !mutedTracks.has(c.trackId))
+  const solo = soloActive(project)
+  const soloed = new Set(project.tracks.filter((t) => t.solo === true).map((t) => t.id))
+  return project.clips.filter((c) => c.kind === 'audio' && !!c.sourceUrl && !c.muted && (c.volume ?? 1) > 0 && !mutedTracks.has(c.trackId) && (!solo || soloed.has(c.trackId)))
 }
 
 /** The ids of every clip that moves with `clipId` (itself, plus its linked video/audio partner). */
@@ -585,6 +609,7 @@ export function deserializeVideoProject(json: string): VideoProject | null {
       ...(parsed.magnetic === true ? { magnetic: true } : {}),
       ...(parsed.rippleMarkers === false ? { rippleMarkers: false } : {}),
       ...(cleanMarkers(parsed.markers) ? { markers: cleanMarkers(parsed.markers) } : {}),
+      ...sanitizeProjectAudio(parsed),
     }
   } catch {
     return null
@@ -786,6 +811,7 @@ export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unkno
       seen.add(id)
       const track: Track = { id, name: typeof t.name === 'string' && t.name.trim() ? t.name : `${id.toUpperCase()} · ${TRACK_KIND_LABEL[kind]}`, kind, muted: !!t.muted, locked: !!t.locked }
       if (t.hidden === true && kind !== 'audio') track.hidden = true
+      if (kind === 'audio') Object.assign(track, sanitizeTrackAudio(t))
       return track
     })
   const clips: Clip[] = []
@@ -819,6 +845,8 @@ export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unkno
     if (o.keyframes !== undefined) { const kf = sanitizeKeyframes(o.keyframes, clip.effects ?? [], renames); if (kf) clip.keyframes = kf; else delete clip.keyframes }
     if (o.speed !== undefined) { const sp = sanitizeSpeed(o.speed); if (sp !== undefined) clip.speed = sp; else delete clip.speed }
     if (o.freezes !== undefined) { const fz = sanitizeFreezes(o.freezes); if (fz) clip.freezes = fz; else delete clip.freezes }
+    delete clip.gain; delete clip.fadeIn; delete clip.fadeOut; delete clip.pan; delete clip.denoise
+    if (kind === 'audio') Object.assign(clip, sanitizeClipAudio(o as unknown as Record<string, unknown>))
     if (o.reverse !== undefined && o.reverse !== true) delete clip.reverse
     if (o.preservePitch !== undefined && o.preservePitch !== false) delete clip.preservePitch
     if (o.blendMode !== undefined && (!BLEND_MODES.includes(o.blendMode as BlendMode) || o.blendMode === 'normal')) delete clip.blendMode
