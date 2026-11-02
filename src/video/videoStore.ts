@@ -53,6 +53,8 @@ import { forgetFile } from './media'
 import { analyseClipBeats } from './engine/audioRender'
 import type { Bus, ClipDenoise, ClipFade, LoudnessTarget } from './audioModel'
 import type { BeatProposal, ClipAudioPatch, ProjectAudioPatch, TrackAudioPatch } from './audioEdit'
+import { applyCutsToClip } from './ai/applyCuts'
+import type { CutRefusal, SourceRange } from './ai/applyCuts'
 import { applyProposal, beatProposal, clipPlacementKey, proposalProblem, updateClipAudio, updateProjectAudio, updateTrackAudio } from './audioEdit'
 
 /** An undo step. Removing a bin item changes no clip, so its step carries which bin items undo shows again (`unhide`)
@@ -146,6 +148,8 @@ interface VideoState {
   deleteSelectedClip: () => void
   /** Delete the selection and close the gap on every track. False when a lock stopped it. */
   rippleDeleteSelected: () => boolean
+  /** Cut source ranges out of one footage clip (text edits, filler or silence removal). One undo step. */
+  applyTextCuts: (clipId: string, ranges: SourceRange[]) => { removed: number; refused?: CutRefusal }
   /** Lift / extract the in–out range (or, without one, the selection's time span) from every unlocked track. */
   lift: () => boolean
   extract: () => boolean
@@ -474,6 +478,14 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     for (const id of ids) next = deleteClip(next, id)
     if (next === project) return // on a locked track (or linked to one)
     set((st) => ({ ...edit(st, next), selectedClipId: null, selectedIds: [] }))
+  },
+
+  applyTextCuts: (clipId, ranges) => {
+    const s = get()
+    const r = applyCutsToClip(viewOf(s), clipId, ranges)
+    if (r.refused) return { removed: 0, refused: r.refused }
+    if (r.removed) set((st) => edit(st, r.project))
+    return { removed: r.removed }
   },
 
   rippleDeleteSelected: () => {

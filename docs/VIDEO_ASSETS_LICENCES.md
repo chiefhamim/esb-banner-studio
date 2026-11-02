@@ -12,6 +12,9 @@ the Licence note on each track (kept in the `.esbvideo` project file) says where
 | Transitions, titles, stickers, LUT presets, UI sounds | code-drawn / repo-made | ESB | Own work | yes |
 | Inter (ESB Sans), Hind Siliguri, Oswald, Space Grotesk | fonts | see `src/assets/fonts` | SIL OFL 1.1 | yes |
 | Music | none bundled | n/a | n/a | n/a |
+| `@mediapipe/tasks-vision` 1.2.0 (npm) + wasm | local vision runtime (face detection, segmentation) | Google / MediaPipe | Apache-2.0 (package `license` field, checked 2026-11-02) | yes |
+| `blaze_face_short_range.tflite` (float16) | face detector model, `public/models/mediapipe/` | Google / MediaPipe | **Not confirmed for the model file.** MediaPipe docs carry CC-BY 4.0 (docs) and Apache-2.0 (code); the model's own licence was not found on 2026-11-02. Owner to confirm before release. | pending |
+| `selfie_segmenter.tflite` (float16) | person segmentation model, `public/models/mediapipe/` | Google / MediaPipe | **Not confirmed for the model file** (same as the face model). | pending |
 
 Add a row for anything new in the same pull request that adds it, with the licence text or its URL and the date checked.
 

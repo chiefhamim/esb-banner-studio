@@ -47,3 +47,6 @@ artifacts/**/*.mp4
 .esb-port-offset
 .vite-cache/
 !artifacts/**/*.log
+
+# MediaPipe wasm copied by tools/copy-mediapipe-wasm.mjs
+public/mediapipe/wasm/

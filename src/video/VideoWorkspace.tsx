@@ -33,6 +33,7 @@ import { holdBackground, holdProxies, noteScrub } from './engine/background'
 import { releaseFilmstrips } from './engine/filmstrip'
 import { ExportSheet } from './ExportSheet'
 import { StoryVideoPanel } from './StoryVideoPanel'
+import { TranscriptPanel } from './TranscriptPanel'
 import { DataCardInspector, DataPanel } from './DataPanel'
 import { EffectsPanel, FxSection, InspectorSections, openSection, useInspectorUi } from './EffectsPanel'
 import { ColourPanel } from './ColourPanel'
@@ -1099,6 +1100,9 @@ function VideoDesk() {
                     </div>
                     <textarea className="vw-caption-input" value={captionDraft} placeholder="Caption text (Bangla or English)" rows={3} onChange={(e) => setCaptionDraft(e.target.value)} aria-label="Caption text" />
                     <p className="vw-preset-desc">Adds a caption at the playhead on C1, held 4.5 s. Leave it empty to type it later in the inspector.</p>
+                  </div>
+                  <div className="vw-preset-card">
+                    <TranscriptPanel />
                   </div>
                 </div>
               )}

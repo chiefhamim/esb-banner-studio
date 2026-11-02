@@ -632,3 +632,21 @@
 /* The title section has no header of its own: it is the clip's first body, set off by one hairline (U6) */
 .vw-fx-section.bare { padding-top: 6px; }
 .vw-fx-section.bare .vw-fx-body { gap: 10px; }
+
+/* Phase 5: transcript panel (AI draft, text-based cuts). Words are buttons; a marked word shows a strike. */
+.vw-transcript { display: flex; flex-direction: column; gap: 6px; }
+.vw-transcript-head, .vw-transcript-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.vw-transcript-actions { justify-content: flex-end; }
+.vw-transcript-words { display: flex; flex-wrap: wrap; gap: 4px; max-height: 220px; overflow: auto; padding: 4px 0; }
+.vw-word { font: 500 13px/1.6 var(--ui); color: var(--text); background: var(--field); border: 0; border-radius: var(--r-1); padding: 2px 6px; cursor: pointer; }
+.vw-word:hover { background: var(--field-hover); }
+.vw-word:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.vw-word.is-cut { text-decoration: line-through; color: var(--text-3); }
+.vw-error { color: var(--danger); }
+.vw-cut-tools { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.vw-cut-row { display: flex; align-items: center; gap: 8px; font: 500 12px/1.4 var(--ui); color: var(--text-2); }
+.vw-cut-row input[type="range"] { flex: 1; min-width: 0; }
+.vw-cut-plan { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: var(--r-2); background: var(--field); }
+.vw-cut-list { margin: 0; padding: 0; list-style: none; max-height: 160px; overflow: auto; font: 500 12px/1.6 var(--ui); font-variant-numeric: tabular-nums; }
+.vw-reframe { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.vw-reframe select { font: 500 12px/1.4 var(--ui); color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); padding: 4px 8px; }

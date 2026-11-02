@@ -448,12 +448,14 @@ export function trimClip(timeline: VideoProject, clipId: string, newStart: numbe
   }
 }
 
+let splitSeq = 0
 export function splitClip(timeline: VideoProject, clipId: string, atTime: number): VideoProject {
   const target = timeline.clips.find((c) => c.id === clipId)
   if (!target || groupLocked(timeline, clipId)) return timeline
   if (atTime <= target.start || atTime >= target.start + target.duration) return timeline
   const group = linkedIds(timeline, clipId)
-  const stamp = Date.now().toString(36)
+  // unique per call: two splits in the same millisecond used to mint the same id (Phase 5 cut loop found it)
+  const stamp = `${Date.now().toString(36)}${(++splitSeq).toString(36)}`
   // the second halves of a linked pair stay linked to each other, and no longer to the first halves
   const newLink = target.linkId ? `${target.linkId}-${stamp}` : undefined
   const out: Clip[] = []
