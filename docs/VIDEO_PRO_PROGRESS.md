@@ -2000,6 +2000,13 @@ Fixes found on the way: `splitClip` ids collided when two splits ran in the same
 
 New dependency (owner approved 2026-11-02): `@mediapipe/tasks-vision` 1.2.0 (Apache-2.0). Models in `public/models/mediapipe/`; wasm copied to `public/mediapipe/wasm` by `tools/copy-mediapipe-wasm.mjs` before dev/build (git-ignored). **Model-file licences are not confirmed** (see `docs/VIDEO_ASSETS_LICENCES.md`).
 
-Still to build before Phase 5 is closed: caption translation EN⇄BN (reviewed track), AI-written YouTube/Facebook copy, Story → video v2 (templates, several photos, quote cards, B-roll from the bin). Deferred with the owner's OK (2026-11-02): AI voice-over (TTS). Whisper.cpp local engine stays "planned".
+Also in Phase 5 (second half):
+- **Caption translation EN⇄BN** (Captions tab): a separate track labelled AI draft; a caption whose figures change is left out and reported; nothing is sent while AI is off (`ai/captionTranslate.ts`, `ai/aiText.ts`).
+- **YouTube / Facebook copy** (Story tab): title ≤ 100, description (summary + article link with UTM + chapters from markers only when honest), tags, Facebook caption through `sanitizeFacebook`; a field with a figure the story lacks is replaced by the story's own words and the problem shown; model-made links are stripped; saved with the project (`project.videoCopy`) for the Phase 7 publish sheet (`ai/videoCopy.ts`, `VideoCopyPanel`).
+- **Story → video v2:** cut styles (Standard, Short ≤ 60 s, Quote first), every photo on the desk (up to 4) one per key sentence, a quote card only for a quote whose speaker the story names (never invented), B-roll suggested from the bin by file name, a pointer to the Data tab for a Grid card.
 
-Gate on the code so far: lint 0, unit 1411, build 0, test:video 172 PASS / 0 FAIL (one perf-budget flake on a first run, passes on rerun), test:electron 105 / 0, text-fit 0, centre audit 0. Not verified against a real Gemini call (needs the owner's key) or a real microphone.
+Deferred with the owner's OK (2026-11-02): AI voice-over (TTS). Whisper.cpp local engine stays "planned".
+
+Found by running the desktop app (not visible in the browser): MediaPipe assets must be page-relative (the app loads from `file://`), and the face-analysis `<video>` needs `crossOrigin='anonymous'` or its canvas is tainted. `tools/e2e/video-ai-electron-test.mjs` (in `test:electron`) now covers model load from file URLs, reframe analysis, the silence plan and cut, and the no-key transcript message.
+
+Gate: lint 0, unit 1433+, build 0, test:video 172 PASS (a perf-budget case flakes on a busy PC and passes alone), test:electron 105 + the new 6-check Phase 5 script, text-fit 0, centre audit 0. Not verified against a real Gemini call (needs the owner's key) or a real microphone.

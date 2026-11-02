@@ -652,6 +652,34 @@ const STATES = {
     await clickTab(page, 'Story')
     return {}
   },
+  // ---- Phase 5: Story v2 options and the video copy
+  'story-options': async (page) => {
+    await seedTimeline(page)
+    await seedDraft(page)
+    await page.evaluate(() => {
+      const ed = window.__editorialStore.getState()
+      ed.setDraftField('headline', 'Petrobangla to drill two new wells in Sylhet')
+      ed.setDraftField('slug', 'two-new-wells-sylhet')
+      ed.setDraftField('body', 'Petrobangla will drill two new wells in Sylhet this winter. The wells are expected to add 30 MMCFD to the grid.\n\n\u201cWe expect the first gas by December and no delay,\u201d said Rahim Uddin, the project director at Petrobangla.\n\n\u201cNobody has confirmed the final schedule for this stage yet.\u201d The ministry declined to comment.')
+      window.__videoStore.setState((s) => ({ mediaAssets: s.mediaAssets.map((a) => (a.type === 'video' ? { ...a, name: 'sylhet-gas-field.mp4' } : a)) }))
+    })
+    await page.evaluate(() => window.__videoStore.getState().selectClip(null))
+    await clickTab(page, 'Story')
+    await page.locator('.vw-story-opts').scrollIntoViewIfNeeded()
+    return { el: page.locator('.vw-bin-panel') }
+  },
+  'story-copy': async (page) => {
+    await seedTimeline(page)
+    await seedDraft(page)
+    await page.evaluate(() => {
+      window.__videoStore.getState().setVideoCopy({ youtubeTitle: 'Two new Sylhet wells to add 30 MMCFD by winter', description: 'Petrobangla will drill two new wells in Sylhet. They are expected to add 30 MMCFD.\n\nRead the full story: https://esbpowerline.com/articles/two-new-wells-sylhet?utm_source=youtube&utm_medium=video&utm_campaign=two-new-wells-sylhet\n\nESB Power Line \u00b7 esbpowerline.com', tags: ['Petrobangla', 'Sylhet', 'gas'], facebook: 'Two new wells will add 30 MMCFD to the grid.\n\n#Bangladesh #Gas #Sylhet #ESBPowerLine', model: 'sample', at: 0 })
+      window.__videoStore.getState().selectClip(null)
+    })
+    await clickTab(page, 'Story')
+    await page.locator('.vw-copy').scrollIntoViewIfNeeded()
+    return { el: page.locator('.vw-bin-panel') }
+  },
+  'captions-translate': async (page) => { await seedTimeline(page); await page.evaluate(() => window.__videoStore.getState().selectClip(null)); await clickTab(page, 'Captions'); await page.locator('[aria-label="Translate captions"]').scrollIntoViewIfNeeded(); return { el: page.locator('.vw-bin-panel') } },
   'story-built': async (page) => {
     await seedTimeline(page)
     await seedDraft(page)

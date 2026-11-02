@@ -13,8 +13,10 @@ import { CATEGORIES } from '../core/tokens'
 import type { FormatId } from '../core/tokens'
 import { Icon } from '../ui/Icon'
 import { useVideoStore } from './videoStore'
-import { buildStoryTimeline, holdFor, storyPoints } from './storyVideo'
-import { formatShortTime } from './timeline'
+import { MAX_PHOTOS, STORY_STYLES, buildStoryTimeline, holdFor, quotesWithSpeakers, storyPoints, suggestBroll } from './storyVideo'
+import type { StoryPhoto, StoryStyle } from './storyVideo'
+import { VideoCopyPanel } from './VideoCopyPanel'
+import { clipsForAsset, formatShortTime } from './timeline'
 import type { AspectRatio, MediaAsset } from './timeline'
 import { assetFromEntry, newAssetId, videoBridge } from './media'
 
@@ -33,8 +35,8 @@ async function keepStill(blob: Blob, name: string, w: number, h: number): Promis
   return { id: newAssetId(), name, type: 'image', url, thumbnailUrl: url, duration: 0, size: blob.size, width: w, height: h, generated: true }
 }
 
-async function photoBlob(): Promise<{ blob: Blob; w: number; h: number } | null> {
-  const first = useStore.getState().images[0]
+async function photoBlob(index = 0): Promise<{ blob: Blob; w: number; h: number } | null> {
+  const first = useStore.getState().images[index]
   const img = first ? imageAssets[first.id] : undefined
   if (!img || !img.naturalWidth) return null
   const scale = Math.min(1, 2560 / Math.max(img.naturalWidth, img.naturalHeight))
@@ -49,7 +51,13 @@ async function photoBlob(): Promise<{ blob: Blob; w: number; h: number } | null>
 export function StoryVideoPanel() {
   const draft = useEditorialStore((s) => s.draft)
   const categoryId = useStore((s) => s.doc.content.categoryId)
-  const hasPhoto = useStore((s) => s.images.length > 0)
+  const photoCount = useStore((s) => s.images.length)
+  const hasPhoto = photoCount > 0
+  const mediaAssets = useVideoStore((s) => s.mediaAssets)
+  const addClips = useVideoStore((s) => s.addClips)
+  const playhead = useVideoStore((s) => s.currentTime)
+  const [style, setStyle] = useState<StoryStyle>('standard')
+  const [quoteIdx, setQuoteIdx] = useState(-1)
   const project = useVideoStore((s) => s.project)
   const loadProject = useVideoStore((s) => s.loadProject)
   const [confirm, setConfirm] = useState(false)
@@ -57,7 +65,9 @@ export function StoryVideoPanel() {
   const [note, setNote] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
 
-  const points = useMemo(() => storyPoints(draft.deck, draft.body), [draft.deck, draft.body])
+  const points = useMemo(() => storyPoints(draft.deck, draft.body, style === 'short' ? 3 : undefined), [draft.deck, draft.body, style])
+  const quotes = useMemo(() => quotesWithSpeakers(draft.body), [draft.body])
+  const broll = useMemo(() => suggestBroll(mediaAssets, `${draft.headline} ${draft.deck} ${draft.body}`), [mediaAssets, draft.headline, draft.deck, draft.body])
   const desk = CATEGORIES.find((c) => c.id === categoryId)?.name ?? 'ESB Power Line'
   const total = Math.max(4, Math.min(7, holdFor(draft.headline))) + points.reduce((n, p) => n + holdFor(p), 0) + 4
 
@@ -82,6 +92,13 @@ export function StoryVideoPanel() {
       const bannerAsset = banner ? await keepStill(banner, `${slug}-banner-${project.aspect.replace(':', 'x')}.jpg`, project.width, project.height) : null
       const photo = await photoBlob()
       const photoAsset = photo ? await keepStill(photo.blob, `${slug}-photo.jpg`, photo.w, photo.h) : null
+      // every other photo the desk has (v2): one still each, up to MAX_PHOTOS
+      const extraAssets: MediaAsset[] = []
+      for (let i = 1; i < Math.min(MAX_PHOTOS, useStore.getState().images.length); i++) {
+        const pb = await photoBlob(i)
+        if (pb) extraAssets.push(await keepStill(pb.blob, `${slug}-photo-${i + 1}.jpg`, pb.w, pb.h))
+      }
+      const photos: StoryPhoto[] = [photoAsset, ...extraAssets].filter((a): a is MediaAsset => !!a).map((a) => ({ url: a.url, assetId: a.id }))
       const tl = buildStoryTimeline({
         aspect: project.aspect,
         headline: draft.headline,
@@ -94,9 +111,12 @@ export function StoryVideoPanel() {
         bannerAssetId: bannerAsset?.id,
         photoAssetId: photoAsset?.id,
         accent: CATEGORIES.find((c) => c.id === categoryId)?.accent,
+        photos,
+        style,
+        quote: quoteIdx >= 0 ? quotes.named[quoteIdx] ?? null : null,
       })
       const bin = useVideoStore.getState().mediaAssets
-      loadProject({ ...tl, fps: project.fps }, { assets: [...bin, ...[bannerAsset, photoAsset].filter((a): a is MediaAsset => !!a)], path: null, dirty: true })
+      loadProject({ ...tl, fps: project.fps }, { assets: [...bin, ...[bannerAsset, photoAsset, ...extraAssets].filter((a): a is MediaAsset => !!a)], path: null, dirty: true })
       setNote(`Built a ${formatShortTime(tl.duration)} cut — ${tl.clips.length} clips. Trim, re-time or add sound, then Export.`)
       // the outline was scrolled down to the Build button: bring its headline back into view
       requestAnimationFrame(() => root.current?.closest('.vw-bin-content')?.scrollTo({ top: 0 }))
@@ -114,6 +134,19 @@ export function StoryVideoPanel() {
         <span className="vw-story-kicker">{desk}</span>
         <b>{draft.headline}</b>
       </div>
+      <div className="vw-sec vw-story-style-sec">
+        <div className="vw-sec-head"><h4 className="vw-sec-title">Cut style</h4></div>
+        <div className="vw-story-styles" role="radiogroup" aria-label="Cut style">
+          {STORY_STYLES.map((s) => (
+            <button key={s.id} type="button" role="radio" aria-checked={style === s.id} className={`vw-story-style${style === s.id ? ' on' : ''}`} onClick={() => setStyle(s.id)}>
+              <b>{s.label}</b>
+              <span>{s.hint}</span>
+            </button>
+          ))}
+        </div>
+        {style === 'short' && project.aspect !== '9:16' && <p className="vw-hint">A Short is 9:16. This project is {project.aspect}; switch it in the shape menu above the monitor.</p>}
+        {photoCount > 1 && <p className="vw-hint">{Math.min(photoCount, MAX_PHOTOS)} photos from the desk, one per key sentence.</p>}
+      </div>
       <ol className="vw-story-points">
         <li><span>Title · banner</span><em>{formatShortTime(Math.max(4, Math.min(7, holdFor(draft.headline))))}</em></li>
         {points.map((p, k) => <li key={k}><span>{p}</span><em>{formatShortTime(holdFor(p))}</em></li>)}
@@ -122,6 +155,31 @@ export function StoryVideoPanel() {
       <div className="vw-story-sum">
         <span>{project.aspect} · about {formatShortTime(total)}</span>
         <span>{hasPhoto ? 'Banner + photo' : 'Banner only (no photo on the desk)'}</span>
+      </div>
+      <div className="vw-sec vw-story-opts">
+        <div className="vw-sec-head"><h4 className="vw-sec-title">Quote card</h4></div>
+        {quotes.named.length ? (
+          <label className="vw-story-quote">
+            <select value={quoteIdx} onChange={(e) => setQuoteIdx(Number(e.target.value))} aria-label="Quote card">
+              <option value={-1}>No quote card</option>
+              {quotes.named.map((q, i) => <option key={q.quote} value={i}>{q.speaker}: “{q.quote.length > 60 ? q.quote.slice(0, 57) + '…' : q.quote}”</option>)}
+            </select>
+          </label>
+        ) : <p className="vw-hint">No quote in this story names its speaker, so no quote card is offered.</p>}
+        {quotes.unnamed > 0 && quotes.named.length > 0 && <p className="vw-hint">{quotes.unnamed} more quote{quotes.unnamed === 1 ? '' : 's'} with no named speaker are not offered.</p>}
+        <div className="vw-sec-head"><h4 className="vw-sec-title">B-roll in your media</h4></div>
+        {broll.length ? (
+          <ul className="vw-cut-list vw-short-list">
+            {broll.map(({ asset, matched }) => (
+              <li key={asset.id}>
+                <button type="button" className="vw-word" onClick={() => addClips(clipsForAsset(useVideoStore.getState().project, asset, playhead))}>Add {asset.name}</button>
+                <div className="vw-hint">matches “{matched.join('”, “')}” in the story (by file name)</div>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="vw-hint">No file in the media bin has a name that matches the story. Name files for what they show (for example sylhet-gas-field.mp4).</p>}
+        <div className="vw-sec-head"><h4 className="vw-sec-title">Grid data card</h4></div>
+        <p className="vw-hint">A figure from esbpowerline.com Grid data can be added from the Data tab, with its source line.</p>
       </div>
       {confirm ? (
         <div className="vw-story-confirm">
@@ -135,6 +193,7 @@ export function StoryVideoPanel() {
         </button>
       )}
       {note && <p className="vw-story-note">{note}</p>}
+      <VideoCopyPanel />
     </div>
   )
 }

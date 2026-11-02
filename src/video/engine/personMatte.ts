@@ -2,6 +2,8 @@
 // leaves the PC) turns a footage frame into a small 0..255 alpha picture, which the GL pass multiplies into the layer.
 // The matte is computed from the exact frame the compositor is about to draw, so preview and export agree.
 
+import { mediapipeModel, mediapipeWasmDir } from '../ai/mediapipeAssets'
+
 export interface Matte { w: number; h: number; data: Uint8Array; /** Changes whenever the picture does (GL re-uploads on a new rev). */ rev: number }
 
 type Segmenter = import('@mediapipe/tasks-vision').ImageSegmenter
@@ -21,9 +23,9 @@ export function loadPersonMatte(): Promise<void> {
     state = 'loading'
     seg = (async () => {
       const { ImageSegmenter, FilesetResolver } = await import('@mediapipe/tasks-vision')
-      const vision = await FilesetResolver.forVisionTasks('/mediapipe/wasm')
+      const vision = await FilesetResolver.forVisionTasks(mediapipeWasmDir())
       const segmenter = await ImageSegmenter.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: '/models/mediapipe/selfie_segmenter.tflite', delegate: 'CPU' },
+        baseOptions: { modelAssetPath: mediapipeModel('selfie_segmenter.tflite'), delegate: 'CPU' },
         runningMode: 'IMAGE',
         outputConfidenceMasks: true,
         outputCategoryMask: false,

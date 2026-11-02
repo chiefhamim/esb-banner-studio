@@ -426,7 +426,7 @@ npm run dev
 - The main window's minimum is **900 px** (a 1366 × 768 laptop at 150 % is 911 px). Headers give up space in order — labels to icons, redundant buttons whose actions live in the menus — and never push Export/Publish off the edge or hide the menus, sign-in or the AI chip.
 - `npm run census` (tools/audit/css-census.mjs) reports duplicate/undefined CSS custom properties and off-scale values; `--strict` fails on duplicates or undefined names.
 - The Editorial Desk's "Web Article" preview (`src/editorial/SitePreview.tsx`) is the esbpowerline.com article page itself: markup ported from the website repo's `app/(public)/articles/[slug]/page.tsx`, rendered in an iframe with `src/editorial/site-preview.css`, which is **generated** from the site's `app/globals.css` by `SITE_REPO=../esbpowerline node tools/site-css.mjs` (needs the `esbpowerline/esbpowerline` checkout; runs the site's Tailwind 3.4 via npx). Regenerate it whenever the site's theme tokens or article styles change; never hand-edit it.
-- Content Security Policy in `index.html` permits `connect-src 'self' ws: blob: data: https: http:`.
+- Content Security Policy in `index.html` permits `connect-src 'self' ws: blob: data: https: http:`. `script-src` is `'self' 'wasm-unsafe-eval'`: WebAssembly may compile (the local MediaPipe face/segmentation runtime needs it), JavaScript `eval` stays blocked. MediaPipe assets are loaded relative to the page (`src/video/ai/mediapipeAssets.ts`), never from `/…`, because the desktop app loads the page from a file.
 
 ---
 

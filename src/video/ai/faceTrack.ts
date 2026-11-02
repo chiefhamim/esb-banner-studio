@@ -1,6 +1,7 @@
 // Face tracking for auto reframe: MediaPipe's face detector (local wasm + model, see tools/copy-mediapipe-wasm.mjs),
 // run on frames the editor's own video element seeks to. Nothing leaves the PC.
 import type { SubjectFrame } from './reframe'
+import { mediapipeModel, mediapipeWasmDir } from './mediapipeAssets'
 
 let detector: Promise<import('@mediapipe/tasks-vision').FaceDetector> | null = null
 
@@ -9,9 +10,9 @@ export function faceDetector(): Promise<import('@mediapipe/tasks-vision').FaceDe
   if (!detector) {
     detector = (async () => {
       const { FaceDetector, FilesetResolver } = await import('@mediapipe/tasks-vision')
-      const vision = await FilesetResolver.forVisionTasks('/mediapipe/wasm')
+      const vision = await FilesetResolver.forVisionTasks(mediapipeWasmDir())
       return FaceDetector.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: '/models/mediapipe/blaze_face_short_range.tflite', delegate: 'CPU' },
+        baseOptions: { modelAssetPath: mediapipeModel('blaze_face_short_range.tflite'), delegate: 'CPU' },
         runningMode: 'IMAGE',
         minDetectionConfidence: 0.5,
       })

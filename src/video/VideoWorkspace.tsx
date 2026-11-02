@@ -34,6 +34,7 @@ import { releaseFilmstrips } from './engine/filmstrip'
 import { ExportSheet } from './ExportSheet'
 import { StoryVideoPanel } from './StoryVideoPanel'
 import { TranscriptPanel } from './TranscriptPanel'
+import { CaptionTranslatePanel } from './CaptionTranslatePanel'
 import { DataCardInspector, DataPanel } from './DataPanel'
 import { EffectsPanel, FxSection, InspectorSections, openSection, useInspectorUi } from './EffectsPanel'
 import { ColourPanel } from './ColourPanel'
@@ -1103,6 +1104,9 @@ function VideoDesk() {
                   </div>
                   <div className="vw-preset-card">
                     <TranscriptPanel />
+                  </div>
+                  <div className="vw-preset-card">
+                    <CaptionTranslatePanel />
                   </div>
                 </div>
               )}

@@ -34,6 +34,8 @@ export function ReframePanel({ clip }: { clip: Clip }) {
     setCtrl(c)
     const video = document.createElement('video')
     video.muted = true
+    // the media protocol sends CORS headers for the app; without this the frame canvas is tainted and cannot be read
+    video.crossOrigin = 'anonymous'
     video.preload = 'auto'
     video.src = previewUrl(clip) || clip.sourceUrl || ''
     try {

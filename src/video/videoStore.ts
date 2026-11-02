@@ -56,6 +56,7 @@ import type { BeatProposal, ClipAudioPatch, ProjectAudioPatch, TrackAudioPatch }
 import { applyCutsToClip } from './ai/applyCuts'
 import type { CutRefusal, SourceRange } from './ai/applyCuts'
 import type { Transcript } from './ai/transcript'
+import type { VideoCopy } from './ai/savedCopy'
 import { applyProposal, beatProposal, clipPlacementKey, proposalProblem, updateClipAudio, updateProjectAudio, updateTrackAudio } from './audioEdit'
 
 /** An undo step. Removing a bin item changes no clip, so its step carries which bin items undo shows again (`unhide`)
@@ -153,6 +154,8 @@ interface VideoState {
   applyTextCuts: (clipId: string, ranges: SourceRange[]) => { removed: number; refused?: CutRefusal }
   /** Keep (or drop, with null) the transcript of one source file with the project. Not an undo step: it is data about the file, not an edit. */
   setTranscript: (key: string, transcript: Transcript | null) => void
+  /** Keep (or drop, with null) the video's YouTube / Facebook copy with the project. Not an undo step. */
+  setVideoCopy: (copy: VideoCopy | null) => void
   /** Lift / extract the in–out range (or, without one, the selection's time span) from every unlocked track. */
   lift: () => boolean
   extract: () => boolean
@@ -482,6 +485,11 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     if (next === project) return // on a locked track (or linked to one)
     set((st) => ({ ...edit(st, next), selectedClipId: null, selectedIds: [] }))
   },
+
+  setVideoCopy: (copy) => set((s) => {
+    const { videoCopy: _drop, ...rest } = s.project
+    return { project: copy ? { ...rest, videoCopy: copy } : rest, dirty: true, rev: s.rev + 1 }
+  }),
 
   setTranscript: (key, transcript) => set((s) => {
     const next = { ...(s.project.transcripts ?? {}) }
