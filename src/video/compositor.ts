@@ -204,13 +204,13 @@ export function rasterOffline(clip: Clip, w: number, h: number): { src: TexImage
   return { src: c as TexImageSource, width: w, height: h }
 }
 
-export const bugKey = (w: number, h: number) => `bug|${w}x${h}|${imageState()}`
+export const bugKey = (w: number, h: number, corner: string = 'tr') => `bug|${w}x${h}|${corner}|${imageState()}`
 
 /** The ESB bug raster (null until the logo has loaded). */
-export function rasterBug(w: number, h: number): { src: TexImageSource; width: number; height: number } | null {
+export function rasterBug(w: number, h: number, corner: 'tr' | 'tl' | 'br' | 'bl' = 'tr'): { src: TexImageSource; width: number; height: number } | null {
   if (!(stationLogoImg && stationLogoImg.complete && stationLogoImg.naturalWidth > 0)) return null
   const { c, ctx } = scratchCanvas(w, h)
-  renderStationBug(ctx, w, h)
+  renderStationBug(ctx, w, h, corner)
   return { src: c as TexImageSource, width: w, height: h }
 }
 
@@ -457,7 +457,7 @@ function renderCaptionClip(ctx: Ctx, clip: Clip, w: number, h: number, editor: b
 /** The ESB bug: the official logo on a white plate, top right. The wordmark has black and dark-green letters, so it
  * sits on white (on dark glass its "ESB" vanished). Sized off the frame's short side so it reads in a 9:16 frame and
  * on the monitor. No REC dot or "live" sign: a finished package is not live. */
-function renderStationBug(ctx: Ctx, w: number, h: number) {
+function renderStationBug(ctx: Ctx, w: number, h: number, corner: 'tr' | 'tl' | 'br' | 'bl' = 'tr') {
   const logo = stationLogoImg && stationLogoImg.complete && stationLogoImg.naturalWidth > 0 ? stationLogoImg : null
   if (!logo) return
   ctx.save()
@@ -468,12 +468,15 @@ function renderStationBug(ctx: Ctx, w: number, h: number) {
   const padY = 9 * s
   const plateW = logoW + padX * 2
   const plateH = logoH + padY * 2
-  const x = w - plateW - 36 * s
+  const left = corner === 'tl' || corner === 'bl'
+  const x = left ? 36 * s : w - plateW - 36 * s
   // on a 9:16 frame the Reels / Shorts header icons own the top band: the bug sits just below it (titles/brand.ts
   // DEFAULT_SAFE_ZONES, the same numbers the title kit keeps clear of); 16:9, 4:5 and 1:1 keep their old place
   const portrait = h / w >= 1.5
   const headerBand = portrait ? h * Math.max(DEFAULT_SAFE_ZONES.platforms.reels.top, DEFAULT_SAFE_ZONES.platforms.shorts.top) : 0
-  const y = Math.max(36 * s, headerBand + 10 * s)
+  // top corners: below the Reels / Shorts header band on a portrait frame; bottom corners: above the platform's caption band there
+  const footerBand = portrait ? h * Math.max(DEFAULT_SAFE_ZONES.platforms.reels.bottom, DEFAULT_SAFE_ZONES.platforms.shorts.bottom) : 0
+  const y = corner === 'br' || corner === 'bl' ? h - plateH - Math.max(36 * s, footerBand + 10 * s) : Math.max(36 * s, headerBand + 10 * s)
   ctx.shadowColor = 'rgba(0, 0, 0, 0.28)'
   ctx.shadowBlur = 10 * s
   ctx.shadowOffsetY = 2 * s

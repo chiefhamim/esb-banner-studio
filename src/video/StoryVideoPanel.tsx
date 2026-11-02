@@ -16,8 +16,14 @@ import { useVideoStore } from './videoStore'
 import { MAX_PHOTOS, STORY_STYLES, buildStoryTimeline, holdFor, quotesWithSpeakers, storyPoints, suggestBroll } from './storyVideo'
 import type { StoryPhoto, StoryStyle } from './storyVideo'
 import { VideoCopyPanel } from './VideoCopyPanel'
-import { clipsForAsset, formatShortTime } from './timeline'
-import type { AspectRatio, MediaAsset } from './timeline'
+import { SizesPanel } from './SizesPanel'
+import { BrandPanel } from './BrandPanel'
+import { MyTemplatesPanel } from './MyTemplatesPanel'
+import { TEMPLATES, applyTemplate, templateById, type TemplateId } from './templates'
+import { loadBrand, accentFor } from './brandKit'
+import { useTitleUi } from './titleUi'
+import { ASPECT_CONFIGS, clipsForAsset, formatShortTime } from './timeline'
+import type { AspectRatio, MediaAsset, VideoProject } from './timeline'
 import { assetFromEntry, newAssetId, videoBridge } from './media'
 
 const FORMAT_FOR: Record<AspectRatio, FormatId> = { '16:9': 'web', '9:16': 'story', '1:1': 'sq', '4:5': 'fb45' }
@@ -57,6 +63,7 @@ export function StoryVideoPanel() {
   const addClips = useVideoStore((s) => s.addClips)
   const playhead = useVideoStore((s) => s.currentTime)
   const [style, setStyle] = useState<StoryStyle>('standard')
+  const [tplId, setTplId] = useState<TemplateId | 'custom'>('custom')
   const [quoteIdx, setQuoteIdx] = useState(-1)
   const project = useVideoStore((s) => s.project)
   const loadProject = useVideoStore((s) => s.loadProject)
@@ -65,7 +72,9 @@ export function StoryVideoPanel() {
   const [note, setNote] = useState<string | null>(null)
   const root = useRef<HTMLDivElement>(null)
 
-  const points = useMemo(() => storyPoints(draft.deck, draft.body, style === 'short' ? 3 : undefined), [draft.deck, draft.body, style])
+  const spec = tplId === 'custom' ? null : templateById(tplId) ?? null
+  const effStyle: StoryStyle = spec ? spec.style : style
+  const points = useMemo(() => storyPoints(draft.deck, draft.body, effStyle === 'short' ? 3 : undefined), [draft.deck, draft.body, effStyle])
   const quotes = useMemo(() => quotesWithSpeakers(draft.body), [draft.body])
   const broll = useMemo(() => suggestBroll(mediaAssets, `${draft.headline} ${draft.deck} ${draft.body}`), [mediaAssets, draft.headline, draft.deck, draft.body])
   const desk = CATEGORIES.find((c) => c.id === categoryId)?.name ?? 'ESB Power Line'
@@ -87,9 +96,11 @@ export function StoryVideoPanel() {
     try {
       // the banner carries the headline; if it cannot be rendered, the title card sets the headline itself
       let banner: Blob | null = null
-      try { banner = await renderBanner(useStore.getState().doc, FORMAT_FOR[project.aspect], await loadBaseAssets(), 1, 'jpeg', 0.92) } catch { banner = null }
+      const aspect = spec ? spec.aspect : project.aspect
+      const dims = ASPECT_CONFIGS[aspect]
+      try { banner = await renderBanner(useStore.getState().doc, FORMAT_FOR[aspect], await loadBaseAssets(), 1, 'jpeg', 0.92) } catch { banner = null }
       const slug = draft.headline.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'story'
-      const bannerAsset = banner ? await keepStill(banner, `${slug}-banner-${project.aspect.replace(':', 'x')}.jpg`, project.width, project.height) : null
+      const bannerAsset = banner ? await keepStill(banner, `${slug}-banner-${aspect.replace(':', 'x')}.jpg`, dims.width, dims.height) : null
       const photo = await photoBlob()
       const photoAsset = photo ? await keepStill(photo.blob, `${slug}-photo.jpg`, photo.w, photo.h) : null
       // every other photo the desk has (v2): one still each, up to MAX_PHOTOS
@@ -99,8 +110,8 @@ export function StoryVideoPanel() {
         if (pb) extraAssets.push(await keepStill(pb.blob, `${slug}-photo-${i + 1}.jpg`, pb.w, pb.h))
       }
       const photos: StoryPhoto[] = [photoAsset, ...extraAssets].filter((a): a is MediaAsset => !!a).map((a) => ({ url: a.url, assetId: a.id }))
-      const tl = buildStoryTimeline({
-        aspect: project.aspect,
+      const chosen = quoteIdx >= 0 ? quotes.named[quoteIdx] ?? null : spec?.needsQuote ? quotes.named[0] ?? null : null
+      const common = {
         headline: draft.headline,
         deck: draft.deck,
         body: draft.body,
@@ -110,14 +121,23 @@ export function StoryVideoPanel() {
         photoUrl: photoAsset?.url ?? null,
         bannerAssetId: bannerAsset?.id,
         photoAssetId: photoAsset?.id,
-        accent: CATEGORIES.find((c) => c.id === categoryId)?.accent,
-        photos,
-        style,
-        quote: quoteIdx >= 0 ? quotes.named[quoteIdx] ?? null : null,
-      })
+        accent: accentFor(loadBrand(), categoryId ?? null) ?? CATEGORIES.find((c) => c.id === categoryId)?.accent,
+      }
+      let tl: VideoProject
+      const notes: string[] = []
+      if (spec) {
+        const r = applyTemplate(spec, { ...common, photos, quote: chosen, category: categoryId ?? null }, loadBrand())
+        if (r.refused) { setNote(r.refused); return }
+        tl = r.project
+        notes.push(...r.notes)
+        // the platform's UI zones show while editing, so the editor sees what the captions keep clear of
+        if (r.guides) useTitleUi.setState({ guides: true, platform: r.guides })
+      } else {
+        tl = buildStoryTimeline({ ...common, aspect, photos, style, quote: chosen })
+      }
       const bin = useVideoStore.getState().mediaAssets
-      loadProject({ ...tl, fps: project.fps }, { assets: [...bin, ...[bannerAsset, photoAsset, ...extraAssets].filter((a): a is MediaAsset => !!a)], path: null, dirty: true })
-      setNote(`Built a ${formatShortTime(tl.duration)} cut — ${tl.clips.length} clips. Trim, re-time or add sound, then Export.`)
+      loadProject(spec ? tl : { ...tl, fps: project.fps }, { assets: [...bin, ...[bannerAsset, photoAsset, ...extraAssets].filter((a): a is MediaAsset => !!a)], path: null, dirty: true })
+      setNote(`Built a ${formatShortTime(tl.duration)} cut${spec ? ' (' + spec.name + ')' : ''} — ${tl.clips.length} clips. Trim, re-time or add sound, then Export.${notes.length ? ' ' + notes.join(' ') : ''}`)
       // the outline was scrolled down to the Build button: bring its headline back into view
       requestAnimationFrame(() => root.current?.closest('.vw-bin-content')?.scrollTo({ top: 0 }))
     } catch (e) {
@@ -134,7 +154,23 @@ export function StoryVideoPanel() {
         <span className="vw-story-kicker">{desk}</span>
         <b>{draft.headline}</b>
       </div>
-      <div className="vw-sec vw-story-style-sec">
+      <div className="vw-sec vw-story-tpl-sec">
+        <div className="vw-sec-head"><h4 className="vw-sec-title">Template</h4></div>
+        <div className="vw-story-styles" role="radiogroup" aria-label="Template">
+          <button type="button" role="radio" aria-checked={tplId === 'custom'} className={'vw-story-style' + (tplId === 'custom' ? ' on' : '')} onClick={() => setTplId('custom')}>
+            <b>Custom</b>
+            <span>Pick the cut style yourself, in the shape the project is in now</span>
+          </button>
+          {TEMPLATES.map((t) => (
+            <button key={t.id} type="button" role="radio" aria-checked={tplId === t.id} className={'vw-story-style' + (tplId === t.id ? ' on' : '')} onClick={() => setTplId(t.id)}>
+              <b>{t.name}</b>
+              <span>{t.blurb}</span>
+            </button>
+          ))}
+        </div>
+        {spec && <p className="vw-hint">{spec.aspect}, at most {spec.maxSeconds} s. Music {spec.musicDb} dB, loudness {spec.loudness} LUFS, export {spec.export.container.toUpperCase()} {spec.export.fps} fps for {spec.export.for}.</p>}
+      </div>
+      {!spec && <div className="vw-sec vw-story-style-sec">
         <div className="vw-sec-head"><h4 className="vw-sec-title">Cut style</h4></div>
         <div className="vw-story-styles" role="radiogroup" aria-label="Cut style">
           {STORY_STYLES.map((s) => (
@@ -146,7 +182,7 @@ export function StoryVideoPanel() {
         </div>
         {style === 'short' && project.aspect !== '9:16' && <p className="vw-hint">A Short is 9:16. This project is {project.aspect}; switch it in the shape menu above the monitor.</p>}
         {photoCount > 1 && <p className="vw-hint">{Math.min(photoCount, MAX_PHOTOS)} photos from the desk, one per key sentence.</p>}
-      </div>
+      </div>}
       <ol className="vw-story-points">
         <li><span>Title · banner</span><em>{formatShortTime(Math.max(4, Math.min(7, holdFor(draft.headline))))}</em></li>
         {points.map((p, k) => <li key={k}><span>{p}</span><em>{formatShortTime(holdFor(p))}</em></li>)}
@@ -193,6 +229,9 @@ export function StoryVideoPanel() {
         </button>
       )}
       {note && <p className="vw-story-note">{note}</p>}
+      <SizesPanel />
+      <BrandPanel />
+      <MyTemplatesPanel />
       <VideoCopyPanel />
     </div>
   )

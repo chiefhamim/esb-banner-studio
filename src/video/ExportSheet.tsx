@@ -38,7 +38,8 @@ const PROGRESS_MS = 100
 
 export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoProject; onClose: () => void; onShowMedia?: () => void }) {
   const setExporting = useVideoStore((s) => s.setExporting)
-  const [container, setContainer] = useState<ExportContainer>('mp4')
+  const preset = useVideoStore((s) => s.project.exportPreset)
+  const [container, setContainer] = useState<ExportContainer>(preset?.container ?? 'mp4')
   const [length, setLength] = useState<'full' | 'draft'>('full')
   const [support, setSupport] = useState<{ mp4: boolean; audio: string | null } | null>(null)
   const [step, setStep] = useState<'setup' | 'running' | 'done' | 'error'>('setup')
@@ -145,6 +146,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
       <div className="vw-export-modal vx">
         {step === 'setup' && (
           <>
+            {preset?.for && <p className="vx-preset">Template export settings: {preset.container.toUpperCase()}, {preset.fps} fps, for {preset.for}.</p>}
             <div className="vx-row">
               <span className="vx-label">Format</span>
               <Seg<ExportContainer> value={container} onChange={setContainer} options={[{ value: 'mp4', label: 'MP4 · H.264' }, { value: 'webm', label: 'WebM · VP9' }]} />

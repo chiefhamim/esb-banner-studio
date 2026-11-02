@@ -680,6 +680,32 @@ const STATES = {
     return { el: page.locator('.vw-bin-panel') }
   },
   'captions-translate': async (page) => { await seedTimeline(page); await page.evaluate(() => window.__videoStore.getState().selectClip(null)); await clickTab(page, 'Captions'); await page.locator('[aria-label="Translate captions"]').scrollIntoViewIfNeeded(); return { el: page.locator('.vw-bin-panel') } },
+  // ---- Phase 6: templates, sizes, brand kit, my templates
+  'story-templates': async (page) => {
+    await seedTimeline(page)
+    await seedDraft(page)
+    await page.evaluate(() => window.__videoStore.getState().selectClip(null))
+    await clickTab(page, 'Story')
+    return { el: page.locator('.vw-bin-panel') }
+  },
+  'story-sizes-brand': async (page) => {
+    await seedTimeline(page)
+    await seedDraft(page)
+    await page.evaluate(() => window.__videoStore.getState().selectClip(null))
+    await clickTab(page, 'Story')
+    await page.locator('[aria-label="Sizes"]').scrollIntoViewIfNeeded()
+    return { el: page.locator('.vw-bin-panel') }
+  },
+  'story-my-templates': async (page) => {
+    await seedTimeline(page)
+    await seedDraft(page)
+    await page.evaluate(() => window.__videoStore.getState().selectClip(null))
+    await clickTab(page, 'Story')
+    await page.locator('input[aria-label="Template name"]').fill('Evening bulletin')
+    await page.getByRole('button', { name: 'Save as template' }).click()
+    await page.locator('[aria-label="My templates"]').scrollIntoViewIfNeeded()
+    return { el: page.locator('.vw-bin-panel') }
+  },
   'story-built': async (page) => {
     await seedTimeline(page)
     await seedDraft(page)

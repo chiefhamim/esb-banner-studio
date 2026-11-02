@@ -35,7 +35,6 @@ import {
   ungroupClips,
   updateMarker,
   writeCompoundView,
-  ASPECT_CONFIGS,
   contentEnd,
   EMPTY_VIEW_SECONDS,
   createDefaultTimeline,
@@ -56,6 +55,8 @@ import type { BeatProposal, ClipAudioPatch, ProjectAudioPatch, TrackAudioPatch }
 import { applyCutsToClip } from './ai/applyCuts'
 import type { CutRefusal, SourceRange } from './ai/applyCuts'
 import type { Transcript } from './ai/transcript'
+import { applySize, setFraming, type SizeFraming } from './sizes'
+import type { BugCorner } from './brandKit'
 import type { VideoCopy } from './ai/savedCopy'
 import { applyProposal, beatProposal, clipPlacementKey, proposalProblem, updateClipAudio, updateProjectAudio, updateTrackAudio } from './audioEdit'
 
@@ -112,6 +113,9 @@ interface VideoState {
 
   // Actions
   setAspect: (aspect: AspectRatio) => void
+  /** Keep the framing computed for one shape (auto reframe); shown when the project is in that shape. One undo step. */
+  setSizeFraming: (aspect: AspectRatio, framing: SizeFraming) => void
+  setBugCorner: (corner: BugCorner) => void
   setProjectName: (name: string) => void
   setBug: (on: boolean) => void
   seek: (time: number, snap?: boolean) => void
@@ -366,10 +370,17 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   generation: 0,
   gesture: false,
 
+  // one timeline, several shapes: the framing of the shape being left is kept, the target's is loaded (sizes.ts)
   setAspect: (aspect) => {
-    const cfg = ASPECT_CONFIGS[aspect]
-    set((s) => s.project.aspect === aspect ? {} : { history: pushHistory(s.project, s.history), future: [], project: { ...s.project, aspect, width: cfg.width, height: cfg.height }, dirty: true, rev: s.rev + 1 })
+    set((s) => s.project.aspect === aspect ? {} : { history: pushHistory(s.project, s.history), future: [], project: applySize(s.project, aspect), dirty: true, rev: s.rev + 1 })
   },
+
+  setSizeFraming: (aspect, framing) => set((s) => ({ history: pushHistory(s.project, s.history), future: [], project: setFraming(s.project, aspect, framing), dirty: true, rev: s.rev + 1 })),
+
+  setBugCorner: (corner) => set((s) => {
+    const { bugCorner: _c, ...rest } = s.project
+    return { history: pushHistory(s.project, s.history), future: [], project: corner === 'tr' ? rest : { ...rest, bugCorner: corner }, dirty: true, rev: s.rev + 1 }
+  }),
 
   setProjectName: (name) => set((s) => ({ project: { ...s.project, name }, dirty: true, rev: s.rev + 1 })),
 

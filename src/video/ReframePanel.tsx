@@ -2,9 +2,8 @@
 // The project must already be the target shape (9:16 for a Short); nothing is written until the editor presses Apply.
 import { useState } from 'react'
 import { useVideoStore, viewOf } from './videoStore'
-import { previewUrl } from './engine/mediaSource'
-import { planReframe, type ReframePlan, type TargetAspect } from './ai/reframe'
-import { sampleTimes, trackFaces } from './ai/faceTrack'
+import { reframeClip } from './ai/reframeClip'
+import type { ReframePlan, TargetAspect } from './ai/reframe'
 import type { SubjectFrame } from './ai/reframe'
 import type { Clip } from './timeline'
 
@@ -32,39 +31,10 @@ export function ReframePanel({ clip }: { clip: Clip }) {
     setError(''); setBusy(true); setProgress('Opening the clip…')
     const c = new AbortController()
     setCtrl(c)
-    const video = document.createElement('video')
-    video.muted = true
-    // the media protocol sends CORS headers for the app; without this the frame canvas is tainted and cannot be read
-    video.crossOrigin = 'anonymous'
-    video.preload = 'auto'
-    video.src = previewUrl(clip) || clip.sourceUrl || ''
-    try {
-      await new Promise<void>((resolve, reject) => {
-        video.onloadedmetadata = () => resolve()
-        video.onerror = () => reject(new Error('This clip’s picture could not be opened for analysis.'))
-      })
-      const srcW = video.videoWidth
-      const srcH = video.videoHeight
-      if (!srcW || !srcH) throw new Error('This clip has no picture to analyse.')
-      const times = sampleTimes(clip.in, clip.out, 4)
-      if (!times.length) throw new Error('The clip has no length to analyse.')
-      const frames = await trackFaces(video, times, {
-        signal: c.signal,
-        onProgress: (d, t) => setProgress(`Finding the face… ${Math.round((d / t) * 100)}%`),
-      })
-      const found = frames.filter((f) => f.box).length
-      if (!found) throw new Error('No face was found in this clip, so no crop was made. Try a clip with a face in view.')
-      // frame times are source seconds; planReframe wants keyframe times relative to the clip's in-point
-      const reframe = planReframe(frames, { srcW, srcH, target, clipIn: clip.in })
-      setPlan({ clipId: clip.id, plan: reframe, frames })
-      setProgress('')
-    } catch (e) {
-      if (!c.signal.aborted) setError((e as Error).message)
-    } finally {
-      video.removeAttribute('src')
-      video.load()
-      setBusy(false); setProgress(''); setCtrl(null)
-    }
+    const r = await reframeClip(clip, target, { signal: c.signal, onProgress: (d, t) => setProgress(`Finding the face… ${Math.round((d / t) * 100)}%`) })
+    if (r.ok) setPlan({ clipId: clip.id, plan: r.plan, frames: r.frames })
+    else if (!c.signal.aborted) setError(r.why)
+    setBusy(false); setProgress(''); setCtrl(null)
   }
 
   const apply = () => {

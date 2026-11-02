@@ -15,6 +15,7 @@ import type { BlendMode } from './effects'
 import type { Transcript } from './ai/transcript'
 import { sanitizeSavedTranscripts } from './ai/transcript'
 import { sanitizeSavedCopy, type VideoCopy } from './ai/savedCopy'
+import { sanitizeProjectMeta, type ProjectMeta } from './projectMeta'
 import { BLEND_MODES, LUT_MAX_CHARS, lutText, lutsUsed, registerLut, sanitizeEffects } from './effects'
 import type { TitleData } from './titleModel'
 import { migrateOverlayClip, sanitizeTitleData, titleDuration } from './titleModel'
@@ -201,6 +202,12 @@ export interface VideoProject {
   transcripts?: Record<string, Transcript>
   /** The YouTube / Facebook copy for this video (an AI draft until edited), kept for the publish sheet. */
   videoCopy?: VideoCopy
+  /** Phase 6: the template this video was made from, the logo-bug corner (default top right), the safe zone captions keep clear of, export defaults, and per-shape framing (sizes.ts). */
+  bugCorner?: ProjectMeta['bugCorner']
+  safeZone?: ProjectMeta['safeZone']
+  template?: ProjectMeta['template']
+  exportPreset?: ProjectMeta['exportPreset']
+  sizes?: ProjectMeta['sizes']
   /** Phase 4: master fader (dB) and limiter; ducking of the music bus under the voice bus; the loudness an export is
    * normalised to (null/unset = not normalised); bus faders (dB). All unset = the sound of a Phase 0–3 project. */
   master?: MasterSettings
@@ -628,6 +635,7 @@ export function deserializeVideoProject(json: string): VideoProject | null {
       ...(cleanMarkers(parsed.markers) ? { markers: cleanMarkers(parsed.markers) } : {}),
       ...(sanitizeSavedTranscripts(parsed.transcripts) ? { transcripts: sanitizeSavedTranscripts(parsed.transcripts) } : {}),
       ...(sanitizeSavedCopy(parsed.videoCopy) ? { videoCopy: sanitizeSavedCopy(parsed.videoCopy) } : {}),
+      ...sanitizeProjectMeta(parsed),
       ...sanitizeProjectAudio(parsed),
     }
   } catch {

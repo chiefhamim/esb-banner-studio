@@ -19,6 +19,7 @@ import { hasKeyframes, sampleProp, srcAt } from './animation'
 import { beginFxFrame, resolveFx } from './fxResolve'
 import { titleTexture, titleTop, type Box } from './titleRaster'
 import { legacyView } from '../titleModel'
+import { DEFAULT_SAFE_ZONES } from '../titles/brand'
 import { guidesKey, rasterGuides, type Guides } from './guides'
 
 /** A footage picture for this instant: a decoded frame (ImageBitmap / VideoFrame) or, for a file the decoder cannot
@@ -105,6 +106,8 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
     const top = l.clip.titleData ? titleTop(l.clip, w, h, editor) : null
     if (top != null) captionBottom = Math.min(captionBottom, top - 18 * (Math.min(w, h) / 1080))
   }
+  // a portrait project with a safe zone keeps captions above the platform's caption / music band
+  if (project.safeZone && h / w >= 1.5) captionBottom = Math.min(captionBottom, h * (1 - DEFAULT_SAFE_ZONES.platforms[project.safeZone].bottom))
   const report: RenderReport = { footage: 0, missing: [] }
   const slots = new Set<string>()
   const fxOf = (clip: Clip): LayerFx | null => resolveFx(comp, clip, t, h, project.height, false, editor)
@@ -207,7 +210,8 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
   // the ESB bug (top right), unless switched off, over a banner still (whose own masthead sits exactly there), or on an
   // empty timeline (nothing to brand: the monitor stays black behind the start card)
   if (project.bug !== false && !branded && project.clips.length > 0) {
-    const tex = comp.staticTexture(bugKey(w, h), () => rasterBug(w, h))
+    const corner = project.bugCorner ?? 'tr'
+    const tex = comp.staticTexture(bugKey(w, h, corner), () => rasterBug(w, h, corner))
     if (tex) comp.draw({ tex, quad: frameQuad(w, h), uv: FULL_UV, alpha: 1 })
   }
   if (editor && opts.guides) {
