@@ -89,9 +89,9 @@
 
   --danger: #b42318;
   --danger-soft: rgba(180, 35, 24, 0.08);
-  --warning: #9a5b00;
+  --warning: #8c5300;
   --warning-soft: rgba(154, 91, 0, 0.1);
-  --success: #1f7a45;
+  --success: #1a6f3f;
   --success-soft: rgba(31, 122, 69, 0.1);
 
   /* tooltips take the theme's own surface: light on light, dark on dark */
@@ -190,8 +190,8 @@
   --border-strong: #4d4d56;
 
   --text-primary: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #9a9aa5;
+  --text-secondary: #b3b3bd;
+  --text-tertiary: #a8a8b3;
   --text-disabled: rgba(244, 244, 245, 0.42);
 
   --accent: #f4f4f5;

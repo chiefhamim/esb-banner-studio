@@ -94,7 +94,7 @@ export function ParamSlider({ p, value, onChange, cls }: { p: NumParam; value: n
   return (
     <div className="vw-field vw-fx-field">
       <label onDoubleClick={() => onChange(p.def)} data-tip="Double-click to reset">{p.label} <em>{fmt(p, value)}</em></label>
-      <Slider className={cls} min={p.min} max={p.max} step={p.step} value={value} onChange={onChange} />
+      <Slider className={cls} label={p.label} min={p.min} max={p.max} step={p.step} value={value} onChange={onChange} />
     </div>
   )
 }

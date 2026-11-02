@@ -8,6 +8,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 import { spawnSync } from 'node:child_process'
+import { auditFocus, auditPage } from '../audit/page-audit.mjs'
 import { startFakePlatforms, FAKE_PAGE_ID, FAKE_PAGE_TOKEN } from '../fixtures/publish/fake-platforms.mjs'
 
 const root = path.resolve(import.meta.dirname, '../..')
@@ -174,6 +175,21 @@ try {
   await page.waitForFunction(() => /uploads/i.test(document.querySelector('.vw-pub-conn')?.textContent ?? ''))
   await page.screenshot({ path: path.join(shots, 'publish-connections.png') })
   check('Connections shows YouTube and the Page as connected, with quota lines', /connected/i.test(await page.locator('.vw-pub-conn').innerText()) && /uploads/i.test(await page.locator('.vw-pub-conn').innerText()))
+  // ---- accessibility of the Publish sheet itself: every tab, both themes
+  const found = []
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((t) => { document.documentElement.dataset.theme = t }, theme)
+    for (const tab of ['Renders', 'Post', 'Connections']) {
+      await page.getByRole('tab', { name: tab, exact: true }).click()
+      await page.waitForTimeout(500)
+      const a = await auditPage(page)
+      a.noFocus = await auditFocus(page)
+      for (const [k, list] of Object.entries(a)) if (k !== 'below28') for (const f of list) found.push(theme + '/' + tab + ' ' + k + ': ' + JSON.stringify(f).slice(0, 160))
+    }
+  }
+  console.log('a11y findings:', found.length ? '\n  ' + found.slice(0, 20).join('\n  ') : 'none')
+  check('The Publish sheet has no contrast, target-size, unnamed-control or focus-ring findings (all tabs, both themes)', found.length === 0, found.length + ' finding(s)')
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light' })
   check('No token or secret ever appeared in a URL the fake servers saw', fake.leaks.length === 0, JSON.stringify(fake.leaks).slice(0, 120))
   check('No page errors', errors.length === 0, errors.slice(0, 2).join(' | '))
 } catch (e) {

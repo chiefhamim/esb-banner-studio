@@ -51,11 +51,21 @@ export const AI_DRAFT_LABEL = 'AI transcript — draft, check before use'
 
 let seg: Intl.Segmenter | null = null
 /** Grapheme clusters of a string (a Bangla conjunct with its vowel signs is one or a few clusters, never cut inside). */
+// plain printable ASCII: every character is its own cluster, so the (slow) segmenter is skipped
+const PLAIN = /^[ -~]*$/
+const clusterMemo = new Map<string, string[]>()
 export function graphemes(s: string): string[] {
+  if (PLAIN.test(s)) return s.split('')
+  const hit = clusterMemo.get(s)
+  if (hit) return hit
   seg ??= new Intl.Segmenter(undefined, { granularity: 'grapheme' })
-  return Array.from(seg.segment(s), (x) => x.segment)
+  const out = Array.from(seg.segment(s), (x) => x.segment)
+  // Bangla words repeat a lot: remember the recent ones (bounded)
+  if (clusterMemo.size >= 6000) clusterMemo.clear()
+  clusterMemo.set(s, out)
+  return out
 }
-export const glen = (s: string) => graphemes(s).length
+export const glen = (s: string) => (PLAIN.test(s) ? s.length : graphemes(s).length)
 
 // ---------------------------------------------------------------- segments
 

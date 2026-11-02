@@ -30,6 +30,7 @@
     "audit:text-fit": "node tools/audit/text-fit-audit.mjs",
     "audit:contrast": "node tools/audit/contrast-audit.mjs",
     "audit:a11y": "node tools/audit/a11y-audit.mjs",
+    "audit:video-a11y": "node tools/audit/video-a11y.mjs",
     "audit:suite": "node tools/audit/capture-visual-suite.mjs",
     "audit:pdf": "node tools/audit/generate-pdf-report.mjs"
   },

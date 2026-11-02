@@ -20,6 +20,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { launchBrowser } from '../launch-browser.mjs'
+import { auditFocus, auditPage } from '../audit/page-audit.mjs'
 
 const root = path.resolve(import.meta.dirname, '../..')
 const PORT = Number(process.env.PORT || 5291)
@@ -1185,6 +1186,7 @@ async function seedDraft(page) {
   if (!ok) na('window.__editorialStore dev handle missing')
 }
 
+
 // ------------------------------------------------------------------ run
 const wanted = list(process.env.STATES, Object.keys(STATES))
 const unknown = wanted.filter((s) => !STATES[s])
@@ -1224,8 +1226,9 @@ try {
           const r = (await STATES[state](page)) || {}
           if (!r.saved) { await settle(page, { keepPointer: !!r.keepPointer }); await waitAnimations(page) }
           const geo = await timelineGeometry(page)
+          if (process.env.AUDIT) { const a = await auditPage(page); await page.keyboard.press('Tab').catch(() => {}); a.noFocus = await auditFocus(page); entry.audit = a }
           const opts = { path: path.join(outDir, file), animations: 'disabled', caret: 'hide' }
-          if (r.saved) { /* the state took its own shot */ } else if (r.el) await r.el.screenshot(opts)
+          if (process.env.AUDIT_ONLY) { /* no picture: the audit is the result */ } else if (r.saved) { /* the state took its own shot */ } else if (r.el) await r.el.screenshot(opts)
           else await page.screenshot(opts)
           entry = { ...entry, ok: true, geometry: geo, note: [r.note, geo?.problems?.length ? `TIMELINE: ${geo.problems.join(', ')}` : '', thumbRetries ? `black bin thumbnail on import, re-imported ${thumbRetries}x` : '', pageErrors.length ? `page errors: ${pageErrors.join(' | ')}` : ''].filter(Boolean).join('; ') }
           console.log(`ok   ${file}${entry.note ? '  (' + entry.note + ')' : ''}`)

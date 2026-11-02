@@ -80,6 +80,29 @@ function playable(p: VideoProject): VideoProject {
   return f
 }
 
+const TIPS_KEY = 'esb-banner-studio/video/tips-dismissed/v1'
+/** Three one-line pointers on an empty desk (where the work is), dismissed for good with one press. */
+function StartTips() {
+  const [gone, setGone] = useState(() => { try { return localStorage.getItem(TIPS_KEY) === '1' } catch { return false } })
+  const [open, setOpen] = useState(false)
+  if (gone) return null
+  return (
+    <div className="vw-start-tips">
+      <button type="button" className="vw-start-tips-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>Where to find things</button>
+      {open && (
+        <>
+          <ul>
+            <li><b>Captions</b> tab: transcribe, cut by words, remove silences, captions, reframe.</li>
+            <li><b>Story</b> tab: templates, all sizes, brand kit, YouTube and Facebook copy.</li>
+            <li><b>Publish</b>: render the sizes, then post. You approve every post.</li>
+          </ul>
+          <button type="button" className="btn xs" onClick={() => { try { localStorage.setItem(TIPS_KEY, '1') } catch { /* shown again next time */ } setGone(true) }}>Got it, hide this</button>
+        </>
+      )}
+    </div>
+  )
+}
+
 function useMediaQuery(q: string) {
   const [on, setOn] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches)
   useEffect(() => {
@@ -1150,6 +1173,7 @@ function VideoDesk() {
                       <button type="button" className="btn primary vw-start-import" onClick={() => void importFromDialog()}><Icon name="upload" size={14} />Import media</button>
                       <button type="button" className="btn vw-start-story" onClick={() => showTab('story')}><Icon name="newspaper" size={14} />Build from story</button>
                     </div>
+                    <StartTips />
                   </div>
                 )}
               </div>

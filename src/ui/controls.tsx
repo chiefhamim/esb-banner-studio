@@ -498,9 +498,18 @@ export function Scrub({ label, value, onChange, step = 1, min, max, unit, decima
 }
 
 // ------------------------------------------------------------------ Slider
-export function Slider({ value, min, max, step = 1, onChange, className = '' }: { value: number; min: number; max: number; step?: number; onChange: (v: number) => void; className?: string }) {
+export function Slider({ value, min, max, step = 1, onChange, className = '', label }: { value: number; min: number; max: number; step?: number; onChange: (v: number) => void; className?: string; label?: string }) {
   const p = ((value - min) / (max - min)) * 100
-  return <input type="range" className={'slider ' + className} min={min} max={max} step={step} value={value} style={{ ['--p' as string]: p + '%' } as CSSProperties} onChange={(e) => onChange(parseFloat(e.target.value))} />
+  const ref = useRef<HTMLInputElement>(null)
+  // a slider with no name of its own takes its field's label ("Opacity", without the value beside it)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || label || el.getAttribute('aria-label') || el.closest('label')) return
+    const lab = el.closest('.vw-field, .field, .row')?.querySelector('label')
+    const text = lab ? Array.from(lab.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim() : ''
+    if (text) el.setAttribute('aria-label', text)
+  })
+  return <input ref={ref} type="range" aria-label={label} className={'slider ' + className} min={min} max={max} step={step} value={value} style={{ ['--p' as string]: p + '%' } as CSSProperties} onChange={(e) => onChange(parseFloat(e.target.value))} />
 }
 
 // ------------------------------------------------------------------ Colour
@@ -567,7 +576,7 @@ export function ColorField({ value, onChange, onReset, label, className = '' }: 
     <div className={'colorfield ' + className}>
       {label && <span className="cf-label">{label}</span>}
       <button ref={btn} type="button" className="cf-swatch" style={{ background: v }} onClick={() => setOpen((o) => !o)} aria-label="Pick colour" />
-      <input value={text} spellCheck={false} maxLength={7}
+      <input value={text} spellCheck={false} maxLength={7} aria-label={label ? `${label}, hex colour` : 'Hex colour'}
         onChange={(e) => { setText(e.target.value); const h = hex6(e.target.value.startsWith('#') ? e.target.value : '#' + e.target.value); if (h) onChange(h) }}
         onBlur={() => setText(value)} />
       {open && btn.current && (
@@ -575,7 +584,7 @@ export function ColorField({ value, onChange, onReset, label, className = '' }: 
           <HsvPicker value={v} onChange={onChange} />
           <div className="cp-hex">
             <i style={{ background: v }} />
-            <input value={text} spellCheck={false} maxLength={7} onChange={(e) => { setText(e.target.value); const h = hex6(e.target.value.startsWith('#') ? e.target.value : '#' + e.target.value); if (h) onChange(h) }} onBlur={() => setText(value)} />
+            <input value={text} spellCheck={false} maxLength={7} aria-label="Hex colour" onChange={(e) => { setText(e.target.value); const h = hex6(e.target.value.startsWith('#') ? e.target.value : '#' + e.target.value); if (h) onChange(h) }} onBlur={() => setText(value)} />
             {onReset && <button type="button" className="ibtn" data-tip="Reset colour to default" onClick={() => { onReset(); close() }}><Icon name="reset" size={13} /></button>}
           </div>
           <div className="cp-title">Brand &amp; neutrals</div>

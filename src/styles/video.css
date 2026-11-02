@@ -20,6 +20,9 @@
 .video-workspace .vw-start .vw-start-actions .btn.vw-start-story:not(.primary):not(.ghost) { color: var(--text); background: var(--fill); border: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
 .video-workspace .vw-start .vw-start-actions .btn.vw-start-story:not(.primary):not(.ghost):hover { background: var(--fill-hover); }
 .vw-start-actions .btn.primary { color: #131316; background: #f4f4f5; box-shadow: none; }
+/* every other button on the dark start card (Discard…) reads light-on-dark in BOTH themes: it was white text on a white button in light */
+.video-workspace .vw-start-card .btn:not(.primary):not(.ghost) { color: var(--text); background: var(--fill); border: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+.video-workspace .vw-start-card .btn:not(.primary):not(.ghost):hover:not(:disabled) { background: var(--fill-hover); }
 .vw-restore-card .vw-start-icon { color: #131316; background: #f5c26b; }
 
 /* ---------------------------------------------------------------- the bin */
@@ -258,10 +261,11 @@
 .vw-marker-list { display: flex; flex-direction: column; gap: 4px; width: 320px; }
 .vw-ml-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px 4px; font: 700 10.5px/16px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
 .vw-ml-add { gap: 4px; letter-spacing: 0; text-transform: none; }
-.vw-ml-add kbd { margin-left: 2px; }
+.vw-ml-add kbd { margin-left: 2px; color: var(--text); }
 .vw-ml-empty, .vw-ml-foot { margin: 2px 2px 0; font: 500 11.5px/16px var(--ui); color: var(--text-3); }
 .vw-ml-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto auto 28px; align-items: center; gap: 6px; }
-.vw-ml-dot { width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2); }
+.vw-ml-dot { position: relative; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2); }
+.vw-ml-dot::before { content: ''; position: absolute; inset: -6px; } /* a 26 px hit area around the 14 px dot */
 .vw-ml-dot:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .vw-ml-name { min-width: 0; height: 28px; padding: 0 8px; font: 500 12.5px/1 var(--ui); color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); }
 .vw-ml-name:focus { outline: 0; box-shadow: 0 0 0 2px var(--focus-ring); }
@@ -290,7 +294,7 @@
 .vw-diamond { display: inline-block; width: 8px; height: 8px; background: currentColor; transform: rotate(45deg); border-radius: 1.5px; flex: none; }
 .vw-prop label { justify-content: flex-start; align-items: center; }
 .vw-prop label em { margin-left: auto; }
-.vw-kf-toggle { display: inline-grid; place-items: center; width: 22px; height: 22px; margin: -3px 0 -3px -4px; padding: 0; color: var(--text-3); background: none; border: 0; border-radius: var(--r-1); cursor: pointer; }
+.vw-kf-toggle { display: inline-grid; place-items: center; width: 24px; height: 24px; margin: -4px 0 -4px -5px; padding: 0; color: var(--text-3); background: none; border: 0; border-radius: var(--r-1); cursor: pointer; }
 .vw-kf-toggle .vw-diamond { width: 7px; height: 7px; background: none; box-shadow: inset 0 0 0 1.5px currentColor; }
 .vw-kf-toggle:hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
 .vw-kf-toggle.between { color: var(--text-2); }
@@ -582,6 +586,8 @@
 .vw-data-refresh { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .vw-data-changed { align-self: stretch; padding: 8px 10px; border-radius: var(--r-2); background: var(--warning-soft); display: flex; flex-direction: column; gap: 4px; }
 .vw-data-changed .vw-btn-row { margin-top: 4px; }
+.vw-data-changed .vw-hint { color: var(--text-2); }
+.vw-data-changed b { color: var(--text); }
 
 /* ---- Phase 3 UI fix round ---- */
 /* Titles tab: the accent and two switches in one compact block, so the kit list gets the height (U7) */
@@ -727,3 +733,18 @@
 .vw-q-step.st-failed { color: var(--danger); }
 .vw-q-out.st-failed .vw-q-status, .vw-q-job.st-failed .vw-q-head b { color: var(--danger); }
 .vw-tag.ok { color: var(--success); }
+
+.vw-formula-toggle { min-height: 24px; display: inline-flex; align-items: center; }
+.colorfield input:focus-visible, .cp-hex input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+/* Phase 8: the controls this build added keep the studio's 28 px floor */
+.vw-sec .btn.xs, .vw-pub .btn.xs, .vw-q-actions .btn, .vw-transcript-actions .btn { min-height: 28px; }
+.vw-word { min-height: 28px; min-width: 28px; justify-content: center; display: inline-flex; align-items: center; }
+
+/* Phase 8: where-to-find-things tips on the empty desk */
+.vw-start-tips { margin-top: 8px; width: 100%; text-align: center; }
+.vw-start-tips-toggle { background: none; border: 0; display: inline-flex; align-items: center; min-height: 28px; padding: 0 8px; border-radius: var(--r-2); cursor: pointer; font: 600 12px/1 var(--ui); color: var(--text-2); }
+.vw-start-tips-toggle:hover { background: var(--fill-hover); }
+.vw-start-tips-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.vw-start-tips { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 4px; }
+.vw-start-tips ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; text-align: left; font: 500 12px/17px var(--ui); color: var(--text-2); }
+.vw-start-tips b { color: var(--text); font-weight: 700; }

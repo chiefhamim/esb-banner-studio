@@ -986,3 +986,6 @@ kbd,
     transform: translate(-50%, 0);
   }
 }
+
+/* Phase 8: a small toggle keeps its look, and its hit area reaches 24 px tall (WCAG 2.2 target size) through invisible padding */
+.tgl.sm::before { content: ""; position: absolute; inset: -4px -2px; }
