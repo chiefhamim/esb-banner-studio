@@ -17,6 +17,9 @@ const AUDIO_EXT = new Set(Object.keys(AUDIO_TYPES))
 const MAX_FILES = 2000
 const MAX_DEPTH = 3
 const MAX_REL = 400
+/** The most directory entries looked at and folders opened in one listing (a drive root would otherwise be walked for seconds). */
+const MAX_ENTRIES = 20000
+const MAX_DIRS = 400
 
 const extOf = (p) => String(p).split('.').pop().toLowerCase()
 const isNetworkOrDevicePath = (p) => /^[\\/]{2}/.test(String(p))
@@ -64,28 +67,71 @@ function confinedAudio(root, rel) {
   }
 }
 
-/** The audio files under `root` (at most MAX_DEPTH folders deep, MAX_FILES of them), as relative paths with their
- * size and modified time. Directory links and junctions are not followed. Read-only. */
-function listAudio(root) {
+/** The audio files under `root` (at most MAX_DEPTH folders deep, MAX_FILES of them; at most MAX_ENTRIES entries and
+ * MAX_DIRS folders looked at), as relative paths with their size and modified time. Directory links and junctions are
+ * not followed. Read-only. Asynchronous: the main process is never held while a big folder is read. */
+async function listAudioAsync(root) {
   const out = []
   if (!isFolderPath(root)) return { files: out, truncated: false }
   let realRoot
   try { realRoot = real(root) } catch { return { files: out, truncated: false } }
   let truncated = false
-  const walk = (dir, prefix, depth) => {
+  let seen = 0
+  let dirs = 0
+  const walk = async (dir, prefix, depth) => {
+    if (++dirs > MAX_DIRS) { truncated = true; return }
     let entries
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    try { entries = await fs.promises.readdir(dir, { withFileTypes: true }) } catch { return }
     entries.sort((a, b) => a.name.localeCompare(b.name))
     for (const e of entries) {
-      if (out.length >= MAX_FILES) { truncated = true; return }
+      if (out.length >= MAX_FILES || ++seen > MAX_ENTRIES) { truncated = true; return }
       const abs = path.join(dir, e.name)
       const rel = prefix ? `${prefix}/${e.name}` : e.name
       if (e.isSymbolicLink()) continue // a link could lead anywhere: not listed, not followed
       if (e.isDirectory()) {
         if (depth < MAX_DEPTH) {
           // a junction (Windows) reads as a directory: it must still resolve inside the chosen folder
+          try { if (!within(realRoot, await fs.promises.realpath(abs))) continue } catch { continue }
+          await walk(abs, rel, depth + 1)
+          if (truncated) return
+        }
+        continue
+      }
+      if (!e.isFile() || !AUDIO_EXT.has(extOf(e.name)) || !safeRel(rel)) continue
+      try {
+        const st = await fs.promises.stat(abs)
+        out.push({ rel, name: e.name, size: st.size, mtimeMs: Math.round(st.mtimeMs) })
+      } catch { /* gone */ }
+    }
+  }
+  await walk(realRoot, '', 0)
+  return { files: out, truncated }
+}
+
+/** Synchronous listing with the same limits (tests, tools). */
+function listAudio(root) {
+  const out = []
+  if (!isFolderPath(root)) return { files: out, truncated: false }
+  let realRoot
+  try { realRoot = real(root) } catch { return { files: out, truncated: false } }
+  let truncated = false
+  let seen = 0
+  let dirs = 0
+  const walk = (dir, prefix, depth) => {
+    if (++dirs > MAX_DIRS) { truncated = true; return }
+    let entries
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    entries.sort((a, b) => a.name.localeCompare(b.name))
+    for (const e of entries) {
+      if (out.length >= MAX_FILES || ++seen > MAX_ENTRIES) { truncated = true; return }
+      const abs = path.join(dir, e.name)
+      const rel = prefix ? `${prefix}/${e.name}` : e.name
+      if (e.isSymbolicLink()) continue
+      if (e.isDirectory()) {
+        if (depth < MAX_DEPTH) {
           try { if (!within(realRoot, real(abs))) continue } catch { continue }
           walk(abs, rel, depth + 1)
+          if (truncated) return
         }
         continue
       }
@@ -118,4 +164,4 @@ function createMusicFolder({ file }) {
   }
 }
 
-module.exports = { AUDIO_EXT, AUDIO_TYPES, MAX_FILES, MAX_DEPTH, safeRel, confinedAudio, listAudio, isFolderPath, createMusicFolder }
+module.exports = { AUDIO_EXT, AUDIO_TYPES, MAX_FILES, MAX_DEPTH, MAX_ENTRIES, MAX_DIRS, safeRel, confinedAudio, listAudio, listAudioAsync, isFolderPath, createMusicFolder }

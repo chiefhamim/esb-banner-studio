@@ -91,7 +91,12 @@ export function denoise(channels: Float32Array[], sampleRate: number, opts: Deno
   return channels.map((x) => {
     const N = estimateNoise(x, sampleRate, { ...opts, fftSize: size })
     const nf = frames(x.length, size, hop)
-    const out = new Float64Array(x.length + 2 * size)
+    // Overlap-add through a ring of one window (not a buffer the length of the signal): after frame f, the `hop` samples at
+    // its start can no longer change, so they are written to the output and the ring slides on. Memory stays at the input
+    // and the output (Float32), however long the clip is.
+    const y = new Float32Array(x.length)
+    const acc = new Float64Array(size)
+    let written = -size // signal index of acc[0] (the stream starts one window before the signal)
     const prevG = new Float64Array(bins).fill(1)
     const prevGamma = new Float64Array(bins).fill(1)
     const r = new Float64Array(size)
@@ -116,11 +121,13 @@ export function denoise(channels: Float32Array[], sampleRate: number, opts: Deno
         if (k > 0 && k < size / 2) { r[size - k] *= g; m[size - k] *= g }
       }
       fft.transform(r, m, true)
-      const o = f * hop // position in `out`, which starts one window before the signal
-      for (let i = 0; i < size; i++) out[o + i] += r[i] * win[i] * norm
+      // this frame starts at signal index f·hop − size (== `written` here)
+      for (let i = 0; i < size; i++) acc[i] += r[i] * win[i] * norm
+      for (let i = 0; i < hop; i++) { const j = written + i; if (j >= 0 && j < x.length) y[j] = acc[i] }
+      acc.copyWithin(0, hop)
+      acc.fill(0, size - hop)
+      written += hop
     }
-    const y = new Float32Array(x.length)
-    for (let i = 0; i < x.length; i++) y[i] = out[i + size]
     return y
   })
 }

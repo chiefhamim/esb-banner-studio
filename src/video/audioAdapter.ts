@@ -41,7 +41,7 @@ export interface Master { gain: number; limiter: boolean }
 export interface Denoise { amount: number; noiseRange?: [number, number] }
 export interface ClipAudio { gain?: number | null; fadeIn?: Fade | null; fadeOut?: Fade | null; pan?: number | null; denoise?: Denoise | null }
 export interface TrackAudio { bus?: Bus | null; volume?: number | null; pan?: number | null; solo?: boolean | null; muted?: boolean }
-export interface LoudnessReading { integrated: number; truePeak: number; range?: number; gainDb?: number; wouldLimit?: boolean; target?: number | null }
+export interface LoudnessReading { integrated: number; truePeak: number; range?: number; gainDb?: number; wouldLimit?: boolean; target?: number | null; /** A very short mix: the level is ungated. */ shortMix?: boolean; /** Things worth saying next to the numbers (short mix, broken samples). */ warnings?: string[] }
 
 export { DEFAULT_DUCKING }
 export const DEFAULT_MASTER_UI: Master = DEFAULT_MASTER
@@ -126,7 +126,7 @@ export async function measureLoudnessNow(project: VideoProject): Promise<Loudnes
     const r = await measureProjectLoudness(project, { signal: ctl.signal, onProgress: (p) => { if (seq === measureSeq) useLoudness.setState({ progress: p }) } })
     if (seq !== measureSeq) return null
     if (r.silent || !Number.isFinite(r.integrated)) { useLoudness.setState({ measuring: false, reading: null, silent: true, error: null }); return null }
-    const reading: LoudnessReading = { integrated: r.integrated, truePeak: r.truePeak, range: r.lra, gainDb: r.gainDb, wouldLimit: r.wouldLimit, target: r.target }
+    const reading: LoudnessReading = { integrated: r.integrated, truePeak: r.truePeak, range: r.lra, gainDb: r.gainDb, wouldLimit: r.wouldLimit, target: r.target, shortMix: r.shortMix, warnings: r.warnings }
     useLoudness.setState({ measuring: false, silent: false, reading: { ...reading, at: Date.now(), seconds: r.duration }, error: null })
     return reading
   } catch (e) {
@@ -154,13 +154,25 @@ export function neighbourAfter(clip: Clip): Clip | undefined {
   return v.clips.filter((c) => c.trackId === clip.trackId && c.kind === 'audio' && c.id !== clip.id && c.start > clip.start + 1e-6).sort((a, b) => a.start - b.start)[0]
 }
 
+/** Why a clip cannot be crossfaded (its edges are not where the file's sound is simply continued), or null. A reversed,
+ * frozen, speed-changed or speed-ramped clip plays the file differently from its edges, so widening it by spare file
+ * sound would fade across the wrong audio. */
+export function crossfadeBlocker(c: Clip): string | null {
+  const name = `“${(c.title || 'A clip').slice(0, 40)}”`
+  if (c.reverse) return `${name} plays backwards: crossfades need clips that play forwards. Overlap the clips by hand instead.`
+  if (c.freezes?.length) return `${name} has a freeze frame: crossfades need clips without one. Overlap the clips by hand instead.`
+  if (c.speed != null) return `${name} has a speed change${typeof c.speed === 'object' ? ' (a speed ramp)' : ''}: crossfades need clips at normal speed. Overlap the clips by hand instead.`
+  return null
+}
+
 /** Crossfade `clip` into the clip after it: an overlap is faded as it is; clips that only touch are widened by spare
  * source on both sides so there is something to fade. One undo step. Returns a sentence when it cannot. */
 export function crossfadeWithNext(shown: Clip): string | null {
   const clip = useVideoStore.getState().project.clips.find((c) => c.id === shown.id) ?? shown
   const next = neighbourAfter(clip)
   if (!next) return 'There is no audio clip after this one on the track.'
-  if (clip.speed != null || next.speed != null) return 'Crossfades need clips at normal speed.'
+  const why = crossfadeBlocker(clip) ?? crossfadeBlocker(next)
+  if (why) return why
   const fps = useVideoStore.getState().project.fps || 30
   const gap = next.start - (clip.start + clip.duration)
   let overlap = -gap

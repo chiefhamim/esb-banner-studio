@@ -1890,3 +1890,35 @@ Engine API: `measureProjectLoudness(project, {signal,onProgress}): Promise<Proje
 ### Files
 New: `src/video/audioModel.ts`, `audioEdit.ts`, `audioJobs.ts`, `useAudioMeters.ts`, `src/video/engine/{audioGraph,audioRender,denoiseJob,denoiseWorker}.ts`, `src/video/audio/streamMeter.ts`, `tools/unit/video-p4-audio.test.ts` (14 tests), `tools/e2e/video-audio-test.mjs` (added to `test:video`).
 Changed: `timeline.ts` (types, migration/sanitising, `audibleClips` honours solo), `videoStore.ts` (actions), `engine/audioEngine.ts` (graph, denoised clips, ducking, `levels()`, `prepare`, `master` getter), `exportVideo.ts` (mix via `prepareMix`, `loudness`, `exportLoudnessReport`, `onAudioStatus`; the old `mixPiece` is gone, `mixAudio` re-exported), `audio/ducking.ts`, `audio/loudness.ts`, `package.json`.
+
+## Phase 4 fix round — logic/engine (2026-11-02, branch `video-p4-fix`)
+
+Reviewers' findings verified by running; all correctness items were real. Tests: `tools/unit/video-p4-fix.test.ts`, `video-p4-fix-main.test.ts`.
+
+| Item | Result |
+|---|---|
+| C1 split fades | fixed. `subClip(c,a,b,trim)`: a cut inside the clip (split, extract/clearRange, compound window) drops the fade on the new edge (A keeps fade-in, B fade-out); trims (trim, ripple, roll, slide) keep edge fades; slip untouched. |
+| C2 project audio in a compound | fixed. master/ducking/target/bus volume go through `editRoot` to the root project (also `patchProjectAudioCoalesced`). |
+| C3 footage sound → music | fixed. `Clip.bus` set at creation (`clipsForAsset` = voice); survives unlink/delete/window; old linked clips get it once in `migrateTimeline`. Track bus still wins. |
+| C4 noiseRange | fixed. `rebaseDenoise` in subClip and slip; dropped → `denoise.noiseDropped: true` (UI note); amount 0 keeps the range. |
+| C5 solo/compound | fixed. Solo+mute = silent and solo still silences the rest. Inner solo is scoped to the compound; outer track's mute, volume (dB added), pan (added), bus (override) and solo apply to the inside (`compoundAudioTracks`). |
+| C6 short mixes / NaN | fixed. <400 ms: ungated level, `shortMix` + warning; non-finite samples = 0, counted (`nonFinite`, warning). |
+| C7 voiceover | fixed. `voiceoverPlacement` (recorder start vs first playhead move, mic latency, user offset ms in localStorage `esb-video-vo-offset-ms`); overlap → new Voiceover track + `layered` message, nothing overwritten; 1.5 s timeslice pieces appended on disk by main (`electron/video-take.cjs`, validated header/size, crash recovery at start); mic unplug / recorder error → clean stop, take kept, `interrupted`. |
+| C8 NR failure | fixed. Export throws `DenoiseError` naming the clip; preview shows the reason in `useAudioJobs.errors[clipId]`; refcounted shared jobs; >20 min refused with a message (not chunked). |
+| C9 crossfade | fixed. `crossfadeBlocker` (reverse/freeze/speed) reason strings. |
+| C10 beats | fixed. Proposal is clip-relative + `clipKey`; applied at the clip's current place; stale → refused (`beatsProblem`). |
+| C11 engine.start | fixed. Session bumped first, stale start returns after resume. |
+| C12 coalescing | fixed (store side). `patchClipAudioCoalesced / patchTrackAudioCoalesced / patchProjectAudioCoalesced` (window COALESCE_MS = 1200 ms, shared with Phase 3). |
+| S1 denoise memory | fixed. One job at a time, allocation clamped to the real file length (plain speed), 20 min per clip, 3 h per project. |
+| S2 licence/musicRel | fixed (string, 600 / 400 chars). |
+| S3 music listing | fixed. Async, 20,000 entries / 400 folders cap, debounced `loadMusic`. |
+| S4 | fixed. Clearing/changing the folder removes the registered tracks from the media registry; whole-file decode refused over 96 MB before reading (`fetchBounded`). |
+| P1 export passes | partly. Dry-pass meters without true peak; measure-pass blocks cached (≤420 MB) so trial and final passes do not render again; gated true-peak envelope; limiter gain in a Worker. Not done: caching the limiter envelope between trial passes. |
+| P2 long tasks | fixed for the Measure path (`pushAsync` 1 s slices + `yieldUi`); the limiter moved to a Worker. |
+| P3 denoise | fixed. Ring overlap-add (no Float64 buffer the length of the clip), queue of one, latest-wins abort per clip, worker restarted on abort. |
+| P4 ducking | fixed. In-flight deduped, stale aborted, last curve kept until the new one arrives. |
+| P5 | fixed. Shared level buffer; `writeClip` no-op returns the same project (tested). |
+
+Perf (10 min stereo, synthetic worst case from the review bench, this PC): true-peak meter 9.5 s → 1.9 s per pass; limiterGain over 60 blocks 17.6 s → about 7 s per pass (and off the main thread in the export); dry passes no longer pay the meter's true peak (−9 s each) or a re-render. Audible-clip material is sparser than the bench, so real gains are larger. The 40 s end-to-end target was not timed in a browser export (offline audio needs the app); estimated from the parts at 35–40 s.
+
+Behaviour changes to know: the limiter and meter gate the true-peak search around samples within 6 dB / 4 dB of the ceiling or peak (equal to the full search on band-limited material; white noise can differ below the ceiling only). Clearing the music folder makes music already in a project show as missing until relinked.

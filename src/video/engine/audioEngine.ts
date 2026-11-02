@@ -137,11 +137,13 @@ export class AudioEngine {
 
   /** Start the sound at timeline time `t0`, heard at wall time `originPerf`. `playhead()` reads the clock. */
   async start(project: VideoProject, t0: number, originPerf: number, playhead: () => number) {
-    this.stop()
+    this.stop() // bumps the session, tears down any graph of an earlier start
+    const session = ++this.session
     const ctx = this.ensure()
     if (ctx.state === 'suspended') await ctx.resume().catch(() => {})
+    // a newer start (or a stop) came while the context was resuming: this one is stale and builds nothing
+    if (session !== this.session) return
     this.installTap()
-    const session = ++this.session
     // one mapping for the whole start (re-reading the output timestamp per piece would jitter the joins)
     const base = this.ctxTimeAt(originPerf)
     this.map = { t0, base }
@@ -162,9 +164,10 @@ export class AudioEngine {
       void this.scheduleClip(c, t0, base, playhead, strip.input, nodes, () => alive && session === this.session, dn)
     }
     // ducking: the cached curve now, or when the background job has made it
-    const duck = needsDuck(project) ? cachedDuck(project) : null
-    if (duck) automateDuck(g.duck.gain, duck, t0, this.endOf(project), ctxOf)
-    else if (needsDuck(project)) void prepareDuckForPreview(project).then((curve) => { if (curve && session === this.session && this.graph === g) this.applyDuck(curve, project) })
+    this.duckFor(project)
+    const duck = needsDuck(project) ? cachedDuck(project) ?? this.lastDuck : null
+    if (duck) { this.lastDuck = duck; automateDuck(g.duck.gain, duck, t0, this.endOf(project), ctxOf) }
+    if (needsDuck(project) && !cachedDuck(project)) void prepareDuckForPreview(project).then((curve) => { if (curve && session === this.session && this.graph === g) this.applyDuck(curve, project) })
   }
 
   /** Where a clip's automation starts: its start, or the playhead when it began earlier (an event in the past is skipped). */
@@ -176,16 +179,25 @@ export class AudioEngine {
   private endOf(project: VideoProject) { let e = 0; for (const c of project.clips) e = Math.max(e, c.start + c.duration); return e }
 
   /** Schedule a ducking curve on the music bus from now to the end of the project (re-done after any change). */
+  /** The last ducking curve applied: kept while a new one is being made, so a fader drag does not let the music jump up. */
+  private lastDuck: GainCurve | null = null
+  private lastDuckId = ''
+  private duckFor(project: VideoProject) { if (this.lastDuckId !== project.id) { this.lastDuck = null; this.lastDuckId = project.id } }
+
   private applyDuck(curve: GainCurve | null, project: VideoProject) {
     const g = this.graph
     const ctx = this.ctx
     if (!g || !ctx) return
+    this.duckFor(project)
     const now = ctx.currentTime
     const hold = g.duck.gain as AudioParam & { cancelAndHoldAtTime?: (t: number) => void }
     try { if (hold.cancelAndHoldAtTime) hold.cancelAndHoldAtTime(now); else g.duck.gain.cancelScheduledValues(now) } catch { /* nothing scheduled */ }
     const ctxOf = (tl: number) => this.map.base + (tl - this.map.t0)
     const nowTl = this.map.t0 + (now + 0.01 - this.map.base)
-    if (!curve || !duckingOf(project).enabled) { g.duck.gain.setTargetAtTime(1, now, 0.02); return }
+    if (!duckingOf(project).enabled || !needsDuck(project)) { this.lastDuck = null; g.duck.gain.setTargetAtTime(1, now, 0.02); return }
+    if (curve) this.lastDuck = curve
+    else curve = this.lastDuck // not made yet for these settings: the old curve keeps ducking until it arrives
+    if (!curve) { g.duck.gain.setTargetAtTime(1, now, 0.02); return }
     automateDuck(g.duck.gain, curve, nowTl, Math.max(nowTl + 0.01, this.endOf(project)), ctxOf)
   }
 
@@ -398,6 +410,8 @@ export class AudioEngine {
     }
     applyStatic(g, project, now)
     this.applyDuck(needsDuck(project) ? cachedDuck(project) : null, project)
+    // the curve for these settings is made in the background; the old one keeps playing until it is ready
+    if (needsDuck(project) && !cachedDuck(project)) void prepareDuckForPreview(project).then((curve) => { if (curve && this.graph === g) this.applyDuck(curve, project) })
   }
 
   stop() {
@@ -430,6 +444,7 @@ export class AudioEngine {
     this.ctx = null
     this.sink = null
     this.graph = null
+    this.lastDuck = null
     this.prepUnsub?.()
     this.prepUnsub = null
     this.tapNode = null

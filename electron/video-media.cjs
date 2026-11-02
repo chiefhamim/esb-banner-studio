@@ -106,6 +106,8 @@ function createMediaRegistry({ file, max = MAX_REGISTRY }) {
     },
     /** Write the list now (quit, tests). */
     flush,
+    /** Forget an approval (the music folder was cleared). */
+    remove(p) { if (!isMediaPath(p)) return false; const ok = byId.delete(mediaId(p)); if (ok) persist(); return ok },
     has: (p) => isMediaPath(p) && byId.has(mediaId(p)),
     pathFor: (id) => (typeof id === 'string' && /^[0-9a-f]{32}$/.test(id) ? byId.get(id) || null : null),
     size: () => byId.size,

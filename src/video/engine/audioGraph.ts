@@ -198,7 +198,9 @@ export function applyStatic(g: MixGraph, project: VideoProject, now: number) {
 
 export interface Level { peak: number; rms: number }
 /** dBFS of an analyser's last 1024 samples (peak and RMS; −Infinity for silence). */
-export function readLevel(a: AnalyserNode, buf = new Float32Array(a.fftSize)): Level {
+let LEVEL_BUF = new Float32Array(1024)
+export function readLevel(a: AnalyserNode, buf?: Float32Array<ArrayBuffer>): Level {
+  if (!buf) { if (LEVEL_BUF.length !== a.fftSize) LEVEL_BUF = new Float32Array(a.fftSize); buf = LEVEL_BUF } // one shared buffer: this runs ~30× a second for every track
   a.getFloatTimeDomainData(buf)
   let peak = 0
   let sum = 0

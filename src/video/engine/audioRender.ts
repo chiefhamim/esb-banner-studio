@@ -23,10 +23,11 @@ import { automate, automateDuck, buildMixGraph, clipStrip } from './audioGraph'
 import { VoiceLevels, duckFromLevels } from '../audio/ducking'
 import type { GainCurve } from '../audio/ducking'
 import { StreamMeter } from '../audio/streamMeter'
-import { DEFAULT_CEILING, limiterGain, normalizeGain } from '../audio/normalize'
+import { DEFAULT_CEILING, normalizeGain } from '../audio/normalize'
 import { detectOnsets } from '../audio/onsets'
 import type { OnsetResult } from '../audio/onsets'
 import { denoiseAsync, denoiseOptionsFor } from './denoiseJob'
+import { limiterGainAsync } from './limiterJob'
 import { setDenoiseJob, setDuckJob } from '../audioJobs'
 
 export const SAMPLE_RATE = 48000
@@ -34,10 +35,23 @@ export const AUDIO_CHUNK_SECONDS = 10
 /** The tail of the last piece kept as the limiter's left context (seconds), and the look-ahead taken from the next. */
 const LIMIT_CONTEXT = 0.5
 const LIMIT_HEAD = 0.1
+/** The most PCM the export keeps from its measure pass (about 17 minutes of stereo) so later passes need not render again. */
+const RAW_CACHE_BYTES = 420 * 1024 * 1024
 
 // ---------------------------------------------------------------- source readers
 
-export interface AudioReader { buffers(from: number, to: number): AsyncIterable<{ buffer: AudioBuffer; timestamp: number }>; close(): void }
+/** Give the desk a turn (a message-channel hop, not a timer: no 4 ms clamp). The long loops of the mix call it between pieces. */
+export function yieldUi(): Promise<void> {
+  if (typeof MessageChannel === 'undefined') return new Promise((r) => setTimeout(r))
+  return new Promise((r) => { const ch = new MessageChannel(); ch.port1.onmessage = () => { ch.port1.close(); r() }; ch.port2.postMessage(0) })
+}
+
+export interface AudioReader {
+  buffers(from: number, to: number): AsyncIterable<{ buffer: AudioBuffer; timestamp: number }>
+  close(): void
+  /** The real length of the file's sound, seconds (what the decoder finds, not what a project file claims). */
+  length?(): Promise<number>
+}
 
 /** A reader over one file's sound: mediabunny's decoder, or (a file it cannot read) the whole file through
  * decodeAudioData. Null when the file has no sound. */
@@ -47,23 +61,41 @@ export async function openAudio(url: string): Promise<AudioReader | null> {
     const track = await input.getPrimaryAudioTrack()
     if (track && (await track.canDecode())) {
       const sink = new AudioBufferSink(track)
-      return { buffers: (a, b) => sink.buffers(a, b), close: () => input.dispose() }
+      return { buffers: (a, b) => sink.buffers(a, b), close: () => input.dispose(), length: () => track.computeDuration().catch(() => Infinity) }
     }
     input.dispose()
     if (!track) return null
   } catch { /* fall through to decodeAudioData */ }
   try {
-    const bytes = await (await fetch(url)).arrayBuffer()
+    const bytes = await fetchBounded(url)
     const buffer = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(bytes)
-    return { buffers: async function* () { yield { buffer, timestamp: 0 } }, close: () => {} }
+    return { buffers: async function* () { yield { buffer, timestamp: 0 } }, close: () => {}, length: async () => buffer.duration }
   } catch {
     return null
   }
 }
 
-const decodeWhole = async (url: string) => {
-  try { return await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await (await fetch(url)).arrayBuffer()) } catch { return null }
+/** The most compressed audio a whole-file decode is attempted on (its PCM is ten times bigger or more). */
+export const DECODE_MAX_BYTES = 96 * 1024 * 1024
+/** Fetch a file for a whole-file decode, refusing one over DECODE_MAX_BYTES before it is read (a hostile or mistaken file
+ * could otherwise turn into gigabytes of PCM). */
+export async function fetchBounded(url: string, max = DECODE_MAX_BYTES): Promise<ArrayBuffer> {
+  const res = await fetch(url)
+  const len = Number(res.headers.get('content-length') || 0)
+  if (len > max) { try { await res.body?.cancel() } catch { /* gone */ } throw new Error(`This audio file is too big to decode here (${Math.round(len / 1048576)} MB; the limit is ${Math.round(max / 1048576)} MB). Convert it to a shorter or smaller file.`) }
+  const bytes = await res.arrayBuffer()
+  if (bytes.byteLength > max) throw new Error(`This audio file is too big to decode here (${Math.round(bytes.byteLength / 1048576)} MB; the limit is ${Math.round(max / 1048576)} MB). Convert it to a shorter or smaller file.`)
+  return bytes
 }
+
+const decodeWhole = async (url: string) => {
+  try {
+    const buf = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await fetchBounded(url))
+    return buf.duration > MAX_DECODED_SECONDS ? null : buf
+  } catch { return null }
+}
+/** A decoded file longer than this is refused (a compressed file can be tiny and decode to hours). */
+export const MAX_DECODED_SECONDS = 4 * 3600
 
 /** Per render pass: the speed-changed clips' sound renderers (by clip id; a stretcher joins its grains across the
  * pieces of ONE sequential pass) and their source readers (by URL, shared by every pass). */
@@ -179,21 +211,24 @@ export async function renderChunk(s: MixSession, t0: number, t1: number, opts: C
 
 /** One clip's own sound for its whole span (no gain, fades, pan or noise reduction), stereo 48 kHz, one Float32Array
  * per channel. Rendered a minute at a time. */
-export async function renderClipSpan(s: MixSession, c: Clip, signal?: AbortSignal): Promise<Float32Array[]> {
+export async function renderClipSpan(s: MixSession, c: Clip, signal?: AbortSignal, span?: number): Promise<Float32Array[]> {
   const total = Math.max(1, Math.round(c.duration * SAMPLE_RATE))
-  const out = [new Float32Array(total), new Float32Array(total)]
+  // never read more than the sound that exists (`span`): the rest of the clip stays silent
+  const live = Math.max(1, Math.min(total, Math.round((span ?? c.duration) * SAMPLE_RATE)))
+  const out = [new Float32Array(live), new Float32Array(live)]
   const PIECE = 15
   restartPass(s)
   for (let a = c.start; a < c.start + c.duration - 1e-9; a += PIECE) {
     if (signal?.aborted) throw new DOMException('cancelled', 'AbortError')
+    const at = Math.round((a - c.start) * SAMPLE_RATE)
+    if (at >= live) break
     const b = Math.min(c.start + c.duration, a + PIECE)
     const len = Math.max(1, Math.round((b - a) * SAMPLE_RATE))
     const ctx = new OfflineAudioContext(2, len, SAMPLE_RATE)
     await scheduleSource(ctx, c, ctx.destination, a, b, a, s, false)
     const buf = await ctx.startRendering()
-    const at = Math.round((a - c.start) * SAMPLE_RATE)
-    for (let ch = 0; ch < 2; ch++) out[ch].set(buf.getChannelData(Math.min(ch, buf.numberOfChannels - 1)).subarray(0, Math.min(len, total - at)), at)
-    await new Promise((r) => setTimeout(r)) // let the desk breathe between pieces
+    for (let ch = 0; ch < 2; ch++) out[ch].set(buf.getChannelData(Math.min(ch, buf.numberOfChannels - 1)).subarray(0, Math.min(len, live - at)), at)
+    await yieldUi() // let the desk breathe between pieces
   }
   return out
 }
@@ -211,55 +246,141 @@ function cacheDenoise(key: string, buf: AudioBuffer) {
   for (const b of denoiseCache.values()) total += bytesOf(b)
   for (const k of [...denoiseCache.keys()]) { if (total <= DENOISE_CACHE_BYTES || k === key) break; total -= bytesOf(denoiseCache.get(k)!); denoiseCache.delete(k) }
 }
-const inFlight = new Map<string, Promise<AudioBuffer | null>>()
 
 /** The longest clip noise reduction will take (its whole PCM is held while it runs). */
 export const DENOISE_MAX_SECONDS = 20 * 60
+/** The most audio one project's noise reduction will work through in total (clips beyond it are refused, by name). */
+export const DENOISE_TOTAL_SECONDS = 3 * 3600
+
+/** Noise reduction could not be done for a clip: the message names the clip and says why (an export shows it as it is). */
+export class DenoiseError extends Error {
+  readonly clipId: string
+  constructor(clipId: string, message: string) { super(message); this.name = 'DenoiseError'; this.clipId = clipId }
+}
+const clipName = (c: Clip) => `“${(c.title || c.id).slice(0, 60)}”`
+const aborted = () => new DOMException('cancelled', 'AbortError')
+
+/** One shared job per clip content: callers that ask for the same render wait on it together. A caller's own signal only
+ * withdraws that caller; the job itself stops when nobody is left waiting. */
+interface Job { ctl: AbortController; users: number; done: boolean; promise: Promise<AudioBuffer> }
+const inFlight = new Map<string, Job>()
+
+/** Noise reduction runs one clip at a time (each holds the clip's whole PCM and an FFT working set). */
+let queueTail: Promise<void> = Promise.resolve()
+function inQueue<T>(signal: AbortSignal, run: () => Promise<T>): Promise<T> {
+  const result = queueTail.then(() => { if (signal.aborted) throw aborted(); return run() })
+  queueTail = result.then(() => undefined, () => undefined)
+  return result
+}
+
+function joinJob(key: string, start: (signal: AbortSignal) => Promise<AudioBuffer>, signal?: AbortSignal): Promise<AudioBuffer> {
+  let job = inFlight.get(key)
+  if (!job) {
+    const ctl = new AbortController()
+    const j: Job = { ctl, users: 0, done: false, promise: undefined as unknown as Promise<AudioBuffer> }
+    j.promise = start(ctl.signal).finally(() => { j.done = true; if (inFlight.get(key) === j) inFlight.delete(key) })
+    j.promise.catch(() => undefined)
+    inFlight.set(key, j)
+    job = j
+  }
+  const mine = job
+  mine.users++
+  return new Promise<AudioBuffer>((res, rej) => {
+    let left = false
+    const onAbort = () => { leave(true); rej(aborted()) }
+    const leave = (stop: boolean) => {
+      if (left) return
+      left = true
+      signal?.removeEventListener('abort', onAbort)
+      mine.users--
+      if (stop && mine.users <= 0 && !mine.done) mine.ctl.abort()
+    }
+    if (signal?.aborted) { onAbort(); return }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    mine.promise.then((b) => { leave(false); res(b) }, (e) => { leave(false); rej(e) })
+  })
+}
 
 /** The cached noise-reduced render of a clip, if it has been made. */
 export const denoisedFor = (c: Clip) => { const k = denoiseKey(c); return k ? denoiseCache.get(k) ?? null : null }
 
+/** How many seconds of the clip noise reduction will really work on: never more than the file has (a project file can
+ * claim a clip hours long over a short file) and never more than DENOISE_MAX_SECONDS. */
+async function spanFor(s: MixSession, c: Clip): Promise<number> {
+  if (c.duration > DENOISE_MAX_SECONDS) throw new DenoiseError(c.id, `Noise reduction cannot take ${clipName(c)}: it is ${Math.round(c.duration / 60)} minutes long and the limit is ${DENOISE_MAX_SECONDS / 60}. Split the clip into shorter ones, or switch noise reduction off for it.`)
+  const url = exportUrl(c)!
+  if (!s.readers.has(url)) s.readers.set(url, await openAudio(url))
+  const reader = s.readers.get(url)
+  if (!reader) throw new DenoiseError(c.id, `Noise reduction cannot read the sound of ${clipName(c)}.`)
+  if (isPlainSpeed(c) && reader.length) {
+    const real = await reader.length()
+    if (Number.isFinite(real)) return Math.max(0.05, Math.min(c.duration, real - (c.in || 0)))
+  }
+  return c.duration
+}
+
 /** Make (or fetch) the noise-reduced render of one clip: its sound rendered through the clip's own speed mapping, then
- * the denoiser in a worker. */
+ * the denoiser in a worker. Resolves with the render; REJECTS (a DenoiseError naming the clip and the reason, or an
+ * AbortError when `signal` is aborted) when it cannot: the caller decides what that means (an export stops, the preview
+ * plays the clip as it is and the clip's panel shows the reason). */
+export function denoiseClipStrict(c: Clip, project: VideoProject, signal?: AbortSignal): Promise<AudioBuffer> {
+  const key = denoiseKey(c)
+  if (!key || !c.denoise) return Promise.reject(new DenoiseError(c.id, `${clipName(c)} has no noise reduction to make.`))
+  const hit = denoiseCache.get(key)
+  if (hit) { setDenoiseJob(c.id, 'ready'); return Promise.resolve(hit) }
+  setDenoiseJob(c.id, 'pending')
+  const dn = c.denoise
+  const p = joinJob(key, (jobSignal) => inQueue(jobSignal, async () => {
+    const s = newMixSession({ ...project, clips: [c], tracks: project.tracks }, c.start + c.duration)
+    try {
+      const span = await spanFor(s, c)
+      const pcm = await renderClipSpan(s, c, jobSignal, span)
+      const out = await denoiseAsync(pcm, SAMPLE_RATE, denoiseOptionsFor(dn), jobSignal)
+      const buf = new AudioBuffer({ length: out[0].length, numberOfChannels: 2, sampleRate: SAMPLE_RATE })
+      buf.copyToChannel(out[0] as Float32Array<ArrayBuffer>, 0)
+      buf.copyToChannel(out[1] as Float32Array<ArrayBuffer>, 1)
+      cacheDenoise(key, buf)
+      return buf
+    } finally { closeMixSession(s) }
+  }), signal)
+  return p.then((b) => { setDenoiseJob(c.id, 'ready'); return b }, (e) => {
+    if ((e as Error).name === 'AbortError') throw e // withdrawn: a newer request (or nobody) owns the clip's state now
+    const err = e instanceof DenoiseError ? e : new DenoiseError(c.id, `Noise reduction failed on ${clipName(c)}: ${String((e as Error)?.message || e).slice(0, 160)}`)
+    setDenoiseJob(c.id, 'error', err.message)
+    throw err
+  })
+}
+
+/** The latest preview request per clip: a request for different settings (a slider moved on) withdraws the one before it. */
+const previewCtl = new Map<string, { ctl: AbortController; key: string }>()
+
+/** Preview side of denoiseClipStrict: the render, or null when it cannot be made (the reason is in audioJobs.errors[c.id])
+ * or was superseded by a newer request for the same clip. Never rejects. */
 export function denoiseClip(c: Clip, project: VideoProject, signal?: AbortSignal): Promise<AudioBuffer | null> {
   const key = denoiseKey(c)
   if (!key || !c.denoise) return Promise.resolve(null)
   const hit = denoiseCache.get(key)
   if (hit) { setDenoiseJob(c.id, 'ready'); return Promise.resolve(hit) }
-  const running = inFlight.get(key)
-  if (running) return running
-  setDenoiseJob(c.id, 'pending')
-  const p = (async () => {
-    const s = newMixSession({ ...project, clips: [c], tracks: project.tracks }, c.start + c.duration)
-    try {
-      if (c.duration > DENOISE_MAX_SECONDS) throw new Error('This clip is too long for noise reduction')
-      const pcm = await renderClipSpan(s, c, signal)
-      const out = await denoiseAsync(pcm, SAMPLE_RATE, denoiseOptionsFor(c.denoise!))
-      const buf = new AudioBuffer({ length: out[0].length, numberOfChannels: 2, sampleRate: SAMPLE_RATE })
-      buf.copyToChannel(out[0] as Float32Array<ArrayBuffer>, 0)
-      buf.copyToChannel(out[1] as Float32Array<ArrayBuffer>, 1)
-      cacheDenoise(key, buf)
-      setDenoiseJob(c.id, 'ready')
-      return buf
-    } catch (e) {
-      setDenoiseJob(c.id, 'error')
-      if ((e as Error).name === 'AbortError') return null
-      return null
-    } finally {
-      closeMixSession(s)
-      inFlight.delete(key)
-    }
-  })()
-  inFlight.set(key, p)
-  return p
+  const prev = previewCtl.get(c.id)
+  const mine = { ctl: new AbortController(), key }
+  signal?.addEventListener('abort', () => mine.ctl.abort(), { once: true })
+  const p = denoiseClipStrict(c, project, mine.ctl.signal) // joins the same render first, then the old request leaves
+  previewCtl.set(c.id, mine)
+  if (prev && prev.key !== key) prev.ctl.abort()
+  return p.then((b) => b, () => null).finally(() => { if (previewCtl.get(c.id) === mine) previewCtl.delete(c.id) })
 }
 
-/** Make sure every clip of the session that asks for noise reduction has its render (an export waits for them). */
+/** Make sure every clip of the session that asks for noise reduction has its render (an export waits for them). A clip
+ * whose noise reduction cannot be made stops the export with a message naming it: the file is never written without the
+ * noise reduction the editor asked for. */
 export async function ensureDenoised(s: MixSession, signal?: AbortSignal) {
+  let total = 0
   for (const c of s.clips) {
-    if (!c.denoise || c.denoise.amount <= 0) continue
-    const buf = await denoiseClip(c, s.project, signal)
-    if (buf) s.denoised.set(c.id, buf)
+    if (!c.denoise || !(c.denoise.amount > 0)) continue
+    if (signal?.aborted) throw aborted()
+    total += Math.min(c.duration, DENOISE_MAX_SECONDS + 1)
+    if (total > DENOISE_TOTAL_SECONDS) throw new DenoiseError(c.id, `Noise reduction would have to work through more than ${DENOISE_TOTAL_SECONDS / 3600} hours of sound; it stopped at ${clipName(c)}. Switch it off on some clips.`)
+    s.denoised.set(c.id, await denoiseClipStrict(c, s.project, signal))
   }
 }
 
@@ -306,6 +427,7 @@ export async function computeDuckCurve(s: MixSession, signal?: AbortSignal): Pro
       const b = Math.min(s.duration, a + AUDIO_CHUNK_SECONDS)
       const buf = await renderChunk(s, a, b, { sidechain: true })
       lv.push([buf.getChannelData(0), buf.getChannelData(1)])
+      await yieldUi()
     }
   } finally { s.duck = saved; restartPass(s) }
   const curve = duckFromLevels(lv.finish(), { threshold: d.threshold, depth: d.depthDb, attack: d.attack, release: d.release, rate: 100 })
@@ -314,19 +436,41 @@ export async function computeDuckCurve(s: MixSession, signal?: AbortSignal): Pro
   return curve
 }
 
-/** Preview side: make the ducking curve in the background (not on a clip's own session: it opens its own readers). */
-export async function prepareDuckForPreview(project: VideoProject, signal?: AbortSignal): Promise<GainCurve | null> {
-  if (!needsDuck(project)) { setDuckJob('idle'); return null }
+/** The preview's ducking job: one at a time, the newest request wins (a fader drag asks again for every pause). */
+let duckPrep: { key: string; ctl: AbortController; promise: Promise<GainCurve | null> } | null = null
+
+/** Preview side: make the ducking curve in the background (not on a clip's own session: it opens its own readers). The
+ * same request while one is running joins it; a different one (the project changed) stops the old one first. A clip whose
+ * noise reduction fails is ducked from its plain sound (the clip's panel shows the failure). */
+export function prepareDuckForPreview(project: VideoProject, signal?: AbortSignal): Promise<GainCurve | null> {
+  if (!needsDuck(project)) { duckPrep?.ctl.abort(); duckPrep = null; setDuckJob('idle'); return Promise.resolve(null) }
   const hit = cachedDuck(project)
-  if (hit) { setDuckJob('ready'); return hit }
+  if (hit) { setDuckJob('ready'); return Promise.resolve(hit) }
+  const key = duckSignature(project)
+  if (duckPrep?.key === key) return duckPrep.promise
+  duckPrep?.ctl.abort()
+  const ctl = new AbortController()
+  signal?.addEventListener('abort', () => ctl.abort(), { once: true })
   setDuckJob('pending')
-  const s = newMixSession(project)
-  try {
-    await ensureDenoised(s, signal)
-    const c = await computeDuckCurve(s, signal)
-    setDuckJob(c ? 'ready' : 'idle')
-    return c
-  } catch { setDuckJob('error'); return null } finally { closeMixSession(s) }
+  const promise = (async () => {
+    const s = newMixSession(project)
+    try {
+      for (const c of s.clips) {
+        if (!c.denoise || !(c.denoise.amount > 0)) continue
+        const b = await denoiseClip(c, s.project, ctl.signal)
+        if (ctl.signal.aborted) throw aborted()
+        if (b) s.denoised.set(c.id, b)
+      }
+      const c = await computeDuckCurve(s, ctl.signal)
+      if (duckPrep?.ctl === ctl) setDuckJob(c ? 'ready' : 'idle')
+      return c
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError' && duckPrep?.ctl === ctl) setDuckJob('error')
+      return null
+    } finally { closeMixSession(s); if (duckPrep?.ctl === ctl) duckPrep = null }
+  })()
+  duckPrep = { key, ctl, promise }
+  return promise
 }
 
 // ---------------------------------------------------------------- loudness and the export's audio plan
@@ -346,6 +490,8 @@ export interface ExportLoudness {
   ceiling: number
   /** The target could not be reached (a silent mix, or the limiter held it back by more than 0.5 LU). */
   note: string | null
+  /** Things the editor should know about the sound: a mix too short for a gated measurement, broken (NaN) samples. */
+  warnings: string[]
 }
 
 const summary = (r: { integrated: number; range: number; truePeak: number; samplePeak: number }): LoudnessSummary => ({ integrated: r.integrated, lra: r.range, truePeak: r.truePeak, samplePeak: r.samplePeak })
@@ -387,7 +533,20 @@ export async function prepareMix(project: VideoProject, duration: number, opts: 
     s.duck = await computeDuckCurve(s, opts.signal)
     const blocks: [number, number][] = []
     for (let a = 0; a < duration - 1e-9; a += AUDIO_CHUNK_SECONDS) blocks.push([a, Math.min(duration, a + AUDIO_CHUNK_SECONDS)])
-    const rawBlock = async (i: number) => { const [a, b] = blocks[i]; const buf = await renderChunk(s, a, b); return [buf.getChannelData(0), buf.getChannelData(1)] as Float32Array[] }
+    // the measure pass keeps the blocks it renders (when they fit in RAW_CACHE_BYTES) so the limiter's trial passes and the
+    // final pass do not render the whole timeline again; the final pass hands each one back as it is used
+    const keepRaw = target != null && duration * SAMPLE_RATE * 2 * 4 <= RAW_CACHE_BYTES
+    const rawCache: (Float32Array[] | undefined)[] = []
+    const rawBlock = async (i: number) => {
+      const hit = rawCache[i]
+      if (hit) return hit
+      const [a, b] = blocks[i]
+      const buf = await renderChunk(s, a, b)
+      const arr = [buf.getChannelData(0), buf.getChannelData(1)] as Float32Array[]
+      if (keepRaw) rawCache[i] = arr
+      return arr
+    }
+    const warnings: string[] = []
 
     let gainDb = 0
     let before: LoudnessSummary = { integrated: -Infinity, lra: 0, truePeak: -Infinity, samplePeak: -Infinity }
@@ -398,10 +557,12 @@ export async function prepareMix(project: VideoProject, duration: number, opts: 
     if (target != null && blocks.length) {
       opts.onStatus?.('Measuring loudness')
       const meter = new StreamMeter(SAMPLE_RATE, 2)
-      for (let i = 0; i < blocks.length; i++) { if (opts.signal?.aborted) throw new DOMException('cancelled', 'AbortError'); meter.push(await rawBlock(i)) }
+      for (let i = 0; i < blocks.length; i++) { if (opts.signal?.aborted) throw new DOMException('cancelled', 'AbortError'); await meter.pushAsync(await rawBlock(i), yieldUi) }
       const rep = meter.report()
       before = summary(rep)
-      restartPass(s)
+      if (!keepRaw) restartPass(s)
+      if (meter.nonFinite) warnings.push(`${meter.nonFinite} broken samples (NaN or infinite) in the sound were treated as silence.`)
+      if (rep.shortMix) warnings.push('The mix is shorter than 0.4 s: its level was measured without gating, so the target is approximate.')
       if (!Number.isFinite(rep.integrated)) note = 'The mix is silent: nothing to normalise'
       else {
         const plan = normalizeGain(rep, { target, ceiling })
@@ -415,7 +576,7 @@ export async function prepareMix(project: VideoProject, duration: number, opts: 
     const finalOnly = target == null && !limit && opts.final === false
 
     // one pass of final pieces (used for the real export, and for a dry run when the limiter will lower the level)
-    const makePass = (sink: StreamMeter | null) => {
+    const makePass = (sink: StreamMeter | null, free = false) => {
       let idx = 0
       let raw: Float32Array[] | null = null
       // silence before the first piece and after the last: the limiter's gain at the very ends is averaged with its
@@ -430,6 +591,7 @@ export async function prepareMix(project: VideoProject, duration: number, opts: 
           const cur = raw
           const hasNext = idx + 1 < blocks.length
           const nextRaw = hasNext ? await rawBlock(idx + 1) : null
+          if (free) rawCache[idx] = undefined // the final pass is the last to read this block (the next one is read once more as its own)
           const n = cur[0].length
           let outCh: Float32Array[]
           if (finalOnly || (g === 1 && !needsLimiter)) outCh = cur
@@ -443,7 +605,7 @@ export async function prepareMix(project: VideoProject, duration: number, opts: 
               for (const set of [tail, scaled, head]) for (const ch of set) for (let i = 0; i < ch.length; i++) { const v = Math.abs(ch[i]); if (v > peak) peak = v }
               if (peak > ceilLin * 0.55) {
                 const joined = [0, 1].map((c) => { const o = new Float32Array(tail[c].length + n + head[c].length); o.set(tail[c], 0); o.set(scaled[c], tail[c].length); o.set(head[c], tail[c].length + n); return o })
-                const gain = limiterGain(joined, SAMPLE_RATE, { ceiling })
+                const gain = await limiterGainAsync(joined, SAMPLE_RATE, { ceiling })
                 const off = tail[0].length
                 let minG = 1
                 outCh = scaled.map((ch) => { const o = new Float32Array(n); for (let i = 0; i < n; i++) { const k = gain[off + i]; if (k < minG) minG = k; o[i] = ch[i] * k } return o })
@@ -466,10 +628,10 @@ export async function prepareMix(project: VideoProject, duration: number, opts: 
     if (target != null && needsLimiter && Number.isFinite(before.integrated)) {
       for (let attempt = 0; attempt < 2; attempt++) {
         opts.onStatus?.('Setting the limiter')
-        const meter = new StreamMeter(SAMPLE_RATE, 2)
+        const meter = new StreamMeter(SAMPLE_RATE, 2, { truePeak: false }) // only the integrated level is read here
         const dry = makePass(meter)
-        while (await dry.next()) { if (opts.signal?.aborted) throw new DOMException('cancelled', 'AbortError') }
-        restartPass(s)
+        while (await dry.next()) { if (opts.signal?.aborted) throw new DOMException('cancelled', 'AbortError'); await yieldUi() }
+        if (!keepRaw) restartPass(s)
         const miss = target - meter.report().integrated
         if (!Number.isFinite(miss) || Math.abs(miss) <= 0.15) break
         gainDb += miss
@@ -477,7 +639,7 @@ export async function prepareMix(project: VideoProject, duration: number, opts: 
     }
 
     const finalMeter = new StreamMeter(SAMPLE_RATE, 2)
-    const pass = makePass(finalMeter)
+    const pass = makePass(finalMeter, keepRaw)
     pass.setGain(gainDb)
     let cursor = 0
     return {
@@ -492,7 +654,7 @@ export async function prepareMix(project: VideoProject, duration: number, opts: 
         if (!blocks.length) return null
         const after = summary(finalMeter.report())
         if (target != null && !note && Number.isFinite(after.integrated) && Math.abs(after.integrated - target) > 0.5) note = `Reached ${after.integrated.toFixed(1)} LUFS: the true-peak limit held the level back`
-        return { target, before: target != null ? before : after, after, gainDb, limited, ceiling, note }
+        return { target, before: target != null ? before : after, after, gainDb, limited, ceiling, note, warnings }
       },
       dispose() { closeMixSession(s) },
     }
@@ -532,6 +694,10 @@ export interface ProjectLoudness {
   duration: number
   /** Nothing audible. */
   silent: boolean
+  /** Shorter than 400 ms: `integrated` is an ungated level, not a BS.1770 gated one. */
+  shortMix?: boolean
+  /** Things the editor should know (a very short mix, NaN samples that were measured as silence). */
+  warnings: string[]
   /** The project's loudness target and what an export would do: the gain, and whether the limiter would be needed. */
   target: number | null
   gainDb: number
@@ -559,7 +725,7 @@ export async function measureProjectLoudness(project: VideoProject, opts: { sign
   try {
     const target = p.loudnessTarget ?? null
     if (!s.clips.length || duration <= 0) {
-      return { integrated: -Infinity, lra: 0, truePeak: -Infinity, samplePeak: -Infinity, momentary: new Float32Array(0), shortTerm: new Float32Array(0), momentaryMax: -Infinity, shortTermMax: -Infinity, duration, silent: true, target, gainDb: 0, wouldLimit: false }
+      return { integrated: -Infinity, lra: 0, truePeak: -Infinity, samplePeak: -Infinity, momentary: new Float32Array(0), shortTerm: new Float32Array(0), momentaryMax: -Infinity, shortTermMax: -Infinity, duration, silent: true, target, gainDb: 0, wouldLimit: false, warnings: [] }
     }
     await ensureDenoised(s, opts.signal)
     s.duck = await computeDuckCurve(s, opts.signal)
@@ -568,7 +734,7 @@ export async function measureProjectLoudness(project: VideoProject, opts: { sign
       if (opts.signal?.aborted) throw new DOMException('cancelled', 'AbortError')
       const b = Math.min(duration, a + AUDIO_CHUNK_SECONDS)
       const buf = await renderChunk(s, a, b)
-      meter.push([buf.getChannelData(0), buf.getChannelData(1)])
+      await meter.pushAsync([buf.getChannelData(0), buf.getChannelData(1)], yieldUi)
       opts.onProgress?.(b / duration)
     }
     const r = meter.report()
@@ -577,6 +743,11 @@ export async function measureProjectLoudness(project: VideoProject, opts: { sign
       integrated: r.integrated, lra: r.range, truePeak: r.truePeak, samplePeak: r.samplePeak,
       momentary: r.momentary, shortTerm: r.shortTerm, momentaryMax: r.momentaryMax, shortTermMax: r.shortTermMax,
       duration, silent: !Number.isFinite(r.integrated), target, gainDb: plan.gainDb, wouldLimit: plan.limit,
+      ...(r.shortMix ? { shortMix: true } : {}),
+      warnings: [
+        ...(meter.nonFinite ? [`${meter.nonFinite} broken samples (NaN or infinite) in the sound were treated as silence.`] : []),
+        ...(r.shortMix ? ['The mix is shorter than 0.4 s: its level was measured without gating (short-term), not as a gated integrated value.'] : []),
+      ],
     }
     loudCache.set(key, out)
     if (loudCache.size > 6) loudCache.delete(loudCache.keys().next().value!)

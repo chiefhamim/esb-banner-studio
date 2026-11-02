@@ -51,7 +51,19 @@ const set = useMusic.setState
 
 const clean = (e: unknown) => String((e as Error)?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '').slice(0, 200)
 
-export async function loadMusic(): Promise<void> {
+let loadTimer: ReturnType<typeof setTimeout> | undefined
+let loadRun: Promise<void> | null = null
+/** Re-read the folder. Calls close together (tab switches, focus) are one listing, and one already running is joined. */
+export function loadMusic(): Promise<void> {
+  if (loadRun) return loadRun
+  loadRun = new Promise<void>((res) => {
+    clearTimeout(loadTimer)
+    loadTimer = setTimeout(() => { void loadMusicNow().finally(() => { loadRun = null; res() }) }, 250)
+  })
+  return loadRun
+}
+
+async function loadMusicNow(): Promise<void> {
   const b = videoBridge()
   if (!b?.videoMusicFolder || !b.videoMusicList) { set({ supported: false }); return }
   set({ supported: true, loading: true, error: null })

@@ -60,7 +60,7 @@ export function channelWeights(n: number): number[] {
   return Array.from({ length: n }, () => 1)
 }
 
-const toLufs = (power: number) => (power > 0 ? -0.691 + 10 * Math.log10(power) : SILENCE)
+export const toLufs = (power: number) => (power > 0 ? -0.691 + 10 * Math.log10(power) : SILENCE)
 const toPower = (lufs: number) => Math.pow(10, (lufs + 0.691) / 10)
 
 export interface LoudnessReport {
@@ -83,6 +83,11 @@ export interface LoudnessReport {
   samplePeak: number
   /** Per channel true peak, dBTP. */
   truePeakPerChannel: number[]
+  /** The signal was too short for a gated integrated measurement (under 400 ms): `integrated` is the ungated level of what
+   * there is, not a BS.1770 value. */
+  shortMix?: boolean
+  /** Samples that were NaN or infinite (hostile or broken audio): they were measured as 0. */
+  nonFinite?: number
 }
 
 export interface LoudnessOptions {
@@ -253,4 +258,41 @@ export function truePeakOf(x: Float32Array): number {
   let m = 0
   for (let i = 0; i < e.length; i++) if (e[i] > m) m = e[i]
   return m
+}
+
+/** The largest |value| of the 4× oversampled signal in [i, i+1) (the sample itself and the three phases between it and
+ * the next). Samples outside the array count as 0. */
+export function truePeakAt(x: Float32Array, i: number, phases?: Float64Array[]): number {
+  const ph = phases ?? (PHASES ??= interpolator())
+  const TAPS = ph[0].length
+  const n = x.length
+  const half = TAPS / 2 - 1
+  let m = i >= 0 && i < n ? Math.abs(x[i]) : 0
+  const j0 = i - half
+  const inside = j0 >= 0 && j0 + TAPS <= n // the common case: every tap lies inside the array (no bounds test)
+  for (let p = 1; p < OVERSAMPLE; p++) {
+    const h = ph[p]
+    let s = 0
+    if (inside) for (let k = 0; k < TAPS; k++) s += h[k] * x[j0 + k]
+    else for (let k = 0; k < TAPS; k++) { const j = j0 + k; if (j >= 0 && j < n) s += h[k] * x[j] }
+    const a = s < 0 ? -s : s
+    if (a > m) m = a
+  }
+  return m
+}
+
+/** `truePeakEnvelope` computed only where it can matter: around samples of at least `gate` (linear). An inter-sample peak is
+ * never more than ~3 dB over the samples beside it, so where every sample is below gate/1.5 the oversampled signal is
+ * below `gate` too and the plain |x| stands in. Where it is computed it is exactly truePeakEnvelope's value. */
+export function truePeakEnvelopeGated(x: Float32Array, gate: number, phases?: Float64Array[]): Float32Array {
+  const ph = phases ?? (PHASES ??= interpolator())
+  const n = x.length
+  const env = new Float32Array(n)
+  for (let i = 0; i < n; i++) env[i] = Math.abs(x[i])
+  let done = -1
+  for (let i = 0; i < n; i++) {
+    if (env[i] < gate) continue
+    for (let k = Math.max(0, i - 1, done + 1); k <= i; k++) { const v = truePeakAt(x, k, ph); if (v > env[k]) env[k] = v; done = k }
+  }
+  return env
 }

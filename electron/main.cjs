@@ -345,6 +345,24 @@ ipcMain.handle('esb:video-store-take', (_e, name, bytes) => {
   return videoEntries([file])[0] || null
 })
 
+// A take written while it is recorded (electron/video-take.cjs): pieces are appended on disk, so a crash keeps the take.
+const videoTakeDir = () => path.join(app.getPath('userData'), 'video-takes')
+let videoTakeRec = null
+const takeRec = () => (videoTakeRec ??= require('./video-take.cjs').createTakeRecorder({ dir: videoTakeDir(), audioTakeKind: videoMedia.audioTakeKind, maxBytes: videoMedia.MAX_TAKE_BYTES }))
+const keepTakeBytes = (name, data) => {
+  const stem = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '')
+  const file = videoMedia.storeGenerated(videoTakeDir(), stem, videoMedia.audioTakeKind(data), data, videoMedia.TAKES_CAP)
+  return videoEntries([file])[0] || null
+}
+ipcMain.handle('esb:video-take-begin', () => takeRec().begin())
+ipcMain.handle('esb:video-take-chunk', (_e, id, bytes) => takeRec().append(String(id), bytes))
+ipcMain.handle('esb:video-take-end', (_e, id, name) => {
+  const r = takeRec().finish(String(id))
+  return r ? keepTakeBytes(name, r.data) : null
+})
+ipcMain.handle('esb:video-take-discard', (_e, id) => { takeRec().discard(String(id)); return true })
+ipcMain.handle('esb:video-take-recover', () => takeRec().recover().map((r, i) => keepTakeBytes(`Recovered voiceover ${new Date(r.mtimeMs).toISOString().slice(0, 16).replace('T', ' ')} ${i + 1}`, r.data)).filter(Boolean))
+
 // ---------------------------------------------------------------- Video desk: the music library (one folder the owner chose)
 // Read-only. The renderer never names an absolute path: the folder comes from main's own dialog, files are named
 // relative to it and resolved through every link (electron/video-music.cjs). A file asked for is added to the media
@@ -355,19 +373,26 @@ ipcMain.handle('esb:video-music-folder', () => musicInfo())
 ipcMain.handle('esb:video-music-choose', async () => {
   const r = await dialog.showOpenDialog(win, { title: 'Choose your music folder', properties: ['openDirectory'], buttonLabel: 'Use this folder' })
   if (r.canceled || !r.filePaths[0]) return musicInfo()
+  forgetMusic()
   if (!videoMusicFolder.set(r.filePaths[0])) throw new Error('That is not a local folder')
   return musicInfo()
 })
-ipcMain.handle('esb:video-music-clear', () => { videoMusicFolder.clear(); return null })
-ipcMain.handle('esb:video-music-list', () => {
+// files this folder choice registered for playback: forgotten again when the folder is cleared or changed, so a
+// cleared library leaves nothing servable behind
+const musicRegistered = new Set()
+const forgetMusic = () => { for (const f of musicRegistered) { try { videoRegistry?.remove(f) } catch { /* gone */ } } musicRegistered.clear() }
+ipcMain.handle('esb:video-music-clear', () => { forgetMusic(); videoMusicFolder.clear(); return null })
+ipcMain.handle('esb:video-music-list', async () => {
   const root = videoMusicFolder?.get()
-  return root ? videoMusic.listAudio(root) : { files: [], truncated: false }
+  return root ? videoMusic.listAudioAsync(root) : { files: [], truncated: false }
 })
 ipcMain.handle('esb:video-music-use', (_e, rel) => {
   const root = videoMusicFolder?.get()
   const file = root ? videoMusic.confinedAudio(root, rel) : null
   if (!file) throw new Error('That file is not in the music folder')
-  return videoEntries([file])[0] || null
+  const entry = videoEntries([file])[0] || null
+  if (entry) musicRegistered.add(file)
+  return entry
 })
 ipcMain.handle('esb:video-save-project', async (_e, name, text, existingPath) => {
   if (typeof text !== 'string' || text.length > 25 * 1024 * 1024) throw new Error('Project text too large')

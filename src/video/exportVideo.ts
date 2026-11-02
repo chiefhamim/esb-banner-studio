@@ -240,6 +240,7 @@ export function exportLoudnessReport(r: Pick<ExportResult, 'loudness'>): { lines
   const lines = [`Loudness ${f(l.after.integrated, 'LUFS')}${l.target != null ? ` (target ${l.target} LUFS)` : ''}`, `True peak ${f(l.after.truePeak, 'dBTP')}`, `Range ${l.after.lra.toFixed(1)} LU`]
   if (l.target != null) lines.push(`Gain ${l.gainDb >= 0 ? '+' : ''}${l.gainDb.toFixed(1)} dB${l.limited ? ', limiter on' : ''}`)
   if (l.note) lines.push(l.note)
+  for (const w of l.warnings ?? []) lines.push(w)
   const ok = l.target == null ? l.after.truePeak <= l.ceiling + 0.5 : Number.isFinite(l.after.integrated) && Math.abs(l.after.integrated - l.target) <= 0.5 && l.after.truePeak <= l.ceiling + 0.3
   return { lines, ok, target: l.target }
 }

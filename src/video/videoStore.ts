@@ -53,7 +53,7 @@ import { forgetFile } from './media'
 import { analyseClipBeats } from './engine/audioRender'
 import type { Bus, ClipDenoise, ClipFade, LoudnessTarget } from './audioModel'
 import type { BeatProposal, ClipAudioPatch, ProjectAudioPatch, TrackAudioPatch } from './audioEdit'
-import { applyBeatMarkers, beatProposal, proposalTimes, updateClipAudio, updateProjectAudio, updateTrackAudio } from './audioEdit'
+import { applyProposal, beatProposal, clipPlacementKey, proposalProblem, updateClipAudio, updateProjectAudio, updateTrackAudio } from './audioEdit'
 
 /** An undo step. Removing a bin item changes no clip, so its step carries which bin items undo shows again (`unhide`)
  * and redo hides again (`hide`). */
@@ -126,6 +126,10 @@ interface VideoState {
    * clip, with nothing else edited between them and none more than COALESCE_MS apart, make ONE undo step. Use
    * `endCoalesce()` on blur / Enter to close the step at once. Sliders and colour drags use beginGesture / endGesture. */
   updateClipCoalesced: (clip: Clip, key: string) => void
+  /** Phase 4 fix: the same, for audio parameters (keyboard steps of a slider or fade handle are one undo step). */
+  patchClipAudioCoalesced: (clipId: string, patch: ClipAudioPatch, key?: string) => void
+  patchTrackAudioCoalesced: (trackId: string, patch: TrackAudioPatch, key?: string) => void
+  patchProjectAudioCoalesced: (patch: ProjectAudioPatch, key?: string) => void
   /** Close the open coalesced edit: the next `updateClipCoalesced` starts a new undo step. */
   endCoalesce: () => void
   moveClip: (clipId: string, newStart: number, newTrackId?: string) => void
@@ -222,6 +226,8 @@ interface VideoState {
   markBeats: (clipId: string) => Promise<BeatProposal | null>
   /** Add a proposal's markers (the beat grid, or the strongest onsets) in one undo step; returns how many were added. */
   applyBeats: (proposal: BeatProposal, use?: 'beats' | 'onsets') => number
+  /** Why a beat proposal can no longer be applied (the clip was edited or deleted since), or null. */
+  beatsProblem: (proposal: BeatProposal) => string | null
   /** Start a gesture (pointer down on a clip, a trim handle or a slider): one undo step for everything until end. */
   beginGesture: () => void
   /** End the gesture; a gesture that changed nothing leaves no undo step. */
@@ -283,6 +289,25 @@ const edit = (s: VideoState, next: VideoProject): Partial<VideoState> => {
 /** A pause longer than this ends a coalesced typing step (the next keystroke is a new undo step). */
 export const COALESCE_MS = 1200
 let coalesceMark: { key: string; rev: number; at: number } | null = null
+
+/** An undoable edit of the PROJECT itself, whatever compound is open: the master, ducking, loudness target and bus faders
+ * belong to the project, not to a compound's inside (a view only carries tracks, clips and markers back). */
+const editRoot = (s: VideoState, next: VideoProject): Partial<VideoState> => {
+  if (next === s.project) return {}
+  if (s.gesture) return { project: next, dirty: true, rev: s.rev + 1 }
+  return { history: pushHistory(s.project, s.history), future: [] as Step[], project: next, dirty: true, rev: s.rev + 1 }
+}
+
+/** Keyboard steps and typed numbers: repeated edits with the same `id` within COALESCE_MS are ONE undo step. */
+function coalesced(s: VideoState, id: string, apply: (s: VideoState) => Partial<VideoState>): Partial<VideoState> {
+  const now = Date.now()
+  const same = !!coalesceMark && coalesceMark.key === id && coalesceMark.rev === s.rev && now - coalesceMark.at < COALESCE_MS && !s.gesture && s.history.length > 0
+  // inside an open step the earlier undo entry already holds the state before the first keystroke: change the project only
+  const r = same ? apply({ ...s, gesture: true }) : apply(s)
+  const rev = (r.rev as number | undefined) ?? s.rev
+  coalesceMark = { key: id, rev, at: now }
+  return r
+}
 
 /** Makes marker ids unique when several are added in the same millisecond. */
 let markerSeq = 0
@@ -393,15 +418,12 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   updateClipCoalesced: (clip, key) => set((s) => {
     const v = viewOf(s)
     const next = { ...v, clips: v.clips.map((c) => (c.id === clip.id ? clip : c)) }
-    const now = Date.now()
-    const id = `${clip.id}|${key}`
-    const same = !!coalesceMark && coalesceMark.key === id && coalesceMark.rev === s.rev && now - coalesceMark.at < COALESCE_MS && !s.gesture && s.history.length > 0
-    // inside an open step the earlier undo entry already holds the state before the first keystroke: change the project only
-    const r = same ? edit({ ...s, gesture: true }, next) : edit(s, next)
-    const rev = (r.rev as number | undefined) ?? s.rev
-    coalesceMark = { key: id, rev, at: now }
-    return r
+    return coalesced(s, `${clip.id}|${key}`, (st) => edit(st, next))
   }),
+
+  patchClipAudioCoalesced: (clipId, patch, key = 'audio') => set((s) => coalesced(s, `${clipId}|${key}`, (st) => edit(st, updateClipAudio(viewOf(st), clipId, patch)))),
+  patchTrackAudioCoalesced: (trackId, patch, key = 'track') => set((s) => coalesced(s, `${trackId}|${key}`, (st) => edit(st, updateTrackAudio(viewOf(st), trackId, patch)))),
+  patchProjectAudioCoalesced: (patch, key = 'project') => set((s) => coalesced(s, `project|${key}`, (st) => editRoot(st, updateProjectAudio(st.project, patch)))),
 
   endCoalesce: () => { coalesceMark = null },
 
@@ -742,27 +764,30 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   setTrackMute: (trackId, muted) => set((s) => edit(s, updateTrackAudio(viewOf(s), trackId, { muted }))),
   setTrackSolo: (trackId, solo) => set((s) => edit(s, updateTrackAudio(viewOf(s), trackId, { solo }))),
   patchTrackAudio: (trackId, patch) => set((s) => edit(s, updateTrackAudio(viewOf(s), trackId, patch))),
-  setMaster: (patch) => set((s) => edit(s, updateProjectAudio(viewOf(s), { master: patch }))),
-  setDucking: (patch) => set((s) => edit(s, updateProjectAudio(viewOf(s), { ducking: patch }))),
-  setLoudnessTarget: (t) => set((s) => edit(s, updateProjectAudio(viewOf(s), { loudnessTarget: t }))),
-  setBusVolume: (bus, db) => set((s) => edit(s, updateProjectAudio(viewOf(s), { busVolume: { [bus]: db } }))),
-  patchProjectAudio: (patch) => set((s) => edit(s, updateProjectAudio(viewOf(s), patch))),
+  setMaster: (patch) => set((s) => editRoot(s, updateProjectAudio(s.project, { master: patch }))),
+  setDucking: (patch) => set((s) => editRoot(s, updateProjectAudio(s.project, { ducking: patch }))),
+  setLoudnessTarget: (t) => set((s) => editRoot(s, updateProjectAudio(s.project, { loudnessTarget: t }))),
+  setBusVolume: (bus, db) => set((s) => editRoot(s, updateProjectAudio(s.project, { busVolume: { [bus]: db } }))),
+  patchProjectAudio: (patch) => set((s) => editRoot(s, updateProjectAudio(s.project, patch))),
 
   markBeats: async (clipId) => {
     const s = get()
-    const a = await analyseClipBeats(flattenCompounds(viewOf(s)), clipId)
-    return a ? beatProposal({ clipId, clipStart: a.clipStart, clipDuration: a.clipDuration, onsets: a.onsets, beats: a.beats, tempo: a.tempo }) : null
+    const view = viewOf(s)
+    const shown = view.clips.find((c) => c.id === clipId)
+    const a = await analyseClipBeats(flattenCompounds(view), clipId)
+    return a ? beatProposal({ clipId, clipStart: a.clipStart, clipDuration: a.clipDuration, clipKey: shown ? clipPlacementKey(shown) : undefined, onsets: a.onsets, beats: a.beats, tempo: a.tempo }) : null
   },
 
   applyBeats: (proposal, use = 'beats') => {
     const s = get()
     const v = viewOf(s)
-    const times = proposalTimes(proposal, use)
-    const next = applyBeatMarkers(v, times, Date.now().toString(36))
+    const next = applyProposal(v, proposal, use, Date.now().toString(36))
     if (next === v) return 0
     set((st) => edit(st, next))
     return (next.markers?.length ?? 0) - (v.markers?.length ?? 0)
   },
+
+  beatsProblem: (proposal) => proposalProblem(viewOf(get()), proposal),
 
   beginGesture: () => set((s) => {
     if (s.gesture) return {}
