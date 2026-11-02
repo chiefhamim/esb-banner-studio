@@ -15,7 +15,7 @@ import { fixLetterWithAi, OUTREACH_BLUEPRINTS, reviewLetter, type LetterProblem,
 import { STATUS_TEXT } from './CampaignsTab'
 import { aiFor, aiPaused, loadAiSettings, providerMeta, roleProvider } from '../editorial/aiProviders'
 import { ProviderMark } from '../editorial/ProviderMark'
-import { AutopilotCard } from './AutopilotCard'
+import { AnyHourWarning, AutopilotCard } from './AutopilotCard'
 import { Icon } from '../ui/Icon'
 import { Dialog, Switch, Tabs } from '../ui/controls'
 import { buildMessage } from './compose'
@@ -25,15 +25,17 @@ import { NeedsYou } from './NeedsYou'
 import { domainOf, roleMailbox, disposableDomain } from './addressCheck'
 import { cloudAgo, lockBlock, useCloud } from './cloudStore'
 import { clickedText, engineSkipText, keyOf, openedText, outcomeOf } from './outcome'
-import { fmtCountdown, fmtDay } from './activityFormat'
+import { fmtCountdown, fmtDay, fmtGapRange, waitReason } from './activityFormat'
 import { useEngineStore } from './engineStore'
+import { mailFailView } from './mailCheck'
 import { fmtDateTime, useClockFormat } from '../ui/time'
 
 const fmtWhen = (t: number) => fmtDateTime(t, { weekday: false })
 const mmss = (ms: number) => fmtCountdown(ms)
 const HOLD_TEXT: Record<string, string> = { window: 'Outside sending hours', cap: 'Daily limit reached', quota: 'Gmail asked to slow down', schedule: 'Scheduled', offline: 'Offline', domain: 'Same company just emailed' }
 const settingsTz = () => useEngineStore.getState().settings?.window?.tz || 'Asia/Dhaka'
-const gap = (lo: number, hi: number) => (lo >= 60 ? `${Math.round(lo / 60)}–${Math.round(hi / 60)} min` : `${lo}–${hi} s`)
+// the gap the engine really uses (Autopilot settings = the Sender dialog's "wait at least / at most")
+const pacingText = (p: { minDelaySec: number; maxDelaySec: number }) => `${fmtGapRange(p.minDelaySec, p.maxDelaySec)} apart`
 
 // memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
 export const OutreachInspector = memo(function OutreachInspector() {
@@ -58,6 +60,7 @@ function SendTab() {
   const s = useDesk()
   const c = s.campaign()
   const desktop = !!window.esb?.outreachSend
+  const ui = useOutreachUi()
   const [testTo, setTestTo] = useState('')
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
@@ -74,9 +77,12 @@ function SendTab() {
   useEffect(() => () => { if (testResultTimer.current) clearTimeout(testResultTimer.current) }, [])
 
   const set = s.mail?.settings
+  const engineSet = useEngineStore((x) => x.settings)
   const ready = s.mail?.hasPassword && !!set
-  const limit = set?.dailyLimit ?? 0
-  const used = s.mail?.sent24h ?? 0
+  // why the last mail check failed, in plain words: only a refused login is a wrong app password
+  const smtpFail = s.smtp.state === 'bad' ? mailFailView(s.smtp.kind, s.smtp.error, { host: set?.host }) : null
+  const limit = engineSet?.dailyLimit ?? set?.dailyLimit ?? 0
+  const used = s.mail?.sentToday ?? s.mail?.sent24h ?? 0
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
   const willSend = Math.min(queue.length, Math.max(0, limit - used))
   const active = s.contacts.find((x) => x.id === s.activeContact)
@@ -98,16 +104,17 @@ function SendTab() {
         ) : set ? (
           <div className="or-sender">
             <b>{set.name}</b><span>{set.user}</span>
-            <span className={'or-chip ' + (ready ? (s.smtp.state === 'bad' ? 'bad' : 'good') : 'warn')}>{!ready ? 'No app password' : s.smtp.state === 'bad' ? 'Login failed' : s.smtp.state === 'ok' ? 'Signed in' : 'Saved'}</span>
+            <span className={'or-chip ' + (ready ? (smtpFail ? (smtpFail.tone === 'warn' ? 'warn' : 'bad') + ' or-chip-fail' : 'good') : 'warn')} data-tip={smtpFail?.tip}>{!ready ? 'No app password' : smtpFail ? smtpFail.chip : s.smtp.state === 'ok' ? 'Signed in' : 'Saved'}</span>
+            {ready && smtpFail?.fixInSender && <button type="button" className="or-link or-sender-fix" onClick={() => ui.set({ sheet: 'sender' })}>Change in Sender</button>}
           </div>
         ) : (
           <p className="or-muted">No sender yet. Use the account button at the top right to add the Gmail or Workspace account that sends, with a Google app password.</p>
         )}
         {desktop && set && (
           <>
-            <div className="or-meter-row"><span>Last 24 hours</span><span className="or-figure">{used} <small>of {limit}</small></span></div>
+            <div className="or-meter-row"><span>Today</span><span className="or-figure">{used} <small>of {limit}</small></span></div>
             <div className="or-meter" role="meter" aria-valuemin={0} aria-valuemax={limit} aria-valuenow={used}><i style={{ width: `${limit ? Math.min(100, (used / limit) * 100) : 0}%` }} /></div>
-            <p className="or-muted">{Math.max(0, limit - used)} more can go today · {gap(set.minDelaySec, set.maxDelaySec)} apart</p>
+            <p className="or-muted">{Math.max(0, limit - used)} more can go today · {pacingText(engineSet ?? set)}</p>
           </>
         )}
       </section>
@@ -516,19 +523,24 @@ function SendFooter() {
   }, [s.nextAt])
   const set = s.mail?.settings
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
-  const willSend = Math.min(queue.length, Math.max(0, (set?.dailyLimit ?? 0) - (s.mail?.sent24h ?? 0)))
+  const willSend = Math.min(queue.length, Math.max(0, (set?.dailyLimit ?? 0) - (s.mail?.sentToday ?? s.mail?.sent24h ?? 0)))
   const lock = useCloud((x) => (c ? x.locks[c.id] : undefined))
-  // why the engine is holding this campaign's batch: outside sending hours, daily limit, Gmail's slow-down, a start time
-  const holdWhy = useEngineStore((x) => { const j = c ? x.jobForCampaign(c.id) : undefined; return j && j.status === 'waiting' && j.why && j.why !== 'gap' && j.until ? j.why : null })
-  const holdUntil = useEngineStore((x) => (c ? x.jobForCampaign(c.id)?.until ?? null : null))
-  const hold = holdWhy && holdUntil ? { why: holdWhy, until: holdUntil } : null
+  // why the engine is holding this campaign's batch, in words: the organisation's spacing or daily limit, the gap
+  // between emails, outside sending hours, the daily limit, Gmail's slow-down, a start time (activityFormat waitReason)
+  const job = useEngineStore((x) => (c ? x.jobForCampaign(c.id) : undefined))
+  const waiting = job && job.status === 'waiting' ? job : null
+  const reason = waitReason(waiting)
+  const holdUntil = waiting?.until ?? (s.nextAt || null)
+  const far = holdUntil != null && holdUntil - Date.now() > 6 * 3600 * 1000
   const why = cannotStart()
   const blocked = lockBlock(lock)
   if (s.run !== 'idle') {
     return (
       <footer className="or-right-foot">
         {blocked && <p className="or-foot-note" role="status">{blocked}</p>}
-        <div className="or-progress"><span><b>{s.runSent}</b> of {s.runTotal} sent</span>{s.current ? <span>Sending to {s.current}</span> : hold ? <span>{HOLD_TEXT[hold.why] ?? 'Waiting'} · resumes <b>{fmtDay(hold.until, settingsTz())}</b></span> : s.nextAt ? <span>Next in <b>{mmss(s.nextAt - Date.now())}</b></span> : null}</div>
+        <div className="or-progress"><span><b>{s.runSent}</b> of {s.runTotal} sent</span>{s.current ? <span>Sending to {s.current}</span> : holdUntil ? <span>{far ? <>{reason ? 'Next email' : (waiting?.why && HOLD_TEXT[waiting.why]) || 'Waiting'} <b>{fmtDay(holdUntil, settingsTz())}</b></> : <>Next in <b>{mmss(holdUntil - Date.now())}</b></>}</span> : null}</div>
+        {!s.current && reason && <p className="or-foot-note or-wait-why" role="status" data-testid="or-foot-why">{reason}</p>}
+        <AnyHourWarning />
         <div className="or-meter"><i style={{ width: `${s.runTotal ? (s.runSent / s.runTotal) * 100 : 0}%` }} /></div>
         <div className="or-actions">
           {s.run === 'running'

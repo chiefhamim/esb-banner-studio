@@ -52,11 +52,26 @@ describe('validateSmtpSettings', () => {
 describe('ledgerCheck: the cap, the gap and no repeats', () => {
   const now = Date.UTC(2026, 9, 28, 12)
   const mail = (to: string, extra = {}) => ({ to, isTest: false, resend: false, ...extra })
-  it('stops at the daily limit and says when the next slot opens', () => {
+  it('stops at the daily limit and says when the next slot opens: the next Dhaka midnight (calendar day)', () => {
+    // now = 18:00 Dhaka; three sends at 15:00, 16:00, 17:00 Dhaka the same day
     const l = [1, 2, 3].map((h) => ({ t: now - h * 3600e3, to: `x${h}@example.com`, kind: 'campaign' }))
     const r = m.ledgerCheck(l, now, settings, mail('new@example.com'))
     expect(r.ok).toBe(false)
-    expect(r.nextAt).toBe(now - 3 * 3600e3 + 24 * 3600e3)
+    expect(r.nextAt).toBe(Date.UTC(2026, 9, 28, 18)) // 00:00 Dhaka on 29 Oct
+  })
+  it('sends of yesterday (Dhaka) do not count today, however recent', () => {
+    // now = 00:30 Dhaka on 29 Oct; three sends between 22:00 and 23:59 Dhaka on the 28th
+    const t = Date.UTC(2026, 9, 28, 18, 30)
+    const l = [20, 60, 120].map((min, i) => ({ t: t - min * 60e3 - 30 * 60e3, to: `y${i}@example.com`, kind: 'campaign' }))
+    expect(m.ledgerCheck(l, t, settings, mail('new@example.com')).ok).toBe(true)
+  })
+  it('the 24 h safety ceiling holds even across midnight', () => {
+    const t = Date.UTC(2026, 9, 28, 18, 30) // 00:30 Dhaka
+    const big = { ...settings, dailyLimit: 300, ceiling24h: 400 }
+    const l = Array.from({ length: 400 }, (_, i) => ({ t: t - 3600e3 - i * 10e3, to: `z${i}@example.com`, kind: 'campaign' }))
+    const r = m.ledgerCheck(l, t, big, mail('new@example.com'))
+    expect(r).toMatchObject({ ok: false, reason: /Safety limit of 400/ })
+    expect(r.nextAt).toBe(Math.min(...l.map((e) => e.t)) + 24 * 3600e3)
   })
   it('keeps the floor between two sends whatever the renderer asks', () => {
     const r = m.ledgerCheck([{ t: now - 5000, to: 'a@example.com', kind: 'campaign' }], now, settings, mail('b@example.com'))

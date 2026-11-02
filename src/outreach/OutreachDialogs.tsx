@@ -249,7 +249,7 @@ export function ReviewSendDialog() {
   const set = s.mail?.settings
   const audience = useMemo(() => s.contacts.filter((x) => inAudience(x, c.audience)), [s.contacts, c.audience])
   const ready = eligible(s.contacts, c.subject, c.body, c.audience)
-  const room = set ? Math.max(0, set.dailyLimit - (s.mail?.sent24h ?? 0)) : 0
+  const room = set ? Math.max(0, set.dailyLimit - (s.mail?.sentToday ?? s.mail?.sent24h ?? 0)) : 0
   const skippedCount = audience.length - ready.length
 
   const reasons = useMemo(() => {

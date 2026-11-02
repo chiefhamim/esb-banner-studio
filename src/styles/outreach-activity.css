@@ -713,6 +713,8 @@
 
 /* an event is an Outreach row: quiet card, state on the chip, a tinted badge for the kind */
 .or-row.oa-ev {
+  /* the contact list turns .or-row into a grid under 1180 px (outreach.css); a log row stays a row */
+  display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;

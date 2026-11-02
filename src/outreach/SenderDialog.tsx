@@ -1,26 +1,34 @@
-// The sending account and pacing. The app password goes to the main process once, is encrypted there with the
-// operating system's keychain and is never shown or read back; the field stays empty after saving.
+// The sending account. The app password goes to the main process once, is encrypted there with the operating
+// system's keychain and is never shown or read back; the field stays empty after saving.
+// The pace (emails per day, gaps, sending hours) is NOT edited here since 2026-11-02: it lives only in Sending
+// settings (AutopilotDialog.tsx). This dialog shows it in one line with a link there. The mailer's validator still
+// wants a pacing triple in outreach-smtp.json, so the engine's numbers are passed through unchanged.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Dialog, Field } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import { useOutreachStore } from './outreachStore'
+import { useEngineStore } from './engineStore'
+import { engineClient } from './engineClient'
+import { useOutreachUi } from './outreachUi'
+import { fmtGapRange } from './activityFormat'
+import { fmtWallClock } from '../ui/time'
 
 export function SenderDialog({ onClose }: { onClose: () => void }) {
   const mail = useOutreachStore((s) => s.mail)
   const refresh = useOutreachStore((s) => s.refreshMail)
   const addLog = useOutreachStore((s) => s.addLog)
   const cur = mail?.settings
+  const pacing = useEngineStore((x) => x.settings)
   const [f, setF] = useState({
     name: cur?.name ?? 'ESB Power Line',
     user: cur?.user ?? '',
     host: cur?.host ?? 'smtp.gmail.com',
     imapHost: cur?.imapHost ?? '',
     port: cur?.port ?? 587,
-    dailyLimit: cur?.dailyLimit ?? 100,
-    minMin: Math.round((cur?.minDelaySec ?? 180) / 60 * 10) / 10,
-    maxMin: Math.round((cur?.maxDelaySec ?? 480) / 60 * 10) / 10,
   })
+  useEffect(() => { if (!pacing) void engineClient.settings() }, [pacing])
+  const ui = useOutreachUi()
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -33,9 +41,13 @@ export function SenderDialog({ onClose }: { onClose: () => void }) {
     // than saving a sender that silently has none
     const moved = !!cur && (cur.user !== f.user.trim() || cur.host !== f.host.trim() || (cur.imapHost || '') !== f.imapHost.trim().toLowerCase() || cur.port !== Number(f.port))
     if (mail?.hasPassword && moved && !password.trim()) { setError('The account or a server changed, so type the app password again. It is only kept for the servers it was saved with.'); return }
+    // the mailer's file still carries a pacing triple (its validator wants one); it is the engine's, untouched
+    const dailyLimit = pacing?.dailyLimit ?? cur?.dailyLimit ?? 100
+    const minDelaySec = pacing?.minDelaySec ?? cur?.minDelaySec ?? 180
+    const maxDelaySec = pacing?.maxDelaySec ?? cur?.maxDelaySec ?? 480
     setSaving(true)
     setError(null)
-    const r = await b.outreachSave({ name: f.name, user: f.user.trim(), host: f.host.trim(), imapHost: f.imapHost.trim(), port: Number(f.port), dailyLimit: Number(f.dailyLimit), minDelaySec: Math.round(f.minMin * 60), maxDelaySec: Math.round(f.maxMin * 60) }, password || undefined)
+    const r = await b.outreachSave({ name: f.name, user: f.user.trim(), host: f.host.trim(), imapHost: f.imapHost.trim(), port: Number(f.port), dailyLimit, minDelaySec, maxDelaySec }, password || undefined)
     setSaving(false)
     if (!r.ok) { setError(r.error); return }
     addLog('info', `Sender saved: ${f.user}${password ? ' (app password stored, encrypted)' : ''}`)
@@ -73,12 +85,12 @@ export function SenderDialog({ onClose }: { onClose: () => void }) {
           <input className="input" placeholder={f.host.trim().toLowerCase() === 'smtp.gmail.com' ? 'imap.gmail.com (automatic)' : f.host.trim() ? `${f.host.trim().replace(/^smtp\./i, 'imap.')} (automatic)` : 'imap.example.com'} value={f.imapHost} onChange={(e) => up('imapHost', e.target.value)} />
         </Field>
         <p className="hint">Opened read-only with the same app password: nothing is marked read, moved or deleted, and only answers from people this desk emailed are looked at. In Gmail, IMAP is on by default for Workspace; for a personal account check Settings → Forwarding and POP/IMAP.</p>
-        <div className="or-grid3">
-          <Field label="Emails a day"><input className="input" type="number" min={1} max={500} value={f.dailyLimit} onChange={(e) => up('dailyLimit', Number(e.target.value))} /></Field>
-          <Field label="Wait at least (min)"><input className="input" type="number" min={0.5} step={0.5} value={f.minMin} onChange={(e) => up('minMin', Number(e.target.value))} /></Field>
-          <Field label="Wait at most (min)"><input className="input" type="number" min={0.5} step={0.5} value={f.maxMin} onChange={(e) => up('maxMin', Number(e.target.value))} /></Field>
+        <div className="or-pace-link" data-testid="or-sender-pace">
+          <Icon name="sliders" size={14} />
+          <span>{pacing ? `Sending pace: ${pacing.dailyLimit} a day · ${fmtGapRange(pacing.minDelaySec, pacing.maxDelaySec)} apart · ${pacing.window?.enabled ? `${fmtWallClock(pacing.window.from)}–${fmtWallClock(pacing.window.to)}` : 'any hour'}` : 'Sending pace'}</span>
+          <button type="button" className="or-link-btn" onClick={() => { onClose(); ui.set({ sheet: 'autopilot' }) }}>Change in Sending settings</button>
         </div>
-        <p className="hint">Each email waits a random time between the two, so the account never sends in bursts. A personal Gmail account allows about 500 a day; staying well under keeps the address out of spam folders. The same address is never emailed twice within 7 days.</p>
+        <p className="hint">A personal Gmail account allows about 500 a day; staying well under keeps the address out of spam folders. The same address is never emailed twice within 7 days.</p>
         {error && <div className="callout warn"><Icon name="info" size={14} /><span>{error}</span></div>}
       </div>
     </Dialog>

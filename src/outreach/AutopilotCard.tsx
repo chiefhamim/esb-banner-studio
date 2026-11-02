@@ -28,6 +28,7 @@ export function AutopilotCard() {
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
   const dailyLimit = settings?.dailyLimit ?? 100
   const estimatedDays = Math.max(1, Math.ceil(queue.length / Math.max(1, dailyLimit)))
+  const anyHour = <AnyHourWarning />
 
   if (desc.status === 'idle') {
     return (
@@ -43,6 +44,7 @@ export function AutopilotCard() {
         {queue.length > 0 && (
           <p className="or-muted">Takes about {estimatedDays} sending {estimatedDays === 1 ? 'day' : 'days'}.</p>
         )}
+        {anyHour}
         <div className="or-autopilot-actions">
           <button
             type="button"
@@ -58,7 +60,7 @@ export function AutopilotCard() {
             onClick={() => ui.set({ sheet: 'autopilot' })}
           >
             <Icon name="sliders" size={12} />
-            <span>Autopilot settings</span>
+            <span>Sending settings</span>
           </button>
         </div>
       </section>
@@ -90,8 +92,9 @@ export function AutopilotCard() {
       </div>
 
       <div className="or-autopilot-meta">
-        <p className="or-muted">{desc.sentence}</p>
-        {desc.nextInText && <p className="or-muted">{desc.nextInText}</p>}
+        {/* the precise reason replaces the generic sentence ("Same company just emailed") when the engine gave one */}
+        {!(desc.reason && desc.nextInText) && <p className="or-muted">{desc.sentence}</p>}
+        {desc.nextInText && <p className="or-muted" data-testid="or-wait-reason">{desc.nextInText}{desc.reason ? ` — ${desc.reason}` : ''}</p>}
       </div>
 
       <div className="or-autopilot-actions">
@@ -147,5 +150,20 @@ export function AutopilotCard() {
         </button>
       </div>
     </section>
+  )
+}
+
+/** "Only send in a time window" is off: say so where sending is watched (the idle Autopilot card; the Send footer
+ *  while a batch runs), so night-time sends are never a surprise. */
+export function AnyHourWarning() {
+  const ui = useOutreachUi()
+  const off = useEngineStore((x) => x.settings?.window?.enabled === false)
+  if (!off) return null
+  return (
+    <p className="or-any-hour" role="status" data-testid="or-any-hour">
+      <Icon name="info" size={12} />
+      <span>Sending at any hour — </span>
+      <button type="button" className="or-link-btn" onClick={() => ui.set({ sheet: 'autopilot' })}>set hours in Sending settings</button>
+    </p>
   )
 }

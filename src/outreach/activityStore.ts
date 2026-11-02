@@ -3,6 +3,7 @@
 
 import { create } from 'zustand'
 import type { OutreachEvent, OutreachStats } from '../esb'
+import { displaySafe } from './activityFormat'
 
 export type ActivityRange = 'today' | '7d' | '30d' | 'all'
 export type ActivityTab = 'overview' | 'log' | 'reports'
@@ -230,7 +231,7 @@ export const useActivityStore = create<ActivityStoreState>((set, get) => {
         })
 
         set({
-          logEvents: res.events || [],
+          logEvents: (res.events || []).map(displaySafe),
           hasMoreEvents: res.hasMore || false,
         })
       } catch {
@@ -261,7 +262,7 @@ export const useActivityStore = create<ActivityStoreState>((set, get) => {
         })
 
         set({
-          logEvents: [...current, ...(res.events || [])],
+          logEvents: [...current, ...(res.events || []).map(displaySafe)],
           hasMoreEvents: res.hasMore || false,
         })
       } catch {

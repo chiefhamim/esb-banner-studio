@@ -14,6 +14,9 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+// the daily limit is ONE rule for the engine and this ledger: per calendar day in the sending time zone, plus a
+// rolling 24 h safety ceiling (outreach-schedule.cjs capState)
+const { capState, GMAIL_SAFE_24H } = require('./outreach-schedule.cjs')
 
 const EMAIL_RE = /^[A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/
 const HOST_RE = /^(?=.{4,253}$)([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/
@@ -162,9 +165,11 @@ function ledgerCheck(ledger, now, settings, mail) {
   }
   // first letters and follow-ups both count toward the day and the gap; tests do not
   const campaign = recent.filter((e) => e.kind !== 'test').sort((a, b) => a.t - b.t)
-  if (campaign.length >= settings.dailyLimit) {
-    const nextAt = campaign[campaign.length - settings.dailyLimit].t + DAY
-    return { ok: false, reason: `Daily limit of ${settings.dailyLimit} reached`, nextAt }
+  const cap = capState({ sendTimes: campaign.map((e) => e.t), now, tz: settings.tz || 'Asia/Dhaka', dailyLimit: settings.dailyLimit, ceiling24h: settings.ceiling24h || GMAIL_SAFE_24H })
+  if (cap.room <= 0) {
+    return cap.limitedBy === 'ceiling'
+      ? { ok: false, reason: `Safety limit of ${settings.ceiling24h || GMAIL_SAFE_24H} emails in 24 hours reached`, nextAt: cap.freesAt }
+      : { ok: false, reason: `Daily limit of ${settings.dailyLimit} reached`, nextAt: cap.freesAt }
   }
   const last = campaign[campaign.length - 1]
   if (last && now - last.t < MIN_GAP_SEC * 1000) return { ok: false, reason: 'Too soon after the last email', nextAt: last.t + MIN_GAP_SEC * 1000 }
@@ -212,25 +217,47 @@ async function padQrPng() {
  * `tracking` (electron/outreach-tracking.cjs createTrackingGate) says whether the site's open/click endpoints are live;
  * without it, or while they are not, letters go out exactly as before and carry no key.
  */
-function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), render = renderer, tracking = null, newKey = null }) {
+/**
+ * `pacing` (optional) returns the Autopilot settings (electron/outreach-settings.cjs) — the ONE place the daily limit
+ * and the gap between emails live. When given, the mailer's own copy in outreach-smtp.json is ignored for both: the
+ * daily cap below uses pacing().dailyLimit and status() reports the engine's numbers, so every screen shows what the
+ * engine actually does. The mailer keeps only its own 30 s floor between two sends.
+ */
+function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), render = renderer, tracking = null, newKey = null, pacing = null }) {
   const settingsFile = path.join(dir, 'outreach-smtp.json')
   const ledgerFile = path.join(dir, 'outreach-ledger.json')
   const read = (f, fallback) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) } catch { return fallback } }
   // write a temp file and rename it, so a crash mid-write never leaves half a ledger
   const write = (f, v) => { const tmp = f + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(v)); fs.renameSync(tmp, f) }
   const ledger = () => { const l = read(ledgerFile, []); return Array.isArray(l) ? l : [] }
+  const withPacing = (saved) => {
+    if (!saved || typeof pacing !== 'function') return saved
+    let p = null
+    try { p = pacing() } catch { p = null }
+    if (!p) return saved
+    const out = { ...saved }
+    if (Number.isInteger(p.dailyLimit) && p.dailyLimit >= 1 && p.dailyLimit <= MAX_DAILY) out.dailyLimit = p.dailyLimit
+    if (Number.isFinite(p.minDelaySec) && Number.isFinite(p.maxDelaySec)) { out.minDelaySec = p.minDelaySec; out.maxDelaySec = p.maxDelaySec }
+    // which calendar day "a day" is, and the 24 h ceiling — the engine's own values
+    if (p.window && typeof p.window.tz === 'string') out.tz = p.window.tz
+    if (Number.isInteger(p.gmailCeiling24h)) out.ceiling24h = p.gmailCeiling24h
+    return out
+  }
 
   function status() {
-    const saved = read(settingsFile, null)
+    const saved = withPacing(read(settingsFile, null))
     const now = clock()
     const l = ledger()
     const recent = l.filter((e) => e.kind !== 'test' && now - e.t < DAY)
+    const cap = capState({ sendTimes: recent.map((e) => e.t), now, tz: saved?.tz || 'Asia/Dhaka', dailyLimit: saved?.dailyLimit || 100, ceiling24h: saved?.ceiling24h || GMAIL_SAFE_24H })
     return {
       configured: !!saved,
       hasPassword: !!saved?.password,
       encryption: safeStorage.isEncryptionAvailable(),
       settings: saved ? { host: saved.host, imapHost: saved.imapHost || '', port: saved.port, user: saved.user, name: saved.name, dailyLimit: saved.dailyLimit, minDelaySec: saved.minDelaySec, maxDelaySec: saved.maxDelaySec } : null,
       sent24h: recent.length,
+      // counted on the same calendar day as the engine's daily limit (what "N of 100 today" shows)
+      sentToday: cap.sentToday,
       imapHost: saved ? require('./inbox.cjs').imapHostFor(saved.host, saved.imapHost) : '',
       // so the desk can mark contacts already emailed, even after its own storage is cleared
       sentTo: l.filter((e) => e.kind === 'campaign' && now - e.t < REPEAT_DAYS * DAY).map((e) => ({ to: e.to, t: e.t })),
@@ -270,7 +297,7 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
   let lastVerify = null
   async function verify(force = false) {
     const saved = read(settingsFile, null)
-    if (!saved || !saved.password) return { ok: false, error: 'No sender account saved', at: clock() }
+    if (!saved || !saved.password) return { ok: false, kind: 'other', error: 'No sender account saved', at: clock() }
     // even a forced check waits 10 s since the last, so a renderer in a loop cannot make the account log in non-stop
     if (lastVerify && lastVerify.user === saved.user && clock() - lastVerify.at < (force ? 10_000 : 60_000)) return lastVerify
     const t0 = clock()
@@ -278,7 +305,10 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
       await transportFor(saved).verify()
       lastVerify = { ok: true, ms: clock() - t0, user: saved.user, at: clock() }
     } catch (e) {
-      lastVerify = { ok: false, error: String(e && e.message || e).slice(0, 200), user: saved.user, at: clock() }
+      // why it failed, so the desk never calls a network blip "login failed": auth | network | tls | other, with the
+      // server's own words (no secrets) for the tooltip
+      const v = require('./outreach-errors.cjs').classifyVerifyError(e)
+      lastVerify = { ok: false, kind: v.kind, error: v.error || 'Mail check failed', ...(v.code !== undefined ? { code: String(v.code) } : {}), user: saved.user, at: clock() }
     }
     return lastVerify
   }
@@ -299,7 +329,7 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     const saved = read(settingsFile, null)
     if (!saved || !saved.password) return { ok: false, error: 'Save the sender account and app password first' }
     const l = ledger()
-    const gate = ledgerCheck(l, clock(), saved, mail)
+    const gate = ledgerCheck(l, clock(), withPacing(saved), mail)
     if (!gate.ok) return { ok: false, error: gate.reason, nextAt: gate.nextAt, duplicate: !!gate.duplicate }
     try {
       const { renderEmail, renderDesigned } = await render()
@@ -350,7 +380,8 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
       // the server's answer, without the account password (nodemailer does not echo it, but never risk it)
       const errText = String(e && e.message || e).slice(0, 300)
       const classified = require('./outreach-errors.cjs').classifySendError(e)
-      return { ok: false, error: errText, kind: classified.kind, scope: classified.scope, code: classified.code }
+      // the raw codes too, so the engine's own classification sees what the server and the socket said
+      return { ok: false, error: errText, kind: classified.kind, scope: classified.scope, code: (e && e.code) || classified.code, ...(e && e.responseCode ? { responseCode: e.responseCode } : {}) }
     }
   }
 

@@ -44,7 +44,8 @@ export interface EsbBridge {
   outreachStatus?: () => Promise<EsbOutreachStatus>
   outreachSave?: (settings: EsbSmtpSettings, password?: string) => Promise<{ ok: true; status: EsbOutreachStatus } | { ok: false; error: string }>
   outreachForgetPassword?: () => Promise<EsbOutreachStatus>
-  outreachVerify?: (force?: boolean) => Promise<{ ok: boolean; ms?: number; error?: string; at: number }>
+  /** `kind` says why a failed check failed: auth (wrong app password) | network (server unreachable) | tls | other. */
+  outreachVerify?: (force?: boolean) => Promise<{ ok: boolean; ms?: number; error?: string; kind?: 'auth' | 'network' | 'tls' | 'other'; code?: string; at: number }>
   outreachInbox?: (force?: boolean) => Promise<EsbInboxResult>
   outreachSend?: (mail: EsbOutreachMail) => Promise<{ ok: true; messageId: string; messageKey?: string | null; sent24h: number } | { ok: false; error: string; nextAt?: number; duplicate?: boolean }>
   outreachJobSubmit?: (spec: JobSpec) => Promise<{ ok: true; jobId: string; rejected: { index: number; error: string }[] } | { ok: false; error: string }>
@@ -53,7 +54,7 @@ export interface EsbBridge {
   outreachJobs?: () => Promise<JobSnapshot[]>
   outreachEvents?: (q?: { since?: string; before?: string; from?: number; to?: number; jobId?: string; campaignId?: string; types?: string[]; q?: string; limit?: number; includeDry?: boolean }) => Promise<{ events: OutreachEvent[]; hasMore: boolean }>
   outreachStats?: (q: { from: number; to: number; jobId?: string; campaignId?: string; includeDry?: boolean }) => Promise<OutreachStats>
-  outreachPlan?: (q: { count: number }) => Promise<{ days: number; firstAt: number | null; lastAt: number | null; perDay: number[]; notes: string[] }>
+  outreachPlan?: (q: OutreachPlanQuery) => Promise<OutreachPlan>
   outreachSettings?: () => Promise<AutopilotSettings>
   outreachSettingsSave?: (s: Partial<AutopilotSettings>) => Promise<{ ok: true; settings: AutopilotSettings } | { ok: false; error: string; field?: string }>
   outreachCheckAddresses?: (domains: string[]) => Promise<Record<string, { mx: boolean; a: boolean; error?: string }>>
@@ -85,6 +86,8 @@ export interface EsbOutreachStatus {
   settings: EsbSmtpSettings | null
   /** Campaign emails sent in the last 24 hours, from the main process's ledger. */
   sent24h: number
+  /** Sends today (calendar day in the sending time zone) — what the daily limit counts. */
+  sentToday?: number
   /** Addresses emailed in the last 7 days. */
   sentTo: { to: string; t: number }[]
   /** Where replies are read: the saved choice or the one worked out from the SMTP server. */
@@ -140,8 +143,10 @@ export interface AutopilotSettings {
     days: number[]
     tz: string
   }
+  /** Emails per calendar day in window.tz (resets at local midnight). */
   dailyLimit: number
   ramp: boolean
+  /** Always 'manual' since 2026-11-02 (one model: a random gap between the two numbers); 'auto' is read as it. */
   pace: 'auto' | 'manual'
   minDelaySec: number
   maxDelaySec: number
@@ -152,7 +157,13 @@ export interface AutopilotSettings {
   aiAutonomy: 'suggest' | 'confirm' | 'auto-safe'
   aiReadsReply: boolean
   autoResume: boolean
+  /** Hard ceiling over any rolling 24 h (default 400, under Gmail's 500). Settings file only, not on screen. */
+  gmailCeiling24h?: number
   legacyBackfilled?: boolean
+  /** The Sender dialog's old pacing copy was adopted once (outreach-settings.cjs migratePacingFromMailer). */
+  pacingMigrated?: boolean
+  /** When the account-wide settings (outreach-settings.cjs SHARED_KEYS) last changed, on any PC (ms). */
+  sharedUpdatedAt?: number
   dryRun?: boolean
 }
 
@@ -185,8 +196,10 @@ export interface JobSnapshot {
   name: string
   kind: 'first' | 'followup'
   status: 'queued' | 'running' | 'waiting' | 'paused' | 'done' | 'stopped'
-  why?: 'window' | 'cap' | 'ramp' | 'gap' | 'domain' | 'offline' | 'quota' | 'schedule' | 'held' | null
+  why?: 'window' | 'cap' | 'ramp' | 'gap' | 'domain' | 'offline' | 'tls' | 'quota' | 'schedule' | 'held' | null
   until?: number | null
+  /** What exactly the wait is for (engine job.wait): the organisation and its limit/spacing, the gap range, the hours. */
+  wait?: JobWait | null
   reason?: 'user' | 'all' | 'auth' | 'circuit' | 'quit' | 'content' | null
   dry: boolean
   total: number
@@ -263,8 +276,90 @@ export interface OutreachStats {
   jobs: JobSnapshot[]
 }
 
+/** The detail behind JobSnapshot.why, set by electron/outreach-engine.cjs. Every field optional. */
+export interface OutreachPlanQuery {
+  count: number
+  /** the organisation (e-mail domain) of each remaining email — the per-organisation limit */
+  domains?: string[]
+  /** unsaved settings from the Sending panel; the plan follows what is typed (validated in main) */
+  draft?: Partial<AutopilotSettings>
+}
+
+export type PlanWarning =
+  | { kind: 'hours'; fit: number; limit: number; spanSec: number; avgGapSec: number }
+  | { kind: 'ceiling'; ceiling: number; limit: number }
+  | { kind: 'ramp'; limitToday: number; limit: number }
+  | { kind: 'anyHour' }
+  | { kind: 'org'; today: number; remaining: number; inOrgs: number; orgs: number; orgMax: number; orgGapMin: number }
+
+/** The Sending panel's live line, computed by the engine with its own rules (outreach-schedule.cjs livePlan). */
+export interface LivePlan {
+  now: number
+  tz: string
+  limit: number
+  limitToday: number
+  sentToday: number
+  sent24h: number
+  roomToday: number
+  limitedBy: null | 'day' | 'ceiling'
+  freesAt: number | null
+  ceiling: number
+  nextAt: number | null
+  minGapSec: number
+  maxGapSec: number
+  avgGapSec: number
+  dayDurationSec: number
+  fitPerDay: number
+  windowOn: boolean
+  remaining: number
+  today: number
+  finishAt: number | null
+  days: number
+  perDay: { day: string; n: number }[]
+  warnings: PlanWarning[]
+}
+
+export interface OutreachPlan {
+  days: number
+  firstAt: number | null
+  lastAt: number | null
+  perDay: number[]
+  notes: string[]
+  live?: LivePlan
+  error?: string
+}
+
+export interface JobWait {
+  /** why 'domain': the organisation (domain) and whether it hit its daily limit or its spacing. */
+  domain?: string | null
+  kind?: 'limit' | 'spacing' | 'day' | 'ceiling' | null
+  count?: number | null
+  max?: number
+  /** why 'domain': the spacing per organisation; why 'gap': the gap chosen after the last email. */
+  gapSec?: number
+  /** why 'gap': the pacing and the editor's range. */
+  pace?: 'auto' | 'manual'
+  minSec?: number
+  maxSec?: number
+  /** why 'window': the sending hours. */
+  from?: string
+  to?: string
+  tz?: string
+  /** why 'cap': today's limit (after warm-up) and how many went today (calendar day in `tz`), or — kind 'ceiling' —
+   *  in the last 24 h against the safety ceiling. */
+  limit?: number
+  sent?: number
+  ramp?: boolean
+  ceiling?: number
+  /** why 'cap': when the limit frees (local midnight, or the ceiling's oldest send turning 24 h) and when sending
+   *  really resumes (the sending hours may start later); `hours` is set when the hours decide. */
+  resetAt?: number | null
+  resumeAt?: number
+  hours?: { from: string; to: string } | null
+}
+
 export type OutreachPush =
-  | { kind: 'progress'; jobId: string; campaignId: string; status: string; why?: string; until?: number; reason?: string; sent: number; total: number; failed: number; current?: string; nextAt?: number | null }
+  | { kind: 'progress'; jobId: string; campaignId: string; status: string; why?: string; until?: number; wait?: JobWait | null; reason?: string; sent: number; total: number; failed: number; current?: string; nextAt?: number | null }
   | { kind: 'event'; event: OutreachEvent }
   | { kind: 'inbox'; result: EsbInboxResult }
 

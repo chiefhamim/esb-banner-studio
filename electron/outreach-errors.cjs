@@ -4,12 +4,27 @@
 const ENHANCED_STATUS_RE = /\b([245])\.(\d{1,3})\.(\d{1,3})\b/
 
 /**
+ * The PC could not reach the mail server at all (a network blip, Wi-Fi drop, DNS hiccup): nodemailer's own codes plus
+ * the Node socket codes it passes through. None of these say anything about the account or the recipient.
+ */
+const NETWORK_CODES = new Set([
+  'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'ECONNREFUSED', 'ENOTFOUND', 'ECONNRESET', 'EAI_AGAIN',
+  'ENETUNREACH', 'EHOSTUNREACH', 'ENETDOWN', 'EHOSTDOWN', 'EPIPE', 'ECONNABORTED', 'EADDRNOTAVAIL',
+])
+// a connection-level failure that came with no code (older nodemailer, or a wrapped error)
+const NETWORK_TEXT_RE = /getaddrinfo|greeting never received|connection (?:timed? ?out|timeout|closed|refused|reset)|socket hang up|network is unreachable|unexpected socket close/i
+// the secure channel failed: nodemailer's ETLS, or the Node TLS/cert code it passes through (CERT_HAS_EXPIRED,
+// DEPTH_ZERO_SELF_SIGNED_CERT, ERR_SSL_WRONG_VERSION_NUMBER, ...)
+const TLS_CODE_RE = /^(?:ETLS|EPROTO|ERR_SSL_|ERR_TLS_|CERT_|UNABLE_TO_|DEPTH_ZERO_|SELF_SIGNED_|HOSTNAME_MISMATCH)/
+const TLS_TEXT_RE = /certificate|ssl routines|wrong version number|tls handshake|secure tls connection|self[- ]signed|must issue a starttls command/i
+
+/**
  * Classifies an error from nodemailer/SMTP into a structured outcome.
  *
  * @param {Error|object|string} err
  * @param {{ dnsLookupFails?: boolean }} [options]
  * @returns {{
- *   kind: 'auth' | 'quota' | 'recipient_permanent' | 'policy' | 'content_all' | 'recipient_transient' | 'network' | 'unknown',
+ *   kind: 'auth' | 'quota' | 'recipient_permanent' | 'policy' | 'content_all' | 'recipient_transient' | 'network' | 'tls' | 'unknown',
  *   retryable: boolean,
  *   scope: 'account' | 'job' | 'recipient',
  *   code?: string | number,
@@ -27,6 +42,17 @@ function classifySendError(err, options = {}) {
 
   const enhancedMatch = ENHANCED_STATUS_RE.exec(response)
   const enhanced = enhancedMatch ? enhancedMatch[0] : undefined
+
+  // 0. The connection itself failed before any SMTP answer: a network blip, or a TLS problem. Checked first and only
+  // when the server gave no reply code, so a real SMTP answer is always classified by what the server said.
+  if (!respCode || /must issue a starttls command/i.test(lower)) {
+    if ((rawCode && TLS_CODE_RE.test(rawCode)) || TLS_TEXT_RE.test(lower)) {
+      return { kind: 'tls', retryable: true, scope: 'job', code: rawCode || respCode || undefined, enhanced, text }
+    }
+    if ((rawCode && NETWORK_CODES.has(rawCode)) || (!rawCode && NETWORK_TEXT_RE.test(lower)) || options.dnsLookupFails === true) {
+      return { kind: 'network', retryable: true, scope: 'job', code: rawCode, enhanced, text }
+    }
+  }
 
   // 1. Auth errors (Scope: account / job)
   if (
@@ -124,14 +150,7 @@ function classifySendError(err, options = {}) {
   }
 
   // 6. Network / connection errors
-  const isNetworkCode =
-    rawCode === 'ECONNECTION' ||
-    rawCode === 'ETIMEDOUT' ||
-    rawCode === 'ESOCKET' ||
-    rawCode === 'EDNS' ||
-    rawCode === 'ECONNREFUSED' ||
-    rawCode === 'ENOTFOUND' ||
-    rawCode === 'ECONNRESET'
+  const isNetworkCode = !!rawCode && NETWORK_CODES.has(rawCode)
 
   if (isNetworkCode || options.dnsLookupFails === true) {
     return {
@@ -175,7 +194,35 @@ function classifySendError(err, options = {}) {
   }
 }
 
+/**
+ * The status bar's mail check (esb:outreach-verify) failed: why, in the editor's terms. Only a refused login means the
+ * app password is wrong; a network blip or a TLS failure must never be shown as "login failed".
+ *   auth    — the server refused the account or app password (EAUTH, 535, 534)
+ *   network — the PC could not reach the mail server (timeout, refused, DNS, reset)
+ *   tls     — the secure connection could not be set up
+ *   other   — anything else
+ * `error` is the server's / socket's own text, one line, without anything that looks like a credential.
+ */
+function classifyVerifyError(err) {
+  const c = classifySendError(err)
+  const kind = c.kind === 'auth' || c.kind === 'network' || c.kind === 'tls' ? c.kind : 'other'
+  return { kind, code: c.code, error: cleanServerText(c.text) }
+}
+
+/** One line, at most 200 characters, with any base64 AUTH blob or `pass=` value cut out. */
+function cleanServerText(s) {
+  return String(s || '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\b(pass(?:word)?|pwd)\s*[=:]\s*\S+/gi, '$1=…')
+    .replace(/\b(AUTH\s+(?:PLAIN|LOGIN|XOAUTH2))\s+\S+/gi, '$1 …')
+    .replace(/[A-Za-z0-9+/]{40,}={0,2}/g, '…')
+    .trim()
+    .slice(0, 200)
+}
+
 module.exports = {
   classifySendError,
+  classifyVerifyError,
+  cleanServerText,
   ENHANCED_STATUS_RE,
 }

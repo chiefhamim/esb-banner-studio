@@ -215,8 +215,15 @@ describe('outreach-guard: IPC boundary argument validation (§1.7, Appendix A)',
 
     it('validates plan query count bounds', () => {
       expect(guard.validatePlanQuery({ count: 500 }).ok).toBe(true)
-      expect(guard.validatePlanQuery({ count: 0 }).ok).toBe(false)
+      // 0 = no campaign open: the Sending panel still shows today's numbers
+      expect(guard.validatePlanQuery({ count: 0 }).ok).toBe(true)
+      expect(guard.validatePlanQuery({ count: -1 }).ok).toBe(false)
       expect(guard.validatePlanQuery({ count: 100001 }).ok).toBe(false)
+      // the organisations of the remaining emails and an unsaved draft
+      const g = guard.validatePlanQuery({ count: 2, domains: ['DESCO.gov.bd', 'bad domain'], draft: { dailyLimit: 50 } })
+      expect(g).toMatchObject({ ok: true, domains: ['desco.gov.bd', ''], draft: { dailyLimit: 50 } })
+      expect(guard.validatePlanQuery({ count: 1, domains: 'x' }).ok).toBe(false)
+      expect(guard.validatePlanQuery({ count: 1, draft: [] }).ok).toBe(false)
     })
   })
 })

@@ -15,9 +15,10 @@ export type SendStatus = 'sent' | 'failed' | 'bounced' | 'skipped' | 'replied' |
 /** One row of public.outreach_sends. */
 export interface SendRow {
   id: string
-  campaign_id: string
+  /** null = a fact about the address itself, in no campaign (an opt-out made in the list): see addressRows. */
+  campaign_id: string | null
   email: string
-  kind: SendKind
+  kind: SendKind | null
   status: SendStatus
   detail: string | null
   message_key: string | null
@@ -107,6 +108,18 @@ export function sendRowsFor(c: Campaign, optOut: ReadonlySet<string>, pc: string
   return rows
 }
 
+/**
+ * Opt-outs that hold for the ADDRESS, whatever campaign: one row each (`addr:optout:{email}`, no campaign, no kind —
+ * the table's CHECKs allow NULL). Before, an opt-out only travelled as the status of a campaign's sent row, so an
+ * address marked "do not email" before anyone wrote to it stayed sendable on the other PC. Older Studio builds skip
+ * rows without a campaign, so this is safe to mix.
+ */
+export const optOutRowId = (email: string) => `addr:optout:${email}`.toLowerCase()
+export function addressRows(optOut: Iterable<string>, pc: string, at = Date.now()): SendRow[] {
+  const iso = new Date(at).toISOString()
+  return [...optOut].map((email) => ({ id: optOutRowId(email), campaign_id: null, email: email.toLowerCase(), kind: null, status: 'opted_out' as const, detail: null, message_key: null, at: iso, pc }))
+}
+
 /** What a row says, for "has this changed since it was last pushed/pulled". */
 export const rowSig = (r: Pick<SendRow, 'status' | 'detail' | 'message_key'>) => `${r.status}|${r.detail ?? ''}|${r.message_key ?? ''}`
 
@@ -144,6 +157,11 @@ export function applySendRows(campaigns: Campaign[], rows: SendRow[], myPc: stri
     const email = String(row.email || '').toLowerCase().trim()
     const at = Date.parse(row.at)
     if (!email || !Number.isFinite(at)) continue
+    if (!row.campaign_id) {
+      // an address-wide fact (addressRows)
+      if (row.status === 'opted_out') optOut.push(email)
+      continue
+    }
     const c = edit(row.campaign_id)
     if (!c) continue
     const mark = (cond: boolean, fn: () => void) => { if (cond) { fn(); dirty.add(c.id) } }

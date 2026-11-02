@@ -3,7 +3,8 @@
 // Drawn like the rest of Outreach: quiet card rows (`or-row`) with a coloured icon badge and a status chip, grouped by day,
 // filters as the same pills the Contacts list uses.
 
-import { Fragment, useState } from 'react'
+import { Fragment, memo, useCallback, useMemo, useState } from 'react'
+import type { OutreachEvent } from '../esb'
 import { useActivityStore, type LogChip } from './activityStore'
 import { describeEvent, fmtClock, fmtDay } from './activityFormat'
 import { dayHeading, eventMeta } from './activityMeta'
@@ -30,12 +31,14 @@ const CHIPS: ChipDef[] = [
 ]
 
 export function ActivityLog() {
-  useClockFormat() // re-render when Home → Settings → Time format changes
+  const clock = useClockFormat() // re-render when Home → Settings → Time format changes
   const store = useActivityStore()
   const events = store.logEvents
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  // one day heading per row, worked out once per page of events (not twice per row per render)
+  const headings = useMemo(() => events.map((ev) => dayHeading(ev.t)), [events])
 
-  const toggleExpand = (id: string) => setExpandedId((prev) => (prev === id ? null : id))
+  const toggleExpand = useCallback((id: string) => setExpandedId((prev) => (prev === id ? null : id)), [])
 
   const activeChipDef = CHIPS.find((c) => c.id === store.activeChip)
   const rangeLabel =
@@ -161,61 +164,9 @@ export function ActivityLog() {
         </div>
       ) : (
         <div className="oa-events">
-          {events.map((ev, i) => {
-            const meta = eventMeta(ev.type)
-            const open = expandedId === ev.id
-            const sentence = describeEvent(ev)
-            const isTest = ev.dry === true
-            const prev = events[i - 1]
-            const heading = dayHeading(ev.t)
-            const newDay = !prev || dayHeading(prev.t) !== heading
-            const who = ev.name || ev.email || ev.to || ''
-            const sub = [ev.name ? ev.email || ev.to : '', ev.org, ev.campaignName || ev.campaignId].filter(Boolean)
-
-            return (
-              <Fragment key={ev.id}>
-                {newDay && <div className="oa-day-head">{heading}</div>}
-                <button
-                  type="button"
-                  className={'or-row oa-ev tone-' + meta.tone + (open ? ' on' : '')}
-                  aria-expanded={open}
-                  onClick={() => toggleExpand(ev.id)}
-                >
-                  <span className="oa-ev-badge" aria-hidden><Icon name={meta.icon} size={16} /></span>
-
-                  <span className="oa-ev-main">
-                    <b title={sentence}>{sentence}</b>
-                    {(who || sub.length > 0) && (
-                      <span className="oa-ev-sub">
-                        {sub.length > 0 ? sub.map((s, k) => <Fragment key={k}>{k > 0 && <i aria-hidden>·</i>}<span>{s}</span></Fragment>) : <span>{who}</span>}
-                      </span>
-                    )}
-
-                    {open && (
-                      <span className="oa-ev-detail">
-                        {ev.error && <span className="oa-kv bad"><em>Error</em>{ev.error}</span>}
-                        {ev.kind && <span className="oa-kv"><em>Kind</em>{ev.kind}</span>}
-                        {ev.attempt && <span className="oa-kv"><em>Attempt</em>{ev.attempt}</span>}
-                        {ev.code && <span className="oa-kv"><em>Code</em>{ev.code}</span>}
-                        {ev.reason && <span className="oa-kv"><em>Reason</em>{ev.reason}</span>}
-                        <span className="oa-kv mono"><em>ID</em>{ev.id}</span>
-                        <span className="oa-kv"><em>Time</em>{fmtDay(ev.t)}</span>
-                      </span>
-                    )}
-                  </span>
-
-                  <span className="oa-ev-side">
-                    {isTest && <span className="or-chip warn">Test</span>}
-                    <span className={'or-chip oa-tone-' + meta.tone}>{meta.label}</span>
-                    <span className="oa-ev-time" title={new Date(ev.t).toISOString()}>
-                      {fmtClock(ev.t)}
-                      {ev.ms ? <i>{ev.ms} ms</i> : null}
-                    </span>
-                  </span>
-                </button>
-              </Fragment>
-            )
-          })}
+          {events.map((ev, i) => (
+            <LogRow key={ev.id} ev={ev} open={expandedId === ev.id} heading={headings[i] !== headings[i - 1] ? headings[i] : null} onToggle={toggleExpand} clock={clock} />
+          ))}
         </div>
       )}
 
@@ -229,3 +180,56 @@ export function ActivityLog() {
     </div>
   )
 }
+
+/** One log row. Memoised: a live push or "Show more" re-renders only rows that changed. Every field was made
+ *  printable by `displaySafe` (activityStore) before it got here. */
+const LogRow = memo(function LogRow({ ev, open, heading, onToggle }: { ev: OutreachEvent; open: boolean; heading: string | null; onToggle: (id: string) => void; clock: unknown }) {
+  const meta = eventMeta(ev.type)
+  const sentence = describeEvent(ev)
+  const isTest = ev.dry === true
+  const who = ev.name || ev.email || ev.to || ''
+  const sub = [ev.name ? ev.email || ev.to : '', ev.org, ev.campaignName || ev.campaignId].filter(Boolean)
+  return (
+    <Fragment>
+      {heading && <div className="oa-day-head">{heading}</div>}
+      <button
+        type="button"
+        className={'or-row oa-ev tone-' + meta.tone + (open ? ' on' : '')}
+        aria-expanded={open}
+        onClick={() => onToggle(ev.id)}
+      >
+        <span className="oa-ev-badge" aria-hidden><Icon name={meta.icon} size={16} /></span>
+
+        <span className="oa-ev-main">
+          <b title={sentence}>{sentence}</b>
+          {(who || sub.length > 0) && (
+            <span className="oa-ev-sub">
+              {sub.length > 0 ? sub.map((s, k) => <Fragment key={k}>{k > 0 && <i aria-hidden>·</i>}<span>{s}</span></Fragment>) : <span>{who}</span>}
+            </span>
+          )}
+
+          {open && (
+            <span className="oa-ev-detail">
+              {ev.error && <span className="oa-kv bad"><em>Error</em>{ev.error}</span>}
+              {ev.kind && <span className="oa-kv"><em>Kind</em>{ev.kind}</span>}
+              {ev.attempt && <span className="oa-kv"><em>Attempt</em>{ev.attempt}</span>}
+              {ev.code && <span className="oa-kv"><em>Code</em>{ev.code}</span>}
+              {ev.reason && <span className="oa-kv"><em>Reason</em>{ev.reason}</span>}
+              <span className="oa-kv mono"><em>ID</em>{ev.id}</span>
+              <span className="oa-kv"><em>Time</em>{fmtDay(ev.t)}</span>
+            </span>
+          )}
+        </span>
+
+        <span className="oa-ev-side">
+          {isTest && <span className="or-chip warn">Test</span>}
+          <span className={'or-chip oa-tone-' + meta.tone}>{meta.label}</span>
+          <span className="oa-ev-time" title={new Date(ev.t).toISOString()}>
+            {fmtClock(ev.t)}
+            {ev.ms ? <i>{ev.ms} ms</i> : null}
+          </span>
+        </span>
+      </button>
+    </Fragment>
+  )
+})

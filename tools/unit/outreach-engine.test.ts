@@ -916,4 +916,62 @@ describe('outreach-engine: headless send loop, error recovery & lifecycle (§1.5
     expect(h.events.read({ types: ['send.skip'], limit: 5 }).events[0]).toMatchObject({ email: 'dup@example.com', reason: 'already-sent' })
     expect(h.events.read({ types: ['send.ok'], limit: 5 }).events[0]).toMatchObject({ email: 'ok@example.org', messageKey: 'K'.repeat(22) })
   })
+
+  // (28) a network blip during a send (the PC could not reach smtp.gmail.com) is transient: the job waits, the same
+  // contact is tried again, no attempt is used, nothing is marked Failed and the circuit breaker is never fed
+  it.each([
+    ['ETIMEDOUT', { ok: false, error: 'Connection timeout', code: 'ETIMEDOUT', kind: 'network' }, 'offline'],
+    ['ECONNREFUSED', { ok: false, error: 'connect ECONNREFUSED 142.250.4.108:587', code: 'ECONNREFUSED' }, 'offline'],
+    ['ENOTFOUND', { ok: false, error: 'getaddrinfo ENOTFOUND smtp.gmail.com', code: 'ENOTFOUND' }, 'offline'],
+    ['EAI_AGAIN', { ok: false, error: 'getaddrinfo EAI_AGAIN smtp.gmail.com', code: 'EAI_AGAIN' }, 'offline'],
+    ['EHOSTUNREACH', { ok: false, error: 'connect EHOSTUNREACH', code: 'EHOSTUNREACH' }, 'offline'],
+    ['ECONNRESET', { ok: false, error: 'read ECONNRESET', code: 'ECONNRESET' }, 'offline'],
+    ['TLS certificate', { ok: false, error: 'certificate has expired', code: 'CERT_HAS_EXPIRED' }, 'tls'],
+  ])('(28) send hit %s -> transient wait, same contact retried, no Failed, no breaker', async (_name, blip, why) => {
+    let blips = 8 // more than the breaker's 5 consecutive failures and the 3-attempt limit
+    const h = createTestHarness({
+      sendError: () => (blips-- > 0 ? blip : { ok: true, messageId: '<ok@example.com>' }),
+    })
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c28', messages: [{ to: 'blip@example.com', subject: 'Hi', body: 'Body' }] })
+
+    for (let i = 0; i < 8; i++) {
+      await h.engine.tick()
+      const snap = h.engine.snapshot()[0]
+      expect(snap.status).toBe('waiting')
+      expect(snap.why).toBe(why)
+      expect(snap.failed).toBe(0)
+      expect(snap.sent).toBe(0)
+      now += 61_000
+    }
+    expect(h.events.read({ types: ['send.fail', 'send.retry', 'job.paused'], limit: 20 }).events).toEqual([])
+
+    await h.engine.tick() // the network is back
+    const snap = h.engine.snapshot()[0]
+    expect(snap.sent).toBe(1)
+    expect(snap.failed).toBe(0)
+    expect(h.sentMails.length).toBe(9)
+    expect(h.sentMails.every((m) => m.to === 'blip@example.com')).toBe(true)
+    expect(h.events.read({ types: ['send.ok'], limit: 5 }).events[0]).toMatchObject({ email: 'blip@example.com', attempt: 1 })
+  })
+
+  // (29) a blip between real recipient failures does not count toward the circuit breaker's consecutive count
+  it('(29) network blips between transient recipient failures never trip the breaker', async () => {
+    const results = [
+      { ok: false, error: '451 4.3.0 Mailbox busy, try again later' },
+      { ok: false, error: 'Connection timeout', code: 'ETIMEDOUT' },
+      { ok: false, error: 'Connection timeout', code: 'ETIMEDOUT' },
+      { ok: false, error: 'Connection timeout', code: 'ETIMEDOUT' },
+      { ok: false, error: 'Connection timeout', code: 'ETIMEDOUT' },
+      { ok: false, error: 'Connection timeout', code: 'ETIMEDOUT' },
+    ]
+    const h = createTestHarness({ sendError: () => results.shift() ?? { ok: true, messageId: '<ok@example.com>' } })
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c29', messages: [{ to: 'a@example.com', subject: 'Hi', body: 'B' }, { to: 'b@example.net', subject: 'Hi', body: 'B' }] })
+    for (let i = 0; i < 12; i++) { await h.engine.tick(); now += 6 * 60_000 }
+    const snap = h.engine.snapshot()[0]
+    expect(snap.status).not.toBe('paused')
+    expect(snap.sent).toBe(2)
+    expect(h.events.read({ types: ['job.paused', 'send.fail'], limit: 5 }).events).toEqual([])
+  })
 })

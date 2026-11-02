@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AutopilotSettings, JobSnapshot, OutreachStats } from '../esb'
+import type { AutopilotSettings, JobSnapshot, JobWait, OutreachStats } from '../esb'
 
 export interface EngineStoreState {
   jobs: JobSnapshot[]
@@ -19,6 +19,7 @@ export interface EngineStoreState {
     status: string
     why?: string | null
     until?: number | null
+    wait?: JobWait | null
     reason?: string | null
     sent: number
     total: number
@@ -55,6 +56,7 @@ export const useEngineStore = create<EngineStoreState>((set, get) => ({
         status: p.status as JobSnapshot['status'],
         why: p.why as JobSnapshot['why'],
         until: p.until,
+        wait: p.wait ?? null,
         reason: p.reason as JobSnapshot['reason'],
         dry: false,
         total: p.total,
@@ -74,6 +76,8 @@ export const useEngineStore = create<EngineStoreState>((set, get) => ({
       status: p.status as JobSnapshot['status'],
       why: (p.why as JobSnapshot['why']) ?? existing.why,
       until: p.until !== undefined ? p.until : existing.until,
+      // every progress push carries the engine's current wait detail (null while sending)
+      wait: p.wait !== undefined ? p.wait : existing.wait,
       reason: (p.reason as JobSnapshot['reason']) ?? existing.reason,
       sent: p.sent,
       total: p.total,

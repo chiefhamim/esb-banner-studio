@@ -613,6 +613,17 @@
 .or-link-btn:hover {
   color: var(--text);
 }
+/* "Only send in a time window" is off (AutopilotCard AnyHourWarning) */
+.or-any-hour {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+  margin: 6px 0 0; padding: 5px 8px; border-radius: 6px;
+  font-size: 12px; line-height: 16px;
+  color: var(--warning); background: var(--warning-soft);
+}
+.or-any-hour .or-link-btn { color: var(--warning); font-weight: 600; }
+.or-any-hour .or-link-btn:hover { color: var(--text); }
+/* the Send footer's "why it waits" line */
+.or-wait-why { display: block; width: 100%; font-size: 11.5px; color: var(--text-2); }
 
 
 /* ---------------------------------------------------------------- Banner row & Autopilot pill */
@@ -1103,3 +1114,62 @@
 .or-bulk-approve-bar { flex-wrap: wrap; }
 .or-bulk-approve-bar .btn.sm.or-bulk-approve-btn { flex: 1 1 100%; min-width: 0; height: auto; min-height: 32px; padding: 6px 10px; justify-content: center; white-space: normal; text-align: center; line-height: 16px; }
 .or-bulk-approve-bar .or-bulk-approve-btn > svg { flex: none; }
+
+/* ---------------------------------------------------------------- Sending settings (2026-11-02) */
+/* the three things that set the pace, the live plan under them, everything else folded under Advanced */
+.or-sending .or-pace { display: flex; flex-direction: column; gap: 10px; }
+.or-pace-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; }
+.or-range { display: flex; align-items: center; gap: 8px; }
+.or-range .input { min-width: 0; flex: 1; }
+.or-range > span { color: var(--text-3); }
+.or-pace-note { margin: 0; font-size: 12px; }
+.or-hours { display: flex; flex-direction: column; gap: 8px; }
+.or-hours-row, .or-tz-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.or-hours-row > input[type=time] { width: 118px; }
+.or-hours-row > span { color: var(--text-2); font-size: 12.5px; }
+.or-tz-row select, .or-tz-row input { max-width: 260px; }
+.or-days { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+.or-plan {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-items: start;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--fill); border: 1px solid var(--line);
+}
+.or-plan-ic { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--text-2); background: var(--surface); }
+.or-plan-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.or-plan-line { margin: 2px 0 0; font-size: 13px; line-height: 19px; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
+.or-plan-warn {
+  display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 5px 8px; border-radius: 6px;
+  font-size: 12px; line-height: 17px; color: var(--warning); background: var(--warning-soft);
+}
+.or-plan-warn svg { flex: none; margin-top: 2px; }
+.or-plan-warn.soft { color: var(--text-2); background: var(--surface); }
+.or-plan-warn.bad { color: var(--danger); background: var(--danger-soft); }
+.or-advanced { padding-top: 2px; }
+.or-adv-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%; min-height: 32px; padding: 4px 6px; border-radius: 8px;
+  background: none; border: 0; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
+}
+.or-adv-toggle:hover { background: var(--fill-hover); }
+.or-adv-sum { margin-left: 6px; font-weight: 500; font-size: 12px; color: var(--text-2); overflow-wrap: anywhere; }
+.or-adv-body { display: flex; flex-direction: column; gap: 12px; padding: 8px 6px 2px 26px; }
+.or-adv-row { display: flex; flex-direction: column; gap: 6px; }
+.or-adv-ctl { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.or-adv-ctl .input { width: 64px; }
+.or-adv-why { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-2); }
+.or-sending-foot { margin: 0; font-size: 11.5px; }
+@media (max-width: 700px) {
+  .or-pace-grid { grid-template-columns: minmax(0, 1fr); }
+  .or-days { margin-left: 0; }
+}
+
+/* Sender dialog: the pace is shown, edited in Sending settings */
+.or-pace-link { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--fill); font-size: 12.5px; color: var(--text-2); }
+.or-pace-link > span { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.or-pace-link .or-link-btn { margin-left: auto; }
+.or-adv-label { font-size: 13px; font-weight: 500; color: var(--text); }
+
+/* Mail pill while the mail server is unreachable: a warning (amber, steady dot), not a failure — it retries itself */
+.ed-statusbar .sb-cms.warn { --sb: var(--warning); --sb2: color-mix(in srgb, var(--warning) 70%, #f59e5b); }
+/* a failed check's chip is longer than "Signed in": it takes its own row under the name instead of squeezing it */
+.or-sender .or-chip.or-chip-fail { grid-row: auto; grid-column: 1 / -1; justify-self: start; margin-top: 6px; }
+.or-sender .or-sender-fix { grid-column: 1 / -1; justify-self: start; margin-top: 4px; font-size: 12px; }

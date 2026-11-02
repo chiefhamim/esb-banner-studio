@@ -36,6 +36,7 @@ import { useStore } from '../store'
 import { Icon } from '../ui/Icon'
 import { MenuBar, Tabs, Seg, type MenuDef } from '../ui/controls'
 import { fmtTime, useClockFormat } from '../ui/time'
+import { mailFailView } from './mailCheck'
 
 export function OutreachWorkspace() {
   useClockFormat() // re-render when Home → Settings → Time format changes
@@ -54,8 +55,18 @@ export function OutreachWorkspace() {
     void s.refreshMail().then(() => { if (useOutreachStore.getState().mail?.hasPassword) void useOutreachStore.getState().checkSmtp() })
     const again = () => { if (useOutreachStore.getState().mail?.hasPassword) void useOutreachStore.getState().checkSmtp() }
     const t = setInterval(again, 5 * 60_000)
+    // the network came back: if the mail server was unreachable, check again now (a moment later, so DNS is up too)
+    let onlineT: ReturnType<typeof setTimeout> | undefined
+    const online = () => {
+      clearTimeout(onlineT)
+      onlineT = setTimeout(() => {
+        const st = useOutreachStore.getState()
+        if (st.mail?.hasPassword && st.smtp.state === 'bad' && st.smtp.kind === 'network') void st.checkSmtp(true)
+      }, 2000)
+    }
     window.addEventListener('focus', again)
-    return () => { clearInterval(t); window.removeEventListener('focus', again) }
+    window.addEventListener('online', online)
+    return () => { clearInterval(t); clearTimeout(onlineT); window.removeEventListener('focus', again); window.removeEventListener('online', online) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const audience = useMemo(() => s.contacts.filter((x) => inAudience(x, c?.audience)), [s.contacts, c?.audience])
@@ -112,7 +123,7 @@ export function OutreachWorkspace() {
       { label: 'Check the inbox for replies', icon: 'inbox', disabled: !desktop || !s.mail?.hasPassword || s.inbox.state === 'busy', onClick: () => void s.checkInbox(true) },
       { label: 'Export results (CSV)', icon: 'download', disabled: !c || !s.contacts.length, onClick: () => c && downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts, useCloud.getState().engagement[c.id] ?? {})) },
       { label: 'Ask the assistant', icon: 'sparkle', onClick: () => ui.set({ sheet: 'assistant' }) },
-      { label: 'Autopilot settings', icon: 'sliders', onClick: () => ui.set({ sheet: 'autopilot' }) },
+      { label: 'Sending settings', icon: 'sliders', onClick: () => ui.set({ sheet: 'autopilot' }) },
       { divider: true },
       { label: 'Delete campaign', icon: 'trash', danger: true, disabled: !c || !idle, onClick: async () => { if (c && await ask({ title: `Delete “${c.name}”?`, body: 'Its letter, sources and results go with it. Addresses it already emailed stay protected by the 7-day rule.', ok: 'Delete', danger: true })) void s.deleteCampaign(c.id) } },
     ] },
@@ -160,8 +171,9 @@ export function OutreachWorkspace() {
   ]
 
   const smtp = s.smtp
-  const smtpOn = !!set && !!s.mail?.hasPassword && smtp.state !== 'bad'
-  const smtpText = !desktop ? 'Desktop app only' : !set ? 'No sender' : !s.mail?.hasPassword ? 'No app password' : smtp.state === 'busy' ? 'Checking' : smtp.state === 'bad' ? 'Login failed' : smtp.state === 'ok' ? <><span className="sb-text">{set.user}</span><span className="sb-ms">{smtp.ms} ms</span></> : <span className="sb-text">{set.user}</span>
+  const smtpFail = smtp.state === 'bad' ? mailFailView(smtp.kind, smtp.error, { host: set?.host, retryAtText: smtp.retryAt ? fmtTime(smtp.retryAt, { seconds: true }) : undefined }) : null
+  const smtpTone = !set || !s.mail?.hasPassword ? 'off' : smtpFail ? smtpFail.tone : 'on'
+  const smtpText = !desktop ? 'Desktop app only' : !set ? 'No sender' : !s.mail?.hasPassword ? 'No app password' : smtp.state === 'busy' ? 'Checking' : smtpFail ? smtpFail.text : smtp.state === 'ok' ? <><span className="sb-text">{set.user}</span><span className="sb-ms">{smtp.ms} ms</span></> : <span className="sb-text">{set.user}</span>
 
   return (
     <div className="outreach-workspace">
@@ -219,8 +231,8 @@ export function OutreachWorkspace() {
       )}
 
       <footer className="statusbar ed-statusbar or-status">
-        <button type="button" className={'sb-cms ' + (smtpOn ? 'on' : 'off')} onClick={() => { if (s.mail?.hasPassword) void s.checkSmtp(true); else if (desktop) ui.set({ sheet: 'sender' }) }}
-          data-tip={smtp.state === 'bad' ? `${smtp.error} — click to try again` : smtp.state === 'ok' ? `Signed in to ${set?.host} · checked ${fmtTime(smtp.at)} — click to check again` : set ? 'Click to sign in to the mail server now' : 'Set up the account that sends'}>
+        <button type="button" className={'sb-cms ' + smtpTone} onClick={() => { if (s.mail?.hasPassword && !smtpFail?.fixInSender) void s.checkSmtp(true); else if (desktop) ui.set({ sheet: 'sender' }) }}
+          data-tip={smtpFail ? (smtpFail.fixInSender ? `${smtpFail.tip} — click to open Sender` : smtpFail.tip) : smtp.state === 'ok' ? `Signed in to ${set?.host} · checked ${fmtTime(smtp.at)} — click to check again` : set ? 'Click to sign in to the mail server now' : 'Set up the account that sends'}>
           <span className="sb-k">Mail</span>
           <span className="sb-pill"><i className="sb-dot" aria-hidden />{smtpText}</span>
         </button>
@@ -239,7 +251,7 @@ export function OutreachWorkspace() {
           type="button"
           className={'sb-cms or-sb-autopilot ' + (desc.status === 'problem' ? 'off' : 'on')}
           onClick={() => ui.set({ desk: 'activity' })}
-          data-tip={`Autopilot — ${desc.sentence}. Click to open full Activity`}
+          data-tip={`Autopilot — ${desc.reason ? `${desc.nextInText ?? 'Waiting'} — ${desc.reason}` : desc.sentence}. Click to open full Activity`}
         >
           <span className="sb-k">Autopilot</span>
           <span className="sb-pill">
@@ -248,7 +260,7 @@ export function OutreachWorkspace() {
               {desc.status === 'sending' || (desc.status === 'waiting' && job?.why === 'gap')
                 ? `Sending ${job?.sent ?? 0}/${job?.total ?? 0}${desc.nextInText ? ` · ${desc.nextInText.replace('Next in ', '')}` : ''}`
                 : desc.status === 'waiting'
-                ? (job?.why === 'window' ? `Waiting · opens ${fmtDay(job.until || Date.now(), settings?.window?.tz)}` : desc.sentence)
+                ? (job?.why === 'window' ? `Waiting · opens ${fmtDay(job.until || Date.now(), settings?.window?.tz)}` : job?.why === 'domain' && job.wait?.domain && desc.nextInText ? `${desc.nextInText} · ${job.wait.domain} ${job.wait.kind === 'limit' ? 'daily limit' : 'spacing'}` : desc.sentence)
                 : desc.status === 'paused'
                 ? 'Paused'
                 : 'Idle'}
@@ -262,7 +274,7 @@ export function OutreachWorkspace() {
         <EngineStatus ai={ai} offline={false} onAddKey={() => ui.set({ sheet: 'ai' })} roles={['outreach', 'research', 'review']} />
         <div className="spacer" />
         <span>{c?.kind === 'direct' ? `${audience.length} recipient${audience.length === 1 ? '' : 's'}` : `${audience.length} in audience`} · {ready} ready · {sent} sent</span>
-        {set && <><div className="sep" /><span>{s.mail?.sent24h ?? 0} of {set.dailyLimit} today</span></>}
+        {set && <><div className="sep" /><span>{s.mail?.sentToday ?? s.mail?.sent24h ?? 0} of {set.dailyLimit} today</span></>}
       </footer>
 
       {ui.sheet === 'sender' && <SenderDialog onClose={() => { ui.set({ sheet: null }); void s.checkSmtp(true) }} />}
