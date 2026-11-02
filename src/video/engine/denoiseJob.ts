@@ -35,16 +35,33 @@ function getWorker(): Worker | null {
   } catch { return null }
 }
 
-/** Denoise `channels` (the arrays are handed to the worker and must not be used afterwards). */
-export function denoiseAsync(channels: Float32Array[], sampleRate: number, opts: DenoiseOptions): Promise<Float32Array[]> {
+const aborted = () => new DOMException('cancelled', 'AbortError')
+
+/** Denoise `channels` (the arrays are handed to the worker and must not be used afterwards). With a `signal`, aborting
+ * stops the work: the worker is shut down (a fresh one starts for the next job) and the promise rejects with an
+ * AbortError. Callers run one job at a time (audioRender.ts queues them). */
+export function denoiseAsync(channels: Float32Array[], sampleRate: number, opts: DenoiseOptions, signal?: AbortSignal): Promise<Float32Array[]> {
+  if (signal?.aborted) return Promise.reject(aborted())
   const w = getWorker()
   if (!w) return Promise.resolve(denoise(channels, sampleRate, opts))
   clearTimeout(idle)
-  return new Promise((res, rej) => {
-    const id = ++seq
+  const id = ++seq
+  let onAbort: (() => void) | null = null
+  return new Promise<Float32Array[]>((res, rej) => {
     waiting.set(id, { res, rej })
+    onAbort = () => {
+      if (!waiting.has(id)) return
+      waiting.delete(id)
+      try { w.terminate() } catch { /* gone */ }
+      if (worker === w) worker = null
+      for (const p of waiting.values()) p.rej(new Error('Noise reduction was restarted'))
+      waiting.clear()
+      rej(aborted())
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
     w.postMessage({ id, channels, sampleRate, opts }, channels.map((c) => c.buffer))
   }).finally(() => {
+    if (onAbort) signal?.removeEventListener('abort', onAbort)
     idle = setTimeout(() => { if (!waiting.size) { worker?.terminate(); worker = null } }, 15000)
-  }) as Promise<Float32Array[]>
+  })
 }

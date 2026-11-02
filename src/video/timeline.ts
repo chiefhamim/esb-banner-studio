@@ -17,7 +17,7 @@ import type { TitleData } from './titleModel'
 import { migrateOverlayClip, sanitizeTitleData, titleDuration } from './titleModel'
 import { sanitizeDataCard, type DataCardRef } from './dataCardClip'
 import type { Bus, ClipDenoise, ClipFade, DuckingSettings, LoudnessTarget, MasterSettings } from './audioModel'
-import { sanitizeClipAudio, sanitizeProjectAudio, sanitizeTrackAudio, soloActive } from './audioModel'
+import { rebaseDenoise, sanitizeClipAudio, sanitizeProjectAudio, sanitizeTrackAudio, soloActive } from './audioModel'
 
 export type TrackKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio'
 export const TRACK_KINDS: readonly TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']
@@ -114,6 +114,9 @@ export interface Clip {
   cropR?: number
   cropT?: number
   cropB?: number
+  /** Phase 4 fix: the bus an audio clip is heard on when its track is on automatic. Set when the clip is made (the sound
+   * of footage is 'voice'); old projects get it once on load. A track's own bus still wins. */
+  bus?: Bus
   /** A video clip and its own sound share one link id: they move, trim, split and delete together until unlinked. */
   linkId?: string
   /** Length of the source file in seconds (footage and sound): a trim cannot run past it. */
@@ -503,7 +506,7 @@ export function trimClipLeft(timeline: VideoProject, clipId: string, deltaSecond
   if (!dt) return timeline
   const updatedClips = timeline.clips.map((c) => {
     if (!group.has(c.id)) return c
-    return { ...subClip(c, dt, c.duration), start: Math.max(0, c.start + dt) }
+    return { ...subClip(c, dt, c.duration, true), start: Math.max(0, c.start + dt) }
   })
   return { ...timeline, clips: updatedClips }
 }
@@ -520,7 +523,7 @@ export function trimClipRight(timeline: VideoProject, clipId: string, deltaSecon
   if (!dt) return timeline
   const updatedClips = timeline.clips.map((c) => {
     if (!group.has(c.id)) return c
-    return subClip(c, 0, Math.max(0.2, c.duration + dt))
+    return subClip(c, 0, Math.max(0.2, c.duration + dt), true)
   })
   const maxEnd = Math.max(timeline.duration, ...updatedClips.map((c) => c.start + c.duration))
   return { ...timeline, duration: maxEnd, clips: updatedClips }
@@ -598,7 +601,7 @@ export function deserializeVideoProject(json: string): VideoProject | null {
     const clips: Clip[] = tl.clips.map(clean)
     const mediaAssets: MediaAsset[] = (Array.isArray(parsed.mediaAssets) ? parsed.mediaAssets : [])
       .filter((a: unknown) => !!a && typeof a === 'object')
-      .map((a: MediaAsset) => ({ ...a, url: isLoadableUrl(a.url) && !isRuntimeUrl(a.url) ? a.url : '', thumbnailUrl: isThumbUrl(a.thumbnailUrl) && !isRuntimeUrl(a.thumbnailUrl) ? a.thumbnailUrl : undefined }))
+      .map((a: MediaAsset) => ({ ...a, licence: typeof a.licence === 'string' ? a.licence.slice(0, 600) : undefined, musicRel: typeof a.musicRel === 'string' ? a.musicRel.slice(0, 400) : undefined, url: isLoadableUrl(a.url) && !isRuntimeUrl(a.url) ? a.url : '', thumbnailUrl: isThumbUrl(a.thumbnailUrl) && !isRuntimeUrl(a.thumbnailUrl) ? a.thumbnailUrl : undefined }))
     return {
       id: parsed.id || `proj-${Date.now()}`,
       name: parsed.name || 'Restored video',
@@ -663,7 +666,7 @@ export function clipsForAsset(project: VideoProject, asset: MediaAsset, at: numb
     const link = asset.hasAudio ? `link-${stamp}` : undefined
     const video: Clip = { ...base, id: `clip-vid-${stamp}`, trackId: V, title: asset.name, kind: 'video', start, duration: d, out: d, color: '#2563eb', srcDuration: asset.duration > 0 ? asset.duration : undefined, linkId: link }
     if (!asset.hasAudio) return [video]
-    return [video, { ...base, id: `clip-aud-${stamp}`, trackId: A, title: `${asset.name} · sound`, kind: 'audio', start, duration: d, out: d, color: '#7c3aed', volume: 1, srcDuration: video.srcDuration, linkId: link, thumbnailUrl: undefined }]
+    return [video, { ...base, id: `clip-aud-${stamp}`, trackId: A, title: `${asset.name} · sound`, kind: 'audio', start, duration: d, out: d, color: '#7c3aed', volume: 1, srcDuration: video.srcDuration, linkId: link, bus: 'voice', thumbnailUrl: undefined }]
   }
   if (asset.type === 'audio') {
     const d = asset.duration > 0 ? asset.duration : 5
@@ -850,7 +853,7 @@ export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unkno
     if (o.keyframes !== undefined) { const kf = sanitizeKeyframes(o.keyframes, clip.effects ?? [], renames); if (kf) clip.keyframes = kf; else delete clip.keyframes }
     if (o.speed !== undefined) { const sp = sanitizeSpeed(o.speed); if (sp !== undefined) clip.speed = sp; else delete clip.speed }
     if (o.freezes !== undefined) { const fz = sanitizeFreezes(o.freezes); if (fz) clip.freezes = fz; else delete clip.freezes }
-    delete clip.gain; delete clip.fadeIn; delete clip.fadeOut; delete clip.pan; delete clip.denoise
+    delete clip.gain; delete clip.fadeIn; delete clip.fadeOut; delete clip.pan; delete clip.denoise; delete clip.bus
     if (kind === 'audio') Object.assign(clip, sanitizeClipAudio(o as unknown as Record<string, unknown>))
     if (o.reverse !== undefined && o.reverse !== true) delete clip.reverse
     if (o.preservePitch !== undefined && o.preservePitch !== false) delete clip.preservePitch
@@ -873,6 +876,9 @@ export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unkno
     clip.trackId = track.id
     clips.push(clip)
   }
+  // once, for projects made before clips carried their origin: footage sound (still linked to its picture) is voice
+  const picLinks = new Set(clips.filter((c) => c.kind === 'video' && c.linkId).map((c) => c.linkId))
+  for (const c of clips) if (c.kind === 'audio' && !c.bus && c.linkId && picLinks.has(c.linkId)) c.bus = 'voice'
   if (version === 1) {
     // v1 drew by kind; order the visual tracks so the list, read bottom-up, draws the same
     const order = v1VisualOrder(tracks) // drawn first → last
@@ -926,7 +932,26 @@ export function setLocked(project: Pick<VideoProject, 'clips' | 'tracks'>, ids: 
 /** The part [a, b] of a clip's local time as a clip of its own (b − a long; the caller sets `start`). Source in/out
  * follow the clip's speed, freezes and direction (speed.ts); keyframes, a speed ramp and freezes are cut and re-based
  * so the kept part looks and plays exactly as it did. a < 0 or b > duration extend the clip at its edge speed. */
-export function subClip(c: Clip, a: number, b: number): Clip {
+export function subClip(c: Clip, a: number, b: number, trim = false): Clip {
+  const r = subClipCore(c, a, b)
+  if (c.kind !== 'audio') return r
+  // Phase 4 fix: a fade belongs to the clip's true edge. A cut inside the clip (split, extract, a window) has no fade
+  // on its new edge: half A keeps the fade-in only, half B the fade-out only (both halves keeping both made a dip at
+  // every split). A trim keeps its fades: the trimmed edge is the clip's new true end.
+  const D = c.duration
+  if (!trim) {
+    if (a > EPS && r.fadeIn) { r.fadeIn = undefined; delete r.fadeIn }
+    if (b < D - EPS && r.fadeOut) { r.fadeOut = undefined; delete r.fadeOut }
+  }
+  if (r.denoise?.noiseRange) {
+    // the noise sample is clip-local seconds: it moves with the sound it was taken from
+    const dn = rebaseDenoise(r.denoise, -a, r.duration)
+    if (dn) r.denoise = dn; else delete r.denoise
+  }
+  return r
+}
+
+function subClipCore(c: Clip, a: number, b: number): Clip {
   const D = c.duration
   const d = Math.max(0.05, b - a)
   const keyframes = a === 0 && b >= D - EPS ? c.keyframes : cutKeyframes(c.keyframes, a, b)
@@ -1030,12 +1055,12 @@ export function rippleTrim(project: VideoProject, clipId: string, side: 'left' |
     const hi = Math.min(...members.map((c) => headroom(c, 'right')))
     const lo = Math.max(...members.map((c) => 0.2 - c.duration))
     dt = Math.max(lo, Math.min(hi, delta))
-    clips = project.clips.map((c) => (group.has(c.id) ? subClip(c, 0, c.duration + dt) : c))
+    clips = project.clips.map((c) => (group.has(c.id) ? subClip(c, 0, c.duration + dt, true) : c))
   } else {
     const hi = Math.min(...members.map((c) => c.duration - 0.2))
     const lo = Math.max(...members.map((c) => -headroom(c, 'left')))
     dt = Math.max(lo, Math.min(hi, delta))
-    clips = project.clips.map((c) => (group.has(c.id) ? { ...subClip(c, dt, c.duration), start: c.start } : c))
+    clips = project.clips.map((c) => (group.has(c.id) ? { ...subClip(c, dt, c.duration, true), start: c.start } : c))
     dt = -dt
   }
   if (Math.abs(dt) < EPS) return project
@@ -1076,8 +1101,8 @@ export function rollEdit(project: VideoProject, leftId: string, rightId: string,
   return {
     ...project,
     clips: project.clips.map((c) => {
-      if (lg.has(c.id)) return subClip(c, 0, c.duration + dt)
-      if (rg.has(c.id)) return { ...subClip(c, dt, c.duration), start: c.start + dt }
+      if (lg.has(c.id)) return subClip(c, 0, c.duration + dt, true)
+      if (rg.has(c.id)) return { ...subClip(c, dt, c.duration, true), start: c.start + dt }
       return c
     }),
   }
@@ -1095,7 +1120,20 @@ export function slipClip(project: VideoProject, clipId: string, delta: number): 
   const hi = Math.min(...members.map((c) => (c.srcDuration != null ? c.srcDuration - c.out : Infinity)))
   const dt = Math.max(lo, Math.min(hi, delta))
   if (Math.abs(dt) < EPS) return project
-  return { ...project, clips: project.clips.map((c) => (group.has(c.id) ? { ...c, in: c.in + dt, out: c.out + dt } : c)) }
+  return {
+    ...project,
+    clips: project.clips.map((c) => {
+      if (!group.has(c.id)) return c
+      const slipped: Clip = { ...c, in: c.in + dt, out: c.out + dt }
+      if (c.kind === 'audio' && c.denoise?.noiseRange) {
+        // the sound under the noise sample moved: the sample follows it (source seconds → timeline seconds at the clip's mean speed)
+        const mean = c.duration > 0 && c.out > c.in ? (c.out - c.in) / c.duration : 1
+        const dn = rebaseDenoise(c.denoise, -(c.reverse ? -dt : dt) / mean, c.duration)
+        if (dn) slipped.denoise = dn; else delete slipped.denoise
+      }
+      return slipped
+    }),
+  }
 }
 
 /** The clips touching a clip's head and tail on its track (edit points), if any. */
@@ -1146,8 +1184,8 @@ export function slideClip(project: VideoProject, clipId: string, delta: number):
     ...project,
     clips: project.clips.map((x) => {
       if (cg.has(x.id)) return { ...x, start: x.start + dt }
-      if (pg.has(x.id)) return subClip(x, 0, x.duration + dt)
-      if (ng.has(x.id)) return { ...subClip(x, dt, x.duration), start: x.start + dt }
+      if (pg.has(x.id)) return subClip(x, 0, x.duration + dt, true)
+      if (ng.has(x.id)) return { ...subClip(x, dt, x.duration, true), start: x.start + dt }
       return x
     }),
   }
@@ -1435,6 +1473,27 @@ function windowClips(X: Clip, inner: Clip[]): Clip[] {
   return out
 }
 
+/** The audio tracks of a compound's inside as they sound in the flattened project. Solo inside a compound is scoped to
+ * it (its other tracks go silent; the outer tracks are not touched). The outer track the compound sits on applies to
+ * everything inside: its mute, its fader (dB added) and pan (added, clamped), its bus when it has one (an override),
+ * and its solo (the inside then counts as soloed). */
+function compoundAudioTracks(inner: Track[], home: Track | undefined, X: Clip): Track[] {
+  const audio = inner.filter((t) => t.kind === 'audio')
+  const innerSolo = audio.some((t) => t.solo === true)
+  const outer = home?.kind === 'audio' ? home : undefined
+  return audio.map((t) => {
+    const o: Track = { ...t, muted: t.muted || !!home?.muted || !!X.muted || (innerSolo && t.solo !== true) }
+    delete o.solo
+    if (outer?.solo === true && !o.muted) o.solo = true
+    if (outer?.bus) o.bus = outer.bus
+    const vol = (t.volume ?? 0) + (outer?.volume ?? 0)
+    if (vol !== 0) o.volume = Math.max(-60, Math.min(12, Math.round(vol * 1000) / 1000)); else delete o.volume
+    const pan = Math.max(-1, Math.min(1, (t.pan ?? 0) + (outer?.pan ?? 0)))
+    if (pan !== 0) o.pan = pan; else delete o.pan
+    return o
+  })
+}
+
 /** The project as the preview, the sound and the export see it: every compound clip replaced by its inside (at its
  * place, to its [in, out]), on tracks placed just above the compound's own track (so they cover what it covered), its
  * sound on extra audio tracks. Ids are prefixed with the compound's (stable, so caches keyed by clip id hold). The
@@ -1450,7 +1509,7 @@ export function flattenCompounds(project: VideoProject): VideoProject {
     const inner = flattenCompounds({ ...project, tracks: X.compound.tracks, clips: X.compound.clips, markers: undefined })
     const pre = `${X.id}/`
     const visual = inner.tracks.filter((t) => t.kind !== 'audio').map((t) => ({ ...t, id: pre + t.id, locked: false, hidden: t.hidden || home?.hidden || undefined }))
-    const audio = inner.tracks.filter((t) => t.kind === 'audio').map((t) => ({ ...t, id: pre + t.id, locked: false, muted: t.muted || !!home?.muted || !!X.muted }))
+    const audio = compoundAudioTracks(inner.tracks, home, X).map((t) => ({ ...t, id: pre + t.id, locked: false }))
     const at = Math.max(0, tracks.findIndex((t) => t.id === X.trackId))
     tracks.splice(at, 0, ...visual)
     extraAudio.push(...audio)

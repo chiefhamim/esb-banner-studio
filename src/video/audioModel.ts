@@ -25,7 +25,13 @@ export type LoudnessTarget = null | -14 | -16 | -23
 export interface ClipFade { dur: number; curve: FadeCurve }
 /** Noise reduction on a clip: `amount` 0 (off) … 1 (strongest); `noiseRange` = a stretch of clip-local seconds that holds
  * only the noise (the noise spectrum is measured there; without it the quietest frames are used). */
-export interface ClipDenoise { amount: number; noiseRange?: [number, number] }
+export interface ClipDenoise {
+  amount: number
+  noiseRange?: [number, number]
+  /** The noise sample was cut away by an edit (split, trim, slip moved the clip's sound off it): the denoiser falls back
+   * to the quietest frames and the clip's panel says so. Cleared when the editor picks a new sample. */
+  noiseDropped?: boolean
+}
 export interface MasterSettings { gain: number; limiter: boolean }
 /** Auto ducking: while the `source` bus is louder than `threshold` (dBFS, RMS), the `target` bus is lowered by up to
  * `depthDb` dB; `attack` / `release` are the seconds it takes to go down / come back. */
@@ -57,16 +63,41 @@ export function sanitizeFade(raw: unknown): ClipFade | undefined {
 }
 
 export function sanitizeDenoise(raw: unknown): ClipDenoise | undefined {
-  if (!isRecord(raw) || !fin(raw.amount) || raw.amount <= 0) return undefined
-  const out: ClipDenoise = { amount: r3(clamp(raw.amount, 0, 1)) }
+  if (!isRecord(raw) || !fin(raw.amount)) return undefined
+  const amount = r3(clamp(raw.amount, 0, 1))
   const nr = raw.noiseRange
-  if (Array.isArray(nr) && nr.length === 2 && fin(nr[0]) && fin(nr[1]) && nr[0] >= 0 && nr[1] > nr[0] && nr[1] <= 1e5) out.noiseRange = [nr[0], nr[1]]
+  const range = Array.isArray(nr) && nr.length === 2 && fin(nr[0]) && fin(nr[1]) && nr[0] >= 0 && nr[1] > nr[0] && nr[1] <= 1e5 ? ([nr[0], nr[1]] as [number, number]) : undefined
+  // amount 0 is "off", but the sample the editor marked is kept (dragging the slider to 0 and back must not lose it)
+  if (amount <= 0 && !range) return undefined
+  const out: ClipDenoise = { amount }
+  if (range) out.noiseRange = range
+  else if (raw.noiseDropped === true && amount > 0) out.noiseDropped = true
   return out
 }
 
+/** Smallest noise sample the denoiser can learn from (seconds). */
+export const MIN_NOISE_RANGE = 0.1
+
+/** A clip's denoise after its sound moved by `shift` seconds in clip-local time (a head trim of `a` seconds is -a) and
+ * the clip now lasts `newDur`: the noise sample moves with the sound it was taken from. What falls outside the clip is
+ * cut off; if less than MIN_NOISE_RANGE is left the sample is dropped and `noiseDropped` records it. */
+export function rebaseDenoise(d: ClipDenoise, shift: number, newDur: number): ClipDenoise | undefined {
+  if (!d.noiseRange) return d
+  const lo = Math.max(0, d.noiseRange[0] + shift)
+  const hi = Math.min(newDur, d.noiseRange[1] + shift)
+  const { noiseRange: _old, noiseDropped: _n, ...rest } = d
+  void _old; void _n
+  if (hi - lo >= MIN_NOISE_RANGE - 1e-9) {
+    if (Math.abs(shift) < 1e-9 && hi === d.noiseRange[1] && lo === d.noiseRange[0]) return d
+    return { ...rest, noiseRange: [r3(lo), r3(hi)] }
+  }
+  return d.amount > 0 ? { ...rest, noiseDropped: true } : undefined
+}
+
 /** The Phase 4 fields of a clip, cleaned (a Partial: only what is set and not the default). */
-export function sanitizeClipAudio(o: Record<string, unknown>): Partial<Pick<Clip, 'gain' | 'fadeIn' | 'fadeOut' | 'pan' | 'denoise'>> {
-  const out: Partial<Pick<Clip, 'gain' | 'fadeIn' | 'fadeOut' | 'pan' | 'denoise'>> = {}
+export function sanitizeClipAudio(o: Record<string, unknown>): Partial<Pick<Clip, 'gain' | 'fadeIn' | 'fadeOut' | 'pan' | 'denoise' | 'bus'>> {
+  const out: Partial<Pick<Clip, 'gain' | 'fadeIn' | 'fadeOut' | 'pan' | 'denoise' | 'bus'>> = {}
+  if (BUSES.includes(o.bus as Bus)) out.bus = o.bus as Bus
   if (fin(o.gain) && o.gain !== 0) out.gain = r3(clamp(o.gain, GAIN_DB_MIN, GAIN_DB_MAX))
   const fi = sanitizeFade(o.fadeIn)
   if (fi) out.fadeIn = fi
@@ -146,16 +177,19 @@ export const duckingOf = (p: Pick<VideoProject, 'ducking'>): DuckingSettings => 
 
 /** The bus a clip is heard on. A track's own bus wins; a track left on automatic puts a clip that is the sound of a
  * footage clip (linked to a video clip) on 'voice', and everything else (music, effects dropped on an audio track) on
- * 'music'. A recorded voiceover goes on a track the mixer sets to 'voice'. */
+ * 'music'. A recorded voiceover goes on a track the mixer sets to 'voice'. `Clip.bus` records the origin when the clip
+ * is made (footage sound = 'voice'), so unlinking or deleting the picture does not turn the speech into music. */
 export function busOf(project: Pick<VideoProject, 'tracks' | 'clips'>, c: Clip): Bus {
   const t = project.tracks.find((x) => x.id === c.trackId)
   if (t?.bus) return t.bus
+  if (c.bus) return c.bus // the clip's own origin (footage sound = voice), kept when it is unlinked or its picture is deleted
   if (c.linkId && project.clips.some((x) => x.linkId === c.linkId && x.kind === 'video' && x.id !== c.id)) return 'voice'
   return 'music'
 }
 
-/** At least one audio track is soloed (the others are then silent). */
-export const soloActive = (p: Pick<VideoProject, 'tracks'>) => p.tracks.some((t) => t.kind === 'audio' && t.solo === true && !t.muted)
+/** At least one audio track is soloed (the others are then silent). DAW rule: mute always wins, so a track that is both
+ * soloed and muted is silent, and the solo still silences the rest (soloing it does not bring anything back). */
+export const soloActive = (p: Pick<VideoProject, 'tracks'>) => p.tracks.some((t) => t.kind === 'audio' && t.solo === true)
 
 /** The linear level of a track: 0 when it is muted, or another track is soloed and this one is not. */
 export function trackLevel(p: Pick<VideoProject, 'tracks'>, t: Track | undefined): number {
@@ -182,13 +216,13 @@ export function audioParamsKey(p: VideoProject): string {
   return JSON.stringify([
     p.master ?? null, p.ducking ?? null, p.loudnessTarget ?? null, p.busVolume ?? null,
     p.tracks.filter((t) => t.kind === 'audio').map((t) => [t.id, t.bus ?? '', t.volume ?? 0, t.pan ?? 0, t.muted ? 1 : 0, t.solo ? 1 : 0]),
-    p.clips.filter((c) => c.kind === 'audio').map((c) => [c.id, c.gain ?? 0, c.pan ?? 0, c.fadeIn ?? null, c.fadeOut ?? null, c.denoise ?? null, c.volume ?? 1, c.muted ? 1 : 0]),
+    p.clips.filter((c) => c.kind === 'audio').map((c) => [c.id, c.gain ?? 0, c.pan ?? 0, c.fadeIn ?? null, c.fadeOut ?? null, c.denoise ?? null, c.bus ?? '', c.volume ?? 1, c.muted ? 1 : 0]),
   ])
 }
 
 /** The part of a clip's denoise that decides the rendered, noise-reduced sound (cache key): source, trim, speed and
  * the denoise settings; gain, fades and pan are applied after and do not matter. */
 export function denoiseKey(c: Clip): string | null {
-  if (!c.denoise || c.denoise.amount <= 0 || !c.sourceUrl) return null
+  if (!c.denoise || !(c.denoise.amount > 0) || !c.sourceUrl) return null
   return JSON.stringify([c.sourceUrl, c.in, c.out, c.duration, c.speed ?? 1, c.freezes ?? null, c.reverse ? 1 : 0, c.preservePitch === false ? 0 : 1, c.denoise.amount, c.denoise.noiseRange ?? null])
 }

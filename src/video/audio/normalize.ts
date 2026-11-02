@@ -2,7 +2,7 @@
 // −23 for EBU R128 broadcast) with a true-peak ceiling (−1 dBTP), and the look-ahead true-peak limiter it needs when
 // the gain alone would push peaks over the ceiling. Pure TS; the result is new arrays, the input is never changed.
 
-import { fromDb, interpolator, measureLoudness, toDb, truePeakEnvelope } from './loudness'
+import { fromDb, interpolator, measureLoudness, toDb, truePeakEnvelope, truePeakEnvelopeGated } from './loudness'
 import type { LoudnessReport } from './loudness'
 
 export const LOUDNESS_TARGETS = [
@@ -76,7 +76,8 @@ export function limiterGain(channels: Float32Array[], sampleRate: number, opts: 
   const r = Math.max(1, Math.round((opts.lookahead ?? 0.005) * sampleRate))
   const req = new Float32Array(n).fill(1)
   for (const ch of channels) {
-    const env = truePeakEnvelope(ch, (STRICT ??= interpolator(64, 1, 10)))
+    // the gain only reacts to peaks over the ceiling: the oversampled envelope is worked out around samples within 6 dB of it
+    const env = truePeakEnvelopeGated(ch, ceil * 0.5, (STRICT ??= interpolator(64, 1, 10)))
     for (let i = 0; i < n; i++) if (env[i] > ceil) req[i] = Math.min(req[i], ceil / env[i])
   }
   // min over ±r, then a centred average over ±r: every averaged value is ≤ the requirement at the centre

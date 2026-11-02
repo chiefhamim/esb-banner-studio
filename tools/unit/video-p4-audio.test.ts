@@ -168,11 +168,13 @@ describe('noise-reduction settings and cache key', () => {
 describe('beat proposals', () => {
   it('a proposal is mapped to the timeline, applies as one edit, skips duplicates and names nothing', () => {
     const pr = beatProposal({ clipId: 'a', clipStart: 10, clipDuration: 4, tempo: { bpm: 120, confidence: 0.9 }, onsets: [{ t: 0.5, strength: 1 }, { t: 1, strength: 3 }, { t: 9, strength: 9 }], beats: [0, 0.5, 1, 1.5, 7] })
-    expect(pr).toMatchObject({ kind: 'proposal', applied: false, beats: [10, 10.5, 11, 11.5] })
-    expect(pr.onsets.map((o) => o.t)).toEqual([10.5, 11])
-    expect(proposalTimes(pr, 'onsets', 1)).toEqual([11])
+    // Phase 4 fix: clip-relative times; they become timeline times when applied against the clip as it is then
+    expect(pr).toMatchObject({ kind: 'proposal', applied: false, beats: [0, 0.5, 1, 1.5] })
+    expect(pr.onsets.map((o) => o.t)).toEqual([0.5, 1])
+    expect(proposalTimes(pr, 'onsets', 1)).toEqual([1])
     const p = proj()
-    const out = applyBeatMarkers(applyBeatMarkers(p, proposalTimes(pr), 's'), proposalTimes(pr), 't')
+    const abs = proposalTimes(pr).map((t) => 10 + t)
+    const out = applyBeatMarkers(applyBeatMarkers(p, abs, 's'), abs, 't')
     expect(out.markers!.map((m) => m.t)).toEqual([10, 10.5, 11, 11.5]); expect(out.markers!.every((m) => m.name === '')).toBe(true)
   })
 })
