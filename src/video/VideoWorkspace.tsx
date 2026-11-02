@@ -1,6 +1,8 @@
 import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
+import { useShellStore } from '../shell/shellStore'
+import { DeskBoundary } from '../ui/DeskBoundary'
 import { Icon } from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { Dialog, IconButton, MenuButton, MenuList, Popover, Seg, Select, Slider, Switch, Tabs } from '../ui/controls'
@@ -9,7 +11,7 @@ import type { AspectRatio, Clip, MediaAsset, OverlayTemplate, Track, TrackKind, 
 import { TRACK_KIND_LABEL, allClips, canPlaceOn, clipsForAsset, contentEnd, flattenCompounds, formatShortTime, formatTimecode, groupLocked, neighbours, trackForKind } from './timeline'
 import { useVideoStore, viewOf } from './videoStore'
 import type { EditTool } from './videoStore'
-import { constantSpeed } from './speed'
+import { constantSpeed, withRampPreset } from './speed'
 import { CompoundBar, KeyframeHead, KeyframeLane, MarkersButton, PROP_RANGES, PasteAttributesDialog, PropRow, RulerMarkers, ShortcutsSheet, SpeedSection, TOOLS, ToolMenu } from './TimelinePro'
 import { OVERLAY_LABELS, dropCachedMedia, pruneMediaCache } from './compositor'
 import { GLCompositor } from './engine/glCompositor'
@@ -25,6 +27,7 @@ import { ExportSheet } from './ExportSheet'
 import { StoryVideoPanel } from './StoryVideoPanel'
 import { AdjustmentPresetCard, EffectsPanel } from './EffectsPanel'
 import { ColourPanel } from './ColourPanel'
+import { lutText } from './effects'
 import { animationSource } from './engine/animation'
 import { PROBE_CONCURRENCY, assetFromEntry, assetFromFile, hasDiskMedia, importOptions, keepTake, mapLimit, patchMeta, probeMedia, takeImportErrors, videoBridge } from './media'
 import type { FolderRef } from './media'
@@ -445,7 +448,17 @@ const rampOfLabel = (c: Clip) => (c.speed && typeof c.speed === 'object' ? 'ramp
 
 // ---------------------------------------------------------------- the desk
 
+/** The desk inside its own error boundary: "Try again" reopens it with nothing selected, on the main timeline, paused
+ * (what was being drawn when it failed); the project and its undo history are kept. */
 export function VideoWorkspace() {
+  return (
+    <DeskBoundary desk="Video" onReset={() => useVideoStore.setState({ selectedClipId: null, selectedIds: [], compoundPath: [], playing: false, rate: 0 })} onLeave={() => useShellStore.getState().setWorkspace('home')}>
+      <VideoDesk />
+    </DeskBoundary>
+  )
+}
+
+function VideoDesk() {
   const {
     project, tl, playing, selectedClipId, selectedIds, tool, range, inCompound, zoom, exporting, canUndo, canRedo, mediaAssets, isRecordingVoiceover, dirty, generation, projectPath,
   } = useVideoStore(useShallow((s) => ({
@@ -581,7 +594,13 @@ export function VideoWorkspace() {
   // ---------------------------------------------------------------- Autosave and the restore card
   useEffect(() => {
     const stop = startAutosave()
-    const off = onAutosaved((at, error) => setAutosave({ at, error }))
+    // a failed autosave is said out loud (once per reason until one succeeds), not only in the status bar
+    let told: string | null = null
+    const off = onAutosaved((at, error) => {
+      setAutosave({ at, error })
+      if (error && error !== told) { told = error; flash(`Autosave failed: ${error}. Your work is not saved yet — try Save (Ctrl+S).`) }
+      if (!error) told = null
+    })
     // a snapshot left from a session that did not save (a crash, a kill) is offered while the desk is still empty
     const st = getState()
     if (!st.project.clips.length && !st.dirty) {
@@ -634,7 +653,7 @@ export function VideoWorkspace() {
       else if (ctrl && e.altKey && k === 'v') { e.preventDefault(); setPasteAttrs(true) }
       else if (ctrl && k === 'c') { if (st.selectedClipId) { e.preventDefault(); const n = st.copySelected(); flash(`Copied ${n} clip${n === 1 ? '' : 's'}`) } }
       else if (ctrl && k === 'v') { e.preventDefault(); if (!st.clipboard) flash('Nothing copied yet (Ctrl+C on a clip).'); else if (!st.pasteClips()) flash('Could not paste there (a locked track).') }
-      else if (ctrl && e.altKey && k === 'g') { e.preventDefault(); if (!st.compoundSelected()) flash('Select clips on unlocked tracks to make a compound clip.') }
+      else if (ctrl && e.altKey && k === 'g') { e.preventDefault(); { const why = st.compoundIssue(); if (why || !st.compoundSelected()) flash(why ?? 'Select clips on unlocked tracks to make a compound clip.') } }
       else if (ctrl && e.shiftKey && k === 'g') { e.preventDefault(); if (!st.ungroupSelected()) flash('No group in the selection.') }
       else if (ctrl && k === 'g') { e.preventDefault(); if (!st.groupSelected()) flash('Shift+click two or more clips to group them.') }
       else if (ctrl && k === 'm') { e.preventDefault(); st.toggleMagnetic(); flash(getState().project.magnetic ? 'Magnetic main track on: V1 closes its gaps' : 'Magnetic main track off') }
@@ -1404,6 +1423,10 @@ if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof w
       preview: previewEngine,
       audio: audioEngine,
       animationSource: () => animationSource,
+      /** A clip with a ramp preset applied (speed.ts), for the playback tests. */
+      rampPreset: (clip: Clip, name: string) => withRampPreset(clip, name),
+      /** The .cube text of a LUT id (effects.ts registry). */
+      lutText: (id: string) => lutText(id),
       stats: () => previewEngine().stats(),
       scrubLatencies: () => previewEngine().scrubLatencies.slice(),
       still: async (t: number) => {

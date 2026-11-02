@@ -111,8 +111,40 @@ export function MarkersButton({ focusId, onFocusDone }: { focusId: string | null
   )
 }
 
+/** A marker's name: typed into a draft and committed once (Enter or leaving the field = one undo step; Esc puts the
+ * name back). It used to write every keystroke, and the pointer-up that ends any gesture split them into one step
+ * per key. */
+function MarkerName({ m, inputRef }: { m: Marker; inputRef: (el: HTMLInputElement | null) => void }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const cancelled = useRef(false)
+  const commit = () => {
+    // Enter commits and then blurs (a second commit in the same tick): compare with the stored name, not the render's
+    const now = viewOf(getState()).markers?.find((x) => x.id === m.id)?.name
+    if (!cancelled.current && draft != null && now != null && draft !== now) getState().updateMarker(m.id, { name: draft })
+    cancelled.current = false
+    setDraft(null)
+  }
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      className="vw-ml-name"
+      value={draft ?? m.name}
+      placeholder="Marker name"
+      aria-label="Marker name"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); e.currentTarget.blur() }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancelled.current = true; e.currentTarget.blur() }
+      }}
+    />
+  )
+}
+
 function MarkerList({ markers, focusId }: { markers: Marker[]; focusId: string | null }) {
   const fps = useVideoStore((s) => viewOf(s).fps)
+  const ripple = useVideoStore((s) => s.project.rippleMarkers !== false)
   const inputs = useRef(new Map<string, HTMLInputElement>())
   useEffect(() => { if (focusId) inputs.current.get(focusId)?.focus() }, [focusId])
   return (
@@ -126,23 +158,14 @@ function MarkerList({ markers, focusId }: { markers: Marker[]; focusId: string |
         <div key={m.id} className="vw-ml-row" data-marker-id={m.id}>
           <button type="button" className="vw-ml-dot" style={{ background: m.color }} aria-label="Change the colour" data-tip="Colour (click for the next one)"
             onClick={() => { const i = MARKER_COLORS.indexOf(m.color as (typeof MARKER_COLORS)[number]); getState().updateMarker(m.id, { color: MARKER_COLORS[(i + 1) % MARKER_COLORS.length] }) }} />
-          <input
-            ref={(el) => { if (el) inputs.current.set(m.id, el); else inputs.current.delete(m.id) }}
-            type="text"
-            className="vw-ml-name"
-            value={m.name}
-            placeholder="Marker name"
-            aria-label="Marker name"
-            onFocus={() => getState().beginGesture()}
-            onBlur={() => getState().endGesture()}
-            onChange={(e) => getState().updateMarker(m.id, { name: e.target.value })}
-          />
+          <MarkerName m={m} inputRef={(el) => { if (el) inputs.current.set(m.id, el); else inputs.current.delete(m.id) }} />
           <button type="button" className="vw-ml-time mono" onClick={() => getState().seek(m.t)} data-tip="Jump to it">{formatShortTime(m.t)}</button>
           <span className="vw-ml-frame mono" aria-hidden="true">{Math.round(m.t * fps) % fps}f</span>
           <IconButton icon="trash" size={13} tip="Delete marker" onClick={() => getState().removeMarker(m.id)} />
         </div>
       ))}
       {markers.length > 1 && <p className="vw-ml-foot">Shift+M next marker · Alt+M previous</p>}
+      <div className="vw-ml-ripple" data-tip="Ripple delete, ripple trim, insert, extract and speed changes move the markers after the edit with the clips"><Switch checked={ripple} onChange={() => getState().toggleRippleMarkers()} label="Markers follow ripple edits" /></div>
     </div>
   )
 }
@@ -529,7 +552,7 @@ export function PasteAttributesDialog({ onClose, flash }: { onClose: () => void;
       width={420}
       footer={<>
         <button type="button" className="btn" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn primary vw-paste-attrs-go" disabled={!pick.size || !targets.length} onClick={() => { const ok = getState().pasteAttributes([...pick]); flash(ok ? `Pasted onto ${targets.length} clip${targets.length === 1 ? '' : 's'}` : 'Nothing changed (locked, or the same values)'); onClose() }}>Paste</button>
+        <button type="button" className="btn primary vw-paste-attrs-go" disabled={!pick.size || !targets.length} onClick={() => { const r = getState().pasteAttributes([...pick]); const kept = r.refused ? ` ${r.refused} kept ${r.refused === 1 ? 'its' : 'their'} speed: the change would move a clip linked to one on a locked track.` : ''; flash(r.ok ? `Pasted onto ${targets.length} clip${targets.length === 1 ? '' : 's'}.${kept}` : r.refused ? `Nothing pasted.${kept}` : 'Nothing changed (locked, or the same values)'); onClose() }}>Paste</button>
       </>}
     >
       {!source || !targets.length ? <p className="vw-confirm-body">Copy a clip (Ctrl+C), select the clips to change, then paste its attributes (Ctrl+Alt+V).</p> : (

@@ -13,6 +13,7 @@ import {
   insertClips,
   liftRange,
   magnetize,
+  compoundProblem,
   makeCompound,
   markerNear,
   moveSet,
@@ -146,10 +147,16 @@ interface VideoState {
   copySelected: () => number
   /** Paste the copied clips at the playhead on their own tracks (insert or overwrite). */
   pasteClips: (mode?: EditMode) => boolean
-  pasteAttributes: (groups: AttrGroup[]) => boolean
+  /** Paste attribute groups from the first copied clip onto the selection. `refused`: clips whose speed could not
+   * change (the ripple would pull a linked pair apart on a locked track); they keep their speed. */
+  pasteAttributes: (groups: AttrGroup[]) => { ok: boolean; refused: number }
   groupSelected: () => boolean
   ungroupSelected: () => boolean
   compoundSelected: () => boolean
+  /** Why the selection cannot become a compound clip now (null: it can). */
+  compoundIssue: () => string | null
+  /** Ripple edits move the markers after the edit (default on). */
+  toggleRippleMarkers: () => void
   breakCompound: (clipId: string) => boolean
   openCompound: (clipId: string) => boolean
   /** Close open compounds back to `depth` (0 = the main timeline). */
@@ -479,12 +486,13 @@ export const useVideoStore = create<VideoState>((set, get) => ({
   pasteAttributes: (groups) => {
     const s = get()
     const src = s.clipboard?.[0]
-    if (!src || !groups.length) return false
+    if (!src || !groups.length) return { ok: false, refused: 0 }
     const v = viewOf(s)
-    const next = pasteAttributes(v, src, liveSelection(s, v), groups)
-    if (next === v) return false
+    const report = { refused: [] as string[] }
+    const next = pasteAttributes(v, src, liveSelection(s, v), groups, report)
+    if (next === v) return { ok: false, refused: report.refused.length }
     set((st) => edit(st, next))
-    return true
+    return { ok: true, refused: report.refused.length }
   },
 
   groupSelected: () => {
@@ -510,12 +518,20 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     const v = viewOf(s)
     const ids = liveSelection(s, v)
     if (!ids.length) return false
-    const next = makeCompound(v, ids)
+    const next = makeCompound(v, ids, undefined, s.compoundPath.length)
     if (next === v) return false
     const made = next.clips.find((c) => !v.clips.some((x) => x.id === c.id))
     set((st) => ({ ...edit(st, next), selectedClipId: made?.id ?? null, selectedIds: made ? [made.id] : [] }))
     return true
   },
+
+  compoundIssue: () => {
+    const s = get()
+    const v = viewOf(s)
+    return compoundProblem(v, liveSelection(s, v), s.compoundPath.length)
+  },
+
+  toggleRippleMarkers: () => set((s) => ({ history: pushHistory(s.project, s.history), future: [], project: { ...s.project, rippleMarkers: s.project.rippleMarkers === false ? undefined : false }, dirty: true, rev: s.rev + 1 })),
 
   breakCompound: (clipId) => {
     const s = get()

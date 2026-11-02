@@ -63,7 +63,8 @@ export const EFFECT_DEFS: Record<EffectType, EffectDef> = {
   lut: {
     type: 'lut', label: 'LUT', max: 1, adjustment: true,
     params: [
-      { kind: 'text', key: 'cube', label: 'LUT', def: '', max: LUT_MAX_CHARS },
+      // the LUT's content id (lutId); the .cube text itself is kept ONCE per project (the project file's `luts`)
+      { kind: 'text', key: 'lut', label: 'LUT', def: '', max: 40 },
       { kind: 'text', key: 'name', label: 'Name', def: '', max: 120 },
       n('intensity', 'Intensity', 0, 1, 0.01, 1, '%'),
     ],
@@ -129,9 +130,12 @@ export function paramValue(e: ClipEffect, p: ParamDef): number | string | boolea
 
 export function paramDef(type: EffectType, key: string): ParamDef | undefined { return EFFECT_DEFS[type].params.find((p) => p.key === key) }
 
-/** Clean an effect list read from a project: known types only, safe ids, values in range, per-type caps, LUT text
- * that is too big or does not parse dropped (the effect stays, empty). Never throws. */
-export function sanitizeEffects(raw: unknown): ClipEffect[] | undefined {
+/** Clean an effect list read from a project: known types only, safe ids, values in range, per-type caps. A LUT refers
+ * to its text by content id (`params.lut`); `lutRef` maps the file's reference to a registered id (unknown: the LUT
+ * is empty). An older inline `params.cube` is registered here (parsed once per distinct text) and replaced by its id.
+ * `renames` collects ids that had to change (a duplicate or an unsafe id), so keyframes under `fx.<old id>.` can
+ * follow (timeline.ts). Never throws. */
+export function sanitizeEffects(raw: unknown, lutRef: (ref: string) => string | undefined = (r) => (lutText(r) ? r : undefined), renames?: { from: string; to: string }[]): ClipEffect[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const out: ClipEffect[] = []
   const count = new Map<EffectType, number>()
@@ -144,9 +148,11 @@ export function sanitizeEffects(raw: unknown): ClipEffect[] | undefined {
     const def = EFFECT_DEFS[o.type]
     const k = count.get(o.type) ?? 0
     if (k >= def.max) continue
-    let id = typeof o.id === 'string' && /^[\w-]{1,60}$/.test(o.id) ? o.id : `fx-${o.type}-${out.length + 1}`
+    const given = typeof o.id === 'string' && /^[\w-]{1,60}$/.test(o.id) ? o.id : null
+    let id = given ?? `fx-${o.type}-${out.length + 1}`
     while (ids.has(id)) id = `${id}x`
     ids.add(id)
+    if (given && id !== given) renames?.push({ from: given, to: id })
     const src = (o.params && typeof o.params === 'object' ? o.params : {}) as Record<string, unknown>
     const params: Record<string, number | string | boolean> = {}
     const tmp: ClipEffect = { id, type: o.type, params: src as ClipEffect['params'] }
@@ -155,11 +161,90 @@ export function sanitizeEffects(raw: unknown): ClipEffect[] | undefined {
       if (p.kind === 'text' && v === '') continue
       params[p.key] = v
     }
-    if (o.type === 'lut' && typeof params.cube === 'string' && !parseCube(params.cube).ok) delete params.cube
+    if (o.type === 'lut') {
+      const ref = typeof params.lut === 'string' ? lutRef(params.lut) : undefined
+      delete params.lut
+      if (ref) params.lut = ref
+      else if (typeof src.cube === 'string' && src.cube.length <= LUT_MAX_CHARS) { const id2 = registerLut(src.cube); if (id2) params.lut = id2 }
+    }
     out.push({ id, type: o.type, enabled: o.enabled !== false, params })
     count.set(o.type, k + 1)
   }
   return out
+}
+
+// ---------------------------------------------------------------- LUTs by content id
+//
+// A LUT's .cube text is big (a 65-point cube is ~5.5 MB) and was copied into every clip that used it (and every split
+// and paste), so a few clips pushed project.json past main's 25 MB cap and Save and autosave were refused. Now each
+// distinct text is kept once: `lutId(text)` (a 64-bit FNV-style hash of the text + its length) names it, clips carry
+// only the id (`params.lut`), the project file keeps `luts: { id: text }` for the ids its clips use, and the parse,
+// the GPU texture and the save all key by the id. The registry below holds every text seen this session (the undo
+// history may still use one); it is content-addressed, so two projects never disagree about an id.
+
+const lutTexts = new Map<string, string>()
+const idOfText = new Map<string, string>()
+
+/** The content id of a .cube text ("lut-" + 16 hex + "-" + its length in base 36). */
+export function lutId(text: string): string {
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193 ^ text.length
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 0x01000193)
+    h2 = Math.imul(h2 ^ c, 0x5bd1e995)
+    h2 ^= h2 >>> 15
+  }
+  const hex = (n: number) => (n >>> 0).toString(16).padStart(8, '0')
+  return `lut-${hex(h1)}${hex(h2)}-${text.length.toString(36)}`
+}
+
+/** Keep a .cube text (it must parse; it is parsed once here) and return its id; null when it is not a usable LUT. */
+export function registerLut(text: string): string | null {
+  if (typeof text !== 'string' || !text || text.length > LUT_MAX_CHARS) return null
+  const known = idOfText.get(text)
+  if (known) return known
+  const id = lutId(text)
+  if (!lutTexts.has(id)) {
+    if (!cachedCube(text, id)) return null
+    lutTexts.set(id, text)
+  }
+  idOfText.set(text, id)
+  return id
+}
+
+/** The text of a registered LUT id. */
+export const lutText = (id: unknown): string | undefined => (typeof id === 'string' ? lutTexts.get(id) : undefined)
+
+/** The LUT id an effect uses (an in-memory effect may still carry its text inline: it is registered on first use). */
+export function lutOf(e: ClipEffect): string | null {
+  const p = e.params
+  if (typeof p?.lut === 'string' && lutTexts.has(p.lut)) return p.lut
+  if (typeof p?.cube === 'string') return registerLut(p.cube)
+  return null
+}
+
+/** Every LUT id the clips use. */
+export function lutsUsed(clips: Iterable<Pick<Clip, 'effects'>>): Set<string> {
+  const out = new Set<string>()
+  for (const c of clips) for (const e of c.effects ?? []) if (e?.type === 'lut') { const id = lutOf(e); if (id) out.add(id) }
+  return out
+}
+
+/** All distinct LUTs of a project together may hold at most this many characters (main refuses a project text over
+ * 25 MB; this leaves room for the rest), and at most this many distinct LUTs. */
+export const LUT_PROJECT_MAX_CHARS = 16 * 1024 * 1024
+export const LUT_PROJECT_MAX = 8
+
+/** Why adding the LUT `text` to a project whose clips already use `used` would be refused (null: it fits). */
+export function lutBudgetProblem(used: Set<string>, text: string): string | null {
+  const id = lutId(text)
+  if (used.has(id)) return null
+  if (used.size >= LUT_PROJECT_MAX) return `This project already uses ${used.size} different LUTs (at most ${LUT_PROJECT_MAX}). Use one of them again, or remove one first.`
+  let total = text.length
+  for (const u of used) total += lutText(u)?.length ?? 0
+  if (total > LUT_PROJECT_MAX_CHARS) return `The project's LUTs would take ${(total / 1048576).toFixed(1)} MB (at most ${LUT_PROJECT_MAX_CHARS / 1048576} MB together, so the project can still be saved). Use a smaller LUT (33 points) or one the project already uses.`
+  return null
 }
 
 // ---------------------------------------------------------------- .cube LUTs
@@ -251,15 +336,17 @@ export function compactCube(lut: CubeLut): string {
   return lines.join('\n') + '\n'
 }
 
-/** Parsed LUTs by text (the project's string object, so a look-up per frame costs nothing after the first). */
+/** Parsed LUTs by id (or by text for an unregistered one): parsed once, looked up per frame for nothing. */
 const parsed = new Map<string, CubeLut | null>()
-export function cachedCube(text: string): CubeLut | null {
-  let hit = parsed.get(text)
-  if (hit !== undefined) { parsed.delete(text); parsed.set(text, hit); return hit }
+export function cachedCube(textOrId: string, id?: string): CubeLut | null {
+  const text = lutTexts.get(textOrId) ?? textOrId
+  const key = id ?? (lutTexts.has(textOrId) ? textOrId : text.length > 4096 ? lutId(text) : text)
+  let hit = parsed.get(key)
+  if (hit !== undefined) { parsed.delete(key); parsed.set(key, hit); return hit }
   const r = parseCube(text)
   hit = r.ok ? r.lut : null
-  parsed.set(text, hit)
-  while (parsed.size > 6) parsed.delete(parsed.keys().next().value!)
+  parsed.set(key, hit)
+  while (parsed.size > 8) parsed.delete(parsed.keys().next().value!)
   return hit
 }
 

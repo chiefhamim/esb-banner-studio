@@ -113,67 +113,93 @@ type RampKey = { t: number; v: number }
 
 /** A clip with no speed set plays its source 1:1 (the fast path every Phase 1 clip takes). */
 export function isPlainSpeed(c: Clip): boolean {
-  return (c.speed == null || c.speed === 1) && !reversed(c) && !freezesOf(c).length
+  return (c.speed == null || c.speed === 1) && !reversed(c) && !hasFreezes(c)
 }
 
 const clampRate = (r: number) => (r === 0 ? 0 : Math.sign(r) * Math.min(MAX_RATE, Math.max(MIN_RATE, Math.abs(r))))
 const reversed = (c: Clip) => (c as { reverse?: boolean }).reverse === true
 type Freeze = { at: number; dur: number }
-/** Part A's freeze frames (`clip.freezes`, clip-local seconds): the picture holds, the sound is silent. */
+/** Caps of what the fallback reads (a project file is sanitised on open; these keep a clip built some other way from
+ * costing more than a few microseconds a look-up). */
+const MAX_FALLBACK_KEYS = 256
+const MAX_FALLBACK_FREEZES = 64
+const hasFreezes = (c: Clip) => { const f = (c as { freezes?: unknown }).freezes; return Array.isArray(f) && f.length > 0 && freezesOf(c).length > 0 }
+const freezeCache = new WeakMap<object, Freeze[]>()
+/** Part A's freeze frames (`clip.freezes`, clip-local seconds): the picture holds, the sound is silent. Valid ones,
+ * sorted, capped; computed once per array. */
 function freezesOf(c: Clip): Freeze[] {
   const f = (c as { freezes?: Freeze[] }).freezes
-  return Array.isArray(f) ? f.filter((x) => x && Number.isFinite(x.at) && Number.isFinite(x.dur) && x.dur > 0) : []
+  if (!Array.isArray(f) || !f.length) return NONE
+  let hit = freezeCache.get(f)
+  if (!hit) {
+    hit = f.slice(0, MAX_FALLBACK_FREEZES * 4).filter((x) => !!x && typeof x === 'object' && Number.isFinite(x.at) && Number.isFinite(x.dur) && x.dur > 0).sort((a, b) => a.at - b.at).slice(0, MAX_FALLBACK_FREEZES)
+    freezeCache.set(f, hit)
+  }
+  return hit
 }
-const frozenAt = (c: Clip, t: number) => freezesOf(c).some((f) => t >= f.at && t < f.at + f.dur)
+const NONE: Freeze[] = []
+const frozenAt = (fs: Freeze[], t: number) => fs.some((f) => t >= f.at && t < f.at + f.dur)
 /** Seconds of freeze before local time t. */
-const frozenBefore = (c: Clip, t: number) => freezesOf(c).reduce((s, f) => s + Math.max(0, Math.min(t, f.at + f.dur) - f.at), 0)
+const frozenBefore = (fs: Freeze[], t: number) => fs.reduce((s, f) => s + Math.max(0, Math.min(t, f.at + f.dur) - f.at), 0)
 
+const rampCache = new WeakMap<object, RampKey[] | null>()
 function ramp(c: Clip): RampKey[] | null {
   const s = c.speed
   if (!s || typeof s !== 'object' || !Array.isArray(s.ramp)) return null
-  const keys = s.ramp.filter((k) => k && Number.isFinite(k.t) && Number.isFinite(k.v)).map((k) => ({ t: k.t, v: clampRate(k.v) })).sort((a, b) => a.t - b.t)
-  return keys.length ? keys : null
+  let hit = rampCache.get(s.ramp)
+  if (hit === undefined) {
+    const keys = s.ramp.slice(0, MAX_FALLBACK_KEYS * 4).filter((k) => !!k && typeof k === 'object' && Number.isFinite(k.t) && Number.isFinite(k.v)).map((k) => ({ t: k.t, v: clampRate(k.v) })).sort((a, b) => a.t - b.t).slice(0, MAX_FALLBACK_KEYS)
+    hit = keys.length ? keys : null
+    rampCache.set(s.ramp, hit)
+  }
+  return hit
+}
+
+/** Piecewise-linear ramp value at t (held outside the keys). */
+function rampAt(keys: RampKey[], t: number): number {
+  if (t <= keys[0].t) return keys[0].v
+  for (let i = 1; i < keys.length; i++) if (t < keys[i].t) { const a = keys[i - 1], b = keys[i]; return a.v + ((b.v - a.v) * (t - a.t)) / (b.t - a.t) }
+  return keys[keys.length - 1].v
+}
+
+/** ∫ₐᵇ of the piecewise-linear ramp, exactly (trapezoids between the keys). */
+function rampIntegral(keys: RampKey[], a: number, b: number): number {
+  if (b <= a) return 0
+  let acc = 0
+  let x = a
+  for (const k of keys) {
+    if (k.t <= x) continue
+    const to = Math.min(b, k.t)
+    acc += ((rampAt(keys, x) + rampAt(keys, to)) / 2) * (to - x)
+    x = to
+    if (x >= b) return acc
+  }
+  return acc + ((rampAt(keys, x) + rampAt(keys, b)) / 2) * (b - x)
 }
 
 /** The fallback's signed rate at local time t (0 inside a freeze). */
 function rateFallback(c: Clip, t: number): number {
-  if (frozenAt(c, t)) return 0
+  if (frozenAt(freezesOf(c), t)) return 0
   const keys = ramp(c)
-  if (keys) {
-    if (t <= keys[0].t) return keys[0].v
-    for (let i = 1; i < keys.length; i++) if (t < keys[i].t) { const a = keys[i - 1], b = keys[i]; return a.v + ((b.v - a.v) * (t - a.t)) / (b.t - a.t) }
-    return keys[keys.length - 1].v
-  }
+  if (keys) return rampAt(keys, t)
   const r = typeof c.speed === 'number' && Number.isFinite(c.speed) ? clampRate(c.speed) : 1
   return reversed(c) ? -Math.abs(r) : r
 }
 
-/** ∫₀ᵗ rate (the fallback's source offset), piecewise linear between ramp keys. */
+/** ∫₀ᵗ rate (the fallback's source offset): exact for the piecewise-linear ramp, minus what the freezes hold. The ramp
+ * and the freezes are read once per call (cached per array), so a look-up costs O(keys × freezes), never a step loop. */
 function offsetFallback(c: Clip, t: number): number {
   const keys = ramp(c)
+  const fs = freezesOf(c)
   if (!keys) {
     const r = typeof c.speed === 'number' && Number.isFinite(c.speed) ? clampRate(c.speed) : 1
-    return (reversed(c) ? -Math.abs(r) : r) * (t - frozenBefore(c, t))
+    return (reversed(c) ? -Math.abs(r) : r) * (t - frozenBefore(fs, t))
   }
-  if (freezesOf(c).length) {
-    // a ramp with freezes: midpoint sums on a 240 Hz grid
-    const n = Math.max(1, Math.ceil(t * 240))
-    const h = t / n
-    let acc = 0
-    for (let i = 0; i < n; i++) acc += rateFallback(c, (i + 0.5) * h) * h
-    return acc
+  let acc = rampIntegral(keys, 0, t)
+  for (const f of fs) {
+    if (f.at >= t) break
+    acc -= rampIntegral(keys, f.at, Math.min(t, f.at + f.dur))
   }
-  let acc = 0
-  let x = 0
-  const seg = (a: number, b: number) => { if (b > a) acc += ((rateFallback(c, a) + rateFallback(c, b)) / 2) * (b - a) }
-  for (const k of keys) {
-    if (k.t <= 0) continue
-    const to = Math.min(t, k.t)
-    seg(x, to)
-    x = to
-    if (x >= t) break
-  }
-  if (x < t) seg(x, t)
   return acc
 }
 
@@ -204,7 +230,6 @@ export const srcAt = (c: Clip, t: number) => sourceTimeAt(c, t - c.start)
 export function audioRateAt(c: Clip, tLocal: number): number {
   if (isPlainSpeed(c)) return 1
   if (partRate) { try { const v = partRate(c, tLocal); if (Number.isFinite(v)) return Math.abs(v) } catch { /* fall back */ } }
-  if (frozenAt(c, tLocal)) return 0
   return Math.abs(rateFallback(c, tLocal))
 }
 
@@ -225,7 +250,7 @@ export function clipDurationFor(c: Clip): number {
     const r = typeof c.speed === 'number' && Number.isFinite(c.speed) ? Math.abs(clampRate(c.speed)) : 1
     if (r <= 0) return c.duration
     let d = span / r
-    for (const f of [...freezesOf(c)].sort((x, y) => x.at - y.at)) if (f.at < d - 1e-9) d += f.dur
+    for (const f of freezesOf(c)) if (f.at <= d + 1e-9) d += f.dur
     return d
   }
   // the local time at which |∫ rate| reaches the span (bisection; ≤ span / MIN_RATE)
@@ -238,3 +263,6 @@ export function clipDurationFor(c: Clip): number {
 
 /** The clip's sound keeps its pitch when sped up or slowed (default true). */
 export const preservePitch = (c: Clip) => (c as { preservePitch?: boolean }).preservePitch !== false
+
+/** The fallback's source offset, for the unit tests (Part A's speed.ts is what runs). */
+export const fallbackOffset = (c: Clip, t: number) => offsetFallback(c, t)

@@ -7,11 +7,12 @@
 // together), be compound clips (a nested timeline, `compound`), carry keyframes (keyframes.ts) and speed (speed.ts);
 // the project has markers and an optional magnetic main track. Every edit is a pure function of the project.
 
-import { cutKeyframes } from './keyframes'
-import { clipDurationFor, cutFreezes, isRetimed, rampOf, sourceTimeUnclamped, speedAt } from './speed'
+import type { Keyframe as Key } from './keyframes'
+import { cutKeyframes, sampleKeys, sanitizeKeyframes } from './keyframes'
+import { clipDurationFor, cutFreezes, isRetimed, rampOf, sanitizeFreezes, sanitizeSpeed, sourceTimeUnclamped, speedAt } from './speed'
 
 import type { BlendMode } from './effects'
-import { BLEND_MODES, sanitizeEffects } from './effects'
+import { BLEND_MODES, LUT_MAX_CHARS, lutText, lutsUsed, registerLut, sanitizeEffects } from './effects'
 
 export type TrackKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio'
 export const TRACK_KINDS: readonly TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']
@@ -156,6 +157,9 @@ export interface VideoProject {
   markers?: Marker[]
   /** Magnetic main track: the main footage track closes its gaps after every edit (Phase 2). */
   magnetic?: boolean
+  /** Ripple edits (ripple delete/trim, insert, extract, speed changes) move the markers after the edit too. On unless
+   * false. */
+  rippleMarkers?: boolean
 }
 
 /** A marker on the timeline: a named, coloured point the editor can jump to (chapters later come from these). */
@@ -513,19 +517,45 @@ export function serializeVideoProject(project: VideoProject, bin: MediaAsset[] =
     ...(c.compound ? { compound: { ...c.compound, clips: c.compound.clips.map(strip) } } : {}),
   })
   const clips = project.clips.map(strip)
-  return JSON.stringify({ ...project, clips, mediaAssets: assets, version: PROJECT_VERSION, timelineVersion: TIMELINE_VERSION }, null, 2)
+  // each distinct LUT text once, keyed by its content id (clips carry only the id)
+  const luts: Record<string, string> = {}
+  for (const id of lutsUsed(allClips(project))) { const t = lutText(id); if (t) luts[id] = t }
+  return projectJson({ ...project, clips, mediaAssets: assets, ...(Object.keys(luts).length ? { luts } : {}), version: PROJECT_VERSION, timelineVersion: TIMELINE_VERSION })
 }
+
+/** Project JSON: indented while it is small enough to read by eye, compact above that (a deep or LUT-heavy project
+ * indented was several times its compact size). */
+export const PRETTY_JSON_MAX = 1024 * 1024
+export function projectJson(value: unknown): string {
+  const compact = JSON.stringify(value)
+  return compact.length <= PRETTY_JSON_MAX ? JSON.stringify(value, null, 2) : compact
+}
+
+/** A URL a clip may play when a project is opened: only this run's own media URLs (the media protocol or an object
+ * URL) — and those are never saved, so in practice clips get their URLs from their media again (relinkClips). An
+ * https:// or file: URL from a crafted file would make the decoder or the sound reader fetch it on open. */
+const isLoadableUrl = (u: unknown): u is string => typeof u === 'string' && /^(blob:|esb-media:)/i.test(u)
+/** A thumbnail may also be an inline picture (drawn by an <img>, which a data: URL cannot make fetch anything). */
+const isThumbUrl = (u: unknown): u is string => isLoadableUrl(u) || (typeof u === 'string' && /^data:image\/(png|jpeg|webp);base64,/i.test(u) && u.length < 2_000_000)
 
 export function deserializeVideoProject(json: string): VideoProject | null {
   try {
     const parsed = JSON.parse(json)
     if (!parsed || !Array.isArray(parsed.tracks) || !Array.isArray(parsed.clips)) return null
-    const tl = migrateTimeline(parsed)
-    const clean = (c: Clip): Clip => ({ ...c, sourceUrl: isRuntimeUrl(c.sourceUrl) ? undefined : c.sourceUrl, ...(c.compound ? { compound: { ...c.compound, clips: c.compound.clips.map(clean) } } : {}) })
+    // the file's LUT texts: each registered once (parsed once), the file's keys mapped to their content ids
+    const lutRefs = new Map<string, string>()
+    if (parsed.luts && typeof parsed.luts === 'object' && !Array.isArray(parsed.luts)) {
+      for (const [k, v] of Object.entries(parsed.luts as Record<string, unknown>).slice(0, 16)) {
+        if (typeof v === 'string' && v.length <= LUT_MAX_CHARS) { const id = registerLut(v); if (id) lutRefs.set(k, id) }
+      }
+    }
+    const tl = migrateTimeline(parsed, { lutRef: (r) => lutRefs.get(r) ?? (lutText(r) ? r : undefined) })
+    // URLs are this run's, from the media (relinkClips); a URL written in the file is never opened
+    const clean = (c: Clip): Clip => ({ ...c, sourceUrl: isLoadableUrl(c.sourceUrl) && !isRuntimeUrl(c.sourceUrl) ? c.sourceUrl : undefined, thumbnailUrl: isThumbUrl(c.thumbnailUrl) && !isRuntimeUrl(c.thumbnailUrl) ? c.thumbnailUrl : undefined, ...(c.compound ? { compound: { ...c.compound, clips: c.compound.clips.map(clean) } } : {}) })
     const clips: Clip[] = tl.clips.map(clean)
     const mediaAssets: MediaAsset[] = (Array.isArray(parsed.mediaAssets) ? parsed.mediaAssets : [])
       .filter((a: unknown) => !!a && typeof a === 'object')
-      .map((a: MediaAsset) => ({ ...a, url: isRuntimeUrl(a.url) ? '' : a.url || '' }))
+      .map((a: MediaAsset) => ({ ...a, url: isLoadableUrl(a.url) && !isRuntimeUrl(a.url) ? a.url : '', thumbnailUrl: isThumbUrl(a.thumbnailUrl) && !isRuntimeUrl(a.thumbnailUrl) ? a.thumbnailUrl : undefined }))
     return {
       id: parsed.id || `proj-${Date.now()}`,
       name: parsed.name || 'Restored video',
@@ -539,6 +569,7 @@ export function deserializeVideoProject(json: string): VideoProject | null {
       mediaAssets,
       bug: parsed.bug !== false,
       ...(parsed.magnetic === true ? { magnetic: true } : {}),
+      ...(parsed.rippleMarkers === false ? { rippleMarkers: false } : {}),
       ...(cleanMarkers(parsed.markers) ? { markers: cleanMarkers(parsed.markers) } : {}),
     }
   } catch {
@@ -712,13 +743,24 @@ export function ensureTracksFor(project: VideoProject, clips: Clip[]): VideoProj
 }
 
 const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d)
+/** No time in a project goes past this (seconds; 27 hours). */
+const MAX_TIME = 1e5
+/** Compound clips nest at most this deep (a file may carry more: the deeper insides are emptied on open). */
+export const MAX_COMPOUND_DEPTH = 16
+export interface MigrateContext {
+  /** Nesting level (0 = the project's own timeline). */
+  depth?: number
+  /** Maps a LUT reference in the file to a registered LUT id (deserializeVideoProject). */
+  lutRef?: (ref: string) => string | undefined
+}
 
 /** The timeline part of any project file as v2 (pure). A v1 timeline (no `timelineVersion`) has its visual tracks put
  * in the order that makes the v2 drawing rule draw exactly what v1 drew (v1 drew footage, then overlays, then
  * captions, whatever their place in the list); nothing else about its clips changes. Both versions are cleaned the
  * same way: tracks without an id or a known kind are repaired, duplicate track ids renamed, a clip whose track is gone
  * gets a track of its kind (never dropped), and numbers that are not numbers get safe values. */
-export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unknown; clips?: unknown }): TimelineData {
+export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unknown; clips?: unknown }, ctx: MigrateContext = {}): TimelineData {
+  const depth = ctx.depth ?? 0
   const version = raw.timelineVersion === TIMELINE_VERSION ? TIMELINE_VERSION : 1
   const seen = new Set<string>()
   let tracks: Track[] = (Array.isArray(raw.tracks) ? raw.tracks : [])
@@ -739,18 +781,32 @@ export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unkno
     let track = tracks.find((t) => t.id === o.trackId)
     let kind: TrackKind = TRACK_KINDS.includes(o.kind) ? o.kind : track ? track.kind : 'video'
     if (kind === 'text') kind = 'overlay'
-    const clip: Clip = { ...o, kind, start: Math.max(0, num(o.start, 0)), duration: Math.max(0.05, num(o.duration, 1)), in: Math.max(0, num(o.in, 0)) }
-    clip.out = num(o.out, clip.in + clip.duration)
+    const clip: Clip = { ...o, kind, start: Math.min(MAX_TIME, Math.max(0, num(o.start, 0))), duration: Math.min(MAX_TIME, Math.max(0.05, num(o.duration, 1))), in: Math.min(MAX_TIME, Math.max(0, num(o.in, 0))) }
+    clip.out = Math.min(MAX_TIME, Math.max(clip.in, num(o.out, clip.in + clip.duration)))
+    if (o.srcDuration !== undefined) { if (typeof o.srcDuration === 'number' && Number.isFinite(o.srcDuration) && o.srcDuration >= 0) clip.srcDuration = Math.min(MAX_TIME, o.srcDuration); else delete clip.srcDuration }
+    for (const f of ['linkId', 'groupId'] as const) if (o[f] !== undefined && !(typeof o[f] === 'string' && o[f]!.length <= 120)) delete clip[f]
     if (typeof clip.title !== 'string') clip.title = String(clip.title ?? '')
     if (typeof clip.color !== 'string') clip.color = '#2563eb'
     if (o.compound !== undefined) {
-      // a compound's inside is cleaned by the same rules (it is always v2: compounds came with Phase 2)
-      const inner = o.compound && typeof o.compound === 'object' ? migrateTimeline({ timelineVersion: TIMELINE_VERSION, tracks: o.compound.tracks, clips: o.compound.clips }) : null
-      if (inner) clip.compound = { tracks: inner.tracks, clips: inner.clips, ...(cleanMarkers(o.compound.markers) ? { markers: cleanMarkers(o.compound.markers) } : {}) }
+      // a compound's inside is cleaned by the same rules (it is always v2: compounds came with Phase 2); past
+      // MAX_COMPOUND_DEPTH levels it is emptied (thousands of levels once overflowed the stack on save)
+      const deep = depth + 1 >= MAX_COMPOUND_DEPTH
+      const inner = o.compound && typeof o.compound === 'object' && !Array.isArray(o.compound)
+        ? deep ? { tracks: [], clips: [] } : migrateTimeline({ timelineVersion: TIMELINE_VERSION, tracks: o.compound.tracks, clips: o.compound.clips }, { ...ctx, depth: depth + 1 })
+        : null
+      if (inner) clip.compound = { tracks: inner.tracks, clips: inner.clips, ...(!deep && cleanMarkers(o.compound.markers) ? { markers: cleanMarkers(o.compound.markers) } : {}) }
       else delete clip.compound
     }
     // effects (Part B): known types and safe values only; a blend mode or adjustment flag only when valid
-    if (o.effects !== undefined) { const fx = sanitizeEffects(o.effects); if (fx) clip.effects = fx; else delete clip.effects }
+    const renames: { from: string; to: string }[] = []
+    if (o.effects !== undefined) { const fx = sanitizeEffects(o.effects, ctx.lutRef, renames); if (fx) clip.effects = fx; else delete clip.effects }
+    // keyframes, speed, freezes: plain finite values, known property names, capped and sorted (a crafted value once
+    // threw inside React render and blanked the app, or made every frame look-up take hundreds of ms)
+    if (o.keyframes !== undefined) { const kf = sanitizeKeyframes(o.keyframes, clip.effects ?? [], renames); if (kf) clip.keyframes = kf; else delete clip.keyframes }
+    if (o.speed !== undefined) { const sp = sanitizeSpeed(o.speed); if (sp !== undefined) clip.speed = sp; else delete clip.speed }
+    if (o.freezes !== undefined) { const fz = sanitizeFreezes(o.freezes); if (fz) clip.freezes = fz; else delete clip.freezes }
+    if (o.reverse !== undefined && o.reverse !== true) delete clip.reverse
+    if (o.preservePitch !== undefined && o.preservePitch !== false) delete clip.preservePitch
     if (o.blendMode !== undefined && (!BLEND_MODES.includes(o.blendMode as BlendMode) || o.blendMode === 'normal')) delete clip.blendMode
     if (o.adjustment !== undefined && !(o.adjustment === true && kind === 'overlay')) delete clip.adjustment
     if (!track) {
@@ -846,12 +902,12 @@ export function headroom(c: Clip, side: 'left' | 'right'): number {
  * linked or grouped with a clip that would move, the ripple is refused (null), since it would pull a pair apart. A
  * negative amount is limited per track so nothing lands on a clip that stays (an existing crossfade overlap is not a
  * limit). Returns the clips and the amount actually used. */
-export function rippleShift(project: VideoProject, from: number, amount: number, skip: Set<string> = new Set()): { clips: Clip[]; amount: number } | null {
-  if (Math.abs(amount) < EPS) return { clips: project.clips, amount: 0 }
+export function rippleShift(project: VideoProject, from: number, amount: number, skip: Set<string> = new Set()): { clips: Clip[]; amount: number; markers: Marker[] | undefined } | null {
+  if (Math.abs(amount) < EPS) return { clips: project.clips, amount: 0, markers: project.markers }
   const locked = new Set(project.tracks.filter((t) => t.locked).map((t) => t.id))
   const isMover = (c: Clip) => !skip.has(c.id) && c.start >= from - EPS && !locked.has(c.trackId)
   const movers = project.clips.filter(isMover)
-  if (!movers.length) return { clips: project.clips, amount }
+  if (!movers.length) return { clips: project.clips, amount, markers: rippleMarkers(project, from, amount) }
   const moving = new Set(movers.map((c) => c.id))
   for (const m of movers) for (const id of moveSet(project, m.id)) if (!moving.has(id) && !skip.has(id)) {
     const other = project.clips.find((c) => c.id === id)
@@ -870,7 +926,25 @@ export function rippleShift(project: VideoProject, from: number, amount: number,
     }
     if (amt > 0) amt = 0
   }
-  return { clips: project.clips.map((c) => (moving.has(c.id) ? { ...c, start: Math.max(0, c.start + amt) } : c)), amount: amt }
+  return { clips: project.clips.map((c) => (moving.has(c.id) ? { ...c, start: Math.max(0, c.start + amt) } : c)), amount: amt, markers: rippleMarkers(project, from, amt) }
+}
+
+/** The markers after a ripple of `amount` at `from` (when the project ripples markers, the default): those at or after
+ * `from` move with the content; a marker inside a span that closed lands where it closed (never dropped). */
+export function rippleMarkers(project: Pick<VideoProject, 'markers' | 'rippleMarkers'>, from: number, amount: number): Marker[] | undefined {
+  const ms = project.markers
+  if (!ms?.length || project.rippleMarkers === false || Math.abs(amount) < EPS) return ms
+  const floor = from + Math.min(0, amount)
+  let changed = false
+  const out = ms.map((m) => {
+    let t = m.t
+    if (m.t >= from - EPS) t = Math.max(0, m.t + amount)
+    else if (amount < 0 && m.t > floor) t = Math.max(0, floor)
+    if (t === m.t) return m
+    changed = true
+    return { ...m, t }
+  })
+  return changed ? sortMarkers(out) : ms
 }
 
 /** Ripple delete: the clip (with its linked partner and group) goes and everything after it on every track moves up
@@ -883,7 +957,7 @@ export function rippleDelete(project: VideoProject, clipId: string): VideoProjec
   const b = Math.max(...gone.map(end))
   const rest = { ...project, clips: project.clips.filter((c) => !ids.has(c.id)) }
   const r = rippleShift(rest, b, a - b)
-  return r ? { ...rest, clips: r.clips } : project
+  return r ? { ...rest, clips: r.clips, markers: r.markers } : project
 }
 
 /** Ripple trim: trim one edge and move everything after the clip by the change, so no gap opens or closes by hand.
@@ -911,7 +985,7 @@ export function rippleTrim(project: VideoProject, clipId: string, side: 'left' |
   }
   if (Math.abs(dt) < EPS) return project
   const r = rippleShift({ ...project, clips }, oldEnd, dt, group)
-  return r ? { ...project, clips: r.clips } : project
+  return r ? { ...project, clips: r.clips, markers: r.markers } : project
 }
 
 /** The edit point on a track nearest `t` (within `tolerance` seconds): a clip whose end touches the next one's start. */
@@ -1072,7 +1146,7 @@ export function extractRange(project: VideoProject, a: number, b: number, trackI
   const cleared = clearRange(project, a, b, trackIds)
   if (cleared === project) return project
   const r = rippleShift(cleared, b, a - b)
-  return r ? { ...cleared, clips: r.clips } : project
+  return r ? { ...cleared, clips: r.clips, markers: r.markers } : project
 }
 
 /** Overwrite: put clips (with their starts) on their tracks, replacing whatever was under them there. */
@@ -1104,7 +1178,7 @@ export function insertClips(project: VideoProject, clips: Clip[]): VideoProject 
   }
   const r = rippleShift(p, at, len)
   if (!r) return project
-  p = { ...p, clips: r.clips }
+  p = { ...p, clips: r.clips, markers: r.markers }
   for (const c of clips) p = addClip(p, c)
   return p
 }
@@ -1138,7 +1212,8 @@ export function retimeClip(project: VideoProject, clipId: string, retime: (c: Cl
   const change = next.duration - target.duration
   const clips = project.clips.map((c) => (c.id === clipId ? next : group.has(c.id) ? retime(c) : c))
   const r = rippleShift({ ...project, clips }, end(target), change, group)
-  return r ? { ...project, clips: r.clips } : { ...project, clips }
+  // refused (a clip that would move is linked to one on a locked track): nothing changes, rather than overlap clips
+  return r ? { ...project, clips: r.clips, markers: r.markers } : project
 }
 
 // ---------------------------------------------------------------- markers
@@ -1219,23 +1294,54 @@ export function ungroupClips(project: VideoProject, ids: string[]): VideoProject
 /** Make one compound clip of the clips (with their partners and groups): a nested timeline holding them on copies of
  * their tracks, from 0. The compound goes on the main video track among them (or their top track when none is
  * footage) at their earliest start, as long as they spanned. */
-export function makeCompound(project: VideoProject, ids: string[], stamp = Date.now().toString(36)): VideoProject {
+export function makeCompound(project: VideoProject, ids: string[], stamp = Date.now().toString(36), atDepth = 0): VideoProject {
+  if (compoundProblem(project, ids, atDepth)) return project
   const set = new Set<string>()
   for (const id of ids) for (const x of moveSet(project, id)) set.add(x)
   const members = project.clips.filter((c) => set.has(c.id))
-  if (!members.length || setLocked(project, set)) return project
   const a = Math.min(...members.map((c) => c.start))
   const b = Math.max(...members.map(end))
   const used = new Set(members.map((c) => c.trackId))
   const tracks = project.tracks.filter((t) => used.has(t.id)).map((t) => ({ ...t, locked: false }))
   const inner = members.map((c) => ({ ...c, start: c.start - a, groupId: undefined }))
-  const home = tracks.find((t) => t.kind === 'video') ?? tracks[0]
+  const home = compoundHome(tracks)
   const kind: TrackKind = tracks.some((t) => t.kind === 'video') ? 'video' : tracks.every((t) => t.kind === 'audio') ? 'audio' : home.kind === 'text' ? 'overlay' : home.kind
   const clip: Clip = {
     id: `clip-cmp-${stamp}`, trackId: home.id, title: 'Compound clip', kind, start: a, duration: b - a, in: 0, out: b - a,
     srcDuration: b - a, color: '#475569', compound: { tracks, clips: inner },
   }
   return { ...project, clips: [...project.clips.filter((c) => !set.has(c.id)), clip] }
+}
+
+/** The track a compound of clips on `tracks` goes on: a video track among them, else an overlay track, else a text
+ * track, else (captions or sound only) their top track. A compound of titles and captions once took the caption
+ * track's kind (it sat first in the list) and read as an empty caption. */
+const compoundHome = (tracks: Track[]) => tracks.find((t) => t.kind === 'video') ?? tracks.find((t) => t.kind === 'overlay') ?? tracks.find((t) => t.kind === 'text') ?? tracks[0]
+
+/** How deep compound clips nest inside a clip list (0: none). */
+export function compoundDepth(clips: Clip[]): number {
+  let d = 0
+  for (const c of clips) if (c.compound) d = Math.max(d, 1 + compoundDepth(c.compound.clips))
+  return d
+}
+
+/** Why the clips cannot become one compound clip (null: they can). The compound covers [first start, last end] on
+ * one track; a clip that is not part of it there would be hidden under it (or over it), so that is refused rather
+ * than silently stacked — select it too, or move it. `atDepth`: how deep the timeline being edited already is. */
+export function compoundProblem(project: VideoProject, ids: string[], atDepth = 0): string | null {
+  const set = new Set<string>()
+  for (const id of ids) for (const x of moveSet(project, id)) set.add(x)
+  const members = project.clips.filter((c) => set.has(c.id))
+  if (!members.length) return 'Select the clips to put in a compound clip.'
+  if (setLocked(project, set)) return 'One of those clips is on a locked track (or linked to one). Unlock it first.'
+  if (atDepth + 1 + compoundDepth(members) > MAX_COMPOUND_DEPTH) return `Compound clips can nest ${MAX_COMPOUND_DEPTH} levels deep at most.`
+  const a = Math.min(...members.map((c) => c.start))
+  const b = Math.max(...members.map(end))
+  const used = new Set(members.map((c) => c.trackId))
+  const home = compoundHome(project.tracks.filter((t) => used.has(t.id)))
+  const covered = project.clips.find((c) => !set.has(c.id) && c.trackId === home.id && c.start < b - EPS && end(c) > a + EPS)
+  if (covered) return `“${covered.title || 'A clip'}” on ${home.name.split(' ·')[0]} lies inside that span but is not selected; the compound clip would cover it. Select it too, or move it.`
+  return null
 }
 
 /** Break a compound clip back into its clips on the parent timeline (the part [in, out] it shows, at its place).
@@ -1294,11 +1400,11 @@ export function flattenCompounds(project: VideoProject): VideoProject {
     tracks.splice(at, 0, ...visual)
     extraAudio.push(...audio)
     for (const c of windowClips(X, inner.clips)) {
+      const prop = c.kind === 'audio' ? 'volume' : 'opacity'
       clips.push({
         ...c, id: pre + c.id, trackId: pre + c.trackId,
         linkId: c.linkId ? pre + c.linkId : undefined, groupId: undefined,
-        ...(c.kind === 'audio' ? { volume: (c.volume ?? 1) * (X.volume ?? 1) } : { opacity: (c.opacity ?? 1) * (X.opacity ?? 1) }),
-        ...scaledKeys(c, c.kind === 'audio' ? 'volume' : 'opacity', c.kind === 'audio' ? X.volume ?? 1 : X.opacity ?? 1),
+        ...timesCompound(c, X, prop),
       })
     }
   }
@@ -1306,12 +1412,32 @@ export function flattenCompounds(project: VideoProject): VideoProject {
   return { ...project, tracks, clips }
 }
 
-/** An inner clip's keyed opacity or volume times the compound's own (keys win over the plain field when sampled, so
- * without this a compound's opacity/volume would not reach an inside clip that animates it). */
-function scaledKeys(c: Clip, prop: 'opacity' | 'volume', k: number): Partial<Clip> {
-  const keys = c.keyframes?.[prop]
-  if (!keys?.length || k === 1) return {}
-  return { keyframes: { ...c.keyframes, [prop]: keys.map((x) => ({ ...x, v: x.v * k })) } }
+/** An inner clip's opacity (or volume) times the compound's, as fields of the flattened clip. The compound's own value
+ * may be keyed (its keys, in its local time, are cut exactly to the inner clip's window): a keyed side times a plain
+ * one is the keys scaled (exact); keyed times keyed is sampled every 1/60 s and at every key of both (linear between,
+ * so between those points it is close, not exact). Without keys on either side it is the plain product, as before. */
+function timesCompound(c: Clip, X: Clip, prop: 'opacity' | 'volume'): Partial<Clip> {
+  const xBase = X[prop] ?? 1
+  const cBase = c[prop] ?? 1
+  const xKeysAll = X.keyframes?.[prop]
+  const off = c.start - X.start
+  const xKeys = xKeysAll?.length ? cutKeyframes({ k: xKeysAll }, off, off + c.duration)?.k : undefined
+  const cKeys = c.keyframes?.[prop]?.length ? c.keyframes[prop] : undefined
+  const withKeys = (keys: Key[] | undefined): Partial<Clip> => {
+    const kf = { ...(c.keyframes ?? {}) }
+    if (keys?.length) kf[prop] = keys
+    else delete kf[prop]
+    return { [prop]: cBase * xBase, keyframes: Object.keys(kf).length ? kf : undefined }
+  }
+  if (!xKeys && !cKeys) return xBase === 1 ? {} : { [prop]: cBase * xBase }
+  if (!xKeys) return xBase === 1 ? {} : withKeys(cKeys!.map((k) => ({ ...k, v: k.v * xBase })))
+  if (!cKeys) return withKeys(xKeys.map((k) => ({ ...k, v: k.v * cBase })))
+  const times = new Set<number>()
+  for (let t = 0; t < c.duration; t += 1 / 60) times.add(Math.round(t * 1e6) / 1e6)
+  times.add(c.duration)
+  for (const k of [...xKeys, ...cKeys]) if (k.t >= 0 && k.t <= c.duration) times.add(k.t)
+  const ts = [...times].sort((p, q) => p - q)
+  return withKeys(ts.map((t) => ({ t, v: (sampleKeys(cKeys, t) ?? cBase) * (sampleKeys(xKeys, t) ?? xBase) })))
 }
 
 /** The timeline being edited at a compound path (ids of compound clips, outermost first): the root for []. Undefined
@@ -1346,46 +1472,78 @@ export function writeCompoundView(root: VideoProject, path: string[], view: Vide
 
 // ---------------------------------------------------------------- copy and paste attributes
 
-export type AttrGroup = 'transform' | 'crop' | 'opacity' | 'volume' | 'speed' | 'keyframes'
+export type AttrGroup = 'transform' | 'crop' | 'opacity' | 'volume' | 'effects' | 'speed' | 'keyframes'
 export const ATTR_FIELDS: Record<AttrGroup, (keyof Clip)[]> = {
   transform: ['fit', 'scale', 'offX', 'offY', 'rotation', 'anchorX', 'anchorY'],
   crop: ['cropL', 'cropR', 'cropT', 'cropB'],
   opacity: ['opacity'],
   volume: ['volume', 'muted'],
+  effects: ['effects', 'blendMode'],
   speed: ['speed', 'freezes', 'reverse', 'preservePitch'],
   keyframes: ['keyframes'],
 }
-export const ATTR_LABEL: Record<AttrGroup, string> = { transform: 'Position, scale and rotation', crop: 'Crop', opacity: 'Opacity', volume: 'Volume', speed: 'Speed, freezes and reverse', keyframes: 'Keyframes' }
+export const ATTR_LABEL: Record<AttrGroup, string> = { transform: 'Position, scale and rotation', crop: 'Crop', opacity: 'Opacity', volume: 'Volume', effects: 'Effects, colour and blend', speed: 'Speed, freezes and reverse', keyframes: 'Keyframes' }
 
-/** The attribute groups that mean something for a clip (speed only for footage and sound; crop for footage). */
+/** The attribute groups that mean something for a clip (speed only for footage and sound; crop for footage; effects
+ * for anything with pixels of its own). A compound clip is flattened into its clips: it takes opacity, volume and
+ * their keyframes only (its own position, scale, rotation, crop and effects are not applied — Planned). */
 export function attrGroupsFor(c: Clip): AttrGroup[] {
-  const media = (c.kind === 'video' && !c.still && !c.compound) || c.kind === 'audio'
+  if (c.compound) return ['opacity', 'volume', 'keyframes']
+  const media = (c.kind === 'video' && !c.still) || c.kind === 'audio'
   const out: AttrGroup[] = []
   if (c.kind !== 'audio') out.push('transform', 'opacity')
   if (c.kind === 'video') out.push('crop')
   if (c.kind === 'audio') out.push('volume')
+  if (c.kind !== 'audio') out.push('effects')
   if (media && c.srcDuration != null) out.push('speed')
   out.push('keyframes')
   return out
 }
 
+/** Keyframes that may be pasted onto `t`: a compound takes opacity and volume keys only; effect keys only for effects
+ * the target has. */
+function keysFor(t: Clip, keys: Clip['keyframes']): Clip['keyframes'] {
+  if (!keys) return undefined
+  const fx = new Set((t.effects ?? []).map((e) => e.id))
+  const out: Record<string, Key[]> = {}
+  for (const [p, ks] of Object.entries(keys)) {
+    if (t.compound ? p !== 'opacity' && p !== 'volume' : p.startsWith('fx.') && !fx.has(p.split('.')[1])) continue
+    out[p] = ks
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 /** Paste the chosen attribute groups of `source` onto the clips `targetIds` (each takes the ones that mean something
  * for it; locked ones are skipped). Speed changes the target's length (its linked sound follows; later clips move). */
-export function pasteAttributes(project: VideoProject, source: Clip, targetIds: string[], groups: AttrGroup[]): VideoProject {
+export function pasteAttributes(project: VideoProject, source: Clip, targetIds: string[], groups: AttrGroup[], report?: { refused: string[] }): VideoProject {
   let p = project
   for (const id of targetIds) {
     const t = p.clips.find((c) => c.id === id)
     if (!t || t.id === source.id || groupLocked(p, id)) continue
     const ok = new Set(attrGroupsFor(t))
     const patch: Partial<Clip> = {}
-    for (const g of groups) if (g !== 'speed' && ok.has(g)) for (const f of ATTR_FIELDS[g]) (patch as Record<string, unknown>)[f] = source[f]
+    for (const g of groups) if (g !== 'speed' && g !== 'keyframes' && ok.has(g)) for (const f of ATTR_FIELDS[g]) (patch as Record<string, unknown>)[f] = source[f]
+    // effects bring their own animation (fx.<id>.* keys) along; the target's keys for effects it no longer has go
+    let keys = t.keyframes
+    if (groups.includes('effects') && ok.has('effects')) {
+      const own = Object.fromEntries(Object.entries(t.keyframes ?? {}).filter(([k]) => !k.startsWith('fx.')))
+      const theirs = Object.fromEntries(Object.entries(source.keyframes ?? {}).filter(([k]) => k.startsWith('fx.')))
+      keys = Object.keys(own).length + Object.keys(theirs).length ? { ...own, ...theirs } : undefined
+    }
+    if (groups.includes('keyframes') && ok.has('keyframes')) keys = keysFor({ ...t, ...patch } as Clip, source.keyframes)
+    if (keys !== t.keyframes) patch.keyframes = keys
     if (Object.keys(patch).length) p = { ...p, clips: p.clips.map((c) => (c.id === id ? { ...c, ...patch } : c)) }
     if (groups.includes('speed') && ok.has('speed')) {
+      const before = p
       p = retimeClip(p, id, (c) => {
         const next = { ...c, speed: source.speed, freezes: source.freezes, reverse: source.reverse, preservePitch: source.preservePitch }
         return { ...next, duration: clipDurationFor(next) }
       })
+      // refused (the ripple would pull a linked pair apart on a locked track): that clip keeps its speed
+      if (p === before && !sameTiming(t, source)) report?.refused.push(id)
     }
   }
   return p
 }
+
+const sameTiming = (a: Clip, b: Clip) => JSON.stringify([a.speed, a.freezes, !!a.reverse, a.preservePitch]) === JSON.stringify([b.speed, b.freezes, !!b.reverse, b.preservePitch])

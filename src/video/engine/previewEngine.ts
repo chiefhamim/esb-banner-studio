@@ -7,7 +7,7 @@ import type { Clip, VideoProject } from '../timeline'
 import { isActive } from '../timeline'
 import { getCachedVideo } from '../compositor'
 import { FrameCache } from './frameCache'
-import type { FrameEntry } from './frameCache'
+import type { FrameEntry, FrameWindow } from './frameCache'
 import { FrameStream, ReverseStream, SourceDecoder } from './decoder'
 import { audioRateAt, directionAt, isPlainSpeed } from './animation'
 import { previewUrl } from './mediaSource'
@@ -176,8 +176,8 @@ export class PreviewEngine {
     // frames kept per second of play: every source frame up to the project rate (a fast clip keeps only the shown ones)
     for (const l of live) perSecond += l.dec.frameBytes() * Math.max(0.1, Math.min(l.dec.fps * Math.max(0.1, l.rate), fps * 1.05))
     this.ahead = perSecond > 0 ? Math.max(MIN_AHEAD, Math.min(AHEAD, (this.cache.budget * AHEAD_SHARE) / perSecond)) : AHEAD
-    const windows = new Map<string, [number, number][]>()
-    const addWindow = (url: string, lo: number, hi: number) => { const w = windows.get(url) ?? []; w.push([lo, hi]); windows.set(url, w) }
+    const windows = new Map<string, FrameWindow[]>()
+    const addWindow = (url: string, lo: number, hi: number, dir: 1 | -1 = 1) => { const w = windows.get(url) ?? []; w.push([lo, hi, dir]); windows.set(url, w) }
     for (const { c, url, dec, from, rate } of live) {
       want.add(c.id)
       let cur = this.streams.get(c.id)
@@ -228,6 +228,7 @@ export class PreviewEngine {
           this.streams.set(c.id, cur)
         }
         cur.s.want = rate > 1.05 ? needed : null
+        if (cur.s instanceof FrameStream) cur.s.wantMax = dec.index(hi)
         cur.s.target = hi
         addWindow(url, Math.max(0, dec.index(lo) - 1), dec.index(hi) + 2)
       } else {
@@ -256,7 +257,7 @@ export class PreviewEngine {
         // the frame after a key frame (the last of the GOP below) is there in time
         r.target = lo - REVERSE_LEAD
         // keep what this stream decoded from its pending GOP up to the playhead
-        addWindow(url, Math.max(0, dec.index(Math.min(r.pending, lo)) - 1), dec.index(from) + 2)
+        addWindow(url, Math.max(0, dec.index(Math.min(r.pending, lo)) - 1), dec.index(from) + 2, -1)
       }
     }
     this.cache.setWindows(windows)

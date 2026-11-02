@@ -17,7 +17,7 @@
 // maps exactly as before (in + t), so every Phase 0/1 project plays and exports unchanged.
 
 import type { Clip, Keyframe } from './timeline'
-import { sampleKeys } from './keyframes'
+import { insertKeyAt, sampleKeys, sanitizeKeyList } from './keyframes'
 
 export const SPEED_MIN = 0.1
 export const SPEED_MAX = 10
@@ -50,11 +50,59 @@ export function isRetimed(clip: Timed): boolean {
   return !!rampOf(clip) || (typeof clip.speed === 'number' && Math.abs(clip.speed - 1) > 1e-9) || !!clip.freezes?.length || !!clip.reverse
 }
 
-function freezesOf(clip: Pick<Clip, 'freezes'>): Freeze[] {
-  const f = clip.freezes
-  if (!f || !f.length) return []
-  return f.filter((x) => Number.isFinite(x.at) && Number.isFinite(x.dur) && x.dur > 0).sort((a, b) => a.at - b.at)
+// ---------------------------------------------------------------- reading a project file (never trust it)
+
+/** Most ramp keys and freezes one clip keeps. */
+export const MAX_RAMP_KEYS = 256
+export const MAX_FREEZES = 64
+/** Longest single freeze (seconds). */
+export const MAX_FREEZE = 3600
+
+/** `clip.speed` from a file: a finite constant (clamped to 0.1–10; 1 → undefined) or `{ ramp }` of sanitised keys
+ * (keyframes.ts sanitizeKeyList, speeds clamped, at most MAX_RAMP_KEYS); anything else → undefined (normal speed). */
+export function sanitizeSpeed(raw: unknown): Clip['speed'] {
+  if (typeof raw === 'number') { if (!Number.isFinite(raw)) return undefined; const s = clampSpeed(raw); return Math.abs(s - 1) < 1e-9 ? undefined : s }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const keys = sanitizeKeyList((raw as { ramp?: unknown }).ramp, { max: MAX_RAMP_KEYS, vMin: SPEED_MIN, vMax: SPEED_MAX })
+  return keys.length ? { ramp: keys } : undefined
 }
+
+/** `clip.freezes` from a file: plain `{ at, dur }` with finite `at` ≥ 0 and 0 < dur ≤ MAX_FREEZE, at most MAX_FREEZES,
+ * sorted, overlapping ones merged; undefined when none is left. */
+export function sanitizeFreezes(raw: unknown): Freeze[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const fs: Freeze[] = []
+  for (const f of raw.slice(0, MAX_FREEZES * 4)) {
+    if (!f || typeof f !== 'object' || Array.isArray(f)) continue
+    const { at, dur } = f as { at?: unknown; dur?: unknown }
+    if (typeof at !== 'number' || typeof dur !== 'number' || !Number.isFinite(at) || !Number.isFinite(dur) || dur <= 0) continue
+    fs.push({ at: Math.min(1e5, Math.max(0, at)), dur: Math.min(MAX_FREEZE, dur) })
+  }
+  fs.sort((a, b) => a.at - b.at)
+  const out: Freeze[] = []
+  for (const f of fs) {
+    const last = out[out.length - 1]
+    if (last && f.at <= last.at + last.dur) last.dur = Math.max(last.dur, f.at + f.dur - last.at)
+    else if (out.length < MAX_FREEZES) out.push({ ...f })
+  }
+  return out.length ? out : undefined
+}
+
+// ---------------------------------------------------------------- freezes
+
+const freezeCache = new WeakMap<object, Freeze[]>()
+/** The clip's valid freezes, sorted (cached per freezes array: the per-frame look-ups allocate nothing). */
+export function freezesOf(clip: Pick<Clip, 'freezes'>): Freeze[] {
+  const f = clip.freezes
+  if (!Array.isArray(f) || !f.length) return NO_FREEZES
+  let hit = freezeCache.get(f)
+  if (!hit) {
+    hit = f.filter((x) => !!x && Number.isFinite(x.at) && Number.isFinite(x.dur) && x.dur > 0).sort((a, b) => a.at - b.at)
+    freezeCache.set(f, hit)
+  }
+  return hit
+}
+const NO_FREEZES: Freeze[] = []
 
 /** Speed at clip-local time t ignoring freezes (the ramp value, or the constant). */
 export function speedAt(clip: Pick<Clip, 'speed'>, t: number): number {
@@ -65,7 +113,11 @@ export function speedAt(clip: Pick<Clip, 'speed'>, t: number): number {
 
 /** The picture is held at clip-local time t. */
 export function isFrozenAt(clip: Pick<Clip, 'freezes'>, t: number): boolean {
-  return freezesOf(clip).some((f) => t >= f.at && t < f.at + f.dur)
+  for (const f of freezesOf(clip)) {
+    if (f.at > t) return false
+    if (t < f.at + f.dur) return true
+  }
+  return false
 }
 
 /** Seconds of freeze in [0, t). */
@@ -79,36 +131,83 @@ function frozenBefore(fs: Freeze[], t: number): number {
 }
 
 // ---- ramps: a cumulative table per ramp + freezes (cached by object identity; edits make new objects)
+//
+// The table's cells end on every ramp key and every freeze edge, so inside a cell the speed is one smooth eased piece
+// (or 0: frozen). Each cell is integrated with 3-point Gauss–Legendre (exact for polynomials up to degree 5; the eased
+// segments are smooth), and a time inside a cell is integrated the same way from the cell's start — so P(t) is
+// accurate to ~1e-9 s with a few thousand cells, and a split of the ramp (insertKeyAt) plays exactly as before. The
+// table covers the keys and the freezes only: past its end the speed is the last key's and nothing is frozen, so it
+// does not depend on the clip's length (one table per committed ramp, whatever the length it is tried at).
 
-interface Table { h: number; n: number; cum: Float64Array; end: number }
+interface Table { x: Float64Array; cum: Float64Array; frozen: Uint8Array; n: number; end: number }
 const tables = new WeakMap<object, WeakMap<object, Table>>()
 const NO_FREEZE = {}
-const TABLE_STEP = 1 / 1000
-const TABLE_MAX = 400_000
+/** Cells per second at most, and cells per table at most. */
+const CELLS_PER_S = 200
+const TABLE_MAX = 40_000
+const GX = [-Math.sqrt(3 / 5), 0, Math.sqrt(3 / 5)]
+const GW = [5 / 9, 8 / 9, 5 / 9]
 
-function tableFor(clip: Pick<Clip, 'speed' | 'freezes' | 'duration'>, fs: Freeze[]): Table {
+function gauss(r: Keyframe[], a: number, b: number): number {
+  if (b <= a) return 0
+  const m = (a + b) / 2
+  const h = (b - a) / 2
+  let s = 0
+  for (let i = 0; i < 3; i++) s += GW[i] * clampSpeed(sampleKeys(r, m + h * GX[i]) ?? 1)
+  return s * h
+}
+
+function tableFor(clip: Pick<Clip, 'speed' | 'freezes'>, fs: Freeze[]): Table {
   const rampObj = clip.speed as object
   const fKey = (clip.freezes as object | undefined) ?? NO_FREEZE
   let inner = tables.get(rampObj)
   if (!inner) { inner = new WeakMap(); tables.set(rampObj, inner) }
   const hit = inner.get(fKey)
+  if (hit) return hit
   const r = rampOf(clip)!
-  // the table covers every key and freeze and the clip's length; past it the speed is the last key's, unfrozen
-  const end = Math.max(clip.duration || 0, r[r.length - 1].t, ...fs.map((f) => f.at + f.dur), 0.001)
-  if (hit && hit.end >= end) return hit
-  const n = Math.min(TABLE_MAX, Math.max(16, Math.ceil(end / TABLE_STEP)))
-  const h = end / n
+  // break points: 0, every key, every freeze edge
+  const pts: number[] = [0]
+  for (const k of r) if (k.t > 0) pts.push(k.t)
+  for (const f of fs) { pts.push(f.at); pts.push(f.at + f.dur) }
+  pts.sort((a, b) => a - b)
+  const end = Math.max(pts[pts.length - 1], 1e-3)
+  const per = Math.min(CELLS_PER_S, TABLE_MAX / end)
+  const xs: number[] = [0]
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1]
+    const b = pts[i]
+    if (b - a < 1e-12) continue
+    const m = Math.max(1, Math.ceil((b - a) * per))
+    for (let j = 1; j <= m; j++) xs.push(j === m ? b : a + ((b - a) * j) / m)
+  }
+  if (xs[xs.length - 1] < end) xs.push(end)
+  const n = xs.length - 1
+  const x = Float64Array.from(xs)
   const cum = new Float64Array(n + 1)
+  const frozen = new Uint8Array(n)
   let fi = 0
   for (let i = 0; i < n; i++) {
-    const mid = (i + 0.5) * h
+    const mid = (x[i] + x[i + 1]) / 2
     while (fi < fs.length && fs[fi].at + fs[fi].dur <= mid) fi++
-    const frozen = fi < fs.length && mid >= fs[fi].at && mid < fs[fi].at + fs[fi].dur
-    cum[i + 1] = cum[i] + (frozen ? 0 : clampSpeed(sampleKeys(r, mid) ?? 1)) * h
+    const fz = fi < fs.length && mid >= fs[fi].at && mid < fs[fi].at + fs[fi].dur
+    frozen[i] = fz ? 1 : 0
+    cum[i + 1] = cum[i] + (fz ? 0 : gauss(r, x[i], x[i + 1]))
   }
-  const tb = { h, n, cum, end }
+  const tb = { x, cum, frozen, n, end }
   inner.set(fKey, tb)
   return tb
+}
+
+/** The table cell holding t (0 ≤ t < end). */
+function cellOf(tb: Table, t: number): number {
+  let lo = 0
+  let hi = tb.n
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1
+    if (tb.x[mid] <= t) lo = mid
+    else hi = mid
+  }
+  return lo
 }
 
 /**
@@ -126,9 +225,8 @@ export function progressAt(clip: Pick<Clip, 'speed' | 'freezes' | 'duration'>, t
   if (t <= 0) return speedAt(clip, 0) * t
   const tb = tableFor(clip, fs)
   if (t >= tb.end) return tb.cum[tb.n] + speedAt(clip, tb.end) * (t - tb.end)
-  const x = t / tb.h
-  const i = Math.floor(x)
-  return tb.cum[i] + (tb.cum[i + 1] - tb.cum[i]) * (x - i)
+  const i = cellOf(tb, t)
+  return tb.cum[i] + (tb.frozen[i] ? 0 : gauss(r, tb.x[i], t))
 }
 
 /**
@@ -142,8 +240,10 @@ export function progressAt(clip: Pick<Clip, 'speed' | 'freezes' | 'duration'>, t
  */
 export function sourceTimeAt(clip: Timed, tLocal: number): number {
   const t = Math.max(0, Math.min(clip.duration > 0 ? clip.duration : tLocal, tLocal))
-  const p = isRetimed(clip) ? progressAt(clip, t) : t
-  const src = clip.reverse ? Math.max(clip.in || 0, clip.out - p - REVERSE_EPS) : (clip.in || 0) + p
+  const timed = isRetimed(clip)
+  const p = timed ? progressAt(clip, t) : t
+  // never past the span: a held last frame (a freeze at the end) shows `out`'s frame, not the file beyond it
+  const src = clip.reverse ? Math.max(clip.in || 0, clip.out - p - REVERSE_EPS) : (timed ? Math.min(clip.out, (clip.in || 0) + p) : (clip.in || 0) + p)
   return Math.max(0, src)
 }
 
@@ -154,7 +254,8 @@ export function sourceTimeUnclamped(clip: Timed, tLocal: number): number {
 }
 
 /**
- * The timeline length a clip needs to play its whole source span [in, out] at its speed, freezes included.
+ * The timeline length a clip needs to play its whole source span [in, out] at its speed, freezes included (a freeze
+ * that starts exactly where the content ends holds the last frame: it counts too).
  * Constant speed s: (out − in) / s + freezes. A ramp is solved on its table.
  */
 export function clipDurationFor(clip: Timed): number {
@@ -162,25 +263,38 @@ export function clipDurationFor(clip: Timed): number {
   if (!isRetimed(clip)) return span
   const fs = freezesOf(clip)
   const r = rampOf(clip)
+  let d: number
   if (!r) {
     const s = constantSpeed(clip)
-    // walk the freezes in order: each one that starts before the content ends adds its length
-    let d = span / s
-    for (const f of fs) if (f.at < d - 1e-9) d += f.dur
+    // walk the freezes in order: each one that starts before (or right at) the content's end adds its length
+    d = span / s
+    for (const f of fs) if (f.at <= d + 1e-9) d += f.dur
     return d
   }
-  // past the table's end the speed is the last key's and nothing is frozen, so the rest is exact arithmetic
   const tb = tableFor(clip, fs)
-  if (tb.cum[tb.n] < span) return tb.end + (span - tb.cum[tb.n]) / speedAt(clip, tb.end)
-  let lo = 0
-  let hi = tb.n
-  while (hi - lo > 1) {
-    const mid = (lo + hi) >> 1
-    if (tb.cum[mid] < span) lo = mid
-    else hi = mid
+  if (tb.cum[tb.n] < span) d = tb.end + (span - tb.cum[tb.n]) / speedAt(clip, tb.end)
+  else {
+    // the first cell whose end reaches the span, then the time inside it (bisection on the same integral)
+    let lo = 0
+    let hi = tb.n
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1
+      if (tb.cum[mid] < span) lo = mid
+      else hi = mid
+    }
+    const i = tb.cum[lo] >= span ? lo : hi - 1
+    const want = span - tb.cum[i]
+    let a = tb.x[i]
+    let b = tb.x[i + 1]
+    if (want <= 0 || tb.frozen[i]) d = a
+    else {
+      for (let k = 0; k < 60 && b - a > 1e-12; k++) { const m = (a + b) / 2; if (gauss(r, tb.x[i], m) < want) a = m; else b = m }
+      d = (a + b) / 2
+    }
   }
-  const seg = tb.cum[hi] - tb.cum[lo]
-  return (lo + (seg > 0 ? (span - tb.cum[lo]) / seg : 0)) * tb.h
+  // freezes that start where the content ends hold its last frame
+  for (const f of fs) if (Math.abs(f.at - d) <= 1e-6) d = f.at + f.dur
+  return d
 }
 
 /**
@@ -242,10 +356,13 @@ export function withRamp<C extends Clip>(clip: C, ramp: Keyframe[]): C {
   return { ...next, duration: clipDurationFor(next) }
 }
 
-/** A freeze frame of `dur` seconds at clip-local `at`: the clip gets longer by `dur`, its source span is the same. */
+/** A freeze frame of `dur` seconds at clip-local `at`: the clip gets longer by `dur`, its source span is the same.
+ * `at` may be the clip's end (the last frame is held). On a ramped clip the ramp is split exactly at `at`
+ * (keyframes.ts insertKeyAt) and what follows moves `dur` later with the content: a key at `at` and its copy at
+ * `at + dur` carry the split curve, so every frame before and after the freeze plays as it did. */
 export function withFreeze<C extends Clip>(clip: C, at: number, dur = 2): C {
   const a = Math.max(0, Math.min(clip.duration, at))
-  // a freeze inside another freeze extends that one
+  // a freeze inside another freeze (or touching its end) extends that one
   const fs = freezesOf(clip).map((f) => ({ ...f }))
   const hit = fs.find((f) => a >= f.at && a <= f.at + f.dur)
   if (hit) hit.dur += dur
@@ -255,9 +372,20 @@ export function withFreeze<C extends Clip>(clip: C, at: number, dur = 2): C {
     fs.push({ at: a, dur })
   }
   fs.sort((x, y) => x.at - y.at)
-  // a ramp's later keys move with the content as well
+  // a ramp's later keys move with the content as well; the segment across `at` is split first so it is not stretched
   const r = rampOf(clip)
-  const speed = r ? { ramp: r.map((k) => (k.t > a ? { ...k, t: k.t + dur } : k)) } : clip.speed
+  let speed = clip.speed
+  if (r) {
+    const pivot = hit ? hit.at + hit.dur - dur : a
+    if (pivot <= r[0].t + 1e-9) speed = { ramp: r.map((k) => ({ ...k, t: k.t + dur })) }
+    else if (pivot < r[r.length - 1].t - 1e-9) {
+      const split = insertKeyAt(r, pivot).keys
+      const i = split.findIndex((k) => Math.abs(k.t - pivot) <= 1e-9)
+      const atKey = split[i]
+      // the key at the pivot is flat through the hold; its copy after the hold carries the rest of the curve
+      speed = { ramp: [...split.slice(0, i), { t: pivot, v: atKey.v }, { ...atKey, t: pivot + dur }, ...split.slice(i + 1).map((k) => ({ ...k, t: k.t + dur }))] }
+    }
+  }
   const next = { ...clip, freezes: fs, speed }
   return { ...next, duration: clipDurationFor(next) }
 }
@@ -268,7 +396,17 @@ export function withoutFreeze<C extends Clip>(clip: C, index: number): C {
   if (!gone) return clip
   const rest = fs.filter((_, i) => i !== index).map((f) => (f.at > gone.at ? { ...f, at: f.at - gone.dur } : f))
   const r = rampOf(clip)
-  const speed = r ? { ramp: r.map((k) => (k.t > gone.at + gone.dur ? { ...k, t: k.t - gone.dur } : k)) } : clip.speed
+  let speed = clip.speed
+  if (r) {
+    const a = gone.at
+    const b = gone.at + gone.dur
+    // withFreeze left a flat key at `a` and its continuation at `b`: drop what lies inside the hold and close it up
+    const hasEdge = r.some((k) => Math.abs(k.t - b) <= 1e-6)
+    const keys = r
+      .filter((k) => !(hasEdge && k.t >= a - 1e-9 && k.t < b - 1e-6))
+      .map((k) => (k.t >= b - 1e-6 ? { ...k, t: Math.max(a, k.t - gone.dur) } : k))
+    speed = { ramp: keys }
+  }
   const next = { ...clip, freezes: rest.length ? rest : undefined, speed }
   return { ...next, duration: clipDurationFor(next) }
 }

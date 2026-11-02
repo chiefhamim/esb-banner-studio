@@ -4,7 +4,8 @@
 
 import type { Clip, ClipEffect } from '../timeline'
 import type { EffectType } from '../effects'
-import { EFFECT_DEFS, MAX_MASKS, blendIndex, cachedCube, chromaOf, hexToRgb, isEffectType } from '../effects'
+import { EFFECT_DEFS, MAX_MASKS, blendIndex, cachedCube, chromaOf, hexToRgb, isEffectType, lutOf } from '../effects'
+import type { NumParam } from '../effects'
 import { sampleProp } from './animation'
 import type { GLCompositor, LayerFx } from './glCompositor'
 import { FX_COLOUR, FX_KEY, FX_LUT, FX_MASK, FX_SHARPEN, FX_VIGNETTE, newLayerFx, resetLayerFx } from './glCompositor'
@@ -32,13 +33,24 @@ function chromaFor(hex: string): [number, number] {
   return c
 }
 
+/** Numeric parameter definitions by type and key (looked up per frame without a search). */
+const NUM: Record<string, Record<string, NumParam>> = {}
+for (const [type, def] of Object.entries(EFFECT_DEFS)) { NUM[type] = {}; for (const p of def.params) if (p.kind === 'num') NUM[type][p.key] = p }
+/** `fx.<id>.<key>` keyframe names, made once per effect id and key (no string building per frame). */
+const kfNames = new Map<string, Record<string, string>>()
+function kfName(id: string, key: string): string {
+  let m = kfNames.get(id)
+  if (!m) { m = {}; kfNames.set(id, m); if (kfNames.size > 512) kfNames.delete(kfNames.keys().next().value!) }
+  return (m[key] ??= `fx.${id}.${key}`)
+}
+
 /** A numeric parameter at clip-local time t (keyframes under fx.<id>.<key>), clamped to its range. */
 function num(c: Clip, e: ClipEffect, type: EffectType, key: string, t: number): number {
-  const p = EFFECT_DEFS[type].params.find((x) => x.key === key)
-  if (!p || p.kind !== 'num') return 0
+  const p = NUM[type][key]
+  if (!p) return 0
   const raw = e.params?.[key]
   const base = typeof raw === 'number' && Number.isFinite(raw) ? raw : p.def
-  const v = c.keyframes ? sampleProp(c, `fx.${e.id}.${key}`, t, base) : base
+  const v = c.keyframes ? sampleProp(c, kfName(e.id, key), t, base) : base
   return Math.min(p.max, Math.max(p.min, Number.isFinite(v) ? v : p.def))
 }
 
@@ -71,11 +83,12 @@ export function resolveFx(comp: GLCompositor, clip: Clip, t: number, h: number, 
         break
       }
       case 'lut': {
-        const text = e.params?.cube
+        // keyed by the LUT's content id (never the multi-MB text: a Map look-up of that text hashed it)
+        const id = lutOf(e)
         const mixv = num(clip, e, 'lut', 'intensity', tl)
-        if (typeof text !== 'string' || !text || mixv <= 0) break
-        if (!comp.lutTexture(text, () => cachedCube(text))) break
-        fx.lut = text
+        if (!id || mixv <= 0) break
+        if (!comp.lutTexture(id, () => cachedCube(id))) break
+        fx.lut = id
         fx.lutMix = mixv
         fx.flags |= FX_LUT
         break
