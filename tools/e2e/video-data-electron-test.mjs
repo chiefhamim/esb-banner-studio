@@ -79,7 +79,7 @@ try {
   await openData()
   await page.waitForSelector('.vw-data-signed-out')
   const out = (await page.locator('.vw-data-panel').innerText()).replace(/\s+/g, ' ')
-  check('Signed out: the Data tab explains, and says stored cards keep their values', /Not signed in/.test(out) && /keep their stored values/.test(out), out.slice(0, 160))
+  check('Signed out: the Data tab explains, and says stored cards keep their values', /Sign in to esbpowerline\.com in the Studio/.test(out) && /not enabled/.test(out) && /keep their stored values/.test(out), out.slice(0, 160))
   check('Signed out: nothing was asked of the site', state.requests.length === 0, String(state.requests.length))
   await shot('data-tab-signed-out.png')
 
@@ -102,7 +102,13 @@ try {
   const row = (await page.locator('.vw-data-item[data-metric="eveningPeakGen"]').innerText()).replace(/\s+/g, ' ')
   check('Before adding: the figure shows its exact value, unit, hour and date', row.includes('15,552.54') && row.includes('MW') && row.includes('19:00') && row.includes('21 Oct 2026'), row)
   const share = (await page.locator('.vw-data-item[data-series="fuelMix:share"]').innerText()).replace(/\s+/g, ' ')
-  check('A derived series is labelled "Derived" with its formula', /Derived: share = value ÷ Σ values/.test(share), share.slice(0, 120))
+  check('A derived series is labelled "Derived: share of total"', /Derived: share of total/.test(share), share.slice(0, 120))
+  // the full formula stays reachable: in the tooltip, and in the text once "Show formula" is pressed
+  const item = page.locator('.vw-data-item[data-series="fuelMix:share"]')
+  check('The derived label carries the formula as its tooltip', /share = value ÷ Σ values/.test((await item.locator('.vw-data-derived [data-tip]').getAttribute('data-tip')) || ''))
+  await item.locator('.vw-formula-toggle').click()
+  const formula = ((await item.locator('.vw-formula').innerText()) || '').replace(/\s+/g, ' ')
+  check('Show formula reveals the full formula', /share = value ÷ Σ values/.test(formula) && /× 100/.test(formula), formula.slice(0, 120))
   await shot('data-tab-day-loaded.png')
 
   // 4. Add → a data-card clip with the source value exactly
