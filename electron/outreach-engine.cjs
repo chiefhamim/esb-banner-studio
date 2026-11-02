@@ -3,13 +3,17 @@
 
 const {
   windowState,
-  secondsLeftInWindow,
   rampCap,
-  autoGap,
   domainOf,
   isWebmail,
   pickNext,
   planSchedule,
+  capState,
+  livePlan,
+  dayKey,
+  nextDayStartAt,
+  nextOpenAt,
+  GMAIL_SAFE_24H,
 } = require('./outreach-schedule.cjs')
 const { classifySendError } = require('./outreach-errors.cjs')
 
@@ -44,6 +48,8 @@ function createEngine(deps = {}) {
   let consecutiveFailures = 0
 
   // Domain tracking: domain -> { countToday: number, lastSentAt: number, resetAt: number }
+  // countToday is per CALENDAR day in the sending time zone (resetAt = the next local midnight); lastSentAt survives
+  // midnight, so the spacing between two emails to one organisation still holds across it.
   const domainStats = new Map()
 
   function getSettings() {
@@ -53,7 +59,9 @@ function createEngine(deps = {}) {
           window: { enabled: !noWindow, from: '09:00', to: '17:00', days: [0, 1, 2, 3, 4], tz: 'Asia/Dhaka' },
           dailyLimit: 100,
           ramp: true,
-          pace: 'auto',
+          pace: 'manual',
+          minDelaySec: 180,
+          maxDelaySec: 480,
           domainMaxPerDay: 3,
           domainMinGapSec: 20 * 60,
           contactCooldownDays: 30,
@@ -68,39 +76,42 @@ function createEngine(deps = {}) {
     return cfg.window || { enabled: true, from: '09:00', to: '17:00', days: [0, 1, 2, 3, 4], tz: 'Asia/Dhaka' }
   }
 
-  // Count sends in rolling 24 hours
-  function countSentLast24h() {
-    const now = clock()
-    const cutoff = now - DAY_MS
-    let n = 0
-    if (events && typeof events.count === 'function') {
-      n = events.count((e) => e.type === 'send.ok' && e.t >= cutoff && (!dryRun ? !e.dry : true))
-    }
-    return n
+  // The time zone every "day" is counted in: the sending hours' zone, also when the hours are switched off.
+  function tzOf(cfg) {
+    return (cfg && cfg.window && cfg.window.tz) || 'Asia/Dhaka'
   }
 
-  // when the daily limit has room again: the (sent - cap + 1)-th oldest send of the last 24 h turns 24 h old
-  // (a settings change wakes the wait at once — settingsChanged)
-  function capFreesAt(now, sent, cap) {
-    const fallback = now + 3600 * 1000
-    if (!events || typeof events.read !== 'function') return fallback
+  // Times of the sends that count toward the limits (real ones, or all in a dry run) in the last 24 h. The calendar
+  // day always lies inside it, so one read answers both the daily limit and the 24 h safety ceiling.
+  function recentSendTimes(now) {
+    if (!events || typeof events.read !== 'function') return []
     const res = events.read({ types: ['send.ok'], from: now - DAY_MS, limit: 100000, includeDry: dryRun })
-    const ts = (res.events || []).map((e) => e.t).filter(Number.isFinite).sort((a, b) => a - b)
-    const k = Math.max(0, sent - cap)
-    const at = ts[k] !== undefined ? ts[k] + DAY_MS : fallback
-    return Math.max(now + 1000, at)
+    return (res.events || []).map((e) => e.t).filter((t) => Number.isFinite(t) && t <= now)
   }
 
-  // Count distinct calendar days with send.ok
-  function countSendDays() {
+  // The daily limit (calendar day, warm-up applied) and the 24 h ceiling, by the one rule in outreach-schedule.cjs
+  function capNow(cfg, now) {
+    const tz = tzOf(cfg)
+    const limit = rampCap(cfg.dailyLimit || 100, countSendDays(tz), cfg.ramp !== false)
+    const st = capState({ sendTimes: recentSendTimes(now), now, tz, dailyLimit: limit, ceiling24h: cfg.gmailCeiling24h || GMAIL_SAFE_24H })
+    return { ...st, limit, tz }
+  }
+
+  let sendDayCache = { sig: '', days: new Set() }
+  // Distinct sending days (local calendar days in the sending time zone — they were UTC days) for the warm-up
+  function countSendDays(tz = 'Asia/Dhaka') {
     if (!events || typeof events.read !== 'function') return 1
     const res = events.read({ types: ['send.ok', 'legacy.sent'], limit: 5000, includeDry: dryRun })
-    const days = new Set()
-    for (const e of res.events) {
-      const dStr = new Date(e.t).toISOString().slice(0, 10)
-      days.add(dStr)
+    // the same sends give the same days: remembered until a send is added (or the zone changes)
+    const sig = `${tz}|${res.events.length}|${res.events.length ? res.events[0].t : 0}`
+    let days = sendDayCache.sig === sig ? sendDayCache.days : null
+    if (!days) {
+      days = new Set()
+      for (const e of res.events) days.add(dayKey(e.t, tz))
+      sendDayCache = { sig, days }
     }
-    return Math.max(1, days.size)
+    // today is a sending day even before its first send (day 1 on the first day, day 2 the next morning)
+    return days.size + (days.has(dayKey(clock(), tz)) ? 0 : 1)
   }
 
   // Cooldown check: has this address received any first letter in the last N days?
@@ -119,22 +130,24 @@ function createEngine(deps = {}) {
     return res.events.some((e) => e.remote && e.campaignId === campaignId && (kind === 'followup' ? e.run === 'followup' : e.run !== 'followup'))
   }
 
-  function cleanDomainStats(now) {
+  // a new local day clears each organisation's count; an entry is forgotten once its last send is a day old
+  function cleanDomainStats(now, tz) {
     for (const [dom, st] of domainStats.entries()) {
       if (now >= st.resetAt) {
-        domainStats.delete(dom)
+        if (now - (st.lastSentAt || 0) >= DAY_MS) domainStats.delete(dom)
+        else domainStats.set(dom, { countToday: 0, lastSentAt: st.lastSentAt, resetAt: nextDayStartAt(now, tz) })
       }
     }
   }
 
-  function recordDomainSend(dom, now) {
+  function recordDomainSend(dom, now, tz) {
     if (!dom || isWebmail(dom)) return
-    cleanDomainStats(now)
-    const prev = domainStats.get(dom) || { countToday: 0, lastSentAt: 0, resetAt: now + DAY_MS }
+    cleanDomainStats(now, tz)
+    const prev = domainStats.get(dom) || { countToday: 0, lastSentAt: 0, resetAt: nextDayStartAt(now, tz) }
     domainStats.set(dom, {
       countToday: prev.countToday + 1,
       lastSentAt: now,
-      resetAt: prev.resetAt || now + DAY_MS,
+      resetAt: prev.resetAt || nextDayStartAt(now, tz),
     })
   }
 
@@ -142,28 +155,28 @@ function createEngine(deps = {}) {
   // reset the "3 a day per organisation" limit and skipped the gap before the next email. Both are rebuilt from the
   // event log (the single source of truth): every send.ok of the last 24 h — from this PC or merged from another
   // (remote), real ones only unless this is a dry run — replayed through recordDomainSend in time order, so the
-  // counts and their reset times (24 h after the first send to that organisation) are exactly what they were.
+  // counts (per local calendar day) and the last-send times are exactly what they were.
   function rebuildFromLog() {
     if (!events || typeof events.read !== 'function') return
     const now = clock()
+    const tz = tzOf(getSettings())
     const res = events.read({ types: ['send.ok'], from: now - DAY_MS, limit: 100000, includeDry: dryRun })
     const list = (res.events || []).filter((e) => Number.isFinite(e.t) && e.t <= now).sort((a, b) => a.t - b.t)
     domainStats.clear()
     for (const e of list) {
-      recordDomainSend(domainOf(e.email || ''), e.t)
+      recordDomainSend(domainOf(e.email || ''), e.t, tz)
       if (e.t > lastSendAt) lastSendAt = e.t
     }
-    cleanDomainStats(now)
+    cleanDomainStats(now, tz)
   }
 
-  // the gap before the next email, always inside the editor's "wait at least / at most" (Autopilot settings and the
-  // Sender dialog edit the same two numbers). 'manual' = a random gap between them; 'auto' = spread over the hours
-  // left in the window, but never outside them (outreach-schedule.cjs autoGap).
-  function chooseGapSec(cfg, now, win, room) {
+  // the gap before the next email: a random time between the editor's "wait at least / at most". One model since
+  // 2026-11-02 — "spread over the hours" ('auto') stretched the gaps to fill the day, which with a calendar-day limit
+  // only delayed emails the editor wanted out; an old 'auto' setting is read as this.
+  function chooseGapSec(cfg) {
     const minG = Number.isFinite(cfg.minDelaySec) && cfg.minDelaySec > 0 ? cfg.minDelaySec : 180
     const maxG = Number.isFinite(cfg.maxDelaySec) && cfg.maxDelaySec >= minG ? cfg.maxDelaySec : Math.max(minG, 480)
-    if (cfg.pace === 'manual') return Math.round(minG + rnd() * (maxG - minG))
-    return autoGap(secondsLeftInWindow(now, win), room, rnd, { minSec: minG, maxSec: maxG })
+    return Math.round(minG + rnd() * (maxG - minG))
   }
 
   function pushProgress(job) {
@@ -226,9 +239,9 @@ function createEngine(deps = {}) {
     }
 
     const now = clock()
-    cleanDomainStats(now)
     const cfg = getSettings()
     const win = getEffectiveWindow(cfg)
+    cleanDomainStats(now, tzOf(cfg))
 
     // 1. Pick oldest active job
     const activeJobs = jobs
@@ -297,18 +310,26 @@ function createEngine(deps = {}) {
       return
     }
 
-    // 3. Room & quota check
-    const sent24h = countSentLast24h()
-    const sendDays = countSendDays()
-    const effectiveCap = rampCap(cfg.dailyLimit || 100, sendDays, cfg.ramp !== false)
-    const room = effectiveCap - sent24h
-
-    if (room <= 0) {
+    // 3. Daily limit (calendar day in the sending time zone) and the 24 h safety ceiling
+    const cap = capNow(cfg, now)
+    if (cap.room <= 0) {
       job.status = 'waiting'
       job.why = 'cap'
-      // room comes back when the oldest send that is over the limit turns 24 h old (at most an hour's re-check)
-      job.until = capFreesAt(now, sent24h, effectiveCap)
-      job.wait = { limit: effectiveCap, sent: sent24h, ramp: cfg.ramp !== false && effectiveCap < (cfg.dailyLimit || 100) }
+      // the day's limit comes back at local midnight, the ceiling when its oldest send turns 24 h old; then the
+      // sending hours decide (a full day at 20:55 resumes at 09:00 tomorrow, not at 00:00)
+      const resumeAt = nextOpenAt(cap.freesAt || now + 3600 * 1000, win)
+      job.until = resumeAt
+      job.wait = {
+        kind: cap.limitedBy,
+        limit: cap.limit,
+        sent: cap.limitedBy === 'ceiling' ? cap.sent24h : cap.sentToday,
+        ceiling: cfg.gmailCeiling24h || GMAIL_SAFE_24H,
+        ramp: cfg.ramp !== false && cap.limit < (cfg.dailyLimit || 100),
+        resetAt: cap.freesAt,
+        resumeAt,
+        hours: resumeAt > (cap.freesAt || 0) && win.enabled !== false ? { from: win.from, to: win.to } : null,
+        tz: cap.tz,
+      }
       jobs.saveState(job)
       pushProgress(job)
       activeTimer = setTimer(tick, Math.max(1000, Math.round((job.until - now) / speed)))
@@ -316,12 +337,12 @@ function createEngine(deps = {}) {
     }
 
     // 4. Gap check
-    const requiredGapSec = chooseGapSec(cfg, now, win, room)
-    const gapWait = { pace: cfg.pace === 'manual' ? 'manual' : 'auto', minSec: cfg.minDelaySec, maxSec: cfg.maxDelaySec }
+    const requiredGapSec = chooseGapSec(cfg)
+    const gapWait = { pace: 'manual', minSec: cfg.minDelaySec, maxSec: cfg.maxDelaySec }
 
     const elapsedSinceLastSendMs = now - lastSendAt
     const effectiveGapMs = Math.round((requiredGapSec * 1000) / speed)
-    const gapKey = `${cfg.pace}|${cfg.minDelaySec}|${cfg.maxDelaySec}`
+    const gapKey = `${cfg.minDelaySec}|${cfg.maxDelaySec}`
     if (job.why === 'gap' && job.until && job.gapKey === gapKey) {
       // the gap after the last send was chosen once, when that send finished (step 8), and announced as job.until —
       // wait it out exactly, never re-roll it (a re-roll made the countdown jump or vanish). A pacing change in
@@ -344,7 +365,7 @@ function createEngine(deps = {}) {
     }
 
     // 5. Pick next message
-    cleanDomainStats(now)
+    cleanDomainStats(now, tzOf(cfg))
     const msgs = jobs.messages(job.id)
     const sentIndexes = new Set(job.state.sent || [])
     const heldIndexes = new Set(job.state.held || [])
@@ -520,7 +541,7 @@ function createEngine(deps = {}) {
 
     // 7. Handle Result
     if (sendResult.ok) {
-      recordDomainSend(domain, tEnd)
+      recordDomainSend(domain, tEnd, tzOf(cfg))
       checkCircuitBreaker({ success: true })
 
       events.append({
@@ -689,7 +710,7 @@ function createEngine(deps = {}) {
       job.why = 'gap'
       job.until = clock() + nextWaitMs
       job.wait = { ...gapWait, gapSec: requiredGapSec }
-      job.gapKey = `${cfg.pace}|${cfg.minDelaySec}|${cfg.maxDelaySec}`
+      job.gapKey = `${cfg.minDelaySec}|${cfg.maxDelaySec}`
       jobs.saveState(job)
       pushProgress(job)
     }
@@ -964,15 +985,20 @@ function createEngine(deps = {}) {
     return jobs.list().some((j) => j.status === 'running' || j.status === 'queued' || j.status === 'waiting')
   }
 
-  function plan(count) {
-    const cfg = getSettings()
-    return planSchedule({
-      count,
-      now: clock(),
-      settings: cfg,
-      sentLast24h: countSentLast24h(),
-      sendDays: countSendDays(),
-    })
+  // The plan for `count` emails (Review & send, the assistant) and the Sending panel's live line. `draft` = settings
+  // being edited and not saved yet (already validated by the caller), so the line follows what the editor types;
+  // `domains` = the organisation of each remaining email (the per-organisation limit). Same functions as tick().
+  function plan(count, { draft = null, domains = null } = {}) {
+    const cfg = draft || getSettings()
+    const now = clock()
+    const tz = tzOf(cfg)
+    const sendTimes = recentSendTimes(now)
+    const sendDays = countSendDays(tz)
+    const cap = capNow(cfg, now)
+    cleanDomainStats(now, tz)
+    const base = planSchedule({ count: Math.max(0, count || 0), now, settings: cfg, sentLast24h: cap.sent24h, sentToday: cap.sentToday, sendDays })
+    const live = livePlan({ now, settings: cfg, sendTimes, sendDays, lastSendAt, remaining: count || 0, domains, domainToday: domainStats })
+    return { ...base, notes: [], live }
   }
 
   function shutdown({ clean = true } = {}) {

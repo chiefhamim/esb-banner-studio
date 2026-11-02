@@ -34,8 +34,7 @@ const mmss = (ms: number) => fmtCountdown(ms)
 const HOLD_TEXT: Record<string, string> = { window: 'Outside sending hours', cap: 'Daily limit reached', quota: 'Gmail asked to slow down', schedule: 'Scheduled', offline: 'Offline', domain: 'Same company just emailed' }
 const settingsTz = () => useEngineStore.getState().settings?.window?.tz || 'Asia/Dhaka'
 // the gap the engine really uses (Autopilot settings = the Sender dialog's "wait at least / at most")
-const pacingText = (p: { minDelaySec: number; maxDelaySec: number; pace?: string }) =>
-  `${fmtGapRange(p.minDelaySec, p.maxDelaySec)} apart${p.pace === 'auto' ? ' (spread over the hours)' : ''}`
+const pacingText = (p: { minDelaySec: number; maxDelaySec: number }) => `${fmtGapRange(p.minDelaySec, p.maxDelaySec)} apart`
 
 // memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
 export const OutreachInspector = memo(function OutreachInspector() {
@@ -79,7 +78,7 @@ function SendTab() {
   const engineSet = useEngineStore((x) => x.settings)
   const ready = s.mail?.hasPassword && !!set
   const limit = engineSet?.dailyLimit ?? set?.dailyLimit ?? 0
-  const used = s.mail?.sent24h ?? 0
+  const used = s.mail?.sentToday ?? s.mail?.sent24h ?? 0
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
   const willSend = Math.min(queue.length, Math.max(0, limit - used))
   const active = s.contacts.find((x) => x.id === s.activeContact)
@@ -108,7 +107,7 @@ function SendTab() {
         )}
         {desktop && set && (
           <>
-            <div className="or-meter-row"><span>Last 24 hours</span><span className="or-figure">{used} <small>of {limit}</small></span></div>
+            <div className="or-meter-row"><span>Today</span><span className="or-figure">{used} <small>of {limit}</small></span></div>
             <div className="or-meter" role="meter" aria-valuemin={0} aria-valuemax={limit} aria-valuenow={used}><i style={{ width: `${limit ? Math.min(100, (used / limit) * 100) : 0}%` }} /></div>
             <p className="or-muted">{Math.max(0, limit - used)} more can go today · {pacingText(engineSet ?? set)}</p>
           </>
@@ -519,7 +518,7 @@ function SendFooter() {
   }, [s.nextAt])
   const set = s.mail?.settings
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
-  const willSend = Math.min(queue.length, Math.max(0, (set?.dailyLimit ?? 0) - (s.mail?.sent24h ?? 0)))
+  const willSend = Math.min(queue.length, Math.max(0, (set?.dailyLimit ?? 0) - (s.mail?.sentToday ?? s.mail?.sent24h ?? 0)))
   const lock = useCloud((x) => (c ? x.locks[c.id] : undefined))
   // why the engine is holding this campaign's batch, in words: the organisation's spacing or daily limit, the gap
   // between emails, outside sending hours, the daily limit, Gmail's slow-down, a start time (activityFormat waitReason)
@@ -534,7 +533,7 @@ function SendFooter() {
     return (
       <footer className="or-right-foot">
         {blocked && <p className="or-foot-note" role="status">{blocked}</p>}
-        <div className="or-progress"><span><b>{s.runSent}</b> of {s.runTotal} sent</span>{s.current ? <span>Sending to {s.current}</span> : holdUntil ? <span>{far ? <>{(waiting?.why && HOLD_TEXT[waiting.why]) || 'Waiting'} · resumes <b>{fmtDay(holdUntil, settingsTz())}</b></> : <>Next in <b>{mmss(holdUntil - Date.now())}</b></>}</span> : null}</div>
+        <div className="or-progress"><span><b>{s.runSent}</b> of {s.runTotal} sent</span>{s.current ? <span>Sending to {s.current}</span> : holdUntil ? <span>{far ? <>{reason ? 'Next email' : (waiting?.why && HOLD_TEXT[waiting.why]) || 'Waiting'} <b>{fmtDay(holdUntil, settingsTz())}</b></> : <>Next in <b>{mmss(holdUntil - Date.now())}</b></>}</span> : null}</div>
         {!s.current && reason && <p className="or-foot-note or-wait-why" role="status" data-testid="or-foot-why">{reason}</p>}
         <AnyHourWarning />
         <div className="or-meter"><i style={{ width: `${s.runTotal ? (s.runSent / s.runTotal) * 100 : 0}%` }} /></div>

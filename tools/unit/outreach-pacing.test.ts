@@ -1,6 +1,6 @@
 // Outreach pacing follows the editor's settings (2026-11-01 fix):
 //  A  one copy of the gaps / daily limit (engine Autopilot settings); the Sender dialog's old copy is adopted once
-//  B  automatic pacing never goes outside "wait at least / at most"
+//  B  one pacing model: a random gap inside "wait at least / at most" (an old 'auto' setting is read as it)
 //  C  per-organisation counts and the last-send time survive a restart (rebuilt from the event log)
 //  D  the wait is explained in words
 // Every file lives in a temp folder — never the editor's userData.
@@ -16,7 +16,6 @@ const { createEventLog } = require('../../electron/outreach-events.cjs')
 const { createJobStore } = require('../../electron/outreach-jobs.cjs')
 const { createEngine } = require('../../electron/outreach-engine.cjs')
 const { createSettingsManager, migratePacingFromMailer, DEFAULT_SETTINGS } = require('../../electron/outreach-settings.cjs')
-const { autoGap } = require('../../electron/outreach-schedule.cjs')
 const mailerMod = require('../../electron/mailer.cjs')
 
 // Sunday 2026-11-01 10:00 Dhaka — inside the default Sun–Thu 09:00–17:00 window
@@ -111,7 +110,7 @@ describe('A — the Sender dialog and Autopilot settings edit ONE copy, and the 
     expect(mgr.get().window.enabled).toBe(false)
     const ev = events.read({ types: ['settings.migrated'] }).events
     expect(ev).toHaveLength(1)
-    expect(ev[0]).toMatchObject({ from: { minDelaySec: 180, maxDelaySec: 480 }, to: { minDelaySec: 60, maxDelaySec: 120 } })
+    expect(ev[0]).toMatchObject({ before: { minDelaySec: 180, maxDelaySec: 480 }, after: { minDelaySec: 60, maxDelaySec: 120 } })
     // the smtp file is never written
     expect(JSON.parse(fs.readFileSync(smtp, 'utf8')).minDelaySec).toBe(60)
     // once only: a later change in Autopilot settings is never overwritten by the old smtp copy
@@ -148,20 +147,8 @@ describe('A — the Sender dialog and Autopilot settings edit ONE copy, and the 
   })
 })
 
-describe('B — automatic pacing stays inside "wait at least / at most"', () => {
-  it('autoGap with bounds: never below min, never above max, whatever the window and room', () => {
-    for (const [span, room] of [[100, 1000], [28800, 60], [28800, 1], [43200, 3], [60, 1]]) {
-      for (const r of [0, 0.5, 1]) {
-        const g = autoGap(span, room, () => r, { minSec: 60, maxSec: 120 })
-        expect(g).toBeGreaterThanOrEqual(60)
-        expect(g).toBeLessThanOrEqual(120)
-      }
-    }
-    // a narrow range that is above the old 60 s floor
-    expect(autoGap(100, 1000, () => 0, { minSec: 300, maxSec: 300 })).toBe(300)
-  })
-
-  it('the engine in Automatic mode waits at least minDelaySec even when the window would allow faster', async () => {
+describe('B — one pacing model: a random gap between "wait at least / at most"', () => {
+  it('an old "spread over the hours" setting is read as the fixed gap', async () => {
     const mgr = { get: () => ({ ...DEFAULT_SETTINGS, window: winOpen, pace: 'auto', minDelaySec: 240, maxDelaySec: 300, domainMinGapSec: 0, ramp: false }) }
     const h = engineWith(mgr, () => 0)
     h.engine.start()
@@ -172,7 +159,8 @@ describe('B — automatic pacing stays inside "wait at least / at most"', () => 
     expect(j.why).toBe('gap')
     expect((j.until - now) / 1000).toBeGreaterThanOrEqual(240)
     expect((j.until - now) / 1000).toBeLessThanOrEqual(300)
-    expect(j.wait).toMatchObject({ pace: 'auto', minSec: 240, maxSec: 300 })
+    expect(j.wait).toMatchObject({ pace: 'manual', minSec: 240, maxSec: 300 })
+    expect(createSettingsManager({ dir: path.join(dir, 'p') }).validate({ pace: 'auto' }).cleaned.pace).toBe('manual')
   })
 })
 
@@ -199,8 +187,9 @@ describe('C — a restart keeps the per-organisation counts and the gap', () => 
     await h.engine.tick()
     expect(h.sent).toHaveLength(0)
     expect(c2()).toMatchObject({ status: 'waiting', why: 'domain', wait: { domain: 'desco.gov.bd', kind: 'limit', count: 3, max: 3 } })
-    // freed 24 h after the FIRST of the three, not 24 h after the restart
-    expect(c2().until).toBe(BASE + 24 * 3600 * 1000)
+    // freed at the next Dhaka midnight (the organisation's day is a calendar day, like the account's), not 24 h
+    // after the first send and not 24 h after the restart
+    expect(c2().until).toBe(Date.UTC(2026, 10, 1, 18, 0, 0))
   })
 
   it('restart right after a send still waits the gap (the last-send time is rebuilt too)', async () => {
@@ -265,11 +254,13 @@ describe('D — the wait in words', () => {
   })
   it('gap, window, cap', () => {
     expect(w('gap', { pace: 'manual', minSec: 60, maxSec: 120 })).toBe('gap 1–2 min')
-    expect(w('gap', { pace: 'auto', minSec: 180, maxSec: 480 })).toBe('spread over the sending hours, 3–8 min apart')
+    expect(w('gap', { pace: 'auto', minSec: 180, maxSec: 480 })).toBe('gap 3–8 min')
     expect(w('gap', { pace: 'manual', minSec: 45, maxSec: 90 })).toBe('gap 45 s–1.5 min')
     expect(w('window', { from: '09:00', to: '17:00' })).toMatch(/^outside sending hours \(/)
+    // a job snapshot saved by the previous build (no kind) keeps its old wording
     expect(w('cap', { limit: 100, sent: 100, ramp: false })).toBe('100 sent in 24 h — daily limit 100')
-    expect(w('cap', { limit: 30, sent: 30, ramp: true })).toBe('30 sent in 24 h — warm-up limit 30 today')
+    expect(w('cap', { kind: 'day', limit: 100, sent: 100, ramp: false })).toBe('daily limit reached — 100 of 100 sent today')
+    expect(w('cap', { kind: 'day', limit: 30, sent: 30, ramp: true })).toBe('warm-up limit reached — 30 of 30 sent today')
   })
   it('nothing when not waiting', () => {
     expect(waitReason({ status: 'running', why: null, wait: null })).toBeNull()

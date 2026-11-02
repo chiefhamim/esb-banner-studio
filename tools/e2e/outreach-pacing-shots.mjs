@@ -1,4 +1,4 @@
-// Screenshots for the 2026-11-01 pacing fix: the Sender dialog and Autopilot settings showing ONE set of gaps, and the
+// Screenshots for the 2026-11-01 pacing fix (updated 2026-11-02: the pace is edited only in Sending settings): the Sender dialog and Sending settings showing ONE set of gaps, and the
 // Send footer saying WHY it waits (the gap, then an organisation's 20-min spacing), with the "Sending at any hour"
 // warning — light and dark. Dry run in a temp profile (nothing is sent, the editor's data is never touched).
 // Usage: npm run build && node tools/e2e/outreach-pacing-shots.mjs   → tools/out/outreach-fix/*.png
@@ -42,23 +42,20 @@ try {
   await page.reload()
   await toOutreach()
 
-  // Sender dialog and Autopilot settings read the same numbers
+  // the pace is edited in ONE place (Sending settings); the Sender dialog only shows it and links there (2026-11-02)
   for (const t of ['light', 'dark']) {
     await theme(t)
     await page.evaluate(() => document.querySelector('.ed-account')?.click())
     await page.waitForSelector('.or-sender-form', { timeout: 5000 })
     await page.waitForTimeout(400)
-    const vals = await page.locator('.or-sender-form .or-grid3 input').evaluateAll((els) => els.map((e) => e.value))
-    check(vals[1] === '1' && vals[2] === '2', `${t}: Sender dialog shows the engine's 1–2 min (${vals.join(' / ')})`)
+    const paceLine = await page.locator('[data-testid="or-sender-pace"]').innerText()
+    check(/100 a day · 1–2 min apart/.test(paceLine) && (await page.locator('.or-sender-form input[type=number]').count()) === 1, `${t}: Sender dialog shows the pace in words, no pacing fields ("${paceLine.replace(/\s+/g, ' ')}")`)
     await shot(`sender-dialog-${t}`, page.locator('.dialog').first())
-    await closeDialog()
-    const card = page.locator('.or-autopilot-card button:has-text("Autopilot settings")')
-    if (await card.count()) await card.first().click()
-    else { await page.locator('.menubar button:has-text("Campaign"), [role="menubar"] button:has-text("Campaign")').first().click(); await page.locator('[role="menuitem"]:has-text("Autopilot settings"), .menu-item:has-text("Autopilot settings")').first().click() }
-    await page.waitForSelector('text=How fast', { timeout: 5000 })
+    await page.locator('[data-testid="or-sender-pace"] .or-link-btn').click()
+    await page.waitForSelector('[data-testid="or-gap-min"]', { timeout: 5000 })
     await page.waitForTimeout(400)
-    const ap = await page.locator('.or-dialog-section .or-grid3 input').evaluateAll((els) => els.map((e) => e.value))
-    check(ap[0] === '1' && ap[1] === '2', `${t}: Autopilot settings shows the same 1–2 min (${ap.join(' / ')})`)
+    const ap = [await page.locator('[data-testid="or-gap-min"]').inputValue(), await page.locator('[data-testid="or-gap-max"]').inputValue(), await page.locator('[data-testid="or-daily"]').inputValue()]
+    check(ap[0] === '1' && ap[1] === '2' && ap[2] === '100', `${t}: Sending settings shows the same 1–2 min, 100 a day (${ap.join(' / ')})`)
     await shot(`autopilot-dialog-${t}`, page.locator('.dialog').first())
     await closeDialog()
   }

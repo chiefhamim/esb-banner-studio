@@ -490,7 +490,17 @@ ipcMain.handle('esb:outreach-stats', (_e, rawQ) => {
 ipcMain.handle('esb:outreach-plan', (_e, rawQ) => {
   const g = outreachGuard.validatePlanQuery(rawQ)
   if (!g.ok) return { days: 0, firstAt: null, lastAt: null, perDay: [], notes: [g.error] }
-  return outreachEngineInstance.plan(g.count)
+  // a draft is checked like a save (same validator, nothing written); an invalid draft plans with the saved settings
+  // and says which field is wrong
+  let draft = null
+  let error
+  if (g.draft) {
+    const v = outreachSettings.validate(g.draft, outreachSettings.get())
+    if (v.valid) draft = v.cleaned
+    else error = v.error
+  }
+  const res = outreachEngineInstance.plan(g.count, { draft, domains: g.domains })
+  return error ? { ...res, error } : res
 })
 ipcMain.handle('esb:outreach-settings', () => {
   const s = outreachSettings.get()

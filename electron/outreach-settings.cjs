@@ -9,7 +9,7 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 // The settings that belong to the sending ACCOUNT, not to one PC: both office PCs send from the same Gmail address,
 // so its hours, daily limit, gaps, per-organisation limits and cooldown must be the same on both (cloud sync carries
 // them, src/outreach/cloudSync.ts). Tray sending, the assistant's autonomy and reading replies stay per PC.
-const SHARED_KEYS = ['window', 'dailyLimit', 'ramp', 'pace', 'minDelaySec', 'maxDelaySec', 'domainMaxPerDay', 'domainMinGapSec', 'contactCooldownDays']
+const SHARED_KEYS = ['window', 'dailyLimit', 'ramp', 'pace', 'minDelaySec', 'maxDelaySec', 'domainMaxPerDay', 'domainMinGapSec', 'contactCooldownDays', 'gmailCeiling24h']
 
 const DEFAULT_SETTINGS = {
   window: {
@@ -19,14 +19,20 @@ const DEFAULT_SETTINGS = {
     days: [0, 1, 2, 3, 4], // Sun-Thu
     tz: 'Asia/Dhaka',
   },
+  // per CALENDAR day in window.tz (resets at local midnight — outreach-schedule.cjs capState)
   dailyLimit: 100,
   ramp: true,
-  pace: 'auto',
+  // one pacing model since 2026-11-02: a random gap between minDelaySec and maxDelaySec. 'auto' ("spread over the
+  // hours") is still accepted from an older file or another PC and read as 'manual'.
+  pace: 'manual',
   minDelaySec: 180,
   maxDelaySec: 480,
   domainMaxPerDay: 3,
   domainMinGapSec: 20 * 60,
   contactCooldownDays: 30,
+  // hard safety under Gmail's real limit (500 a rolling 24 h for a consumer account): however the calendar day resets,
+  // never more than this in any 24 h. Not on screen; edit outreach-autopilot.json (50–2000) for a Workspace account.
+  gmailCeiling24h: 400,
   traySending: true,
   aiAutonomy: 'suggest',
   aiReadsReply: false,
@@ -73,6 +79,7 @@ function validateSettings(input, currentSettings = DEFAULT_SETTINGS, opts = {}) 
     'domainMaxPerDay',
     'domainMinGapSec',
     'contactCooldownDays',
+    'gmailCeiling24h',
     'traySending',
     'aiAutonomy',
     'aiReadsReply',
@@ -169,7 +176,8 @@ function validateSettings(input, currentSettings = DEFAULT_SETTINGS, opts = {}) 
     if (safe.pace !== 'auto' && safe.pace !== 'manual') {
       return { valid: false, error: "pace must be 'auto' or 'manual'", field: 'pace' }
     }
-    result.pace = safe.pace
+    // 'auto' is migrated: the engine has one model (random gap between the two numbers)
+    result.pace = 'manual'
   }
 
   // 5. minDelaySec & maxDelaySec (30..3600)
@@ -223,6 +231,14 @@ function validateSettings(input, currentSettings = DEFAULT_SETTINGS, opts = {}) 
       }
     }
     result.contactCooldownDays = safe.contactCooldownDays
+  }
+
+  // 8b. gmailCeiling24h (50..2000) — the rolling 24 h safety ceiling
+  if (safe.gmailCeiling24h !== undefined) {
+    if (!Number.isInteger(safe.gmailCeiling24h) || safe.gmailCeiling24h < 50 || safe.gmailCeiling24h > 2000) {
+      return { valid: false, error: 'gmailCeiling24h must be an integer between 50 and 2000', field: 'gmailCeiling24h' }
+    }
+    result.gmailCeiling24h = safe.gmailCeiling24h
   }
 
   // 9. traySending (boolean)
@@ -312,6 +328,11 @@ function createSettingsManager(options = {}) {
       const res = validateSettings(parsed, DEFAULT_SETTINGS)
       if (res.valid && res.cleaned) {
         currentSettings = res.cleaned
+        // 2026-11-02 migration: 'auto' pace → 'manual' and the new ceiling key, written back once; every value the
+        // editor chose (limit, gaps, hours, days, organisation limits) is kept exactly
+        if (parsed && (parsed.pace === 'auto' || parsed.gmailCeiling24h === undefined)) {
+          try { writeAtomic(currentSettings) } catch {}
+        }
       } else {
         // Fallback to defaults if file is completely corrupt
         currentSettings = clone(DEFAULT_SETTINGS)
@@ -424,7 +445,8 @@ function migratePacingFromMailer({ settings, smtpFile, events = null, fsImpl = f
   if (!r.ok) return done({ migrated: false, reason: r.error })
   if (events && typeof events.append === 'function') {
     try {
-      events.append({ type: 'settings.migrated', what: 'pacing', from, to: patch, source: 'outreach-smtp.json' })
+      // never `to`/`from`: the desk reads `to` as a recipient address (an object there blanked the Activity log)
+      events.append({ type: 'settings.migrated', what: 'pacing', before: from, after: patch, source: 'outreach-smtp.json' })
     } catch {}
   }
   return { migrated: true, from, to: patch }

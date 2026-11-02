@@ -1,4 +1,6 @@
 import type {
+  OutreachPlan,
+  OutreachPlanQuery,
   AutopilotSettings,
   EsbBridge,
   JobSnapshot,
@@ -302,7 +304,7 @@ export const engineClient = {
     return bridge.outreachStats(query)
   },
 
-  async plan(query: { count: number }): Promise<{ days: number; firstAt: number | null; lastAt: number | null; perDay: number[]; notes: string[] }> {
+  async plan(query: OutreachPlanQuery): Promise<OutreachPlan> {
     const bridge = getBridge()
     if (!bridge?.outreachPlan) {
       return { days: 0, firstAt: null, lastAt: null, perDay: [], notes: [] }

@@ -1,5 +1,5 @@
 import { fmtDateTime, fmtTime, fmtWallClock } from '../ui/time'
-import type { AutopilotSettings, JobSnapshot, OutreachEvent, OutreachStats } from '../esb'
+import type { AutopilotSettings, JobSnapshot, LivePlan, OutreachEvent, OutreachStats, PlanWarning } from '../esb'
 
 const DOW_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -98,15 +98,12 @@ export function waitReason(job: Pick<JobSnapshot, 'status' | 'why' | 'wait'> | n
     }
     case 'gap': {
       const r = fmtGapRange(w.minSec, w.maxSec)
-      if (!r) return 'gap between emails'
-      return w.pace === 'auto' ? `spread over the sending hours, ${r} apart` : `gap ${r}`
+      return r ? `gap ${r}` : 'gap between emails'
     }
     case 'window':
       return w.from && w.to ? `outside sending hours (${fmtWallClock(w.from)}–${fmtWallClock(w.to)})` : 'outside sending hours'
     case 'cap':
-      return w.limit !== undefined
-        ? `${w.sent ?? w.limit} sent in 24 h — ${w.ramp ? `warm-up limit ${w.limit} today` : `daily limit ${w.limit}`}`
-        : 'daily limit reached'
+      return capReason(w)
     case 'quota':
       return 'Gmail asked to slow down'
     case 'offline':
@@ -118,6 +115,26 @@ export function waitReason(job: Pick<JobSnapshot, 'status' | 'why' | 'wait'> | n
     default:
       return null
   }
+}
+
+/** When the daily limit / safety ceiling lets sending resume, in words — "resumes 09:00 (sending hours)",
+ *  "resumes 00:00 (new day)", "resumes Tue 3 Nov 15:26". Tomorrow's clock time reads as a time; further out as a day. */
+function resumeWords(w: NonNullable<JobSnapshot['wait']>): string {
+  const at = w.resumeAt ?? w.resetAt
+  if (!at) return ''
+  const tz = w.tz || 'Asia/Dhaka'
+  const when = at - Date.now() < 36 * 3600 * 1000 ? fmtClock(at, tz) : fmtDay(at, tz)
+  if (w.kind === 'ceiling') return ` · resumes ${when}`
+  return ` · resumes ${when} (${w.hours ? 'sending hours' : 'new day'})`
+}
+
+/** The daily-limit wait in words (calendar day; or the 24 h safety ceiling). */
+export function capReason(w: NonNullable<JobSnapshot['wait']> | Record<string, never>): string {
+  if (w.limit === undefined) return 'daily limit reached'
+  if (w.kind === 'ceiling') return `safety limit: ${w.sent ?? w.ceiling} emails in 24 h (max ${w.ceiling ?? 400})${resumeWords(w)}`
+  // a job snapshot from before 2026-11-02 has no kind: the old rolling wording
+  if (!w.kind) return `${w.sent ?? w.limit} sent in 24 h — ${w.ramp ? `warm-up limit ${w.limit} today` : `daily limit ${w.limit}`}`
+  return `${w.ramp ? 'warm-up' : 'daily'} limit reached — ${w.sent ?? w.limit} of ${w.limit} sent today${resumeWords(w)}`
 }
 
 export interface RunDescription {
@@ -190,7 +207,9 @@ export function describeRun(
         sentence = `Waiting for the window — opens ${fmtDay(until, tz)}`
         break
       case 'cap':
-        sentence = `Daily limit reached — continues at ${fmtClock(until, tz)}`
+        sentence = job.wait?.kind === 'ceiling'
+          ? `Safety limit reached — continues at ${fmtClock(until, tz)}`
+          : `Daily limit reached — continues at ${fmtClock(until, tz)}`
         break
       case 'gap':
         sentence = `Spacing out sends — next in ${fmtCountdown(until - now)}`
@@ -281,8 +300,38 @@ export function describeRun(
 }
 
 /** Human sentence describing an append-only event for the Activity Log (§5.7) */
+// Fields the desk prints as text. The log is append-only and written by several builds (and by other PCs through
+// sync), so a field may hold anything: the 2026-11-01 `settings.migrated` event carried `to: { minDelaySec, … }`, the
+// Log printed `ev.to` as the recipient, React threw "objects are not valid as a React child" and, with no boundary,
+// the whole window went blank ("clicking Log freezes the app"). Every event is passed through this before it is shown.
+const TEXT_FIELDS = ['email', 'to', 'name', 'org', 'campaignName', 'campaignId', 'error', 'kind', 'code', 'reason', 'detail', 'text', 'why', 'subject', 'by', 'what', 'source', 'type', 'id'] as const
+const NUM_FIELDS = ['t', 'ms', 'attempt', 'sent', 'failed', 'skipped', 'total'] as const
+
+/** A copy of the event where every field the desk prints is a string or number (anything else is dropped). */
+export function displaySafe(ev: OutreachEvent): OutreachEvent {
+  const out: OutreachEvent = { ...ev }
+  for (const k of TEXT_FIELDS) {
+    const v = out[k]
+    if (v === undefined || v === null) continue
+    if (typeof v === 'string') continue
+    if (typeof v === 'number' && Number.isFinite(v)) { out[k] = String(v); continue }
+    delete out[k]
+  }
+  for (const k of NUM_FIELDS) {
+    const v = out[k]
+    if (v === undefined || v === null) continue
+    if (typeof v !== 'number' || !Number.isFinite(v)) delete out[k]
+  }
+  if (typeof out.id !== 'string') out.id = `${out.t ?? 0}-${Math.random().toString(36).slice(2, 8)}`
+  if (typeof out.t !== 'number') out.t = 0
+  if (typeof out.type !== 'string') out.type = 'unknown'
+  return out
+}
+
 export function describeEvent(ev: OutreachEvent): string {
   switch (ev.type) {
+    case 'settings.migrated':
+      return 'Sending settings updated by an app update'
     case 'send.ok':
       return `Sent to ${ev.name || ev.email || ev.to}${ev.org ? ` (${ev.org})` : ''}`
     case 'send.fail':
@@ -347,3 +396,57 @@ export function reportSummary(stats: OutreachStats, campaignName = 'All campaign
 
   return `${campaignName} — ${sent} sent${timeRange}; ${failed} failed; ${bounced} bounced; ${replies} replies (${optedOut} unsubscribed). Time sending: ${timeSending}; average gap ${avgGap}.`
 }
+
+// ─── The Sending panel's live plan, in words (numbers from the engine: outreach-schedule.cjs livePlan) ───────────
+
+/** "about 2.5 h" / "about 40 min" */
+export function fmtAbout(sec: number): string {
+  if (sec < 90 * 60) return `about ${Math.max(1, Math.round(sec / 60))} min`
+  const h = Math.round((sec / 3600) * 2) / 2
+  return `about ${h} h`
+}
+
+/** When the next email goes, in words, relative to `now` in the sending time zone. */
+export function fmtNext(at: number | null, now: number, tz: string): string {
+  if (at == null) return ''
+  const d = at - now
+  if (d < 45_000) return 'next email now'
+  if (d < 60 * 60_000) return `next email in about ${Math.max(1, Math.round(d / 60_000))} min`
+  const day = (t: number) => new Intl.DateTimeFormat('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(t)
+  if (day(at) === day(now)) return `next email at ${fmtTime(at, { tz })}`
+  if (day(at) === day(now + 24 * 3600_000)) return `next email tomorrow ${fmtTime(at, { tz })}`
+  return `next email ${fmtDateTime(at, { tz })}`
+}
+
+/** The plan line: "Today: 19 of 100 sent · next email now · at 1–2 min gaps, 100 emails take about 2.5 h · the
+ *  remaining 182 in this campaign finish Wed 4 Nov 9:00 AM". */
+export function planLine(p: LivePlan, opts: { campaign: boolean }): string {
+  const parts = [`Today: ${p.sentToday} of ${p.limitToday} sent`]
+  if (p.nextAt != null) parts.push(fmtNext(p.nextAt, p.now, p.tz))
+  parts.push(`at ${fmtGapRange(p.minGapSec, p.maxGapSec)} gaps, ${Math.min(p.limit, p.ceiling)} emails take ${fmtAbout(p.dayDurationSec)}`)
+  if (opts.campaign) {
+    if (p.remaining === 0) parts.push('nothing left to send in this campaign')
+    else if (p.finishAt != null) {
+      const sameDay = p.perDay.length === 1 && p.perDay[0].day === new Intl.DateTimeFormat('en-CA', { timeZone: p.tz }).format(p.now)
+      parts.push(`the remaining ${p.remaining.toLocaleString()} in this campaign finish ${sameDay ? `today ~${fmtTime(p.finishAt, { tz: p.tz })}` : `~${fmtDateTime(p.finishAt, { tz: p.tz })}`}`)
+    }
+  }
+  return parts.join(' · ')
+}
+
+/** A contradiction between the settings, in plain words. */
+export function warningText(w: PlanWarning): string {
+  switch (w.kind) {
+    case 'hours':
+      return `Only about ${w.fit} emails fit in ${fmtAbout(w.spanSec).replace('about ', '')} of sending hours at ~${fmtGapRange(w.avgGapSec, w.avgGapSec)} gaps — fewer than the ${w.limit} a day you set. Widen the hours or shorten the gaps.`
+    case 'ceiling':
+      return `Safety ceiling: never more than ${w.ceiling} emails in any 24 hours (Gmail allows about 500), so ${w.limit} a day cannot all go.`
+    case 'ramp':
+      return `Warm-up is on: today’s limit is ${w.limitToday}, rising by 20 each sending day until it reaches ${w.limit}.`
+    case 'anyHour':
+      return 'Sending hours are off: emails go out at any hour, also at night and at weekends.'
+    case 'org':
+      return `${w.inOrgs.toLocaleString()} of the ${w.remaining.toLocaleString()} remaining contacts are in ${w.orgs.toLocaleString()} ${w.orgs === 1 ? 'organisation' : 'organisations'} — at ${w.orgMax} a day each${w.orgGapMin ? `, ${w.orgGapMin} min apart` : ''}, only ${w.today} can go today.`
+  }
+}
+

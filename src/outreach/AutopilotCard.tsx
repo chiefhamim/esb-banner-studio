@@ -60,7 +60,7 @@ export function AutopilotCard() {
             onClick={() => ui.set({ sheet: 'autopilot' })}
           >
             <Icon name="sliders" size={12} />
-            <span>Autopilot settings</span>
+            <span>Sending settings</span>
           </button>
         </div>
       </section>
@@ -163,7 +163,7 @@ export function AnyHourWarning() {
     <p className="or-any-hour" role="status" data-testid="or-any-hour">
       <Icon name="info" size={12} />
       <span>Sending at any hour — </span>
-      <button type="button" className="or-link-btn" onClick={() => ui.set({ sheet: 'autopilot' })}>set hours in Autopilot settings</button>
+      <button type="button" className="or-link-btn" onClick={() => ui.set({ sheet: 'autopilot' })}>set hours in Sending settings</button>
     </p>
   )
 }

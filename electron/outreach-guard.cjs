@@ -337,11 +337,24 @@ function validatePlanQuery(q) {
     return { ok: false, error: 'Plan query must be an object' }
   }
 
-  if (!Number.isInteger(q.count) || q.count < 1 || q.count > 100000) {
-    return { ok: false, error: 'count must be an integer between 1 and 100,000' }
+  if (!Number.isInteger(q.count) || q.count < 0 || q.count > 100000) {
+    return { ok: false, error: 'count must be an integer between 0 and 100,000' }
   }
 
-  return { ok: true, count: q.count }
+  // the organisation of each remaining email (for the per-organisation limit in the live plan)
+  let domains = null
+  if (q.domains !== undefined) {
+    if (!Array.isArray(q.domains) || q.domains.length > 100000) return { ok: false, error: 'domains must be an array of at most 100,000' }
+    domains = q.domains.map((d) => (typeof d === 'string' && d.length <= 253 && !/[\r\n\s]/.test(d) ? d.toLowerCase() : ''))
+  }
+  // unsaved settings from the Sending panel: validated by the caller with the settings validator (main.cjs)
+  let draft = null
+  if (q.draft !== undefined) {
+    if (!q.draft || typeof q.draft !== 'object' || Array.isArray(q.draft)) return { ok: false, error: 'draft must be an object' }
+    draft = q.draft
+  }
+
+  return { ok: true, count: q.count, domains, draft }
 }
 
 /**

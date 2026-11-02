@@ -12,6 +12,7 @@ import { useDesk } from './outreachStore'
 import { downloadText, resultsCsv } from './campaign'
 import { CampaignResults } from './CampaignResults'
 import { useCloud } from './cloudStore'
+import { DeskBoundary } from './DeskBoundary'
 
 export function ActivityDesk() {
   const store = useActivityStore()
@@ -183,10 +184,12 @@ export function ActivityDesk() {
 
       {/* Main Content Area */}
       <div className="oa-content-scroll">
-        {store.tab === 'overview' && <CampaignResults campaignId={store.campaignId || outreach.activeId} />}
-        {store.tab === 'overview' && <ActivityOverview />}
-        {store.tab === 'log' && <ActivityLog />}
-        {store.tab === 'reports' && <ActivityReports />}
+        <DeskBoundary key={store.tab} label={store.tab === 'log' ? 'The log' : store.tab === 'reports' ? 'Reports' : 'The overview'}>
+          {store.tab === 'overview' && <CampaignResults campaignId={store.campaignId || outreach.activeId} />}
+          {store.tab === 'overview' && <ActivityOverview />}
+          {store.tab === 'log' && <ActivityLog />}
+          {store.tab === 'reports' && <ActivityReports />}
+        </DeskBoundary>
       </div>
     </div>
   )

@@ -112,7 +112,7 @@ export function OutreachWorkspace() {
       { label: 'Check the inbox for replies', icon: 'inbox', disabled: !desktop || !s.mail?.hasPassword || s.inbox.state === 'busy', onClick: () => void s.checkInbox(true) },
       { label: 'Export results (CSV)', icon: 'download', disabled: !c || !s.contacts.length, onClick: () => c && downloadText(`${c.name.replace(/[^\w-]+/g, '-')}-results.csv`, resultsCsv(c, s.contacts, useCloud.getState().engagement[c.id] ?? {})) },
       { label: 'Ask the assistant', icon: 'sparkle', onClick: () => ui.set({ sheet: 'assistant' }) },
-      { label: 'Autopilot settings', icon: 'sliders', onClick: () => ui.set({ sheet: 'autopilot' }) },
+      { label: 'Sending settings', icon: 'sliders', onClick: () => ui.set({ sheet: 'autopilot' }) },
       { divider: true },
       { label: 'Delete campaign', icon: 'trash', danger: true, disabled: !c || !idle, onClick: async () => { if (c && await ask({ title: `Delete “${c.name}”?`, body: 'Its letter, sources and results go with it. Addresses it already emailed stay protected by the 7-day rule.', ok: 'Delete', danger: true })) void s.deleteCampaign(c.id) } },
     ] },
@@ -262,7 +262,7 @@ export function OutreachWorkspace() {
         <EngineStatus ai={ai} offline={false} onAddKey={() => ui.set({ sheet: 'ai' })} roles={['outreach', 'research', 'review']} />
         <div className="spacer" />
         <span>{c?.kind === 'direct' ? `${audience.length} recipient${audience.length === 1 ? '' : 's'}` : `${audience.length} in audience`} · {ready} ready · {sent} sent</span>
-        {set && <><div className="sep" /><span>{s.mail?.sent24h ?? 0} of {set.dailyLimit} today</span></>}
+        {set && <><div className="sep" /><span>{s.mail?.sentToday ?? s.mail?.sent24h ?? 0} of {set.dailyLimit} today</span></>}
       </footer>
 
       {ui.sheet === 'sender' && <SenderDialog onClose={() => { ui.set({ sheet: null }); void s.checkSmtp(true) }} />}

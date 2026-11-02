@@ -14,6 +14,9 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+// the daily limit is ONE rule for the engine and this ledger: per calendar day in the sending time zone, plus a
+// rolling 24 h safety ceiling (outreach-schedule.cjs capState)
+const { capState, GMAIL_SAFE_24H } = require('./outreach-schedule.cjs')
 
 const EMAIL_RE = /^[A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/
 const HOST_RE = /^(?=.{4,253}$)([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/
@@ -162,9 +165,11 @@ function ledgerCheck(ledger, now, settings, mail) {
   }
   // first letters and follow-ups both count toward the day and the gap; tests do not
   const campaign = recent.filter((e) => e.kind !== 'test').sort((a, b) => a.t - b.t)
-  if (campaign.length >= settings.dailyLimit) {
-    const nextAt = campaign[campaign.length - settings.dailyLimit].t + DAY
-    return { ok: false, reason: `Daily limit of ${settings.dailyLimit} reached`, nextAt }
+  const cap = capState({ sendTimes: campaign.map((e) => e.t), now, tz: settings.tz || 'Asia/Dhaka', dailyLimit: settings.dailyLimit, ceiling24h: settings.ceiling24h || GMAIL_SAFE_24H })
+  if (cap.room <= 0) {
+    return cap.limitedBy === 'ceiling'
+      ? { ok: false, reason: `Safety limit of ${settings.ceiling24h || GMAIL_SAFE_24H} emails in 24 hours reached`, nextAt: cap.freesAt }
+      : { ok: false, reason: `Daily limit of ${settings.dailyLimit} reached`, nextAt: cap.freesAt }
   }
   const last = campaign[campaign.length - 1]
   if (last && now - last.t < MIN_GAP_SEC * 1000) return { ok: false, reason: 'Too soon after the last email', nextAt: last.t + MIN_GAP_SEC * 1000 }
@@ -233,6 +238,9 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     const out = { ...saved }
     if (Number.isInteger(p.dailyLimit) && p.dailyLimit >= 1 && p.dailyLimit <= MAX_DAILY) out.dailyLimit = p.dailyLimit
     if (Number.isFinite(p.minDelaySec) && Number.isFinite(p.maxDelaySec)) { out.minDelaySec = p.minDelaySec; out.maxDelaySec = p.maxDelaySec }
+    // which calendar day "a day" is, and the 24 h ceiling — the engine's own values
+    if (p.window && typeof p.window.tz === 'string') out.tz = p.window.tz
+    if (Number.isInteger(p.gmailCeiling24h)) out.ceiling24h = p.gmailCeiling24h
     return out
   }
 
@@ -241,12 +249,15 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     const now = clock()
     const l = ledger()
     const recent = l.filter((e) => e.kind !== 'test' && now - e.t < DAY)
+    const cap = capState({ sendTimes: recent.map((e) => e.t), now, tz: saved?.tz || 'Asia/Dhaka', dailyLimit: saved?.dailyLimit || 100, ceiling24h: saved?.ceiling24h || GMAIL_SAFE_24H })
     return {
       configured: !!saved,
       hasPassword: !!saved?.password,
       encryption: safeStorage.isEncryptionAvailable(),
       settings: saved ? { host: saved.host, imapHost: saved.imapHost || '', port: saved.port, user: saved.user, name: saved.name, dailyLimit: saved.dailyLimit, minDelaySec: saved.minDelaySec, maxDelaySec: saved.maxDelaySec } : null,
       sent24h: recent.length,
+      // counted on the same calendar day as the engine's daily limit (what "N of 100 today" shows)
+      sentToday: cap.sentToday,
       imapHost: saved ? require('./inbox.cjs').imapHostFor(saved.host, saved.imapHost) : '',
       // so the desk can mark contacts already emailed, even after its own storage is cleared
       sentTo: l.filter((e) => e.kind === 'campaign' && now - e.t < REPEAT_DAYS * DAY).map((e) => ({ to: e.to, t: e.t })),

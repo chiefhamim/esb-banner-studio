@@ -40,7 +40,7 @@ const PULL_EVERY = 60_000
 /** Window in the background, nothing sending: a pull every 5 minutes is plenty (Realtime pokes the rest). */
 const PULL_IDLE = 5 * 60_000
 /** The account-wide Autopilot settings (electron/outreach-settings.cjs SHARED_KEYS — keep the two lists in step). */
-export const SHARED_SETTINGS = ['window', 'dailyLimit', 'ramp', 'pace', 'minDelaySec', 'maxDelaySec', 'domainMaxPerDay', 'domainMinGapSec', 'contactCooldownDays'] as const
+export const SHARED_SETTINGS = ['window', 'dailyLimit', 'ramp', 'pace', 'minDelaySec', 'maxDelaySec', 'domainMaxPerDay', 'domainMinGapSec', 'contactCooldownDays', 'gmailCeiling24h'] as const
 const SETTINGS_ID = 'autopilot'
 const PUSH_DELAY = 4_000
 const HEARTBEAT_EVERY = 60_000

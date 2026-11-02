@@ -141,8 +141,9 @@ function createEventLog(options = {}) {
   let dirEnsured = false
   function ensureDir() {
     if (!dirEnsured) {
+      // (it called itself until the stack overflowed, and never made the folder)
       try {
-        ensureDir()
+        fs.mkdirSync(dir, { recursive: true })
         dirEnsured = true
       } catch {}
     }
@@ -163,6 +164,25 @@ function createEventLog(options = {}) {
   }
   recentEvents.sort((a, b) => (a.t || 0) - (b.t || 0))
 
+  // Every event on disk, parsed once and kept while the files are unchanged (append() adds to it in place). Before,
+  // each "All time" query re-read and re-parsed every month file synchronously in the main process — the Activity
+  // log's All range asked again on every live push, which with a large log stalled the whole app.
+  let allCache = null // { sig, events }
+  function filesSig() {
+    return listMonthFiles().map((mf) => { try { const st = fs.statSync(mf.file); return `${mf.month}:${st.size}:${st.mtimeMs}` } catch { return mf.month } }).join('|')
+  }
+  function allEvents() {
+    const sig = filesSig()
+    if (allCache && allCache.sig === sig) return allCache.events
+    const all = []
+    for (const mf of listMonthFiles()) {
+      for (const ev of readLinesFromFile(mf.file)) all.push(ev)
+    }
+    all.sort((a, b) => (a.t || 0) - (b.t || 0))
+    allCache = { sig, events: all }
+    return all
+  }
+
   function append(rawEvent) {
     const t = typeof rawEvent.t === 'number' ? rawEvent.t : clock()
     seq = (seq + 1) % 1000000
@@ -178,6 +198,11 @@ function createEventLog(options = {}) {
 
     applySuppression(ev)
     recentEvents.push(ev)
+    if (allCache) {
+      // keep the cache valid for the file we just wrote (an out-of-order time re-sorts on the next full read)
+      const last = allCache.events[allCache.events.length - 1]
+      if (!last || (last.t || 0) <= t) { allCache.events.push(ev); allCache.sig = filesSig() } else allCache = null
+    }
 
     // Trim recentEvents if it exceeds 90 days from the latest clock
     const cutoff = clock() - NINETY_DAYS_MS
@@ -210,14 +235,7 @@ function createEventLog(options = {}) {
     // If query requires older events than what is in recentEvents, we can scan files
     let sourceEvents = recentEvents
     if ((from !== undefined && recentEvents.length > 0 && from < recentEvents[0].t) || from === 0) {
-      // Need older events: load all available events
-      const all = []
-      const mFiles = listMonthFiles()
-      for (const mf of mFiles) {
-        all.push(...readLinesFromFile(mf.file))
-      }
-      all.sort((a, b) => (a.t || 0) - (b.t || 0))
-      sourceEvents = all
+      sourceEvents = allEvents()
     }
 
     // Filter matching events
