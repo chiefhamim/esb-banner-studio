@@ -204,7 +204,7 @@ async function clickTab(page, label) {
   const bin = page.locator('.vw-bin-panel')
   let tab = bin.getByRole('tab', { name: label, exact: true })
   if (!(await tab.count())) tab = page.getByRole('tab', { name: label, exact: true })
-  if (!(await tab.count())) na(`no "${label}" tab`)
+  if (!(await tab.count())) { if (process.env.DEBUG_TABS) console.log('tabs present:', await page.getByRole('tab').allTextContents(), 'bin:', await bin.count(), 'selected:', await page.evaluate(() => window.__videoStore?.getState().selectedClipId)); na(`no "${label}" tab`) }
   await tab.first().click()
 }
 
@@ -842,6 +842,39 @@ const STATES = {
     return {}
   },
   // ---- Phase 2 — Part B: effects and colour (inspector sections, LUT, mask, chroma key, adjustment layer)
+  // ---- Phase 5: transcript, text cuts, silence plan, reframe, remove background
+  'transcript-no-clip': async (page) => { await seedTimeline(page); await clickTab(page, 'Captions'); return { el: page.locator('.vw-bin-panel') } },
+  'transcript-empty': async (page) => { await seedTimeline(page); await clickTab(page, 'Captions'); return { el: page.locator('.vw-bin-panel') } },
+  'transcript-words': async (page) => {
+    await seedTimeline(page, { select: 'shot-v1' })
+    await page.evaluate(async () => {
+      const vs = window.__videoStore
+      const { makeTranscript } = await import('/src/video/ai/transcript.ts')
+      const text = 'Two new wells will add gas to the grid this winter um and the ministry said work begins in December'.split(' ')
+      const words = text.map((t, i) => ({ text: t, start: 1 + i * 0.28, end: 1.22 + i * 0.28, confidence: i === 5 ? 0.4 : 0.95 }))
+      vs.getState().setTranscript('url:' + vs.getState().project.clips[0].sourceUrl, null)
+      const c = vs.getState().project.clips.find((x) => x.id === 'shot-v1')
+      vs.getState().setTranscript(c.mediaAssetId, makeTranscript(words, { kind: 'ai', engine: 'gemini', model: 'sample', at: 0 }, { lang: 'en', duration: 6 }))
+    })
+    await page.evaluate(() => window.__videoStore.getState().selectClip(null))
+    await clickTab(page, 'Captions')
+    await page.locator('.vw-word').nth(3).click(); await page.locator('.vw-word').nth(4).click()
+    return { el: page.locator('.vw-bin-panel'), note: 'two words marked for cutting' }
+  },
+  'transcript-silence-plan': async (page) => {
+    await seedTimeline(page, { select: 'shot-v1', extra: 'linked' })
+    await clickTab(page, 'Captions')
+    await page.getByRole('button', { name: 'Find silences' }).click()
+    await page.waitForSelector('.vw-cut-plan', { timeout: 15000 }).catch(() => na('silence plan did not appear'))
+    return { el: page.locator('.vw-bin-panel') }
+  },
+  'fx-remove-background': async (page) => {
+    await seedTimeline(page, { select: 'shot-v1', playhead: 2.0 })
+    await setEffects(page, 'shot-v1', [fxOf('fx-pm', 'personMatte', { keep: 'person', edge: 0.25 })])
+    await openSection(page, 'fx')
+    await page.waitForTimeout(1500)
+    return { note: 'Remove background on a test pattern (no person: the matte is empty)' }
+  },
   'effects-panel': async (page) => {
     await seedTimeline(page, { select: 'shot-v1', playhead: 2.0 })
     await setEffects(page, 'shot-v1', [fxOf('fx-m', 'mask', { shape: 'ellipse', x: 0.5, y: 0.5, w: 0.7, h: 0.8, feather: 0.12 }), fxOf('fx-b', 'blur', { radius: 6 }), fxOf('fx-v', 'vignette', { amount: 0.6, size: 0.45, softness: 0.5 })], 'screen')

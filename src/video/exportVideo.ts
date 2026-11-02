@@ -27,6 +27,7 @@ import { inputFor } from './media'
 import { GLCompositor } from './engine/glCompositor'
 import { canvasMeasure, measureNow, titleProblemText, titleProblems } from './titleClip'
 import { renderFrame } from './engine/render'
+import { loadPersonMatte, usesPersonMatte } from './engine/personMatte'
 import type { FrameInput } from './engine/render'
 import { exportUrl } from './engine/mediaSource'
 import { holdBackgroundFor, holdProxies } from './engine/background'
@@ -260,6 +261,9 @@ export async function exportTimelineVideo(
   await fontsReady()
   const blocked = exportBlocker(timeline)
   if (blocked) throw new Error(blocked)
+  if (usesPersonMatte(timeline)) {
+    try { await loadPersonMatte() } catch (e) { throw new Error(`Remove background needs its local model, which could not be loaded (${(e as Error).message}). Nothing was exported.`) }
+  }
   const fps = options.fps || timeline.fps || 30
   const duration = exportDuration(timeline, options.maxDuration)
   const totalFrames = Math.max(1, Math.round(duration * fps))

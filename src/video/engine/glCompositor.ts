@@ -73,8 +73,10 @@ export const FX_COLOUR = 4
 export const FX_LUT = 8
 export const FX_VIGNETTE = 16
 export const FX_MASK = 32
+/** The person matte (Remove background): multiplies the layer's alpha by a segmentation picture of the same frame. */
+export const FX_MATTE = 64
 /** The flags a blur prepass applies before blurring (the rest are applied when the blurred layer is laid in). */
-const FX_PRE = FX_KEY | FX_COLOUR | FX_LUT
+const FX_PRE = FX_KEY | FX_COLOUR | FX_LUT | FX_MATTE
 
 const FS_FX = `#version 300 es
 precision highp float;
@@ -101,6 +103,9 @@ uniform vec4 uMaskA[4];
 uniform vec4 uMaskB[4];
 uniform int uBlend;
 uniform sampler2D uBack;
+uniform sampler2D uMatte;
+uniform float uMatteEdge;
+uniform float uMatteInv;
 uniform vec2 uRes;
 out vec4 o;
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
@@ -144,6 +149,12 @@ void main() {
       rgb.g = (y - 0.2126 * rgb.r - 0.0722 * rgb.b) / 0.7152;
       rgb = clamp(rgb, 0.0, 1.0);
     }
+  }
+  if ((uFlags & ${FX_MATTE}) != 0) {
+    float m = texture(uMatte, vUv).r;
+    float e = 0.5 * uMatteEdge + 0.004;
+    m = smoothstep(0.5 - e, 0.5 + e, m);
+    a *= mix(m, 1.0 - m, uMatteInv);
   }
   if ((uFlags & ${FX_COLOUR}) != 0) {
     rgb *= exp2(uCol1.x);
@@ -254,14 +265,22 @@ export interface LayerFx {
   maskB: Float32Array
   /** 0 normal … 7 soft light (effects.ts BLEND_MODES order) */
   blend: number
+  /** Remove background: the effect is on (render.ts then supplies `matte` for the frame, or draws without it while the model loads). */
+  wantMatte: boolean
+  matteEdge: number
+  /** 0 keep the person, 1 keep the background */
+  matteInvert: number
+  matte: { w: number; h: number; data: Uint8Array; rev: number } | null
+  matteSlot: string
 }
 
 export function newLayerFx(): LayerFx {
-  return { flags: 0, key: new Float32Array(4), spill: 0, col1: new Float32Array(4), col2: new Float32Array(4), lut: null, lutMix: 1, blur: 0, sharpen: 0, vig: new Float32Array(3), masks: 0, maskA: new Float32Array(16), maskB: new Float32Array(16), blend: 0 }
+  return { flags: 0, key: new Float32Array(4), spill: 0, col1: new Float32Array(4), col2: new Float32Array(4), lut: null, lutMix: 1, blur: 0, sharpen: 0, vig: new Float32Array(3), masks: 0, maskA: new Float32Array(16), maskB: new Float32Array(16), blend: 0, wantMatte: false, matteEdge: 0, matteInvert: 0, matte: null, matteSlot: '' }
 }
 
 export function resetLayerFx(fx: LayerFx) {
   fx.flags = 0; fx.lut = null; fx.blur = 0; fx.blend = 0; fx.masks = 0; fx.sharpen = 0; fx.spill = 0; fx.lutMix = 1
+  fx.wantMatte = false; fx.matteEdge = 0; fx.matteInvert = 0; fx.matte = null; fx.matteSlot = ''
 }
 
 /** Does this layer need the fx path at all? */
@@ -276,7 +295,7 @@ interface CachedTex extends TexHandle { key: string; bytes: number; frame: numbe
 /** What a layer draw needs: its texture and where it lands (and, Phase 2, its effects). */
 export interface LayerDraw { tex: TexHandle; quad: Quad; uv: UV; alpha: number; fx?: LayerFx | null }
 
-type FxUniforms = Record<'tex' | 'alpha' | 'uvRect' | 'layerPx' | 'flags' | 'key' | 'spill' | 'col1' | 'col2' | 'lut' | 'lutSize' | 'lutMix' | 'lutMin' | 'lutScale' | 'vig' | 'sharpen' | 'masks' | 'maskA' | 'maskB' | 'blend' | 'back' | 'res', WebGLUniformLocation | null>
+type FxUniforms = Record<'tex' | 'alpha' | 'uvRect' | 'layerPx' | 'flags' | 'key' | 'spill' | 'col1' | 'col2' | 'lut' | 'lutSize' | 'lutMix' | 'lutMin' | 'lutScale' | 'vig' | 'sharpen' | 'masks' | 'maskA' | 'maskB' | 'blend' | 'back' | 'res' | 'matte' | 'matteEdge' | 'matteInv', WebGLUniformLocation | null>
 type Fbo = { fb: WebGLFramebuffer; tex: WebGLTexture; w: number; h: number }
 
 export class GLCompositor {
@@ -310,6 +329,8 @@ export class GLCompositor {
   /** Inside a crossfade input: blend modes are not applied (there is no frame below to blend with). */
   private inMix = false
   /** LUT 3D textures by .cube text, LRU. */
+  /** Person mattes, one texture per layer slot, re-uploaded only when the picture's rev changes. */
+  private mattes = new Map<string, { tex: WebGLTexture; rev: number; w: number; h: number }>()
   private luts = new Map<string, { tex: WebGLTexture; size: number; min: Float32Array; scale: Float32Array }>()
   private quadScratch = new Float32Array(8) as unknown as Quad
   private uvScratch: UV = [0, 0, 1, 1]
@@ -374,12 +395,14 @@ export class GLCompositor {
       tex: fu('uTex'), alpha: fu('uAlpha'), uvRect: fu('uUvRect'), layerPx: fu('uLayerPx'), flags: fu('uFlags'), key: fu('uKey'), spill: fu('uSpill'),
       col1: fu('uCol1'), col2: fu('uCol2'), lut: fu('uLut'), lutSize: fu('uLutSize'), lutMix: fu('uLutMix'), lutMin: fu('uLutMin'), lutScale: fu('uLutScale'),
       vig: fu('uVig'), sharpen: fu('uSharpen'), masks: fu('uMasks'), maskA: fu('uMaskA'), maskB: fu('uMaskB'), blend: fu('uBlend'), back: fu('uBack'), res: fu('uRes'),
+      matte: fu('uMatte'), matteEdge: fu('uMatteEdge'), matteInv: fu('uMatteInv'),
     }
     // every sampler on its own unit, for good: a sampler3D left on unit 0 beside uTex makes every draw invalid
     gl.useProgram(this.fxProg)
     gl.uniform1i(this.uFx.tex, 0)
     gl.uniform1i(this.uFx.back, 1)
     gl.uniform1i(this.uFx.lut, 2)
+    gl.uniform1i(this.uFx.matte, 3)
     const bu = (n: string) => gl.getUniformLocation(this.blurProg, n)
     this.uBlur = { tex: bu('uTex'), max: bu('uMax'), texel: bu('uTexel'), dir: bu('uDir'), sigma: bu('uSigma') }
 
@@ -435,6 +458,32 @@ export class GLCompositor {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     return tex
+  }
+
+  /** The texture of a person matte (R8, linear). Null if the picture is not usable. */
+  matteTexture(slot: string, m: { w: number; h: number; data: Uint8Array; rev: number }): WebGLTexture | null {
+    const gl = this.gl
+    if (m.w < 1 || m.h < 1 || m.data.length < m.w * m.h) return null
+    let e = this.mattes.get(slot)
+    if (!e) {
+      const tex = gl.createTexture()
+      if (!tex) return null
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      e = { tex, rev: -1, w: 0, h: 0 }
+      this.mattes.set(slot, e)
+    }
+    if (e.rev !== m.rev || e.w !== m.w || e.h !== m.h) {
+      gl.bindTexture(gl.TEXTURE_2D, e.tex)
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, m.w, m.h, 0, gl.RED, gl.UNSIGNED_BYTE, m.data)
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4)
+      e.rev = m.rev; e.w = m.w; e.h = m.h
+    }
+    return e.tex
   }
 
   private upload(tex: WebGLTexture, src: TexImageSource) {
@@ -614,6 +663,16 @@ export class GLCompositor {
         gl.uniform1f(u.lutMix, fx.lutMix)
         gl.uniform3fv(u.lutMin, l.min)
         gl.uniform3fv(u.lutScale, l.scale)
+      }
+    }
+    if (f & FX_MATTE) {
+      const mt = fx.matte ? this.matteTexture(fx.matteSlot, fx.matte) : null
+      if (!mt) f &= ~FX_MATTE
+      else {
+        gl.activeTexture(gl.TEXTURE3)
+        gl.bindTexture(gl.TEXTURE_2D, mt)
+        gl.uniform1f(u.matteEdge, fx.matteEdge)
+        gl.uniform1f(u.matteInv, fx.matteInvert)
       }
     }
     gl.uniform1i(u.flags, f)

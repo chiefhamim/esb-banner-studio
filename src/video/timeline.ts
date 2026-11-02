@@ -12,6 +12,8 @@ import { cutKeyframes, sampleKeys, sanitizeKeyframes } from './keyframes'
 import { clipDurationFor, cutFreezes, isRetimed, rampOf, sanitizeFreezes, sanitizeSpeed, sourceTimeUnclamped, speedAt } from './speed'
 
 import type { BlendMode } from './effects'
+import type { Transcript } from './ai/transcript'
+import { sanitizeSavedTranscripts } from './ai/transcript'
 import { BLEND_MODES, LUT_MAX_CHARS, lutText, lutsUsed, registerLut, sanitizeEffects } from './effects'
 import type { TitleData } from './titleModel'
 import { migrateOverlayClip, sanitizeTitleData, titleDuration } from './titleModel'
@@ -194,6 +196,8 @@ export interface VideoProject {
   /** Ripple edits (ripple delete/trim, insert, extract, speed changes) move the markers after the edit too. On unless
    * false. */
   rippleMarkers?: boolean
+  /** Transcripts of the source files used here (AI drafts until reviewed), keyed by media id, in source seconds. Saved with the project so a paid transcription is never lost. */
+  transcripts?: Record<string, Transcript>
   /** Phase 4: master fader (dB) and limiter; ducking of the music bus under the voice bus; the loudness an export is
    * normalised to (null/unset = not normalised); bus faders (dB). All unset = the sound of a Phase 0–3 project. */
   master?: MasterSettings
@@ -619,6 +623,7 @@ export function deserializeVideoProject(json: string): VideoProject | null {
       ...(parsed.magnetic === true ? { magnetic: true } : {}),
       ...(parsed.rippleMarkers === false ? { rippleMarkers: false } : {}),
       ...(cleanMarkers(parsed.markers) ? { markers: cleanMarkers(parsed.markers) } : {}),
+      ...(sanitizeSavedTranscripts(parsed.transcripts) ? { transcripts: sanitizeSavedTranscripts(parsed.transcripts) } : {}),
       ...sanitizeProjectAudio(parsed),
     }
   } catch {

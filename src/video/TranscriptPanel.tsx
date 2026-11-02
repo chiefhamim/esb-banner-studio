@@ -2,7 +2,7 @@
 // the timeline until the editor presses Cut. Cuts are one undo step (videoStore.applyTextCuts).
 import { useMemo, useRef, useState } from 'react'
 import { useVideoStore, viewOf } from './videoStore'
-import { AI_DRAFT_LABEL, makeTranscript, type Transcript } from './ai/transcript'
+import { AI_DRAFT_LABEL, makeTranscript } from './ai/transcript'
 import { geminiEngine } from './ai/transcribe'
 import { cutsForDeletedWords } from './ai/textEdit'
 import { fillerPlan, silencePlan, type CutPlan } from './ai/cutPlan'
@@ -23,12 +23,19 @@ export function TranscriptPanel() {
   const applyTextCuts = useVideoStore((s) => s.applyTextCuts)
   const addClips = useVideoStore((s) => s.addClips)
 
+  const playhead = useVideoStore((s) => s.currentTime)
+  // the selected footage clip; opening a bin tab clears the selection, so then the footage under the playhead, else the first
   const clip: Clip | undefined = useMemo(() => {
-    const pick = [selectedClipId, ...selectedIds].map((id) => project.clips.find((c) => c.id === id && c.kind === 'video' && !c.still))
-    return pick.find(Boolean) ?? undefined
-  }, [project, selectedClipId, selectedIds])
+    const footage = project.clips.filter((c) => c.kind === 'video' && !c.still)
+    const picked = [selectedClipId, ...selectedIds].map((id) => footage.find((c) => c.id === id)).find(Boolean)
+    if (picked) return picked
+    return footage.find((c) => playhead >= c.start && playhead < c.start + c.duration) ?? footage.slice().sort((a, b) => a.start - b.start)[0]
+  }, [project, selectedClipId, selectedIds, playhead])
 
-  const [transcript, setTranscript] = useState<{ clipId: string; t: Transcript } | null>(null)
+  // the transcript belongs to the source FILE (saved with the project), so it survives tab changes, splits and restarts
+  const saved = useVideoStore((s) => s.project.transcripts)
+  const setTranscript = useVideoStore((s) => s.setTranscript)
+  const key = clip ? clip.mediaAssetId ?? `url:${clip.sourceUrl ?? ''}` : ''
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
@@ -36,7 +43,8 @@ export function TranscriptPanel() {
   const [notice, setNotice] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
-  const words = transcript && clip && transcript.clipId === clip.id ? transcript.t.words : []
+  // only the words inside this clip's part of the file
+  const words = useMemo(() => (clip && saved?.[key] ? saved[key].words.filter((w) => w.end > clip.in - 0.01 && w.start < clip.out + 0.01) : []), [saved, key, clip])
   const fps = project.fps || FPS_FALLBACK
 
   const transcribe = async () => {
@@ -56,7 +64,10 @@ export function TranscriptPanel() {
       })
       // the audio began at the clip's in-point, so word times are relative to it: shift them to source seconds
       const shifted = res.transcript.words.map((w) => ({ ...w, start: w.start + clip.in, end: w.end + clip.in }))
-      setTranscript({ clipId: clip.id, t: makeTranscript(shifted, res.transcript.origin, { lang: res.transcript.lang, duration: clip.out }) })
+      // keep words already transcribed elsewhere in the same file; replace only this clip's range
+      const keep = (useVideoStore.getState().project.transcripts?.[key]?.words ?? []).filter((w) => w.end <= clip.in || w.start >= clip.out)
+      const merged = [...keep, ...shifted].sort((a, b) => a.start - b.start)
+      setTranscript(key, makeTranscript(merged, res.transcript.origin, { lang: res.transcript.lang, duration: clip.srcDuration ?? clip.out }))
       setPicked(new Set())
       if (!res.complete) setNotice('Some parts did not come back. The words shown are the parts that did; check the gaps before you cut.')
     } catch (e) {
@@ -147,29 +158,83 @@ export function TranscriptPanel() {
   const toggle = (i: number) => setPicked((p) => { const n = new Set(p); if (n.has(i)) n.delete(i); else n.add(i); return n })
 
   if (!clip) {
-    return <p className="vw-hint">Select a footage clip on V1 to read its words. Transcripts are AI drafts: check them before you cut.</p>
+    return <p className="vw-hint">Add footage to the timeline to read its words. Transcripts are AI drafts: check them before you cut.</p>
   }
 
   return (
     <div className="vw-transcript">
-      <div className="vw-transcript-head">
-        <span className="vw-tag" data-tag="caption">AI draft</span>
-        <button type="button" className="btn xs" onClick={transcribe} disabled={busy} aria-busy={busy}>
-          {busy ? 'Working…' : words.length ? 'Transcribe again' : 'Transcribe with Gemini'}
-        </button>
-      </div>
-      {busy && <p className="vw-hint" role="status">{progress}</p>}
-      {error && <p className="vw-hint vw-error" role="alert">{error}</p>}
-      {notice && <p className="vw-hint" role="status">{notice}</p>}
-      {!words.length && !busy && !error && (
-        <p className="vw-hint">{AI_DRAFT_LABEL}. Gemini hears the clip’s sound; it is sent to Google with your key. Nothing changes until you press Cut.</p>
-      )}
-      <div className="vw-cut-tools">
+      <section className="vw-sec" aria-label="Transcript">
+        <div className="vw-sec-head">
+          <h4 className="vw-sec-title">Transcript</h4>
+          <span className="vw-tag" data-tag="caption">AI draft</span>
+        </div>
+        <p className="vw-hint vw-transcript-clip">Clip: {clip.title}</p>
+        <div className="vw-transcript-actions">
+          <button type="button" className="btn xs" onClick={transcribe} disabled={busy} aria-busy={busy}>
+            {busy ? 'Working…' : words.length ? 'Transcribe again' : 'Transcribe with Gemini'}
+          </button>
+        </div>
+        {busy && <p className="vw-hint" role="status">{progress}</p>}
+        {error && <p className="vw-hint vw-error" role="alert">{error}</p>}
+        {notice && <p className="vw-hint" role="status">{notice}</p>}
+        {!words.length && !busy && (
+          <p className="vw-hint">{AI_DRAFT_LABEL}. Gemini hears the clip’s sound, which is sent to Google with your key. Nothing changes until you press Cut.</p>
+        )}
+        {words.length > 0 && (
+          <>
+            <p className="vw-hint">{AI_DRAFT_LABEL}. Click words to mark them. {picked.size} marked.</p>
+            <div className="vw-transcript-words" aria-label="Transcript words">
+              {words.map((w, i) => (
+                <button
+                  key={`${i}-${w.start}`}
+                  type="button"
+                  className={`vw-word${picked.has(i) ? ' is-cut' : ''}`}
+                  aria-pressed={picked.has(i)}
+                  title={`${formatShortTime(w.start)} · confidence ${Math.round(w.confidence * 100)}%`}
+                  onClick={() => toggle(i)}
+                >
+                  {w.text}
+                </button>
+              ))}
+            </div>
+            <div className="vw-transcript-actions">
+              <button type="button" className="btn xs" onClick={() => setPicked(new Set())} disabled={!picked.size}>Clear marks</button>
+              <button type="button" className="btn xs primary" onClick={cutPicked} disabled={!picked.size}>Cut marked words</button>
+            </div>
+            <div className="vw-transcript-actions">
+              <button type="button" className="btn xs" onClick={addCaptions}>Add captions</button>
+              <button type="button" className="btn xs" onClick={findShorts}>Find Shorts</button>
+            </div>
+            {shorts.length > 0 && (
+              <div className="vw-cut-plan" role="region" aria-label="Short candidates">
+                <p className="vw-hint">Short candidates use the transcript’s own words (15–60 s). Pick one to add it to the timeline.</p>
+                <ul className="vw-cut-list vw-short-list">
+                  {shorts.map((c) => (
+                    <li key={c.id}>
+                      <button type="button" className="vw-word" onClick={() => addShort(c)}>
+                        {formatShortTime(c.start)} – {formatShortTime(c.end)} · {(c.end - c.start).toFixed(0)} s
+                      </button>
+                      <div className="vw-hint">{c.text}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      <section className="vw-sec" aria-label="Silences and hesitations">
+        <div className="vw-sec-head"><h4 className="vw-sec-title">Silences and hesitations</h4></div>
         <label className="vw-cut-row">
-          Silence threshold <input type="range" min={-60} max={-25} step={1} value={thr} onChange={(e) => setThr(Number(e.target.value))} aria-label="Silence threshold in decibels" /> <span>{thr} dB</span>
+          <span className="vw-cut-label">Threshold</span>
+          <input type="range" min={-60} max={-25} step={1} value={thr} onChange={(e) => setThr(Number(e.target.value))} aria-label="Silence threshold in decibels" />
+          <span className="vw-cut-value">{thr} dB</span>
         </label>
         <label className="vw-cut-row">
-          Shortest silence <input type="range" min={0.3} max={2} step={0.1} value={minSil} onChange={(e) => setMinSil(Number(e.target.value))} aria-label="Shortest silence in seconds" /> <span>{minSil.toFixed(1)} s</span>
+          <span className="vw-cut-label">Shortest</span>
+          <input type="range" min={0.3} max={2} step={0.1} value={minSil} onChange={(e) => setMinSil(Number(e.target.value))} aria-label="Shortest silence in seconds" />
+          <span className="vw-cut-value">{minSil.toFixed(1)} s</span>
         </label>
         <div className="vw-transcript-actions">
           <button type="button" className="btn xs" onClick={findSilences} disabled={busy || planBusy}>{planBusy ? 'Listening…' : 'Find silences'}</button>
@@ -189,49 +254,9 @@ export function TranscriptPanel() {
             </div>
           </div>
         )}
-      </div>
-      {notice && !words.length && <p className="vw-hint" role="status">{notice}</p>}
+      </section>
+
       <ReframePanel clip={clip} />
-      {words.length > 0 && (
-        <>
-          <p className="vw-hint">{AI_DRAFT_LABEL}. Click words to mark them, then cut. {picked.size} marked.</p>
-          <div className="vw-transcript-words" aria-label="Transcript words">
-            {words.map((w, i) => (
-              <button
-                key={`${i}-${w.start}`}
-                type="button"
-                className={`vw-word${picked.has(i) ? ' is-cut' : ''}`}
-                aria-pressed={picked.has(i)}
-                title={`${formatShortTime(w.start)} · confidence ${Math.round(w.confidence * 100)}%`}
-                onClick={() => toggle(i)}
-              >
-                {w.text}
-              </button>
-            ))}
-          </div>
-          {shorts.length > 0 && (
-            <div className="vw-cut-plan" role="region" aria-label="Short candidates">
-              <p className="vw-hint">Short candidates (the transcript’s own words, 15–60 s). Pick one to add it to the timeline.</p>
-              <ul className="vw-cut-list">
-                {shorts.map((c) => (
-                  <li key={c.id}>
-                    <button type="button" className="vw-word" onClick={() => addShort(c)}>
-                      {formatShortTime(c.start)} – {formatShortTime(c.end)} · {(c.end - c.start).toFixed(0)} s
-                    </button>
-                    <div className="vw-hint">{c.text}</div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <div className="vw-transcript-actions">
-            <button type="button" className="btn xs" onClick={addCaptions}>Add captions</button>
-            <button type="button" className="btn xs" onClick={findShorts}>Find Short candidates</button>
-            <button type="button" className="btn xs" onClick={() => setPicked(new Set())} disabled={!picked.size}>Clear marks</button>
-            <button type="button" className="btn xs primary" onClick={cutPicked} disabled={!picked.size}>Cut marked words</button>
-          </div>
-        </>
-      )}
     </div>
   )
 }

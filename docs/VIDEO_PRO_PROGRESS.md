@@ -1984,3 +1984,22 @@ labels, rec tags, `--fi/--fo`), `audioControls.tsx` (LevelBar warm class, WaveTh
 ## Phase 4 fix rounds merged and wired (2026-11-02, branch `video-pro`)
 
 `video-p4-fix` and `video-p4-uifix` merged (only the progress doc conflicted; both sections kept). UI wired to the logic APIs: Audio tab "Voiceover latency offset (ms)" (`setVoiceoverOffset`, +-1000, shows `measuredMs`) and `layered` / `interrupted` / `note` lines; noise-reduction failure (`useAudioJobs.errors`) and the dropped-sample note in the clip Audio section, `DenoiseError` named in the export sheet's error; crossfade button disabled with the `crossfadeBlocker` reason; loudness `warnings` / `shortMix` in the card and the export report; sliders and number fields use the `*Coalesced` store actions; beat proposals refused with `beatsProblem`. `video-music-electron-test` now clicks the labelled Forget button. Measured 10 min all-features audio stage (ducking + -14 LUFS + limiter): 21.8 s (plain mix 10.4 s); the limiter did not need to act on that fixture.
+
+## Phase 5 — AI editing (2026-11-03, branch `video-pro`)
+
+What is in (all draft-first, labelled AI, one undo step each, nothing posted):
+- **Transcript** (Captions tab → Transcript): Gemini on the editor's key (`geminiEngine`, existing `aiFor` layer; refuses when AI is off or no Gemini key). The transcript belongs to the source FILE and is saved in the project (`project.transcripts`, keyed by media id, checked on load by `sanitizeSavedTranscripts`); re-transcribing a clip replaces only that clip's range. Word times are source seconds.
+- **Text-based cuts:** click words, "Cut marked words" → `applyTextCuts` (`src/video/ai/applyCuts.ts`) splits and ripples the clip and its linked sound; refuses speed-changed / still / compound / locked / out-of-range clips with a reason.
+- **Silence and hesitation removal:** threshold + shortest sliders, every proposed cut listed before it is applied. Hesitations (um, উম) by default; discourse words (so, মানে) only on request.
+- **Captions** from the transcript onto C1, placed where the words sit after cuts (`captionPlan.ts`); SRT/VTT writers exist in `ai/transcript.ts`.
+- **Short candidates:** `findHighlights` list of the transcript's own words (15–60 s); "add" copies footage + linked sound to the end of the timeline.
+- **Auto reframe** (`ReframePanel`, `faceTrack.ts`): MediaPipe face detector, local wasm + bundled model, 4 samples/s, planReframe → offX/offY keyframes. Needs the project in the target shape (button switches it).
+- **Remove background** (Effects → Add effect): MediaPipe selfie segmenter, person matte of the exact frame → GL pass (`FX_MATTE`), same path in preview and export; export loads the model first and stops with a reason rather than draw an unmasked frame; "Keep the background" inverts. Verified on a real portrait through the GL path (`PERSON_IMAGE=… node tools/e2e/video-matte-check.mjs`).
+
+Fixes found on the way: `splitClip` ids collided when two splits ran in the same millisecond; the CSP blocked WebAssembly (`script-src` now has `'wasm-unsafe-eval'`: wasm only, not JS eval) so MediaPipe could not start.
+
+New dependency (owner approved 2026-11-02): `@mediapipe/tasks-vision` 1.2.0 (Apache-2.0). Models in `public/models/mediapipe/`; wasm copied to `public/mediapipe/wasm` by `tools/copy-mediapipe-wasm.mjs` before dev/build (git-ignored). **Model-file licences are not confirmed** (see `docs/VIDEO_ASSETS_LICENCES.md`).
+
+Still to build before Phase 5 is closed: caption translation EN⇄BN (reviewed track), AI-written YouTube/Facebook copy, Story → video v2 (templates, several photos, quote cards, B-roll from the bin). Deferred with the owner's OK (2026-11-02): AI voice-over (TTS). Whisper.cpp local engine stays "planned".
+
+Gate on the code so far: lint 0, unit 1411, build 0, test:video 172 PASS / 0 FAIL (one perf-budget flake on a first run, passes on rerun), test:electron 105 / 0, text-fit 0, centre audit 0. Not verified against a real Gemini call (needs the owner's key) or a real microphone.

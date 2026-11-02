@@ -273,3 +273,59 @@ export function importCaptions(text: string, at = Date.now()): Transcript {
 }
 
 const round3 = (v: number) => Math.round(v * 1000) / 1000
+
+// ---------------------------------------------------------------- saved with the project
+
+export const MAX_SAVED_TRANSCRIPTS = 24
+export const MAX_SAVED_WORDS = 100_000
+
+/** A transcript read back from a project file: every field checked, nothing trusted (the file can be edited outside
+ * the app). Null when it is not a usable transcript. */
+export function sanitizeSavedTranscript(raw: unknown): Transcript | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  if (!Array.isArray(o.words) || o.words.length > MAX_SAVED_WORDS) return null
+  const words: Word[] = []
+  for (const w of o.words) {
+    if (!w || typeof w !== 'object') return null
+    const x = w as Record<string, unknown>
+    if (typeof x.text !== 'string' || x.text.length > 120) return null
+    const start = Number(x.start)
+    const end = Number(x.end)
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || end > 86_400) return null
+    const conf = Number(x.confidence)
+    words.push({
+      text: x.text,
+      start,
+      end,
+      confidence: Number.isFinite(conf) ? Math.min(1, Math.max(0, conf)) : 1,
+      ...(typeof x.speaker === 'string' ? { speaker: x.speaker.slice(0, 40) } : {}),
+      ...(x.estimated === true ? { estimated: true } : {}),
+    })
+  }
+  const og = o.origin as Record<string, unknown> | undefined
+  const at = Number(og?.at)
+  const when = Number.isFinite(at) ? at : 0
+  let origin: TranscriptOrigin
+  if ((og?.kind === 'ai' || og?.kind === 'local') && typeof og.engine === 'string' && typeof og.model === 'string') origin = { kind: og.kind, engine: og.engine.slice(0, 40), model: og.model.slice(0, 80), at: when }
+  else if (og?.kind === 'import' && (og.format === 'srt' || og.format === 'vtt')) origin = { kind: 'import', format: og.format, at: when }
+  else if (og?.kind === 'typed') origin = { kind: 'typed', at: when }
+  else return null
+  const duration = Number(o.duration)
+  const t = makeTranscript(words, origin, { lang: typeof o.lang === 'string' ? o.lang.slice(0, 16) : '', duration: Number.isFinite(duration) && duration >= 0 ? duration : undefined })
+  // a machine transcript the editor marked reviewed stays reviewed; nothing else can claim it
+  if (t.draft && o.reviewed === true) { t.reviewed = true; t.draft = false }
+  return t
+}
+
+/** The `transcripts` of a project file: at most MAX_SAVED_TRANSCRIPTS, keyed by media id, each checked. */
+export function sanitizeSavedTranscripts(raw: unknown): Record<string, Transcript> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, Transcript> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, MAX_SAVED_TRANSCRIPTS)) {
+    if (!k || k.length > 120) continue
+    const t = sanitizeSavedTranscript(v)
+    if (t) out[k] = t
+  }
+  return Object.keys(out).length ? out : undefined
+}

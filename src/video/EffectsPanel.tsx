@@ -22,6 +22,7 @@ import { BLEND_LABEL, BLEND_MODES, EFFECT_DEFS, newEffect, paramValue, rgbToHex,
 import { useVideoStore, viewOf } from './videoStore'
 import { fxEditor } from './engine/fxResolve'
 import { previewEngine } from './engine/previewEngine'
+import { loadPersonMatte, matteState, retryPersonMatte } from './engine/personMatte'
 import { kenBurnsZoom, poseAt } from './engine/render'
 import '../styles/video-fx.css'
 
@@ -101,6 +102,7 @@ export function ParamSlider({ p, value, onChange, cls }: { p: NumParam; value: n
 const ADDABLE: { type: EffectType; icon: IconName; hint: string; footageOnly?: boolean }[] = [
   { type: 'mask', icon: 'crop', hint: 'Rectangle or ellipse, feathered, inverted' },
   { type: 'chromaKey', icon: 'droplet', hint: 'Remove a green or blue screen', footageOnly: true },
+  { type: 'personMatte', icon: 'image', hint: 'Cut the person out of a talking-head shot (local, no green screen)', footageOnly: true },
   { type: 'blur', icon: 'eyeOff', hint: 'Gaussian, radius in export pixels' },
   { type: 'sharpen', icon: 'sparkle', hint: 'Crisper edges' },
   { type: 'vignette', icon: 'sun', hint: 'Darker corners' },
@@ -384,6 +386,7 @@ export function EffectsPanel({ clip, onChange }: { clip: Clip; onChange: (c: Cli
     const e = newEffect(type, all)
     onChange({ ...clip, effects: [...all, e] })
     if (type === 'mask') useInspectorUi.setState({ mask: e.id })
+    if (type === 'personMatte') void loadPersonMatte().catch(() => {})
   }
   const remove = (id: string) => onChange({ ...clip, effects: all.filter((e) => e.id !== id) })
   const items = ADDABLE.filter((a) => (!a.footageOnly || footage) && !(adjustment && !EFFECT_DEFS[a.type].adjustment)).map((a) => {
@@ -414,6 +417,7 @@ export function EffectsPanel({ clip, onChange }: { clip: Clip; onChange: (c: Cli
               <IconButton icon="trash" size={13} tip={`Remove ${def.label.toLowerCase()}`} className="vw-fx-remove" onClick={() => remove(e.id)} />
               <Toggle small checked={e.enabled !== false} label={e.enabled === false ? `Turn ${def.label.toLowerCase()} on` : `Turn ${def.label.toLowerCase()} off`} onChange={(on) => onChange(withEffect(clip, e.id, (x) => ({ ...x, enabled: on })))} />
             </div>
+            {e.enabled !== false && e.type === 'personMatte' && <MatteNote />}
             {e.enabled !== false && def.params.map((p) => <ParamControl key={p.key} clip={clip} e={e} p={p} onChange={onChange} picking={picking === e.id} onPick={(id) => { setPickFor(id); setPicking(picking === id || !monitorCanvas() ? null : id) }} />)}
           </div>
         )
@@ -423,6 +427,19 @@ export function EffectsPanel({ clip, onChange }: { clip: Clip; onChange: (c: Cli
       {picking && <PickOverlay loupe={loupe} current={keyColour ? String(keyColour.params?.color ?? '#00b140') : '#00b140'} />}
     </FxSection>
   )
+}
+
+/** Remove background: says whether the local model is ready, loading or failed (with the reason and a retry). */
+function MatteNote() {
+  const [s, setS] = useState(matteState())
+  useEffect(() => {
+    void loadPersonMatte().catch(() => {})
+    const id = window.setInterval(() => setS((o) => { const n = matteState(); return o.state === n.state && o.failure === n.failure ? o : n }), 400)
+    return () => window.clearInterval(id)
+  }, [])
+  if (s.state === 'ready') return <p className="vw-hint" role="status">Ready. The cut-out is made on this PC; nothing is uploaded. Best on one person facing the camera.</p>
+  if (s.state === 'failed') return <p className="vw-hint vw-error" role="alert">The background model could not be loaded: {s.failure} <button type="button" className="btn xs" onClick={() => { retryPersonMatte(); void loadPersonMatte().catch(() => {}) }}>Try again</button></p>
+  return <p className="vw-hint" role="status">Loading the background model…</p>
 }
 
 /** The Titles tab card: an adjustment layer at the playhead, 5 s, with a neutral colour, on its own "Adjustment"

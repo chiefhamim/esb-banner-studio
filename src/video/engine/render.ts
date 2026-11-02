@@ -12,7 +12,8 @@
 import type { Clip, VideoProject } from '../timeline'
 import { footageRect, layersAt } from '../timeline'
 import { bugKey, captionLimit, getCachedImage, offlineKey, rasterBug, rasterKey, rasterLayer, rasterOffline } from '../compositor'
-import { fxActive, type GLCompositor, type LayerDraw, type LayerFx } from './glCompositor'
+import { FX_MATTE, fxActive, type GLCompositor, type LayerDraw, type LayerFx } from './glCompositor'
+import { personMatteFor } from './personMatte'
 import { frameQuad, layerQuad, uvOf } from './layerMath'
 import { hasKeyframes, sampleProp, srcAt } from './animation'
 import { beginFxFrame, resolveFx } from './fxResolve'
@@ -131,7 +132,15 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
       slots.add(clip.id)
       const tex = comp.slotTexture(clip.id, f.image, f.width, f.height, f.live)
       const r = footageRect(f.width, f.height, w, h, p)
-      return { tex, quad: layerQuad(r, p.rotation, clip.anchorX, clip.anchorY), uv: uvOf(r, f.width, f.height), alpha, fx: fxOf(clip) }
+      const fx = fxOf(clip)
+      if (fx?.wantMatte) {
+        // the person matte of THIS frame (same instant, same picture), so preview and export agree
+        const m = personMatteFor(clip.id, t.toFixed(5), f.image as CanvasImageSource)
+        if (m) { fx.matte = m; fx.matteSlot = clip.id; fx.flags |= FX_MATTE }
+        // an export never draws the layer without its matte: that would be a silent wrong frame
+        else if (!editor) throw new Error('The background could not be removed for this frame, so the export was stopped. Nothing was saved.')
+      }
+      return { tex, quad: layerQuad(r, p.rotation, clip.anchorX, clip.anchorY), uv: uvOf(r, f.width, f.height), alpha, fx }
     }
     if (clip.kind === 'overlay' && (clip.titleData || clip.dataCard)) {
       const fx = fxOf(clip)

@@ -650,3 +650,21 @@
 .vw-cut-list { margin: 0; padding: 0; list-style: none; max-height: 160px; overflow: auto; font: 500 12px/1.6 var(--ui); font-variant-numeric: tabular-nums; }
 .vw-reframe { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .vw-reframe select { font: 500 12px/1.4 var(--ui); color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); padding: 4px 8px; }
+
+/* Phase 5 panel layout: sections with a quiet divider, wrapping action rows, labelled sliders */
+.vw-transcript { display: flex; flex-direction: column; gap: 0; }
+.vw-sec { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--border-subtle); }
+.vw-sec:first-child { border-top: 0; padding-top: 0; }
+.vw-sec:last-child { padding-bottom: 0; }
+.vw-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
+.vw-sec-title { margin: 0; font: 700 11px/1.2 var(--ui); letter-spacing: var(--track-chip); text-transform: uppercase; color: var(--text-2); }
+.vw-sec .vw-hint { margin: 0; }
+.vw-transcript-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; }
+.vw-transcript-actions .btn { min-height: 28px; }
+.vw-cut-row { display: grid; grid-template-columns: 72px 1fr 52px; align-items: center; gap: 8px; }
+.vw-cut-label { color: var(--text-2); }
+.vw-cut-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+.vw-reframe-note { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px 10px; border-radius: var(--r-2); background: var(--field); }
+.vw-reframe .vw-cut-row select { grid-column: 2 / 4; justify-self: stretch; min-height: 28px; }
+.vw-short-list li { padding: 4px 0; }
+.vw-short-list li + li { border-top: 1px solid var(--border-subtle); }

@@ -107,6 +107,13 @@ export function resolveFx(comp: GLCompositor, clip: Clip, t: number, h: number, 
         fx.flags |= FX_KEY
         break
       }
+      case 'personMatte': {
+        if (adjustment) break
+        fx.wantMatte = true
+        fx.matteEdge = num(clip, e, 'personMatte', 'edge', tl)
+        fx.matteInvert = e.params?.keep === 'background' ? 1 : 0
+        break
+      }
       case 'mask': {
         if (masks >= MAX_MASKS) break
         const i = masks * 4

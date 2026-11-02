@@ -16,8 +16,8 @@
 
 import type { Clip, ClipEffect } from './timeline'
 
-export type EffectType = 'colour' | 'lut' | 'chromaKey' | 'mask' | 'blur' | 'sharpen' | 'vignette'
-export const EFFECT_TYPES: readonly EffectType[] = ['colour', 'lut', 'chromaKey', 'mask', 'blur', 'sharpen', 'vignette']
+export type EffectType = 'colour' | 'lut' | 'chromaKey' | 'personMatte' | 'mask' | 'blur' | 'sharpen' | 'vignette'
+export const EFFECT_TYPES: readonly EffectType[] = ['colour', 'lut', 'chromaKey', 'personMatte', 'mask', 'blur', 'sharpen', 'vignette']
 
 export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'add' | 'darken' | 'lighten' | 'soft-light'
 export const BLEND_MODES: readonly BlendMode[] = ['normal', 'multiply', 'screen', 'overlay', 'add', 'darken', 'lighten', 'soft-light']
@@ -76,6 +76,13 @@ export const EFFECT_DEFS: Record<EffectType, EffectDef> = {
       n('tolerance', 'Tolerance', 0, 1, 0.01, 0.3, '%'),
       n('softness', 'Softness', 0, 1, 0.01, 0.15, '%'),
       n('spill', 'Spill suppression', 0, 1, 0.01, 0.8, '%'),
+    ],
+  },
+  personMatte: {
+    type: 'personMatte', label: 'Remove background', max: 1, adjustment: false,
+    params: [
+      { kind: 'choice', key: 'keep', label: 'Keep', options: [{ value: 'person', label: 'The person' }, { value: 'background', label: 'The background' }], def: 'person' },
+      n('edge', 'Edge softness', 0, 1, 0.01, 0.25, '%'),
     ],
   },
   mask: {

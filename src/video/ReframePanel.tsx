@@ -17,6 +17,7 @@ const TARGETS: { id: TargetAspect; label: string }[] = [
 export function ReframePanel({ clip }: { clip: Clip }) {
   const project = useVideoStore((s) => viewOf(s))
   const updateClip = useVideoStore((s) => s.updateClip)
+  const setAspect = useVideoStore((s) => s.setAspect)
   const [target, setTarget] = useState<TargetAspect>('9:16')
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
@@ -72,15 +73,21 @@ export function ReframePanel({ clip }: { clip: Clip }) {
   }
 
   return (
-    <div className="vw-reframe">
-      <p className="vw-hint">Auto reframe follows the face through this clip and writes the crop as keyframes you can edit. It needs a project in the same shape.</p>
+    <section className="vw-sec vw-reframe" aria-label="Auto reframe">
+      <div className="vw-sec-head"><h4 className="vw-sec-title">Auto reframe</h4></div>
+      <p className="vw-hint">Follows the face through this clip and writes the crop as keyframes you can edit. The project must be in the same shape.</p>
       <label className="vw-cut-row">
-        Shape
+        <span className="vw-cut-label">Shape</span>
         <select value={target} onChange={(e) => setTarget(e.target.value as TargetAspect)} aria-label="Reframe target shape" disabled={busy}>
           {TARGETS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select>
       </label>
-      {aspectMismatch && <p className="vw-hint vw-error" role="note">The project is {projectAspect}. Set the project to {target} first (Project → Aspect), then reframe.</p>}
+      {aspectMismatch && (
+        <div className="vw-reframe-note" role="note">
+          <p className="vw-hint">The project is {projectAspect}, so a {target} crop would not fit it.</p>
+          <button type="button" className="btn xs" onClick={() => setAspect(target)}>Switch project to {target}</button>
+        </div>
+      )}
       <div className="vw-transcript-actions">
         {busy
           ? <button type="button" className="btn xs" onClick={() => ctrl?.abort()}>Stop</button>
@@ -94,7 +101,7 @@ export function ReframePanel({ clip }: { clip: Clip }) {
           Face in frame for {Math.round(plan.plan.insideRatio * 100)}% of the samples; {plan.plan.fastMoves} fast move{plan.plan.fastMoves === 1 ? '' : 's'}. Review the crop, then apply.
         </p>
       )}
-    </div>
+    </section>
   )
 }
 
