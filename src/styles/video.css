@@ -343,3 +343,164 @@
 .vw-multi-hint { display: flex; gap: 6px; align-items: flex-start; }
 .vw-multi-hint svg { flex: none; margin-top: 2px; }
 .vw-paste-attrs { display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------------------------------------------------------------- Phase 2 UI fix round (2026-11-02)
+   The desk never scrolls as a whole: only its own scrollers do (a focused or revealed control in the inspector used
+   to scroll the shell up by the header's 46 px). `clip`, not `hidden`: a hidden box can still be scrolled. */
+.video-workspace, .vw-stage-row, .vw-bin-panel, .vw-monitor-panel, .vw-inspector-panel, .vw-timeline-footer { overflow: clip; }
+
+/* the inspector: a sticky head (kind, clip name, delete, close) with the section jump strip under it */
+.vw-inspector-panel .vw-inspector { padding-top: 0; }
+.vw-inspector-head { position: sticky; top: 0; z-index: 6; display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin: 0 -10px 4px -14px; padding: 10px 10px 10px 14px; background: var(--side); border-bottom: 1px solid var(--card-line); }
+.vw-inspector-host .vw-inspector-head { top: -6px; margin: 0 -8px 4px; padding: 4px 8px 10px; }
+.vw-ih-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.vw-ih-row .vw-inspector-title { flex: none; font: 700 10.5px/16px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+.vw-ih-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 13px/18px var(--ui); color: var(--text); }
+.vw-ih-row .vw-inspector-actions { flex: none; margin-left: auto; }
+.seg-ctl.vw-jump { display: flex; width: 100%; box-sizing: border-box; }
+.seg-ctl.vw-jump button { flex: 1 1 auto; min-width: 0; padding: 0 4px; font-size: 12px; }
+.vw-inspector-body { gap: 10px; }
+/* every section is an accordion row of the same shape */
+.vw-fx-section { gap: 10px; margin: 0; padding-top: 6px; }
+.vw-fx-head { height: 32px; }
+.vw-fx-section.open > .vw-fx-head { color: var(--text); }
+.vw-fx-body { padding-bottom: 6px; }
+.vw-speed .vw-subhead { display: none; }
+
+/* narrow windows: the bar that replaces the bin's tabs while the inspector holds the column */
+.vw-bin-back { display: flex; align-items: center; gap: 8px; height: 36px; margin: 10px 18px 4px 8px; padding: 0 10px 0 4px; box-sizing: border-box; background: var(--fill); border-radius: var(--r-2); }
+.vw-bin-back .vw-back-bin { height: 28px; gap: 4px; padding: 0 10px 0 6px; color: var(--text); }
+.vw-bin-back-title { margin-left: auto; font: 700 10.5px/16px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+
+/* the key colour row: label, swatch, hex, Pick on one 32 px line */
+.vw-fx-colour { display: grid; grid-template-columns: auto 24px minmax(64px, 1fr) auto; align-items: center; gap: 6px; min-height: 32px; }
+.vw-fx-colour-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-2); }
+.vw-fx-colour .vw-fx-swatch { width: 24px; height: 24px; }
+.vw-fx-colour .vw-fx-hex { width: 100%; min-width: 0; height: 32px; box-sizing: border-box; }
+.vw-fx-colour .vw-fx-pick { height: 32px; gap: 4px; padding: 0 8px; }
+/* track names: room for "Adjustment" and "Footage 2" beside the three tools */
+.vw-th-title { gap: 4px; }
+.vw-track-head:not(.vw-kf-head) { padding: 0 4px 0 10px; }
+.vw-th-title b { min-width: 18px; }
+.vw-fx-item-head .tgl { flex: none; }
+.vw-fx-item.editing { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text) 45%, transparent); }
+.vw-fx-item-note { flex: none; font: 500 11px/16px var(--ui); color: var(--text-3); }
+.vw-fx-add, .vw-fx-load, .vw-fx-reset { height: 28px; }
+.vw-fx-lut { min-height: 36px; }
+
+/* picking the key colour: what to do, and a loupe with the colour under the pointer */
+.vw-pick-layer { position: absolute; z-index: 25; pointer-events: none; }
+.vw-pick-banner { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; white-space: nowrap; font: 600 12px/1 var(--ui); color: #f4f4f5; background: rgba(18, 18, 22, 0.88); border-radius: var(--r-pill); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 4px 14px rgba(0, 0, 0, 0.4); }
+.vw-pick-esc { padding-left: 8px; font-weight: 500; color: #b4b4bc; border-left: 1px solid rgba(255, 255, 255, 0.2); }
+.vw-pick-loupe { position: absolute; display: grid; grid-template-columns: 22px 22px auto; align-items: center; padding: 4px 8px 4px 4px; background: rgba(18, 18, 22, 0.92); border-radius: var(--r-2); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 4px 14px rgba(0, 0, 0, 0.45); }
+.vw-pick-was, .vw-pick-now { width: 22px; height: 22px; }
+.vw-pick-was { border-radius: 4px 0 0 4px; }
+.vw-pick-now { border-radius: 0 4px 4px 0; }
+.vw-pick-hex { padding-left: 8px; font: 600 12px/1 var(--ui); font-variant-numeric: tabular-nums; color: #f4f4f5; }
+
+/* the mask being edited, over the monitor: outline, feather edge, four corner grips and a feather grip */
+.vw-mask-layer { position: absolute; z-index: 24; pointer-events: none; }
+.vw-mask-layer.outside { opacity: 0.45; }
+.vw-mask-frame { position: absolute; pointer-events: none; }
+.vw-mask-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.vw-mask-halo { fill: none; stroke: rgba(0, 0, 0, 0.6); stroke-width: 3.5; }
+.vw-mask-line { fill: none; stroke: #ffffff; stroke-width: 1.5; }
+.vw-mask-feather { fill: none; stroke: rgba(255, 255, 255, 0.75); stroke-width: 1; stroke-dasharray: 4 4; }
+.vw-mask-body { position: absolute; pointer-events: auto; cursor: move; }
+.vw-mask-handle { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; pointer-events: auto; touch-action: none; }
+.vw-mask-handle::after { content: ""; position: absolute; left: 9px; top: 9px; width: 10px; height: 10px; box-sizing: border-box; background: #ffffff; border: 1.5px solid #131316; border-radius: 2px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+.vw-mask-handle.nw, .vw-mask-handle.se { cursor: nwse-resize; }
+.vw-mask-handle.ne, .vw-mask-handle.sw { cursor: nesw-resize; }
+.vw-mask-handle.feather { cursor: ew-resize; }
+.vw-mask-handle.feather::after { border-radius: 50%; background: #131316; border-color: #ffffff; }
+.vw-mask-handle:hover::after { transform: scale(1.2); }
+
+/* markers: flags and names in the ruler's lower band (the time labels keep the upper one); the in-out range says
+   what it is */
+.vw-marker { align-items: flex-end; padding: 0 0 2px; border-left: 0; }
+.vw-marker::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 0; width: 2px; background: var(--mk); }
+.vw-marker i { margin: 0 0 1px 2px; width: 8px; height: 9px; }
+.vw-marker span { margin: 0; font: 600 10px/12px var(--ui); }
+.vw-range-band { pointer-events: auto; }
+.vw-range-label { position: absolute; top: 2px; right: 4px; padding: 0 4px; font: 600 10px/12px var(--ui); color: var(--text-2); white-space: nowrap; background: color-mix(in srgb, var(--side) 70%, transparent); border-radius: 3px; }
+.vw-ml-row { grid-template-columns: 18px minmax(0, 1fr) auto 28px; }
+.vw-ml-time { padding: 0 8px; }
+
+/* the keyframe lane: 34 px (a 28 px target per key), keys held inside the clip's ends, a legend at the right */
+.vw-kf-head, .vw-kf-lane { height: 34px; }
+.vw-kf-head .vw-kf-prop { height: 28px; max-width: 140px; padding: 0 8px; gap: 4px; font-size: 12px; }
+.vw-kf-lane { display: flex; align-items: center; justify-content: flex-end; }
+.vw-kf-span { top: 3px; bottom: 3px; }
+.vw-kf-key { display: grid; place-items: center; width: 28px; height: 28px; margin: -14px 0 0 -14px; z-index: 3; }
+.vw-kf-key::before { content: none; }
+.vw-kf-key i { display: block; width: 10px; height: 10px; background: var(--text); transform: rotate(45deg); border-radius: 1.5px; box-shadow: 0 0 0 1.5px var(--bg-0); }
+.vw-kf-key.ease-easeIn i, .vw-kf-key.ease-easeOut i, .vw-kf-key.ease-easeInOut i { width: 12px; height: 12px; border-radius: 50%; transform: none; }
+.vw-kf-key.ease-bezier i { background: var(--warning); }
+.vw-kf-key.ease-hold i { width: 11px; height: 11px; border-radius: 1px; transform: none; }
+.vw-kf-key:hover i, .vw-kf-key:focus-visible i { background: var(--sel, var(--ink)); box-shadow: 0 0 0 1.5px var(--bg-0), 0 0 0 3px color-mix(in srgb, var(--text) 35%, transparent); }
+.vw-kf-key:focus-visible { outline: 0; }
+.vw-kf-legend { position: sticky; right: 12px; z-index: 2; display: flex; align-items: center; gap: 10px; height: 22px; margin-right: 12px; padding: 0 8px; font: 500 11px/1 var(--ui); color: var(--text-2); white-space: nowrap; background: color-mix(in srgb, var(--side) 88%, transparent); border-radius: var(--r-1); box-shadow: 0 0 0 1px var(--card-line); pointer-events: none; }
+.vw-kf-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.vw-kf-glyph { display: inline-block; width: 7px; height: 7px; background: var(--text); }
+.vw-kf-glyph.linear, .vw-kf-glyph.bezier { transform: rotate(45deg); border-radius: 1px; }
+.vw-kf-glyph.eased { width: 8px; height: 8px; border-radius: 50%; }
+.vw-kf-glyph.bezier { background: var(--warning); }
+
+/* the inspector's Keyframes section */
+.vw-kf-summary { display: flex; flex-direction: column; gap: 8px; }
+.vw-kf-summary .vw-btn-row .btn { flex: 1 1 0; justify-content: center; gap: 4px; }
+.vw-kf-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.vw-kf-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; min-height: 32px; padding: 0 2px 0 10px; background: var(--fill); border-radius: var(--r-2); font: 500 12.5px/16px var(--ui); color: var(--text); }
+.vw-kf-list-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vw-kf-list-n { font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.vw-kf-show { height: 28px; padding: 0 10px; }
+.vw-kf-show.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+:root[data-theme=dark] .vw-kf-show.on { color: var(--chip-on-fg); background: var(--chip-on-bg); box-shadow: none; font-weight: 600; }
+
+/* the curve editor: a 240 px square, 28 px grips, numbers, presets, Done; it opens over the bin column */
+.vw-curve-pop { padding: 12px; }
+.vw-bezier { gap: 10px; width: 272px; }
+.vw-bz-grid { stroke: var(--card-line); stroke-width: 1; opacity: 0.7; }
+.vw-bz-hit { fill: transparent; cursor: grab; }
+.vw-bz-grip:hover .vw-bz-handle, .vw-bz-grip:active .vw-bz-handle { fill: var(--sel, var(--ink)); }
+.vw-bz-handle { pointer-events: none; }
+.vw-bz-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.vw-bz-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; font: 600 11px/14px var(--ui); color: var(--text-3); }
+.vw-bz-num { width: 100%; height: 28px; box-sizing: border-box; padding: 0 6px; font: 600 12.5px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); }
+.vw-bz-num:focus { outline: 0; box-shadow: 0 0 0 2px var(--focus-ring); }
+.vw-bezier-presets { gap: 4px; }
+.vw-bezier-presets .btn { height: 28px; padding: 0 10px; }
+.vw-bezier-presets .btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); font-weight: 600; }
+:root[data-theme=dark] .vw-bezier-presets .btn.on { color: var(--chip-on-fg); background: var(--chip-on-bg); box-shadow: none; }
+.vw-bezier-foot { display: flex; justify-content: flex-end; padding-top: 2px; }
+.vw-bz-done { min-width: 72px; justify-content: center; }
+
+/* speed: one 32 px row of field + presets (the shared segmented chip), one of ramp + freeze */
+.vw-speed { gap: 10px; }
+.vw-speed-row { flex-wrap: nowrap; gap: 8px; }
+.vw-inspector .vw-speed-input, .vw-speed-input { width: 72px; height: 32px; box-sizing: border-box; }
+.seg-ctl.vw-speed-chips { flex: 1 1 auto; min-width: 0; }
+.seg-ctl.vw-speed-chips button { padding: 0 6px; }
+.vw-ramp-menu, .vw-freeze { flex: 1 1 0; min-width: 0; height: 32px; gap: 6px; justify-content: center; }
+.vw-freeze.is-disabled { opacity: 0.5; cursor: not-allowed; }
+.vw-freeze-why { margin-top: -4px; }
+.vw-ramp { gap: 6px; }
+.vw-ramp-label { font: 600 11px var(--ui); fill: var(--text-2); }
+.vw-ramp-label.time { font-weight: 500; fill: var(--text-3); text-anchor: middle; }
+.vw-ramp-label.time.start { text-anchor: start; }
+.vw-ramp-label.time.end { text-anchor: end; }
+.vw-ramp-axis { stroke: var(--text-3); stroke-width: 1; }
+.vw-ramp-hint { overflow-wrap: normal; hyphens: none; }
+
+/* the compound breadcrumb: neutral, 28 px Back, a short note on narrow windows */
+.vw-compound-bar { height: 36px; background: var(--side); }
+.vw-compound-bar .vw-cb-back { height: 28px; gap: 4px; padding: 0 10px 0 6px; }
+.vw-cb-crumb { height: 28px; padding: 0 8px; border-radius: var(--r-2); }
+.vw-cb-note-short { display: none; }
+@media (max-width: 1100px) { .vw-cb-note { display: inline; } .vw-cb-note-long { display: none; } .vw-cb-note-short { display: inline; } }
+
+/* the shortcuts sheet: mouse actions read as words, keys as keycaps; a cue while more is below */
+.vw-kspec { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px; flex: none; max-width: 60%; }
+.vw-kspec .vw-ksep { color: var(--text-3); font-size: 11.5px; }
+.vw-kspec .vw-kmouse { font: 500 12px/16px var(--ui); color: var(--text); }
+.vw-keys-more { position: sticky; bottom: -24px; display: flex; align-items: flex-end; justify-content: center; gap: 4px; height: 44px; margin: -44px -24px -24px; padding-bottom: 8px; font: 600 11.5px/1 var(--ui); color: var(--text-2); background: linear-gradient(transparent, var(--card) 70%); pointer-events: none; }

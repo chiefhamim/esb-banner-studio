@@ -55,7 +55,7 @@ export interface Track {
 }
 
 /** The shape of a keyframe segment (keyframes.ts). The hyphenated spellings are read as the same eases. */
-export type Ease = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'bezier' | 'ease-in' | 'ease-out' | 'ease-in-out'
+export type Ease = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'bezier' | 'hold' | 'ease-in' | 'ease-out' | 'ease-in-out'
 /** An animated value: `v` at clip-local timeline second `t`; `ease` shapes the segment to the next key (a named ease,
  * or 'bezier' with `bezier` = [x1, y1, x2, y2], or those four numbers directly). */
 export interface Keyframe { t: number; v: number; ease?: Ease | [number, number, number, number]; bezier?: [number, number, number, number] }

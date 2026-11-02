@@ -81,6 +81,7 @@ function ease(k: Keyframe, u: number): number {
     case 'ease-out': case 'easeOut': return 1 - (1 - u) * (1 - u)
     case 'ease-in-out': case 'easeInOut': return u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u)
     case 'bezier': return k.bezier ? cubicBezier(k.bezier, u) : u
+    case 'hold': return u >= 1 ? 1 : 0
     default: return u
   }
 }

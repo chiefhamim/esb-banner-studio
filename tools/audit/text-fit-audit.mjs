@@ -223,6 +223,8 @@ try {
     await page.keyboard.press('Escape')
     await tryStep('video-speed-ramp', async () => {
       await page.evaluate(() => { const st = window.__videoStore.getState(); const c = st.project.clips.find((x) => x.kind === 'video' && !x.still && x.srcDuration != null) ?? st.project.clips.find((x) => x.kind === 'video'); st.updateClip({ ...c, srcDuration: c.srcDuration ?? 60, still: false }); st.selectClip(c.id) })
+      // Speed is an accordion section of the inspector: open it from the jump strip
+      await page.click('.vw-jump button:has-text("Speed")')
       await page.click('.vw-ramp-menu')
       await page.click('.menu .menu-item:has-text("Hero moment")')
       await page.waitForSelector('.vw-ramp-svg')
