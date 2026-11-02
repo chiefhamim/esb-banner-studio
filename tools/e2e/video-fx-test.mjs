@@ -311,6 +311,13 @@ try {
     const m = await measureEngine(page, 3)
     results.previewReverse2x = { dropped: m.dropped, frames: m.frames, pct: m.frames ? Math.round((m.dropped / m.frames) * 10000) / 100 : 100, gaps: m.gaps.slice(0, 8) }
     check('preview: a 1080p clip reversed at 2× plays with ≤ 5 % dropped frames (GOP-by-GOP backward decode)', m.frames > 60 && results.previewReverse2x.pct <= 5, JSON.stringify(results.previewReverse2x))
+    // a "Hero moment" ramp (2× → 0.3× → 2×): the fast parts once dropped every frame decoded just above the look-ahead
+    const hero = await page.evaluate((c) => window.__videoEngine.rampPreset(c, 'hero'), g({ id: 'hr', start: 0, duration: 6, in: 0, out: 6, title: 'hero', color: '#2563eb' }))
+    await setClips([hero])
+    await page.waitForTimeout(600)
+    const mh = await measureEngine(page, Math.min(8, hero.duration - 0.5))
+    results.previewHero = { dropped: mh.dropped, frames: mh.frames, pct: mh.frames ? Math.round((mh.dropped / mh.frames) * 10000) / 100 : 100, gaps: mh.gaps.slice(0, 8), duration: hero.duration }
+    check('preview: a "Hero moment" speed ramp plays with ≤ 2 % dropped frames', mh.frames > 100 && results.previewHero.pct <= 2, JSON.stringify(results.previewHero))
     await setClips([
       { id: 'pv', trackId: 'v1', kind: 'video', start: 0, duration: 4, in: 0, out: 8, speed: 2, sourceUrl: L.url, mediaAssetId: L.id, srcDuration: 65, linkId: 'P2' },
       { id: 'pa', trackId: 'a1', kind: 'audio', start: 0, duration: 4, in: 0, out: 8, speed: 2, sourceUrl: L.url, mediaAssetId: L.id, srcDuration: 65, linkId: 'P2', volume: 1 },
@@ -348,14 +355,14 @@ try {
     const lutFile = path.join(os.tmpdir(), `esb-fx-test-${process.pid}.cube`)
     fs.writeFileSync(lutFile, cube)
     await page.setInputFiles('.vw-colour-panel input[type=file]', lutFile)
-    await page.waitForFunction(() => window.__videoStore.getState().project.clips[0].effects?.some((e) => e.type === 'lut' && e.params?.cube), null, { timeout: 10000 })
-    const lutState = await page.evaluate(() => { const e = window.__videoStore.getState().project.clips[0].effects.find((x) => x.type === 'lut'); return { name: e.params.name, chars: e.params.cube.length } })
+    await page.waitForFunction(() => window.__videoStore.getState().project.clips[0].effects?.some((e) => e.type === 'lut' && e.params?.lut), null, { timeout: 10000 })
+    const lutState = await page.evaluate(() => { const e = window.__videoStore.getState().project.clips[0].effects.find((x) => x.type === 'lut'); return { name: e.params.name, chars: (window.__videoEngine.lutText?.(e.params.lut) ?? '').length, id: e.params.lut } })
     fs.writeFileSync(lutFile, 'LUT_3D_SIZE 17\n0 0 0\n')
     await page.setInputFiles('.vw-colour-panel input[type=file]', lutFile)
     const lutError = await page.locator('.vw-colour-panel .vw-fx-error').innerText().catch(() => '')
     fs.rmSync(lutFile, { force: true })
     results.ui = { lut: lutState, badLutMessage: lutError }
-    check('Colour panel: a .cube LUT imports (stored compactly in the clip) and a broken one is refused with a reason', lutState.chars > 1000 && /Expected 17³/.test(lutError), JSON.stringify(results.ui))
+    check('Colour panel: a .cube LUT imports (stored once per project by content id) and a broken one is refused with a reason', lutState.chars > 1000 && /Expected 17³/.test(lutError), JSON.stringify(results.ui))
     await page.click('.vw-fx-panel .vw-fx-head')
     await page.click('.vw-fx-panel .vw-fx-add')
     await page.click('.menu .menu-item:has-text("Mask")')

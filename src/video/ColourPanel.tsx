@@ -1,6 +1,7 @@
 // Inspector "Colour" section (Phase 2 — Part B): the basic correction sliders and a .cube 3D LUT with an intensity.
-// The sliders edit one `colour` effect on the clip (made on the first move); the LUT is a `lut` effect whose text is
-// stored in the project, compacted and size-capped (effects.ts). A file that is not a valid 3D .cube is refused with
+// The sliders edit one `colour` effect on the clip (made on the first move); the LUT is a `lut` effect that names its
+// text by content id (effects.ts registerLut: the text is kept once per project, compacted and size-capped; the
+// project's LUTs together have a budget, checked here at import). A file that is not a valid 3D .cube is refused with
 // the parser's reason; nothing is stored.
 
 import { useRef, useState } from 'react'
@@ -8,7 +9,9 @@ import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/controls'
 import type { Clip, ClipEffect } from './timeline'
 import type { NumParam } from './effects'
-import { EFFECT_DEFS, LUT_MAX_CHARS, LUT_MAX_FILE_BYTES, compactCube, newEffect, paramValue, parseCube, setParam } from './effects'
+import { EFFECT_DEFS, LUT_MAX_CHARS, LUT_MAX_FILE_BYTES, compactCube, lutBudgetProblem, lutOf, lutText as lutTextOf, lutsUsed, newEffect, paramValue, parseCube, registerLut, setParam } from './effects'
+import { allClips } from './timeline'
+import { useVideoStore } from './videoStore'
 import { FxSection, ParamSlider } from './EffectsPanel'
 
 const COLOUR_PARAMS = EFFECT_DEFS.colour.params as NumParam[]
@@ -39,8 +42,14 @@ export function ColourPanel({ clip, onChange }: { clip: Clip; onChange: (c: Clip
       if (!r.ok) { setError(r.error); return }
       const cube = compactCube(r.lut)
       if (cube.length > LUT_MAX_CHARS) { setError('This LUT is too big to keep in the project.'); return }
+      const others = lutsUsed(allClips(useVideoStore.getState().project).filter((c) => c.id !== clip.id))
+      const over = lutBudgetProblem(others, cube)
+      if (over) { setError(over); return }
+      const id = registerLut(cube)
+      if (!id) { setError('This LUT could not be read.'); return }
       const name = (r.lut.title || file.name.replace(/\.cube$/i, '')).slice(0, 120)
-      const next: ClipEffect = lut ? { ...lut, enabled: true, params: { ...(lut.params ?? {}), cube, name } } : { ...newEffect('lut', all), params: { cube, name, intensity: 1 } }
+      const { cube: _old, ...kept } = lut?.params ?? {}
+      const next: ClipEffect = lut ? { ...lut, enabled: true, params: { ...kept, lut: id, name } } : { ...newEffect('lut', all), params: { lut: id, name, intensity: 1 } }
       onChange({ ...clip, effects: lut ? all.map((e) => (e === lut ? next : e)) : [...all, next] })
     } catch {
       setError('The file could not be read.')
@@ -49,7 +58,7 @@ export function ColourPanel({ clip, onChange }: { clip: Clip; onChange: (c: Clip
     }
   }
 
-  const lutText = typeof lut?.params?.cube === 'string' ? lut.params.cube : ''
+  const lutText = (lut && lutTextOf(lutOf(lut))) || ''
   const lutSize = /LUT_3D_SIZE\s+(\d+)/.exec(lutText.slice(0, 400))?.[1]
   return (
     <FxSection id="colour" title="Colour" icon="palette" count={changed + (lutText ? 1 : 0)}>

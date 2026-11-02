@@ -40,6 +40,9 @@ export function audioSignature(project: VideoProject): string {
   return audibleClips(project).map((c) => `${c.id}|${c.sourceUrl}|${c.start}|${c.duration}|${c.in}|${JSON.stringify(c.speed ?? 1)}|${JSON.stringify((c as { freezes?: unknown }).freezes ?? null)}|${(c as { reverse?: boolean }).reverse ? 1 : 0}|${(c as { preservePitch?: boolean }).preservePitch === false ? 0 : 1}|${c.keyframes?.volume ? JSON.stringify(c.keyframes.volume) : ''}`).join(';')
 }
 
+/** Idle source readers kept for the next start. */
+const PCM_KEEP = 4
+
 interface Running { stop(): void; gain: GainNode; clip: Clip }
 
 export class AudioEngine {
@@ -53,6 +56,28 @@ export class AudioEngine {
   /** Whole-file decodes of sources mediabunny cannot read: one per URL for the session (shared by every restart). */
   private fallback = new Map<string, Promise<AudioBuffer | null>>()
   private fallbackBytes = new Map<string, number>()
+  /** Source PCM readers for speed-changed clips, kept per URL across play/seek restarts (their decoded 2 s blocks are
+   * what a restart would otherwise decode again); idle ones beyond PCM_KEEP are closed, oldest first. */
+  private pcms = new Map<string, { pcm: PcmSource; users: number; idleAt: number }>()
+  private acquirePcm(url: string): PcmSource {
+    let e = this.pcms.get(url)
+    if (!e) { e = { pcm: new PcmSource(url, (u) => this.wholeFile(u)), users: 0, idleAt: 0 }; this.pcms.set(url, e) }
+    e.users++
+    return e.pcm
+  }
+  private releasePcm(url: string) {
+    const e = this.pcms.get(url)
+    if (!e) return
+    e.users = Math.max(0, e.users - 1)
+    if (e.users) return
+    e.idleAt = performance.now()
+    const idle = [...this.pcms.entries()].filter(([, x]) => !x.users).sort((a, b) => a[1].idleAt - b[1].idleAt)
+    for (const [u, x] of idle.slice(0, Math.max(0, idle.length - PCM_KEEP))) { x.pcm.dispose(); this.pcms.delete(u) }
+  }
+  /** Close the cached readers nothing plays (a project was replaced, or a file relinked). */
+  releaseSources() {
+    for (const [u, x] of this.pcms) if (!x.users) { x.pcm.dispose(); this.pcms.delete(u) }
+  }
   /** Sources whose sound cannot be played here, with the reason. */
   readonly unsupported = new Map<string, string>()
   /** Called when a source turns out to have no playable sound (the desk shows a note). */
@@ -159,7 +184,8 @@ export class AudioEngine {
    * unless the clip says otherwise), in half-second pieces each started at the context time of its first sample. */
   private async scheduleSpeedClip(c: Clip, from: number, ctxOf: (tl: number) => number, out: GainNode, nodes: Set<AudioBufferSourceNode>, alive: () => boolean, playhead: () => number) {
     const ctx = this.ctx!
-    const pcm = new PcmSource(c.sourceUrl!, (u) => this.wholeFile(u))
+    const url = c.sourceUrl!
+    const pcm = this.acquirePcm(url)
     const sa = new ClipSpeedAudio(c, pcm, ctx.sampleRate)
     const end = c.start + c.duration
     const PIECE = 0.5
@@ -194,7 +220,7 @@ export class AudioEngine {
         while (alive() && b - playhead() > LOOKAHEAD) await new Promise((r) => setTimeout(r, 50))
       }
     } catch { /* no sound for this clip */ } finally {
-      pcm.dispose()
+      this.releasePcm(url)
     }
   }
 
@@ -291,6 +317,8 @@ export class AudioEngine {
 
   dispose() {
     this.stop()
+    for (const x of this.pcms.values()) x.pcm.dispose()
+    this.pcms.clear()
     void this.ctx?.close().catch(() => {})
     this.ctx = null
     this.master = null

@@ -9,7 +9,7 @@
 // browser's file picker cannot come back after a reload; the snapshot keeps the edit).
 
 import type { MediaAsset, VideoProject } from './timeline'
-import { relinkClips, serializeVideoProject } from './timeline'
+import { projectJson, relinkClips, serializeVideoProject } from './timeline'
 import type { AssetFacts, ProjectSettings } from './projectFolder'
 import { buildProjectDoc, DEFAULT_SETTINGS, parseProjectText, relInMedia } from './projectFolder'
 import type { FolderRef, MediaEntry } from './media'
@@ -71,7 +71,7 @@ function singleFileText(): string {
     if (m.fps) rec.fps = m.fps
     if (m.keyframeInterval != null) rec.keyframeInterval = m.keyframeInterval
   }
-  return JSON.stringify(j, null, 2)
+  return checkedSize(projectJson(j))
 }
 
 /** The desk's project as current-schema text (with the folder it belongs to, for a snapshot). */
@@ -79,10 +79,18 @@ function projectText(withFolder: boolean): string {
   const s = useVideoStore.getState()
   const { folder, settings } = useMediaMeta.getState()
   const text = buildProjectDoc(s.project, s.mediaAssets, factsForSave(s.mediaAssets, folder), settings)
-  if (!withFolder || !folder) return text
+  if (!withFolder || !folder) return checkedSize(text)
   const j = JSON.parse(text)
   j.folder = folder
-  return JSON.stringify(j)
+  return checkedSize(JSON.stringify(j))
+}
+
+/** Main refuses a project text over this (electron/video-project.cjs MAX_PROJECT_TEXT, video-media.cjs MAX_SNAPSHOT). */
+export const MAX_PROJECT_CHARS = 25 * 1024 * 1024
+/** The text, or a clear error before main refuses it with a bare "too large". */
+function checkedSize(text: string): string {
+  if (text.length > MAX_PROJECT_CHARS) throw new Error(`the project is ${(text.length / 1048576).toFixed(1)} MB, over the ${MAX_PROJECT_CHARS / 1048576} MB a project may be. Remove a LUT or split the edit into two projects`)
+  return text
 }
 
 /** Change a project setting (import mode, proxies); it is saved with the project. */

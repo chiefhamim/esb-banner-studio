@@ -855,3 +855,169 @@ Merge with Part A, then rerun `npm run test:video` against Part A's speed.ts and
 - An adjustment layer or blend mode inside a compound acts on everything below it on the flattened timeline,
   including the parent's clips under the compound (an NLE would composite the compound first). A compound's own
   transform, keyframes and effects are not applied (opacity and volume are).
+
+## Phase 2 fix round (2026-11-02, branch `video-p2-fix`)
+
+From `video-pro` ed6b06b (Phase 2 merged). The security, correctness and performance reviewers' findings, each
+re-checked against the code before it was fixed (all were real), each with a regression test in
+`tools/unit/video-p2-fix.test.ts` (40 tests; the reviewers' probes reused where they measured something). In parallel a
+UI fixer works on the screenshot findings (`video-p2-ui`); this round kept to logic, data and engine files and touched
+their files only where the logic needed a hook (listed under Files).
+
+### Security / input
+- **S1 fixed.** `migrateTimeline` no longer copies keyframes, ramps and freezes as they are: `sanitizeKeyframes`
+  (keyframes.ts: a plain object read through a null-prototype copy; property names only from `PROPS` or
+  `fx.<one of the clip's own effect ids>.<a numeric parameter of that effect>`; at most 64 properties × 1000 keys;
+  finite `t` 0…1e5 and `v`; known eases, a bezier of four finite numbers with x clamped 0..1 and y −10..10; sorted, one
+  key per moment), `sanitizeSpeed` (finite constant clamped 0.1–10, 1 → unset; or a ramp through the same key cleaner,
+  speeds clamped, ≤ 256 keys), `sanitizeFreezes` (finite `at` ≥ 0, 0 < `dur` ≤ 3600, ≤ 64, sorted, overlaps merged),
+  `reverse` only `true`, `preservePitch` only `false`, `srcDuration` finite ≥ 0, `linkId`/`groupId` short strings, every
+  time ≤ 1e5 s, `out ≥ in`. All seven crafted cases of the reviewer's probe (+ `__proto__`/`constructor` names) load and
+  every inspector, engine and edit function on them runs without throwing. **Error boundaries:** `src/ui/DeskBoundary.tsx`
+  around every desk in `App.tsx` (Home, Editorial, Graphics, Video, Outreach) and a second one inside the Video desk whose
+  "Try again" reopens it with nothing selected, on the main timeline, paused (project and undo history kept); "Go to
+  Home" leaves. A render error now shows that card in the desk's place instead of a blank window (screenshot state
+  `desk-error`: crafted keyframes put straight into the store, past the open-time cleaning).
+- **S2 fixed.** After S1 Part A's speed.ts no longer throws on file input, so the fallback is rarely used; it was fixed
+  anyway: `engine/animation.ts` reads a clip's ramp and freezes once per array (WeakMap caches, capped at 256 keys /
+  64 freezes) and integrates the piecewise-linear ramp exactly (trapezoids between keys, minus the frozen spans) instead
+  of `ceil(t·240)` steps that re-filtered and re-sorted per step: a 600 s, 200-key ramp with a freeze runs well under
+  2 ms per look-up alone (the test's bound is 10 ms, for a loaded suite; was 72–881 ms), and equals a 200,000-step midpoint sum to 1e-5. speed.ts's `Math.max(...fs.map())`
+  spread is gone (the table no longer needs it, see P6); freezes are filtered and sorted once per array (`freezesOf`).
+- **S3** = C1.
+- **S4 fixed.** Compound clips nest at most `MAX_COMPOUND_DEPTH` = 16: deeper insides are emptied on open (3,000 levels
+  open and save as a < 200 kB file; they overflowed the stack before), and `makeCompound` / Ctrl+Alt+G refuse past it
+  with a note (the store passes the open compound's depth). Project JSON (`projectJson`, used by
+  `serializeVideoProject`, `buildProjectDoc` and the Phase 0 single file) is indented only while it is ≤ 1 MB compact,
+  compact above that.
+- **S5 fixed** by S1's whitelist: a `__proto__` key is just a name that is not allowed; the cleaned objects are built
+  from allowed names only.
+- **S6 fixed.** On open, a clip's `sourceUrl` and an asset's `url` from the file are never kept (only this run's
+  `esb-media:`/`blob:` URLs could be, and those are never saved), so a crafted `https://…` or `file:` URL can no longer
+  make mediabunny's UrlSource or the sound reader fetch it: such a clip is offline until relinked. Thumbnails keep only
+  inline `data:image/(png|jpeg|webp)` pictures (< 2 MB), which an `<img>` cannot fetch anything with.
+
+### Correctness
+- **C1 fixed (HIGH).** A LUT's text is kept once per project by content id. `effects.ts`: `lutId(text)` (64-bit FNV-style
+  hash + length), `registerLut` (parses once, keeps the text in a session registry; content-addressed, so the undo
+  history and other projects can never disagree), `lutText`, `lutOf(effect)`, `lutsUsed(clips)`. A clip's LUT effect
+  carries `params.lut = <id>`; the project file carries `luts: { id: text }` for the ids its clips use
+  (`serializeVideoProject`); open registers each text once and maps the file's keys (`deserializeVideoProject` →
+  `migrateTimeline` → `sanitizeEffects(…, lutRef)`); an older file with the text inline in each clip is migrated to one
+  id; an in-memory effect that still carries `cube` (the engine tests set one) is registered on first use. Splits and
+  pastes copy the id only: a 65-point LUT on a clip split four times saves at < 1.2 × the LUT text with ONE copy (was
+  5 copies, 27.6 MB, over main's 25 MB cap). Budget: at most 8 distinct LUTs and 16 MB of LUT text per project; the
+  Colour panel refuses a LUT over it with the reason. Save and autosave failures are loud: a project text over 25 MB is
+  refused before main with "the project is N MB, over the 25 MB a project may be…" (`projectIO.checkedSize`), a failed
+  autosave shows a status-bar note ("Autosave failed: … Your work is not saved yet — try Save (Ctrl+S)") once per reason
+  besides the persistent "Unsaved · autosave failed" label, and Save failures already flashed.
+- **C2 fixed (HIGH).** `keyframes.ts insertKeyAt` splits a segment exactly: the cut is found on the ease's cubic bezier
+  (u solved to ~1e-12; `cubicBezier`'s tolerance went from 1e-7 to 1e-12) and split with de Casteljau; each half is
+  renormalised into a key whose ease is the sub-curve (`'bezier'` + points), so the sampled curve is identical before and
+  after. `cutKeyframes` (trims, splits, `subClip`, ramp cuts) inserts keys at both cut edges this way. Measured: easeIn /
+  easeOut / easeInOut / an overshooting custom bezier, split anywhere: max difference < 1e-6 over 400 samples; the
+  easeInOut opacity split at 3 s and the rampUp / hero / bullet / montage ramps split at 2 s, tail-trimmed and
+  head-trimmed play the same source time at every moment (< 1e-6; the reviewer measured ~0.43 s skipped at the cut).
+  Not exact only for an overshooting curve whose cut lands on its start or end value (no bezier from v to v can hold the
+  bump): there the old behaviour is kept and `exact: false` says so. Retimed forward `sourceTimeAt` clamps to `out`.
+  Note: an eased key that was split now reads as "Custom curve" in the ease menu (it is one).
+- **C3 fixed.** `withFreeze` on a ramp splits the ramp exactly at the freeze point and moves only the curve after it:
+  a flat key at `at` and the split key's copy at `at + dur` carry the rest of the curve. Every frame before and after
+  the freeze plays as before (rampUp and hero, < 1e-6); `withoutFreeze` closes it back up to the same mapping.
+- **C4 fixed.** `retimeClip` returns the project unchanged when the ripple is refused (it used to apply the change and
+  overlap clips). The speed panel already said why; Paste attributes now reports "N kept their speed: the change would
+  move a clip linked to one on a locked track" (`pasteAttributes(…, report)`, store returns `{ ok, refused }`).
+- **C5 fixed** (simplest correct rule): a compound covers `[first start, last end]` on its home track, so a clip on that
+  track inside the span that is not selected is refused with a note naming it ("… lies inside that span but is not
+  selected; the compound clip would cover it. Select it too, or move it." — `compoundProblem`, store `compoundIssue`).
+  Data side of the UI review's "compound labelled Caption (empty)": a compound of titles and captions took the kind of
+  the first track in the list (the caption track); the home track is now a video track, else an overlay track, else a
+  text track, so it is an overlay compound. A compound of captions only is still a caption-kind clip (the caption track
+  takes nothing else): the label and inspector must test `clip.compound` (UI fixer).
+- **C6 fixed (partly, the rest Planned).** `flattenCompounds` applies the compound's opacity and volume KEYFRAMES to
+  its inside: the compound's keys are cut exactly to each inner clip's window (C2's machinery); keyed × plain is the keys
+  scaled (exact), keyed × keyed is sampled every 1/60 s and at every key (within 2e-3 of the product). A compound's own
+  position, scale, rotation, crop and effects are NOT applied, so they are not offered: `attrGroupsFor(compound)` is
+  opacity, volume and keyframes (opacity/volume keys only), and the inspector already hides the transform rows for it.
+  Composing a compound's transform onto footage, stills and full-frame titles is Planned (crop cannot be composed per
+  clip at all; it needs the compound drawn into its own layer first).
+- **C7 fixed.** A marker's name is typed into a draft and committed once on Enter or blur (Esc restores): one undo
+  step per edit (`TimelinePro.tsx MarkerName`); e2e check "Typing a marker name and pressing Enter is one undo step".
+- **C8 fixed.** `rippleShift` returns the markers rippled with the clips (`rippleMarkers`): markers at or after the edit
+  point move by the amount actually used; one inside a span that closed lands where it closed (never dropped). Ripple
+  delete, ripple trim, extract, insert and speed changes use it. Option `project.rippleMarkers` (default on, saved when
+  off), a switch "Markers follow ripple edits" in the Markers list, one undo step.
+- **C9 fixed.** A freeze at the clip's end holds the last frame: `clipDurationFor` counts a freeze that starts where
+  the content ends (constant speed and ramps; the engine fallback too), and the held frame is `out`'s (clamped).
+- **C10 fixed.** `sanitizeEffects` reports the ids it renamed (a duplicate or an unsafe id); `sanitizeKeyframes` copies
+  `fx.<old>.*` keys to `fx.<new>.*` before the whitelist, so a renamed effect keeps its animation.
+- **GAP fixed.** Paste attributes has "Effects, colour and blend" (`effects`, `blendMode`, and the effects' own
+  `fx.<id>.*` keys); pasting Keyframes onto a clip drops effect keys for effects it does not have.
+
+### Performance (lead's review)
+- **P1 / P8 fixed** with C1: each distinct cube is parsed once per session (`registerLut` → `cachedCube(text, id)`;
+  opening a project, `describeSnapshot` and every split/paste reuse it), and the parse cache and the compositor's 3D
+  texture cache are keyed by the LUT id, never by the multi-MB text (a Map look-up of that text hashed it per frame).
+- **P2 fixed.** Forward decode streams keep frames above the highest index the look-ahead wants (`FrameStream.wantMax`);
+  only skipped indexes below it are closed. Hero-moment ramp preview check added to `video-fx-test.mjs` (≤ 2 %).
+- **P3 partly fixed.** The audio engine keeps a `PcmSource` per URL across play/seek restarts (4 idle ones kept), so a
+  restart no longer decodes its source blocks again. Moving the WSOLA stretcher to a Worker: deferred (it needs the
+  stretcher and its PCM windows behind a message protocol; the cost is ~10 ms per 0.5 s piece per clip on this PC —
+  next in line).
+- **P4 deferred.** The reverse export of long-GOP 4K footage still re-decodes a GOP for each 512 MB chunk; decoding each
+  GOP once needs frames copied at a bounded (downscaled) size, which trades quality for a zoomed clip — a decision for
+  the lead. Proxies/all-intra sources are unaffected.
+- **P5 fixed.** Frame-cache windows carry their direction: a reverse stream's window counts "needed later" from its top
+  (the playhead), so over budget the cache evicts the frames it needs last, not next (`FrameWindow`).
+- **P6 fixed.** The ramp table's cells end on every key and freeze edge and are integrated with 3-point Gauss–Legendre
+  (≤ 200 cells a second, ≤ 40,000), and a time inside a cell is integrated the same way from its start: accurate to
+  ~1e-9 s, about 25× fewer cells than the 1 ms table, and independent of the clip's length (one table per committed
+  ramp; `withRamp` building with the old length costs nothing extra). A 600 s eased ramp: the first `clipDurationFor`
+  builds the table (bound 250 ms in a loaded suite; a few ms alone), another length reuses it (bound 30 ms).
+- **P7 deferred** (large-radius blur as a downsample chain): shader work that needs the blur goldens redone; the current
+  blur is correct, only slower and slightly banded past ~40 px.
+- **P9 partly fixed.** `fxResolve` no longer builds `fx.<id>.<key>` strings or searches the parameter list per frame
+  (made once per effect id and key), freezes and ramps are filtered/sorted once per array in speed.ts and the engine
+  adapter, the table's spread is gone. `render.ts`'s per-frame quad arrays: not changed (left with the renderer's owner).
+
+### Files
+- Logic/data/engine: `src/video/{keyframes,speed,timeline,effects,videoStore,projectIO,projectFolder}.ts`,
+  `src/video/engine/{animation,fxResolve,decoder,previewEngine,frameCache,audioEngine}.ts`; new `src/ui/DeskBoundary.tsx`;
+  `src/App.tsx` (each desk wrapped).
+- Small hooks in UI-owned files (for the UI fixer's merge): `ColourPanel.tsx` (stores the LUT id and checks the budget;
+  ~12 lines), `TimelinePro.tsx` (MarkerName draft input, the ripple-markers switch, the Paste attributes note),
+  `VideoWorkspace.tsx` (the desk's own boundary, the autosave-failure note, Ctrl+Alt+G's reason, dev handles
+  `rampPreset` and `lutText`).
+- Tests: `tools/unit/video-p2-fix.test.ts` (new), `tools/e2e/video-test.mjs` (marker name = one undo step),
+  `tools/e2e/video-fx-test.mjs` (Hero ramp preview; the LUT import checks the id), `tools/e2e/video-shots.mjs`
+  (`desk-error` state).
+
+### Checks (2026-11-02, `ESB_PORT_OFFSET=40`)
+- `npm run lint`: 0 errors (warnings only, existing kinds). `npm test`: 1030 passed (83 files; + 40 in
+  `video-p2-fix.test.ts`; one run had a timing test fail under load, so its bounds were made generous; the next full runs were green).
+  `npm run build`: ok.
+- `npm run test:video`: 93 PASS, 0 FAIL (video-test, engine-test, fx-test); new: Hero-moment ramp preview 0 dropped of
+  184 frames (≤ 2 % required), the LUT import stores an id (`lut-93147a8b159c7362-h7ba`, 802,630 chars once); goldens,
+  reverse 119 → 0, 2× pitch 440/880 Hz, 30 s 3-layer FX play 0.22 % dropped unchanged. `video-test.mjs` rerun after the
+  marker check was added: 55 PASS, 0 FAIL ("Typing a marker name and pressing Enter is one undo step": history 5 → 6; the
+  first try found 2 steps — Enter's blur committed again — fixed).
+- `npm run test:electron`: exit 0, 66 PASS, 0 FAIL.
+- `text-fit-audit`: 0 text-fit problems (17 deliberate ellipses). `center-audit`: no problems.
+- Screens: `OUT=tools/out/p2-fix PORT=5292 STATES=desk-error,markers,paste-attributes,lut-loaded,colour-panel,
+  compound-clip,compound-open,speed-panel,speed-ramp,keyframe-lane node tools/e2e/video-shots.mjs` — 60 shots, 0 n/a,
+  0 failed. Looked at: the Video desk's error card (message, Try again, Go to Home), the Markers list with "Markers follow
+  ripple edits", Paste attributes with "Effects, colour and blend", a loaded LUT (name, 17³) and a titles + caption
+  compound now on V2 labelled COMPOUND (no caption fields).
+
+### Known gaps
+- C6: a compound's own position, scale, rotation, crop and effects are not applied (and not offered) — Planned; its
+  opacity/volume keys are. Keyed × keyed opacity is sampled at 60 Hz (within 2e-3).
+- C2: an overshooting custom curve cut exactly at its start/end value keeps the old approximate split (`exact: false`).
+- P3 (stretch in a Worker), P4 (reverse 4K export decodes long GOPs more than once), P7 (large-radius blur chain) and the
+  render.ts part of P9 are deferred (reasons above).
+- The LUT registry keeps every LUT text seen in the session (needed while undo can bring one back); at most a few
+  tens of MB in practice.
+
+### Next step
+Merge with the UI fixer's `video-p2-ui` (overlaps: `TimelinePro.tsx`, `VideoWorkspace.tsx`, `ColourPanel.tsx` — small
+hooks listed under Files), then P3's Worker stretcher before Phase 3.

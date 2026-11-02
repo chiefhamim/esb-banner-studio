@@ -476,6 +476,20 @@ const STATES = {
     await waitAnimations(page)
     return {}
   },
+  // Phase 2 fix round: a render error inside the Video desk shows the desk's error card (not a blank window)
+  'desk-error': async (page) => {
+    await seedTimeline(page, {})
+    await page.evaluate(() => {
+      const vs = window.__videoStore
+      const st = vs.getState()
+      // a clip whose keyframes bypass the open-time cleaning (set straight into the store): the inspector throws
+      const clips = st.project.clips.map((c) => (c.id === 'shot-v1' ? { ...c, keyframes: { opacity: [null] } } : c))
+      vs.setState({ project: { ...st.project, clips }, selectedClipId: 'shot-v1', selectedIds: ['shot-v1'] })
+    })
+    await page.waitForSelector('.desk-error', { timeout: 8000 })
+    await waitAnimations(page)
+    return { note: 'crafted keyframes put straight into the store; Try again reopens with nothing selected' }
+  },
   'paste-attributes': async (page) => {
     await seedTimeline(page, { select: 'shot-v1' })
     await page.evaluate(() => { const st = window.__videoStore.getState(); st.copySelected(); st.selectClips(['shot-v1-still']) })

@@ -10,6 +10,7 @@
 // too (Part B adds effect parameters as `fx.<effectId>.<param>`), sampleProp never needs to know it.
 
 import type { Clip, Ease, Keyframe } from './timeline'
+import { EFFECT_DEFS, isEffectType } from './effects'
 
 /** One property's keys, sorted by `t`. Stored at `clip.keyframes[prop]`. */
 export type KeyframeTrack = Keyframe[]
@@ -76,25 +77,33 @@ export function cubicBezier(x: number, b: readonly number[]): number {
   const x2 = Math.min(1, Math.max(0, b[2] ?? 1))
   const y2 = b[3] ?? 1
   // Newton first (fast, exact on smooth curves), bisection when the slope is too flat
+  return bz(solveU(x, x1, x2), y1, y2)
+}
+
+/** The curve parameter u at which x(u) = x (x1/x2 already clamped to 0..1). Precise to ~1e-12, so a segment split
+ * exactly (splitBezier) samples the same as the original. */
+function solveU(x: number, x1: number, x2: number): number {
   let u = x
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 12; i++) {
     const err = bz(u, x1, x2) - x
-    if (Math.abs(err) < 1e-7) return bz(u, y1, y2)
+    if (Math.abs(err) < 1e-12) return u
     const d = bzD(u, x1, x2)
     if (Math.abs(d) < 1e-6) break
     u -= err / d
+    if (u < 0 || u > 1) break
   }
+  if (u >= 0 && u <= 1 && Math.abs(bz(u, x1, x2) - x) < 1e-11) return u
   let lo = 0
   let hi = 1
   u = x
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 64; i++) {
     const v = bz(u, x1, x2)
-    if (Math.abs(v - x) < 1e-7) break
+    if (Math.abs(v - x) < 1e-13) break
     if (v < x) lo = u
     else hi = u
     u = (lo + hi) / 2
   }
-  return bz(u, y1, y2)
+  return u
 }
 
 /** The ease of a key as one of the named shapes (older spellings 'ease-in'… are read too). */
@@ -261,29 +270,144 @@ export function keyTimes(clip: Pick<Clip, 'keyframes'>, prop?: string): number[]
   return out.sort((a, b) => a - b)
 }
 
+/** Keys closer than this (seconds) are at the same moment for an exact cut. */
+const CUT_EPS = 1e-9
+
+/** The key list with a key at `tc` that changes nothing: the segment holding `tc` is split exactly (de Casteljau on
+ * its cubic bezier), so sampling the result gives the same values as the original everywhere. A time outside the keys
+ * (held), on a key, or on a flat segment needs no new shape. `exact` is false only for an overshooting curve whose
+ * split point lands on its start or end value (no bezier from v to v can carry the bump): then the earlier key's shape
+ * is kept over the shorter span, as before. */
+export function insertKeyAt(ks: KeyframeTrack, tc: number): { keys: KeyframeTrack; exact: boolean } {
+  if (!ks.length || tc <= ks[0].t + CUT_EPS || tc >= ks[ks.length - 1].t - CUT_EPS) return { keys: ks, exact: true }
+  let i = 0
+  while (i < ks.length - 1 && ks[i + 1].t <= tc) i++
+  const a = ks[i]
+  const b = ks[i + 1]
+  if (Math.abs(a.t - tc) <= CUT_EPS || Math.abs(b.t - tc) <= CUT_EPS || b.t - a.t <= CUT_EPS) return { keys: ks, exact: true }
+  const span = b.t - a.t
+  const xc = (tc - a.t) / span
+  const va = Number.isFinite(a.v) ? a.v : 0
+  const vb = Number.isFinite(b.v) ? b.v : 0
+  const put = (left: Keyframe, mid: Keyframe) => [...ks.slice(0, i), left, mid, ...ks.slice(i + 1)]
+  if (easeName(a) === 'linear') return { keys: put(a, { t: tc, v: va + (vb - va) * xc }), exact: true }
+  if (va === vb) return { keys: put(a, { ...a, t: tc, v: va }), exact: true }
+  const [x1r, y1, x2r, y2] = easePoints(a)
+  const x1 = Math.min(1, Math.max(0, x1r))
+  const x2 = Math.min(1, Math.max(0, x2r))
+  const u = solveU(xc, x1, x2)
+  // de Casteljau at u: P0 (0,0), P1, P2, P3 (1,1)
+  const l = (p: number, q: number) => p + (q - p) * u
+  const p01x = l(0, x1), p01y = l(0, y1)
+  const p12x = l(x1, x2), p12y = l(y1, y2)
+  const p23x = l(x2, 1), p23y = l(y2, 1)
+  const p012x = l(p01x, p12x), p012y = l(p01y, p12y)
+  const p123x = l(p12x, p23x), p123y = l(p12y, p23y)
+  const cx = l(p012x, p123x), cy = l(p012y, p123y)
+  const vc = va + (vb - va) * cy
+  const approx = { keys: put(a, { ...a, t: tc, v: vc }), exact: false }
+  if (Math.abs(cy) < 1e-9 || Math.abs(1 - cy) < 1e-9 || cx <= 0 || cx >= 1) return approx
+  const left: BezierPoints = [p01x / cx, p01y / cy, p012x / cx, p012y / cy]
+  const right: BezierPoints = [(p123x - cx) / (1 - cx), (p123y - cy) / (1 - cy), (p23x - cx) / (1 - cx), (p23y - cy) / (1 - cy)]
+  const inUnit = (v: number) => v >= -1e-9 && v <= 1 + 1e-9
+  if (!inUnit(left[0]) || !inUnit(left[2]) || !inUnit(right[0]) || !inUnit(right[2])) return approx
+  const clampX = (p: BezierPoints): BezierPoints => [Math.min(1, Math.max(0, p[0])), p[1], Math.min(1, Math.max(0, p[2])), p[3]]
+  return {
+    keys: put({ t: a.t, v: a.v, ease: 'bezier', bezier: clampX(left) }, { t: tc, v: vc, ease: 'bezier', bezier: clampX(right) }),
+    exact: true,
+  }
+}
+
 /** The keys of a clip cut to the part [a, b] of its local time and re-based to start at 0 (a trim or a split). A
- * property animated across a cut gets a key at each cut edge with the value it had there, so the kept part looks
- * exactly as it did. */
+ * property animated across a cut gets a key at each cut edge, and the segment it falls in is split exactly
+ * (insertKeyAt), so the kept part samples exactly as it did. */
 export function cutKeyframes(keyframes: Clip['keyframes'], a: number, b: number): Clip['keyframes'] {
   if (!keyframes) return undefined
   const out: Record<string, Keyframe[]> = {}
   for (const [prop, keys] of Object.entries(keyframes)) {
-    if (!keys?.length) continue
+    if (!Array.isArray(keys) || !keys.length) continue
     const ks = sorted(keys)
-    const inside = ks.filter((k) => k.t >= a - KEY_EPS && k.t <= b + KEY_EPS).map((k) => ({ ...k, t: Math.max(0, k.t - a) }))
-    const before = ks.filter((k) => k.t < a - KEY_EPS)
-    const after = ks.filter((k) => k.t > b + KEY_EPS)
-    if (before.length && !inside.some((k) => k.t <= KEY_EPS)) {
-      // the new edge key has the exact value at the cut; the rest of that segment keeps the earlier key's ease shape
-      // (exact for linear segments, close for eased ones)
-      const prev = before[before.length - 1]
-      inside.unshift({ ...prev, t: 0, v: sampleKeys(ks, a)! })
-    }
-    if (after.length && !inside.some((k) => Math.abs(k.t - (b - a)) <= KEY_EPS)) inside.push({ t: b - a, v: sampleKeys(ks, b)! })
+    const list = insertKeyAt(insertKeyAt(ks, a).keys, b).keys
+    const inside = list.filter((k) => k.t >= a - CUT_EPS && k.t <= b + CUT_EPS).map((k) => ({ ...k, t: Math.max(0, k.t - a) }))
     if (!inside.length) inside.push({ t: 0, v: sampleKeys(ks, a)! })
     out[prop] = inside
   }
   return Object.keys(out).length ? out : undefined
+}
+
+// ---------------------------------------------------------------- reading a project file (never trust it)
+
+/** Most keys kept per property, and properties per clip. */
+export const MAX_KEYS = 1000
+export const MAX_KEYED_PROPS = 64
+const EASES = new Set(['easeIn', 'easeOut', 'easeInOut', 'bezier', 'ease-in', 'ease-out', 'ease-in-out'])
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** One key list from a file: plain objects with finite numbers only, `t` 0…1e5 s, `v` within [vMin, vMax], a known ease
+ * (a bezier of four finite numbers, x clamped 0..1, y −10..10), at most `max` keys, sorted, one key per moment. */
+export function sanitizeKeyList(raw: unknown, opts: { max?: number; vMin?: number; vMax?: number } = {}): Keyframe[] {
+  if (!Array.isArray(raw)) return []
+  const max = opts.max ?? MAX_KEYS
+  const vMin = opts.vMin ?? -1e6
+  const vMax = opts.vMax ?? 1e6
+  const bez = (b: unknown): BezierPoints | null => {
+    if (!Array.isArray(b) || b.length !== 4 || !b.every(finite)) return null
+    const c = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+    return [c(b[0], 0, 1), c(b[1], -10, 10), c(b[2], 0, 1), c(b[3], -10, 10)]
+  }
+  const out: Keyframe[] = []
+  for (const k of raw.slice(0, max)) {
+    if (!k || typeof k !== 'object' || Array.isArray(k)) continue
+    const o = k as Record<string, unknown>
+    if (!finite(o.t) || !finite(o.v)) continue
+    const key: Keyframe = { t: Math.min(1e5, Math.max(0, o.t)), v: Math.min(vMax, Math.max(vMin, o.v)) }
+    if (Array.isArray(o.ease)) { const b = bez(o.ease); if (b) key.ease = b }
+    else if (typeof o.ease === 'string' && EASES.has(o.ease)) {
+      if (o.ease === 'bezier') { const b = bez(o.bezier); if (b) { key.ease = 'bezier'; key.bezier = b } }
+      else key.ease = o.ease as Ease
+    }
+    out.push(key)
+  }
+  out.sort((x, y) => x.t - y.t)
+  // one key per moment (the later one in the file wins)
+  const uniq: Keyframe[] = []
+  for (const k of out) { if (uniq.length && Math.abs(uniq[uniq.length - 1].t - k.t) <= CUT_EPS) uniq[uniq.length - 1] = k; else uniq.push(k) }
+  return uniq
+}
+
+/** A clip's keyframes from a file: a plain object whose property names are the inspector's (PROPS) or
+ * `fx.<effectId>.<param>` for a numeric parameter of one of the clip's (already cleaned) effects; every list through
+ * sanitizeKeyList. Read through a null-prototype object, so `__proto__` and friends are just names that are not
+ * allowed. `renames` (an effect's id in the file → the id sanitizeEffects gave it) copies that effect's keys along. */
+export function sanitizeKeyframes(raw: unknown, effects: readonly { id: string; type: string }[] = [], renames: readonly { from: string; to: string }[] = []): Record<string, Keyframe[]> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const src: Record<string, unknown> = Object.create(null)
+  for (const name of Object.keys(raw).slice(0, MAX_KEYED_PROPS * 4)) src[name] = (raw as Record<string, unknown>)[name]
+  for (const { from, to } of renames) {
+    const pre = `fx.${from}.`
+    for (const name of Object.keys(src)) if (name.startsWith(pre)) { const n2 = `fx.${to}.${name.slice(pre.length)}`; if (!(n2 in src)) src[n2] = src[name] }
+  }
+  const byId = new Map(effects.map((e) => [e.id, e.type]))
+  const out: Record<string, Keyframe[]> = {}
+  let n = 0
+  for (const name of Object.keys(src)) {
+    if (n >= MAX_KEYED_PROPS) break
+    if (!keyableName(name, byId)) continue
+    const keys = sanitizeKeyList(src[name])
+    if (!keys.length) continue
+    out[name] = keys
+    n++
+  }
+  return n ? out : undefined
+}
+
+function keyableName(name: string, effects: Map<string, string>): boolean {
+  if ((PROPS as readonly string[]).includes(name)) return true
+  const m = /^fx\.([\w-]{1,60})\.(\w{1,40})$/.exec(name)
+  if (!m) return false
+  const type = effects.get(m[1])
+  if (!type || !isEffectType(type)) return false
+  return EFFECT_DEFS[type].params.some((p) => p.kind === 'num' && p.key === m[2])
 }
 
 /** Shift every key by `dt` (no cut): used when the clip's start moves but its content must not (a ripple trim of the

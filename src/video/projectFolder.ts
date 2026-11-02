@@ -19,7 +19,7 @@
 // a file from a newer app is refused rather than half-read.
 
 import type { MediaAsset, VideoProject } from './timeline'
-import { deserializeVideoProject, serializeVideoProject } from './timeline'
+import { deserializeVideoProject, projectJson, serializeVideoProject } from './timeline'
 
 export const PROJECT_FORMAT = 'esb-video-project'
 export const PROJECT_SCHEMA_VERSION = 2
@@ -183,7 +183,7 @@ export function buildProjectDoc(project: VideoProject, bin: MediaAsset[], facts:
     }
   })
   const doc: ProjectDoc = { format: PROJECT_FORMAT, version: PROJECT_SCHEMA_VERSION, savedAt: now, settings: settingsOf(settings), media, timeline: seq }
-  return JSON.stringify(doc, null, 2)
+  return projectJson(doc)
 }
 
 /** Read any project text (v1 single file, v2 folder, an autosave snapshot of either): the sequence with its bin for

@@ -13,6 +13,9 @@
 // indexes are aliases of the one real entry, never a second owner of its bitmap: evicting or replacing the entry drops
 // its aliases with it, so a look-up can never return a closed bitmap.
 
+/** A needed index range [lo, hi]; dir −1 = played from hi down (a reverse stream), else from lo up. */
+export type FrameWindow = [number, number] | [number, number, -1 | 1]
+
 export interface FrameEntry {
   /** What the compositor uploads (an ImageBitmap; a VideoFrame for a short-lived export frame). */
   image: TexImageSource
@@ -36,7 +39,7 @@ export class FrameCache<E extends { bytes: number; close(): void } = FrameEntry>
   /** Indexes (real and alias) per source. */
   private bySource = new Map<string, Set<number>>()
   /** While playing: per source, the [lo, hi] index windows still needed. */
-  private windows = new Map<string, [number, number][]>()
+  private windows = new Map<string, FrameWindow[]>()
   used = 0
   hits = 0
   misses = 0
@@ -107,7 +110,7 @@ export class FrameCache<E extends { bytes: number; close(): void } = FrameEntry>
   }
 
   /** While playing: the index windows each source still needs (frames outside them are evicted first). Paused: null. */
-  setWindows(w: Map<string, [number, number][]> | null) { this.windows = w ?? new Map() }
+  setWindows(w: Map<string, FrameWindow[]> | null) { this.windows = w ?? new Map() }
 
   private index(source: string) {
     let s = this.bySource.get(source)
@@ -122,10 +125,12 @@ export class FrameCache<E extends { bytes: number; close(): void } = FrameEntry>
     return false
   }
 
-  /** How far ahead of the start of its nearest window a needed frame is (bigger = needed later). */
+  /** How far ahead of the playhead's end of its nearest window a needed frame is (bigger = needed later). A forward
+   * window is played from `lo` up; a reverse one (dir −1) from `hi` down — counting from `lo` there evicted the frames
+   * a reverse stream needed next first. */
   private ahead(source: string, i: number): number {
     let best = Infinity
-    for (const [lo, hi] of this.windows.get(source) ?? []) if (i >= lo && i <= hi) best = Math.min(best, i - lo)
+    for (const [lo, hi, dir] of this.windows.get(source) ?? []) if (i >= lo && i <= hi) best = Math.min(best, dir === -1 ? hi - i : i - lo)
     return best
   }
 

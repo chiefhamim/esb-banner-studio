@@ -273,6 +273,9 @@ export class FrameStream {
   /** Only these cache indexes are kept (a fast clip shows one frame in several; the rest are decoded and dropped
    * without the copy). Null = keep every frame. The engine refills it as the playhead moves. */
   want: Set<number> | null = null
+  /** The highest index in `want`: frames above it are kept (they are the next look-ahead's; dropping them closed frames
+   * decoded just above the window, and a forward stream never decodes them again — a ramp dropped 17 % of its frames). */
+  wantMax = Infinity
   constructor(dec: SourceDecoder, sink: VideoSampleSink, from: number) {
     this.dec = dec
     this.from = from
@@ -302,7 +305,8 @@ export class FrameStream {
         if (done || !value) break
         if (this.stopped) { value.close(); break }
         const ts = value.timestamp
-        if (this.want && !this.want.has(this.dec.sampleIndex(ts))) value.close()
+        const idx = this.want ? this.dec.sampleIndex(ts) : 0
+        if (this.want && idx <= this.wantMax && !this.want.has(idx)) value.close()
         else await this.dec.store(value)
         // counted only once the frame is in the cache (the clock waits on this before it starts)
         this.last = ts

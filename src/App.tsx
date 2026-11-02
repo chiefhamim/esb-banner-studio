@@ -9,6 +9,7 @@ import { useShellStore, deskMotion } from './shell/shellStore'
 import { arriveFrames, reducedMotion } from './ui/motion'
 import { useStore } from './store'
 import { Dialog, Tooltips } from './ui/controls'
+import { DeskBoundary } from './ui/DeskBoundary'
 import { CATEGORIES } from './core/tokens'
 import { installBannerLink } from './editorial/bannerLink'
 import './styles/home.css'
@@ -29,6 +30,7 @@ const EditorialWorkspace = lazy(() => loadEditorial().then((m) => ({ default: m.
 const VideoWorkspace = lazy(() => loadVideo().then((m) => ({ default: m.VideoWorkspace })))
 const OutreachWorkspace = lazy(() => loadOutreach().then((m) => ({ default: m.OutreachWorkspace })))
 const ComponentGallery = lazy(() => import('./ui/ComponentGallery').then((m) => ({ default: m.ComponentGallery })))
+const toHome = () => useShellStore.getState().setWorkspace('home')
 const DeskLoading = () => <div className="loading"><div className="spinner" />Opening the desk</div>
 
 export default function App() {
@@ -114,14 +116,15 @@ export default function App() {
   return (
     <div className="studio-shell">
       <div className="workspace-main">
-        {workspace === 'home' && <HomeWorkspace />}
+        {/* each desk has its own error boundary: a render error shows a recoverable message there, never a blank app */}
+        {workspace === 'home' && <DeskBoundary desk="Home"><HomeWorkspace /></DeskBoundary>}
         <Suspense fallback={<DeskLoading />}>
-          {workspace === 'editorial' && <EditorialWorkspace />}
-          {workspace === 'video' && <VideoWorkspace />}
-          {workspace === 'outreach' && <OutreachWorkspace />}
+          {workspace === 'editorial' && <DeskBoundary desk="Editorial" onLeave={toHome}><EditorialWorkspace /></DeskBoundary>}
+          {workspace === 'video' && <DeskBoundary desk="Video" onLeave={toHome}><VideoWorkspace /></DeskBoundary>}
+          {workspace === 'outreach' && <DeskBoundary desk="Outreach" onLeave={toHome}><OutreachWorkspace /></DeskBoundary>}
         </Suspense>
         {workspace === 'graphics' && (
-          base ? <GraphicsWorkspace base={base} /> : (
+          base ? <DeskBoundary desk="Graphics" onLeave={toHome}><GraphicsWorkspace base={base} /></DeskBoundary> : (
             <div className="loading"><div className="spinner" />Loading fonts and artwork…</div>
           )
         )}
