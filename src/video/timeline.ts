@@ -1435,7 +1435,8 @@ function timesCompound(c: Clip, X: Clip, prop: 'opacity' | 'volume'): Partial<Cl
   const times = new Set<number>()
   for (let t = 0; t < c.duration; t += 1 / 60) times.add(Math.round(t * 1e6) / 1e6)
   times.add(c.duration)
-  for (const k of [...xKeys, ...cKeys]) if (k.t >= 0 && k.t <= c.duration) times.add(k.t)
+  // every key, and a moment just before it, so a hold's step stays a step in the product (not a 1/60 s ramp)
+  for (const k of [...xKeys, ...cKeys]) if (k.t >= 0 && k.t <= c.duration) { times.add(k.t); if (k.t > 1e-6) times.add(k.t - 1e-6) }
   const ts = [...times].sort((p, q) => p - q)
   return withKeys(ts.map((t) => ({ t, v: (sampleKeys(cKeys, t) ?? cBase) * (sampleKeys(xKeys, t) ?? xBase) })))
 }

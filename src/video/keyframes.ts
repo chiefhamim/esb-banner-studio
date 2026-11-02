@@ -280,7 +280,7 @@ const CUT_EPS = 1e-9
 
 /** The key list with a key at `tc` that changes nothing: the segment holding `tc` is split exactly (de Casteljau on
  * its cubic bezier), so sampling the result gives the same values as the original everywhere. A time outside the keys
- * (held), on a key, or on a flat segment needs no new shape. `exact` is false only for an overshooting curve whose
+ * (held), on a key, or on a flat segment needs no new shape; a hold segment splits into two holds. `exact` is false only for an overshooting curve whose
  * split point lands on its start or end value (no bezier from v to v can carry the bump): then the earlier key's shape
  * is kept over the shorter span, as before. */
 export function insertKeyAt(ks: KeyframeTrack, tc: number): { keys: KeyframeTrack; exact: boolean } {
@@ -295,6 +295,8 @@ export function insertKeyAt(ks: KeyframeTrack, tc: number): { keys: KeyframeTrac
   const va = Number.isFinite(a.v) ? a.v : 0
   const vb = Number.isFinite(b.v) ? b.v : 0
   const put = (left: Keyframe, mid: Keyframe) => [...ks.slice(0, i), left, mid, ...ks.slice(i + 1)]
+  // a hold split is two holds: the value stays va up to b either way
+  if (easeName(a) === 'hold') return { keys: put(a, { t: tc, v: va, ease: 'hold' }), exact: true }
   if (easeName(a) === 'linear') return { keys: put(a, { t: tc, v: va + (vb - va) * xc }), exact: true }
   if (va === vb) return { keys: put(a, { ...a, t: tc, v: va }), exact: true }
   const [x1r, y1, x2r, y2] = easePoints(a)
@@ -345,7 +347,7 @@ export function cutKeyframes(keyframes: Clip['keyframes'], a: number, b: number)
 /** Most keys kept per property, and properties per clip. */
 export const MAX_KEYS = 1000
 export const MAX_KEYED_PROPS = 64
-const EASES = new Set(['easeIn', 'easeOut', 'easeInOut', 'bezier', 'ease-in', 'ease-out', 'ease-in-out'])
+const EASES = new Set(['easeIn', 'easeOut', 'easeInOut', 'bezier', 'hold', 'ease-in', 'ease-out', 'ease-in-out'])
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
 /** One key list from a file: plain objects with finite numbers only, `t` 0…1e5 s, `v` within [vMin, vMax], a known ease

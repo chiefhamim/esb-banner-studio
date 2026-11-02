@@ -1119,3 +1119,34 @@ line in `tools/audit/text-fit-audit.mjs`.
   tooltip). `center-audit`: 0.
 - `video-shots.mjs` → `tools/out/p2-ui`: 354 shots, 0 n/a, 0 failed, 0 geometry findings. Looked at every touched state
   in both themes at 900 / 1366 / 1920.
+
+## Phase 2 fix rounds merged (2026-11-02, `video-pro`)
+
+`video-p2-fix` (e58ccaf) then `video-p2-ui` (a8353dc) merged with `--no-ff`. Conflicts were only in the markers list
+(`TimelinePro.tsx`: the logic side's `MarkerName` draft input + the UI side's header-timecode time button), the
+`VideoWorkspace.tsx` imports and these notes; every logic hook (DeskBoundary, autosave-failure note, Ctrl+Alt+G reason,
+ripple-markers switch, paste-attributes speed note, LUT id + budget, dev `rampPreset`/`lutText`) is in the UI's design.
+
+### Seams fixed after the merge
+- **Hold ease × the logic side.** `sanitizeKeyList` accepts `hold` (it was missing from the whitelist, so a saved hold
+  came back linear). `insertKeyAt` splits a hold segment into two holds (it went through the bezier path with
+  `easePoints(hold)` = the diagonal and turned the step into a ramp); `cutKeyframes` (trim, split, sub-clip) inherits it.
+  A compound's keyed × keyed opacity also samples a moment just before every key, so a held step stays a step instead
+  of a 1/60 s ramp. Tests: `tools/unit/video-p2-merged.test.ts`.
+- **Adjustment layer = tracks below only** (the UI fixer's note). `renderFrame` put an adjustment after every draw so
+  far, which included clips on its own track that start earlier (`layersAt` orders a track by start). It now goes in at
+  the start of its own track's draws, so it acts on the tracks below and never on a clip beside it. Unit test (draw
+  order, same as the layer on its own track between V1 and V2) and a browser golden in `video-fx-test.mjs`: a lower
+  third on V2 with an adjustment layer later on V2 = the lower third on a track above (0 % difference) while the
+  footage is still greyed (37.7 %).
+- **Compound inspector** shows Volume when the compound holds sound, matching `attrGroupsFor(compound)` (opacity,
+  volume, keyframes); no transform, crop or effects.
+- **Markers list**: the timecode button is tabular and 92 px minimum, so the name fields line up row to row.
+
+### Checks (2026-11-02, `ESB_PORT_OFFSET=40`)
+- `npm run lint` 0 errors · `npm test` 1041 passed (85 files) · `npm run build` ok.
+- `npm run test:video` 94 PASS, 0 FAIL, 1 NOTE (the known 2 × 4K30 drop note, GPU busy).
+- `npm run test:electron` 66 PASS, 0 FAIL. `text-fit-audit` 0 problems (20 deliberate ellipses), `center-audit` 0.
+- `video-shots.mjs` → `tools/out/p2-merged`: 360 shots, 0 n/a, 0 failed, 0 geometry findings. Looked at compound-clip,
+  markers, keyframe-lane, curve-editor, speed-panel, speed-ramp, lut-loaded, effects-panel, desk-error and
+  adjustment-track in both themes at 1366 and 900.

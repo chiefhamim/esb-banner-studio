@@ -5,8 +5,9 @@
 //
 // Phase 2: transforms, opacity and crop are sampled each frame (keyframes, engine/animation.ts); a clip's effects and
 // blend mode are resolved into the compositor's LayerFx (engine/fxResolve.ts); an adjustment layer (an overlay clip
-// with `adjustment: true`) applies its effects to everything drawn below it; footage source time follows the clip's
-// speed (sourceTimeAt) — the frame lookup is told the clip, and asks animation.ts for the time itself.
+// with `adjustment: true`) applies its effects to everything on the tracks below its own (not to clips beside it on its
+// own track); footage source time follows the clip's speed (sourceTimeAt) — the frame lookup is told the clip, and
+// asks animation.ts for the time itself.
 
 import type { Clip, VideoProject } from '../timeline'
 import { footageRect, layersAt } from '../timeline'
@@ -134,11 +135,16 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
   type Item = { kind: 'layer'; clip: Clip; d: LayerDraw | null } | { kind: 'mix'; clip: Clip; a: LayerDraw | null; b: LayerDraw | null; p: number } | { kind: 'adjust'; clip: Clip; fx: LayerFx | null; alpha: number }
   const items: Item[] = []
   let branded = false
+  // where the current track's draws begin: an adjustment layer acts on the tracks BELOW it only, so it goes in before
+  // the clips of its own track that layersAt lists first (they start earlier; they are not below it)
+  let trackId: string | null = null
+  let trackStart = 0
   for (const l of layers) {
+    if (l.clip.trackId !== trackId) { trackId = l.clip.trackId; trackStart = items.length }
     if (l.clip.kind === 'video' && l.clip.branded) branded = true
     if (isAdjustment(l.clip)) {
       const a = alphaOf(l.clip, l.alpha)
-      items.push({ kind: 'adjust', clip: l.clip, fx: a > 0 ? resolveFx(comp, l.clip, t, h, project.height, true, editor) : null, alpha: a })
+      items.splice(trackStart++, 0, { kind: 'adjust', clip: l.clip, fx: a > 0 ? resolveFx(comp, l.clip, t, h, project.height, true, editor) : null, alpha: a })
       continue
     }
     if (l.mix) {

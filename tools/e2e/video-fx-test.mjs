@@ -206,6 +206,29 @@ try {
     })
     results.effectChange = plain
     check('each effect changes the picture (colour, LUT, blur, sharpen+vignette: mean change > 1 %)', plain.every((v) => v > 1), JSON.stringify(plain))
+
+    // an adjustment layer acts on the tracks BELOW it only: a lower third on its own track (V2) that starts before it
+    // stays as it is. Reference = the same lower third moved to a track above V2 (the adjustment alone on V2).
+    const lt = { id: 'adj-lt', trackId: 'v2', kind: 'overlay', start: 0, duration: 2, overlayType: 'lower-third', overlayText: 'Golden lower third', overlaySub: 'Unchanged by the adjustment' }
+    const ad = { id: 'adj-ad', trackId: 'v2', kind: 'overlay', start: 0.5, duration: 1.5, adjustment: true, effects: [fx('ag', 'colour', { saturation: -1, contrast: 0.4 })] }
+    const base = g({ id: 'adj-f', start: 0, duration: 2, in: 2 })
+    const tracksOf = () => page.evaluate(() => window.__videoStore.getState().project.tracks)
+    const tr = await tracksOf()
+    const above = [{ id: 'lt-top', name: 'Titles', kind: 'overlay', muted: false, locked: false }, ...tr]
+    const pixels = async (clips, extra) => { await setClips(clips, extra); await page.waitForTimeout(300); return (await still(1)).base64 }
+    const sameTrack = await pixels([base, lt, ad], { bug: false, tracks: tr })
+    const reference = await pixels([base, { ...lt, trackId: 'lt-top' }, ad], { bug: false, tracks: above })
+    const noAdj = await pixels([base, lt], { bug: false, tracks: tr })
+    const cmp = (p, q) => page.evaluate(({ p, q }) => {
+      const x = Uint8Array.from(atob(p), (ch) => ch.charCodeAt(0))
+      const y = Uint8Array.from(atob(q), (ch) => ch.charCodeAt(0))
+      let sum = 0
+      for (let i = 0; i < x.length; i += 4 * 7) sum += Math.abs(x[i] - y[i]) + Math.abs(x[i + 1] - y[i + 1]) + Math.abs(x[i + 2] - y[i + 2])
+      return Math.round((sum / (3 * (x.length / 28)) / 255) * 10000) / 100
+    }, { p, q })
+    results.adjustmentOwnTrack = { vsReferencePct: await cmp(sameTrack, reference), vsNoAdjustmentPct: await cmp(sameTrack, noAdj) }
+    await setClips([base], { tracks: tr })
+    check('GOLDEN an adjustment layer leaves a lower third on its own track (starting before it) unchanged: same picture as the lower third on a track above (mean ≤ 0.2 %), and it still greys the footage (> 1 %)', results.adjustmentOwnTrack.vsReferencePct <= 0.2 && results.adjustmentOwnTrack.vsNoAdjustmentPct > 1, JSON.stringify(results.adjustmentOwnTrack))
     fs.rmSync(file, { force: true })
   }
 

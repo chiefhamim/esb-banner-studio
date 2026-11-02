@@ -424,7 +424,7 @@
 .vw-range-band { pointer-events: auto; }
 .vw-range-label { position: absolute; top: 2px; right: 4px; padding: 0 4px; font: 600 10px/12px var(--ui); color: var(--text-2); white-space: nowrap; background: color-mix(in srgb, var(--side) 70%, transparent); border-radius: 3px; }
 .vw-ml-row { grid-template-columns: 18px minmax(0, 1fr) auto 28px; }
-.vw-ml-time { padding: 0 8px; }
+.vw-ml-time { padding: 0 8px; font-variant-numeric: tabular-nums; min-width: 92px; }
 
 /* the keyframe lane: 34 px (a 28 px target per key), keys held inside the clip's ends, a legend at the right */
 .vw-kf-head, .vw-kf-lane { height: 34px; }
