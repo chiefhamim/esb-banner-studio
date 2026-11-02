@@ -1610,3 +1610,161 @@ Checks: lint (warnings only, none new), `npm test` 1175 passed, build ok, `test:
 the full formula behind "Show formula" and the tooltip. U11 sizes are the logic side's. Checks after the merge: lint (warnings only), `npm test`
 1178 passed, build ok, `test:video` all pass, text-fit 0 problems, center audit 0. Screenshots: the 20 touched states (plus `inspector-video`) in both themes at
 900/1366/1920 re-shot after the merge into `tools/out/p3-ui` (108 shots, 0 failed); the whole 513-shot set was not re-run end to end.
+
+---
+
+## Phase 4/5 pre-build (libraries) (2026-11-02, branch `video-pre-audio-ai`)
+
+Pure TypeScript processing libraries for Phase 4 (audio) and Phase 5 (AI editing), with tests. **No UI and no engine
+wiring**: those phases add the panels, the mixer/export hookup and the review flows, and pass the gate then. Every
+module takes `Float32Array` PCM (one array per channel) and returns new arrays or plain data; nothing touches the DOM.
+Every AI or detector result is a proposal/draft (`applied: false`, `draft: true`), never applied here.
+
+### Modules and APIs
+
+`src/video/audio/`
+- `fft.ts`: `FFT` (radix-2, in place), `hann`, `downmix`.
+- `loudness.ts`: EBU R128 / BS.1770-4. `kWeighting(sr)` (libebur128's bilinear form, so 48 kHz gives the published
+  coefficients), `measureLoudness(channels, sr)` → `{ integrated, range, rangeLow, rangeHigh, momentary[],
+  shortTerm[] (every 100 ms), momentaryMax, shortTermMax, truePeak, samplePeak, truePeakPerChannel }` (absolute −70 /
+  relative −10 LU gate; LRA −20 LU gate, 10th–95th percentile; weights 1/1/1/0/1.41/1.41 for 5.1);
+  `truePeakEnvelope` / `truePeakOf` (4× polyphase Kaiser-sinc, 32 taps a phase), `interpolator(taps, cutoff, beta)`.
+- `normalize.ts`: `LOUDNESS_TARGETS` (−14 web, −16 podcast, −23 EBU); `normalizeGain(report, {target, ceiling})` →
+  `{gainDb, predictedTruePeak, limit}`; `limiterGain` / `limitTruePeak` (linked look-ahead true-peak limiter: sliding
+  minimum + centred average, so the gain is never above what a peak needs, smooth release; it reads peaks through a
+  stricter 64-tap interpolator with a 0.4 dB margin); `normalizeLoudness(channels, sr, {target, ceiling})` (gain →
+  limit if needed → re-measure, up to 4 passes to land within 0.1 LU) → `{channels, gainDb, limited, before, after}`.
+- `ducking.ts`: `duckingCurve(voiceChannels, sr, {threshold, ratio, depth, attack, release, hold, window, rate})` →
+  `{rate, gainDb: Float32Array}` (≤ 0 dB); `curveAt`, `applyGainCurve`, `curveToVolumeKeyframes` (linear 0..1 volume
+  keyframes, simplified).
+- `fades.ts`: `fadeGain('linear' | 'equal-power' | 'log', x)`, `crossfadeGains`, `clipFadeGain(spec, t, dur)`,
+  `applyFades`, `crossfade(a, b, sr, overlap, curve)`.
+- `denoise.ts`: the built-in fallback. STFT (Hann, 75 % overlap, weighted overlap-add) + decision-directed Wiener gain
+  with an 18 dB floor and light cross-bin smoothing; the noise spectrum comes from a marked noise-only range
+  (`noiseRange`) or the quietest 10 % of frames (`estimateNoise`). `denoise(channels, sr, {fftSize, reduction,
+  strength, smoothing, noiseRange})`. Two light passes, so a long clip never holds every spectrum in memory.
+- `onsets.ts`: `detectOnsets(channels, sr)` → `{onsets: {t, strength}[], flux, hopSec, tempo: {bpm, confidence},
+  beats[]}`. Spectral flux (log magnitude, 10 ms hop), adaptive median threshold, peak picking, each onset refined to
+  the 1 ms block with the biggest energy jump; `estimateTempo` (flux autocorrelation, 60–200 BPM, mild 120 BPM prior);
+  `beatGrid`.
+- `summary.ts`: `rmsSummary` / `rmsOver`, RMS on the same 200 / 50 / 12.5 / 3.125 bins-per-second ladder as the
+  engine's waveform. The min/max waveform itself is **not duplicated**: `src/video/engine/peaks.ts` (PeakBuilder,
+  pyramid, levelFor, cache) already covers it.
+- `curve.ts`: `simplify` (Ramer–Douglas–Peucker), `toKeyframes` (→ `timeline.ts` `Keyframe {t, v, ease}`), `valueAt`.
+
+`src/video/ai/`
+- `transcript.ts`: `Word {text, start, end, confidence, speaker?, estimated?}`, `Segment`, `Transcript {lang,
+  duration, words, segments, origin, draft, reviewed}` (`makeTranscript`: a machine origin means `draft: true`;
+  `AI_DRAFT_LABEL`); `buildSegments` (sentence end incl. the danda, pause, speaker change). Captions:
+  `buildCues(words, {maxChars 42, maxLines 2, maxDuration 7, minDuration 0.8, maxGap 1})` with balanced two-line
+  wrapping counted in grapheme clusters (`Intl.Segmenter`; an over-long word is cut by clusters, never inside a
+  conjunct), `toSrt`, `toVtt`, `timecode`, `parseTimecode`, `parseCaptions` (BOM, CRLF, ids, settings, NOTE blocks,
+  inline tags), `cuesToWords` / `importCaptions` (timings spread by length, marked `estimated`).
+- `transcribe.ts`: `TranscriptionEngine {id, label, local, status(), transcribe(audio, opts)}` with `EngineState`
+  ready / off / no-key / not-installed. `geminiEngine(deps?)`: downmix → 16 kHz → 16-bit WAV → base64 → `aiJson` with
+  `attachment: {mime: 'audio/wav'}` (Gemini `inlineData`) on the editor's Gemini key (the main provider if it is
+  Gemini, else the saved Gemini key); `aiPaused()` is checked before the job and before every chunk. Prompt: verbatim,
+  never translate, keep fillers, `[inaudible]` instead of guessing; the answer is `{language, words}` with one
+  TAB-separated `start end confidence speaker word` line per word (the AI layer's schemas are string-only).
+  `planChunks` (≤ 10 min, and ≤ ~5.4 min so the WAV fits Gemini's ~20 MB inline request; 4 s overlap),
+  `stitchChunks` (an overlap's words come from the chunk whose share holds their midpoint), `validateWords` (rejects
+  negative, reversed, out-of-order, overlapping or past-the-end timings: a bad chunk is asked again once, then
+  reported `rejected`, never repaired). Result `{transcript (draft, origin ai), chunks: ChunkReport[], complete}`.
+  `whisperCppEngine(probe?)`: the interface and an honest "not installed" state; `transcribe()` refuses.
+- `textEdit.ts`: `cutsForDeletedWords(words, deleted, {fps, handle, duration})` (cut from the previous kept word +
+  handle to the next kept word − handle, never into a kept word, frame-snapped, runs merged), `keepRanges`,
+  `rippleTime`, `mergeCuts`; `FILLERS` (EN hesitations um, uh, er, hmm…, discourse you know, I mean, like, so…; BN
+  hesitations উম, উ, আ, হুম, ইয়ে…, discourse মানে, আসলে, তো, বলতে গেলে, কী বলব, বুঝলেন, আর কি…), `findFillers` (NFC,
+  punctuation incl. the danda stripped, longest match first; `hesitation` vs the weaker `discourse`), `fillerCuts`;
+  `detectSilences(channels, sr, {threshold −45 dBFS, minDuration 0.5, window 5 ms})`, `silenceCuts(silences, {fps,
+  handle})`. All return `EditProposal {kind: 'proposal', applied: false, source: 'editor' | 'detector', cuts}`.
+- `highlights.ts`: `sentences`, `findHighlights(words, {minSec 15, maxSec 60, ideal [25, 45], top 8, maxOverlap
+  0.3})`: every window that starts and ends on a sentence boundary, scored 0.35 completeness (ends on terminal
+  punctuation, does not start with and/but/so/এবং/কিন্তু/তাই…) + 0.25 speech density + 0.2 no fillers + 0.1 confidence +
+  0.1 length, de-overlapped, deterministic. `rerankHighlights(cands, {context, deps})`: optional AI reorder through
+  `aiFor('main')`; `applyOrder` takes ids only (unknown dropped, missing appended), so text and times always come
+  from the transcript. Paused, no key or an error keep the heuristic order and say why.
+- `reframe.ts`: `planReframe(frames: {t, box | null}[], {srcW, srcH, target '9:16' | '4:5' | '1:1', zoom, deadZone,
+  maxSpeed, smoothing, anchorY, keepInside, clipIn})` → `{cropW, cropH, path: {t, cx, cy}[], keyframes: {offX, offY},
+  clip: {fit: 'fill', scale}, insideRatio, fastMoves}`; detection gaps are interpolated; `cropSize`, `offsetsFor`
+  (crop centre → `footageRect` offX/offY, tested against `footageRect` itself), `pathToKeyframes`. Detection is the
+  input, out of scope.
+- `src/editorial/aiProviders.ts` (the only shared file changed): `AiJsonRequest.attachment.mime` also takes
+  `AudioMime` (`audio/wav|mp3|ogg|flac|aac`); audio for any provider but Gemini is refused before any network. PDF
+  behaviour unchanged.
+
+### Measured (this PC, `npm test`; ffmpeg 9.0.2 `ebur128=peak=true`, which prints one decimal)
+
+| Fixture (ffmpeg lavfi) | I ours / ffmpeg (LUFS) | LRA ours / ffmpeg (LU) | TP ours / ffmpeg (dBTP) |
+|---|---|---|---|
+| pink noise, mono 48k | −26.65 / −26.7 | 0.07 / 0.1 | −12.98 / −13.0 |
+| level steps 8/6/6 s, stereo 48k | −9.27 / −9.3 | 20.00 / 20 | −6.02 / −6.0 |
+| speech-like AM, stereo 44.1k | −12.84 / −12.8 | 1.10 / 1.1 | −6.38 / −6.4 |
+| 12 kHz sine at 45° (inter-sample), 48k | −0.58 / −0.6 | 0.00 / 0 | −0.81 / −0.9 |
+| brown noise, stereo 48k | −17.40 / −17.4 | 0.31 / 0.3 | −6.40 / −6.4 |
+
+All within ±0.3 LU / ±0.3 dB (worst: TP 0.09 dB on the inter-sample sine). EBU reference: a 1 kHz stereo sine at
+−23 dBFS reads −23.0 LUFS.
+- Normalise: bursty noise to −14 / −16 / −23 → −14.09 / −16.05 / −23.00 LUFS, TP −1.25 / −1.35 / −7.13 dBTP (−14 and
+  −16 needed the limiter). ffmpeg reads the limited −14 result as **−14.1 LUFS, −1.2 dBTP**, an unlimited one as
+  −14.0 / −10.8. (When the limiter read peaks through the meter's own short filter, ffmpeg still saw −0.5 dBTP; hence
+  the stricter limiter filter and the 0.4 dB margin.)
+- Ducking: music RMS under the voice lowered by the set 6 / 12 / 18 dB within ±0.5 dB; unchanged (< 0.05 dB) before
+  the voice; back within 0.5 dB 1.5 s after it.
+- Noise reduction (built-in): speech-like harmonic fixture + white noise at 5 dB SNR → 16.87 dB (**+11.9 dB**);
+  low-frequency-heavy (AR 0.9) noise at 5 dB with a marked noise range → 11.33 dB (**+6.3 dB**). A clean signal with
+  0 dB reduction reconstructs to < 1e-6 RMS error.
+- Onsets: clicks at 120 BPM all found within 5 ms, none extra; tempo 90 / 120 / 128 / 150 BPM within 1 BPM; every
+  click has a beat-grid point within 20 ms.
+- Silence: spans 1.0–2.5 s and 4.0–4.8 s found within 1 frame at 30 fps (a 0.2 s dip ignored); with handle 0 the cut
+  list is exactly [1, 2.5], [4, 4.8]; agrees with ffmpeg `silencedetect=n=-45dB:d=0.5` within a frame.
+- Transcription (fake provider, no network): 70 s in 3 chunks of 30 s, every word once and in order after stitching,
+  timings within the fake's ±0.1 s (≤ 150 ms); a bad first answer is retried and accepted; a chunk that stays bad is
+  `rejected` with its reasons and only its own share is missing. With AI paused: the engine reports "off", transcribe
+  and rerank send nothing (`fetch` never called). **Real Gemini word-timing accuracy is not measured** (it needs a
+  key and a fixture with known timings: Phase 5 acceptance).
+- Captions: every line ≤ 42 grapheme clusters and ≤ 2 lines for English and Bangla; SRT and VTT round-trip.
+- Reframe: a face moving ±0.38 of the width (0.24 widths/s, a 0.5 s detection gap, ±0.01 jitter) stays fully inside
+  9:16, 4:5 and 1:1 on every frame; no pan faster than the limit; the keyframes (a third of the frames or fewer)
+  reproduce the path within 0.0025 of the frame; a jittering still subject never moves the camera.
+
+### Candidate dependencies (not installed: the owner decides)
+
+| For | Package / file | Version | Licence | Size |
+|---|---|---|---|---|
+| RNNoise denoiser (WASM) | `@shiguredo/rnnoise-wasm` | 2025.1.5 | Apache-2.0 (RNNoise itself BSD-3-Clause) | 4.8 MB unpacked (several builds; one is used) |
+| RNNoise, alternative | `@jitsi/rnnoise-wasm` | 0.2.1 | npm licence field empty; repo jitsi/rnnoise-wasm is Apache-2.0, confirm before use | 2.1 MB unpacked |
+| Face detection | `@mediapipe/tasks-vision` | 1.2.0 | Apache-2.0 | 44 MB unpacked (WASM for several targets; the face detector needs one) |
+| Face model | `blaze_face_short_range.tflite` (float16, storage.googleapis.com/mediapipe-models) | latest | Apache-2.0 | 230 KB |
+| Local transcription | whisper.cpp (a binary, not npm) + ggml models (huggingface ggerganov/whisper.cpp) | — | MIT | base 148 MB, small 488 MB, medium 1.53 GB; Bangla needs small or larger |
+
+RNNoise runs at 48 kHz in 10 ms frames, so it fits behind the same `denoise(channels, sr)` shape; whisper.cpp would
+run in the main process (a child process on a temp WAV) behind `whisperCppEngine(probe)`.
+
+### What Phases 4 and 5 still have to wire
+- Phase 4: decode clip audio for these functions (the export's 48 kHz mix and the waveform decode already produce
+  PCM); meters (momentary/short-term/integrated LUFS, true peak) in the mixer; the loudness target in the export sheet,
+  applied to the final mix and re-measured by ffmpeg in `video-test`; fades with handles on clips (`clipFadeGain` in
+  the audio engine's gain rule); ducking as an editable volume lane on the music clip (`curveToVolumeKeyframes`; the
+  audio engine must read `keyframes.volume`); denoise as a clip effect with a "mark noise" range and a cached processed
+  file (never overwriting the original); beat markers on the timeline; RMS summaries next to the cached peaks.
+- Phase 5: a transcript panel (AI-draft label, edit, mark reviewed) fed by `geminiEngine().transcribe` on decoded clip
+  audio, with progress, cancel and the rejected-chunk report; the whisper.cpp probe in main; word selection →
+  `cutsForDeletedWords` → a preview of every cut → ripple delete as one undoable step (keyframes and linked clips
+  included); silence/filler sliders over `detectSilences` / `findFillers`; captions from the reviewed transcript
+  (`buildCues`) and SRT/VTT export; local face detection (MediaPipe) sampling frames into `planReframe`, shown as
+  editable offX/offY keyframes (needs Phase 2's keyframe reader); the highlight list with the optional AI rerank.
+
+### Files
+- New: `src/video/audio/{fft,loudness,normalize,ducking,fades,denoise,onsets,summary,curve}.ts`,
+  `src/video/ai/{transcript,transcribe,textEdit,highlights,reframe}.ts`, `tools/unit/audio-fixtures.ts`,
+  `tools/unit/video-audio-loudness.test.ts`, `tools/unit/video-audio-dsp.test.ts`,
+  `tools/unit/video-ai-transcript.test.ts`, `tools/unit/video-ai-transcribe.test.ts`,
+  `tools/unit/video-ai-edit.test.ts`. Fixtures are made by ffmpeg in `tools/out/audio-fixtures/` (git-ignored); none
+  committed. The ffmpeg tests skip themselves when ffmpeg is not on PATH.
+- Changed: `src/editorial/aiProviders.ts` (audio attachment type + Gemini-only guard), this file.
+
+### Checks
+- `npm run lint`: 0 errors (no warnings in the new files).
+- `npm test`: 1,014 passed (84 files; 5 new files, 91 new tests).
+- `npm run build`: ok.

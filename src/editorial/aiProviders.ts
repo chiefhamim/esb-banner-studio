@@ -383,14 +383,18 @@ export function toGeminiSchema(s: AiSchema) {
 /** Strict JSON Schema (Claude, OpenAI): every object closed, every field required. */
 export const strictSchema = (s: AiSchema) => ({ ...s, additionalProperties: false })
 
+/** Audio Gemini reads as inlineData. */
+export type AudioMime = 'audio/wav' | 'audio/mp3' | 'audio/ogg' | 'audio/flac' | 'audio/aac'
+
 export interface AiJsonRequest {
   provider: AiProviderId
   key: string
   model: string
   system: string
   user: string
-  /** A file the model reads itself (a PDF). Only Claude and Gemini take one here; the others raise a plain error. */
-  attachment?: { mime: 'application/pdf'; data: string }
+  /** A file the model reads itself (a PDF). Only Claude and Gemini take one here; the others raise a plain error.
+   *  Audio (Video Desk transcription, `src/video/ai/transcribe.ts`) is Gemini only. */
+  attachment?: { mime: 'application/pdf' | AudioMime; data: string }
   schema: AiSchema
   /** Long for a whole article, short for captions and SEO. */
   maxTokens?: number
@@ -411,6 +415,7 @@ function parseJson(text: string): Record<string, unknown> {
 export async function aiJson<T extends Record<string, unknown>>(req: AiJsonRequest): Promise<{ data: T; model: string }> {
   if (aiPaused()) throw new Error(AI_OFF_MESSAGE)
   const { provider, key, system, user, schema, attachment } = req
+  if (attachment?.mime.startsWith('audio/') && provider !== 'gemini') throw new Error(`${providerMeta(provider).name} cannot listen to audio here — transcription needs a Gemini key.`)
   if (attachment && provider !== 'gemini' && provider !== 'anthropic') throw new Error(`${providerMeta(provider).name} cannot read a PDF file here — choose Claude or Gemini as the main AI.`)
   const maxTokens = req.maxTokens ?? 16000
   const t = timeout(req.timeoutMs ?? 120_000, req.signal)
@@ -446,7 +451,7 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
         model,
         max_tokens: maxTokens,
         system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: attachment ? [{ type: 'document' as const, source: { type: 'base64' as const, media_type: attachment.mime, data: attachment.data } }, { type: 'text' as const, text: user }] : user }],
+        messages: [{ role: 'user', content: attachment ? [{ type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: attachment.data } }, { type: 'text' as const, text: user }] : user }],
         output_config: { ...(CLAUDE_EFFORT.test(model) ? { effort: req.effort ?? 'medium' } : {}), format: { type: 'json_schema', schema: strictSchema(schema) } },
       }, { signal: t.signal })
       const msg = await stream.finalMessage()
