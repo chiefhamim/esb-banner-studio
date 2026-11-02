@@ -453,6 +453,9 @@ export class GLCompositor {
     return s
   }
 
+  /** A slot texture exists (it was drawn and not pruned since). */
+  hasSlot(slot: string) { return this.slots.has(slot) }
+
   /** Drop slot textures not in `keep` (clips that left the screen). */
   pruneSlots(keep: Set<string>) {
     for (const [k, s] of this.slots) if (!keep.has(k)) { this.gl.deleteTexture(s.tex); this.slots.delete(k) }

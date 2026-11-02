@@ -200,8 +200,17 @@ try {
     await page.waitForTimeout(500)
     await tryStep('video-start', async () => { await page.waitForSelector('.vw-start-card') })
     const vtab = (t) => page.click(`.vw-bin-panel .side-tabs button:has-text("${t}")`)
-    for (const t of ['Media', 'Overlays', 'Captions', 'Audio', 'Story']) await tryStep(`video-${t}`, async () => { await vtab(t) })
-    await tryStep('video-overlay-inspector', async () => { await vtab('Overlays'); await page.click('.vw-preset-card[data-preset="card"] button:has-text("Add")'); await page.fill('.vw-f-text', LONG.headline); await page.fill('.vw-f-sub', LONG.deck) })
+    for (const t of ['Media', 'Titles', 'Captions', 'Audio', 'Story']) await tryStep(`video-${t}`, async () => { await vtab(t) })
+    // Phase 3 titles: long Bangla names and roles in the title inspector (fields, the Title section, the export check)
+    const BN_NAME = 'মোহাম্মদ আব্দুল্লাহ আল মামুন ক্ষিতীশ চন্দ্র স্ত্রীবর্গ বিশ্বাস মজুমদার চৌধুরী'
+    const BN_ROLE = 'বাংলাদেশ বিদ্যুৎ উন্নয়ন বোর্ডের প্রধান প্রকৌশলী (সঞ্চালন ও বিতরণ পরিকল্পনা)'
+    await tryStep('video-title-inspector-bn', async () => { await vtab('Titles'); await page.click('.vw-preset-card[data-preset="lower-third"] button:has-text("Add")'); await page.fill('#vw-tf-name', BN_NAME); await page.fill('#vw-tf-role', BN_ROLE) })
+    await tryStep('video-title-section', async () => { await page.click('.vw-title-panel .vw-fx-head[aria-expanded="false"]').catch(() => {}); await page.waitForSelector('.vw-title-panel.open') })
+    await tryStep('video-title-quote-bn', async () => { await page.keyboard.press('Escape'); await vtab('Titles'); await page.click('.vw-preset-card[data-preset="quote"] button:has-text("Add")'); await page.fill('#vw-tf-quote', `${BN_ROLE} ${BN_NAME} ${BN_ROLE}`); await page.fill('#vw-tf-speaker', BN_NAME) })
+    await tryStep('video-title-export-blocked', async () => { await page.evaluate(() => { const st = window.__videoStore.getState(); for (const c of st.project.clips) if (c.titleData) st.updateClip({ ...c, titleData: { ...c.titleData, fields: Object.fromEntries(Object.keys(c.titleData.fields).map((k) => [k, ''])) } }) }); await page.click('.vw-header-actions button:has-text("Export")'); await page.waitForSelector('.vx-title-issues') })
+    await page.keyboard.press('Escape')
+    await tryStep('video-titles-stickers', async () => { await vtab('Titles'); await page.click('.vw-sticker-btn[data-shape="callout"]'); await page.fill('#vw-tf-text', BN_ROLE) })
+    await page.evaluate(() => { const st = window.__videoStore.getState(); st.loadProject({ ...st.project, clips: [] }) })
     await tryStep('video-media-imported', async () => {
       await vtab('Media')
       await page.setInputFiles('.video-workspace input[type=file][multiple]', [path.join(root, 'tools/fixtures/video/speech-6s.mp4'), path.join(root, 'tools/fixtures/media/synthetic-rig.jpg')])

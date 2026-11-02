@@ -37,13 +37,13 @@ describe('story → video', () => {
     for (let i = 1; i < v1.length; i++) expect(v1[i].start).toBeCloseTo(v1[i - 1].start + v1[i - 1].duration, 5)
     const end = Math.max(...tl.clips.map((c) => c.start + c.duration))
     expect(tl.duration).toBeGreaterThanOrEqual(end - 1e-9)
-    expect(tl.clips.find((c) => c.trackId === 'v2')?.overlayText).toBe('Fossil Fuels & Commodities')
+    expect(tl.clips.find((c) => c.trackId === 'v2')?.titleData?.fields.name).toBe('Fossil Fuels & Commodities')
     expect(tl.clips.filter((c) => c.trackId === 'c1').at(-1)?.captionText).toBe('Read the full story on esbpowerline.com')
   })
 
   it('without a banner the headline is set as an overlay instead', () => {
     const tl = buildStoryTimeline({ aspect: '16:9', headline: 'H', deck: '', body, desk: 'D', bannerUrl: null, photoUrl: 'blob:p' })
-    expect(tl.clips.some((c) => c.overlayType === 'headline' && c.overlayText === 'H')).toBe(true)
+    expect(tl.clips.some((c) => c.titleData?.classic === 'headline' && c.titleData.fields.headline === 'H')).toBe(true)
   })
 })
 

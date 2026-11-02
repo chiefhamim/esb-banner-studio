@@ -25,7 +25,7 @@ import { holdBackground, holdProxies, noteScrub } from './engine/background'
 import { releaseFilmstrips } from './engine/filmstrip'
 import { ExportSheet } from './ExportSheet'
 import { StoryVideoPanel } from './StoryVideoPanel'
-import { AdjustmentPresetCard, EffectsPanel, FxSection, InspectorSections, openSection, useInspectorUi } from './EffectsPanel'
+import { EffectsPanel, FxSection, InspectorSections, openSection, useInspectorUi } from './EffectsPanel'
 import { ColourPanel } from './ColourPanel'
 import { lutText } from './effects'
 import { animationSource } from './engine/animation'
@@ -35,17 +35,17 @@ import { BinCard, BinImportMode, BinMissingBar } from './BinCard'
 import { clearSnapshots, describeSnapshot, latestSnapshot, loadProjectText, onAutosaved, saveProject, startAutosave } from './projectIO'
 import type { Snapshot } from './projectIO'
 import { fmtTime, useClockFormat } from '../ui/time'
+import { TitleFields, TitleSection, TitlesTab } from './TitlesPanel'
+import { guidesNow, useTitleUi } from './titleUi'
+import { migrateOverlayClip, titleWords } from './titleModel'
+import { titleRasterStats } from './engine/titleRaster'
 import '../styles/video.css'
 
-type BinTab = 'overlays' | 'media' | 'captions' | 'audio' | 'story'
-const BIN_TAB_LABEL: Record<BinTab, string> = { media: 'Media', overlays: 'Overlays', captions: 'Captions', audio: 'Audio', story: 'Story' }
+type BinTab = 'titles' | 'media' | 'captions' | 'audio' | 'story'
+const BIN_TAB_LABEL: Record<BinTab, string> = { media: 'Media', titles: 'Titles', captions: 'Captions', audio: 'Audio', story: 'Story' }
 
-/** The overlay presets: a kind of title with empty fields. The editor types every word; nothing is filled in here. */
+/** The picture overlays the Titles tab adds (titles themselves are TitlesPanel.tsx's kit). */
 const OVERLAY_PRESETS: { type: OverlayTemplate; tag: string; desc: string; color: string }[] = [
-  { type: 'lower-third', tag: 'Lower third', desc: 'Names the person speaking, on a dark bar with the ESB stripes.', color: '#10b981' },
-  { type: 'headline', tag: 'Headline', desc: 'A headline over the lower half, with an optional kicker.', color: '#dc2626' },
-  { type: 'card', tag: 'Text card', desc: 'A title and a short text, centred, for a key point or a source.', color: '#7c3aed' },
-  { type: 'breaking', tag: 'Breaking', desc: 'A red BREAKING strap with one headline line.', color: '#ef4444' },
   { type: 'logo', tag: 'Logo', desc: 'The official ESB Power Line logo, at its own proportions.', color: '#0ea5e9' },
 ]
 
@@ -235,7 +235,7 @@ function Monitor({ aspect }: { aspect: number }) {
       const st = getState()
       const t = st.currentTime
       const { frames, exact } = eng.lookup(t, st.playing)
-      renderFrame(comp, playable(viewOf(st)), t, w, h, { editor: true, frames })
+      renderFrame(comp, playable(viewOf(st)), t, w, h, { editor: true, frames, guides: guidesNow() })
       eng.drawLog?.push({ perf: performance.now(), t })
       if (st.playing) eng.noteDraw(Math.round(t * st.project.fps), exact())
       else if (exact()) eng.noteExactPaused(t)
@@ -249,12 +249,13 @@ function Monitor({ aspect }: { aspect: number }) {
       if (s.project !== prev.project || s.compoundPath !== prev.compoundPath || s.currentTime !== prev.currentTime || s.playing !== prev.playing) schedule()
     })
     const offProxy = onProxyReady(() => schedule())
+    const offGuides = useTitleUi.subscribe(schedule)
     window.addEventListener('esb:video-media-ready', schedule)
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null
     ro?.observe(canvas)
     schedule()
     return () => {
-      unsub(); offProxy(); window.removeEventListener('esb:video-media-ready', schedule); ro?.disconnect(); cancelAnimationFrame(raf)
+      unsub(); offProxy(); offGuides(); window.removeEventListener('esb:video-media-ready', schedule); ro?.disconnect(); cancelAnimationFrame(raf)
       if (eng.onFrame === schedule) eng.onFrame = () => {}
       comp.dispose()
     }
@@ -1062,24 +1063,7 @@ function VideoDesk() {
                 </div>
               )}
 
-              {activeTab === 'overlays' && (
-                <div className="vw-preset-list">
-                  <div className="vw-bug-row">
-                    <Switch checked={project.bug !== false} onChange={setBug} label="ESB bug, top right" />
-                  </div>
-                  <p className="vw-preset-intro">Each title starts empty: type its words in the inspector.</p>
-                  {OVERLAY_PRESETS.map((p) => (
-                    <div key={p.type} className="vw-preset-card" data-preset={p.type}>
-                      <div className="vw-preset-header">
-                        <span className="vw-tag" data-tag={p.type}>{p.tag}</span>
-                        <button type="button" className="btn xs" onClick={() => handleAddOverlay(p.type, p.tag)}><Icon name="plus" size={12} />Add</button>
-                      </div>
-                      <p className="vw-preset-desc">{p.desc}</p>
-                    </div>
-                  ))}
-                  <AdjustmentPresetCard />
-                </div>
-              )}
+              {activeTab === 'titles' && <TitlesTab bug={project.bug !== false} onBug={setBug} onAddLogo={() => handleAddOverlay('logo', 'Logo')} />}
 
               {activeTab === 'captions' && (
                 <div className="vw-preset-list">
@@ -1290,6 +1274,7 @@ function laneRows(clips: Clip[]): { row: Map<string, number>; count: number } {
 function clipLabel(c: Clip): string {
   if (c.compound) return `${c.title && c.title !== 'Compound clip' ? c.title : 'Compound'} · ${c.compound.clips.length} clip${c.compound.clips.length === 1 ? '' : 's'}`
   if (c.kind === 'caption') return (c.captionText ?? '').trim() || 'Caption (empty)'
+  if (c.kind === 'overlay' && c.titleData) return titleWords(c.titleData) || (c.titleData.template === 'sticker' ? `${c.title}` : `${c.title} (empty)`)
   if (c.kind === 'overlay' && c.overlayType && c.overlayType !== 'logo' && !c.sourceUrl) return (c.overlayText ?? '').trim() || `${c.title} (empty)`
   return c.title
 }
@@ -1301,11 +1286,12 @@ function kindWord(c: Clip): string {
   if (c.kind === 'video') return c.still ? 'Still' : 'Footage'
   if (c.kind === 'audio') return 'Sound'
   if (c.kind === 'caption') return 'Caption'
+  if (c.titleData) return c.titleData.template === 'sticker' ? 'Sticker' : 'Title'
   return 'Overlay'
 }
 
 /** The inspector's sections, in the order of the jump strip and of the column. */
-const SECTION_LABEL: Record<string, string> = { transform: 'Transform', speed: 'Speed', colour: 'Colour', fx: 'Effects', keys: 'Keys' }
+const SECTION_LABEL: Record<string, string> = { title: 'Title', transform: 'Transform', speed: 'Speed', colour: 'Colour', fx: 'Effects', keys: 'Keys' }
 
 function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, onGestureStart, closeLabel, linkedWith, flash, selectionCount }: { clip: Clip; locked: boolean; onChange: (c: Clip) => void; onDelete: () => void; onClose: () => void; onUnlink: () => void; onGestureStart: () => void; closeLabel: string; linkedWith?: Clip; flash: (s: string) => void; selectionCount: number }) {
   const isFootage = clip.kind === 'video' && !clip.compound
@@ -1321,7 +1307,8 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
   const timed = !clip.compound && !clip.still && clip.srcDuration != null && (clip.kind === 'video' || clip.kind === 'audio')
   const visual = clip.kind !== 'audio' && !clip.compound
   // the sections this clip has (a compound has none: it is edited inside; its opacity is a plain row)
-  const ids = clip.compound ? [] : ['transform', ...(timed ? ['speed'] : []), ...(visual ? ['colour', 'fx'] : []), 'keys']
+  const isTitle = !clip.compound && clip.kind === 'overlay' && !!clip.titleData
+  const ids = clip.compound ? [] : [...(isTitle ? ['title'] : []), 'transform', ...(timed ? ['speed'] : []), ...(visual ? ['colour', 'fx'] : []), 'keys']
   const stored = useInspectorUi((s) => s.open)
   const open = stored == null ? null : ids.includes(stored) ? stored : ids[0] ?? null
   const transformTitle = clip.kind === 'audio' ? 'Sound' : clip.adjustment ? 'Opacity' : 'Transform'
@@ -1355,7 +1342,8 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
         <div className="vw-inspector-body">
           {selectionCount > 1 && <p className="vw-hint vw-multi-hint"><Icon name="info" size={12} />{selectionCount} clips selected. Ctrl+G groups them, Ctrl+Alt+G makes a compound clip; this shows the first.</p>}
           {locked && <p className="vw-hint vw-locked-hint"><Icon name="lock" size={12} />On a locked track{linkedWith ? ' (or linked to one)' : ''}: it cannot be moved, trimmed, split or deleted.</p>}
-          {!textOverlay && (clip.kind !== 'caption' || clip.compound) && (
+          {isTitle && <TitleFields clip={clip} onChange={onChange} />}
+          {!textOverlay && !isTitle && (clip.kind !== 'caption' || clip.compound) && (
             <div className="vw-field">
               <label htmlFor="vw-f-title">Name on the timeline</label>
               <input id="vw-f-title" type="text" value={clip.title} onChange={(e) => set({ title: e.target.value })} />
@@ -1398,6 +1386,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
               <textarea id="vw-f-cap" className="vw-f-cap" rows={3} value={clip.captionText ?? ''} placeholder="Caption text" onChange={(e) => set({ captionText: e.target.value })} />
             </div>
           )}
+          {isTitle && <TitleSection clip={clip} onChange={onChange} />}
           {!clip.compound && (
             <FxSection id="transform" title={transformTitle} icon={clip.kind === 'audio' ? 'volume' : 'dimension'}>
               {isFootage && (
@@ -1535,6 +1524,11 @@ if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof w
       /** The .cube text of a LUT id (effects.ts registry). */
       lutText: (id: string) => lutText(id),
       stats: () => previewEngine().stats(),
+      /** Title rasters drawn so far (static: once per settled title; moving: once per new instant). */
+      titleStats: () => ({ static: titleRasterStats.static, moving: titleRasterStats.moving }),
+      resetTitleStats: () => titleRasterStats.reset(),
+      /** A Phase 0–2 overlay as the title clip a reopened project makes of it. */
+      migrateOverlay: (c: Clip) => migrateOverlayClip(c),
       scrubLatencies: () => previewEngine().scrubLatencies.slice(),
       still: async (t: number) => {
         const r = await renderPreviewStill(playable(view()), t)

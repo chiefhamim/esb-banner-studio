@@ -247,7 +247,9 @@ describe('saving and reopening', () => {
   it('opens a version 1 project (no paths) unchanged', () => {
     const v1 = JSON.stringify({ version: 1, id: 'p', name: 'Old', aspect: '16:9', width: 1920, height: 1080, fps: 30, duration: 12, tracks: createDefaultTimeline().tracks, clips: [clip({ id: 'o', trackId: 'v2', kind: 'overlay', overlayType: 'lower-third', overlayText: 'A' })], mediaAssets: [] })
     const p = deserializeVideoProject(v1)!
-    expect(p.clips[0].overlayText).toBe('A')
+    // Phase 3: the old lower third opens as a classic title clip with the same words (drawn exactly as before)
+    expect(p.clips[0].titleData).toMatchObject({ look: 'classic', classic: 'lower-third', fields: { name: 'A', role: '' } })
+    expect(p.clips[0].overlayType).toBeUndefined()
     expect(p.bug).toBe(true)
   })
 })

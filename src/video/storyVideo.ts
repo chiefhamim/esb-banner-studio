@@ -9,6 +9,7 @@
 
 import type { AspectRatio, Clip, VideoProject } from './timeline'
 import { ASPECT_CONFIGS, createDefaultTimeline } from './timeline'
+import { migrateOverlayClip } from './titleModel'
 
 export interface StoryVideoInput {
   aspect: AspectRatio
@@ -100,6 +101,7 @@ export function buildStoryTimeline(input: StoryVideoInput): VideoProject {
     width: cfg.width,
     height: cfg.height,
     duration: Math.ceil(t * 10) / 10,
-    clips,
+    // the headline and the desk's lower third are title clips in the classic look (as the first cut always looked)
+    clips: clips.map(migrateOverlayClip),
   }
 }

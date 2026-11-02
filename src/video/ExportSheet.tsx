@@ -12,6 +12,7 @@ import { audibleClips, downloadVideoBlob, emptyTextClips, exportBlocker, exportD
 import type { ExportContainer, ExportResult } from './exportVideo'
 import { useVideoStore } from './videoStore'
 import { videoBridge } from './media'
+import { canvasMeasure, measureNow, titleProblems } from './titleClip'
 
 const DRAFT_SECONDS = 10
 
@@ -42,7 +43,11 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
   }, [project.width, project.height, project.fps])
 
   const audio = useMemo(() => audibleClips(project), [project])
-  const blocked = useMemo(() => exportBlocker(project), [project])
+  // the title check measures with the real fonts once the canvas measurer exists (made on first use)
+  const [measured, setMeasured] = useState(!!measureNow())
+  useEffect(() => { if (!measured) void canvasMeasure().then(() => setMeasured(true)) }, [measured])
+  const blocked = useMemo(() => (measured ? exportBlocker(project) : exportBlocker(project)), [project, measured])
+  const titleIssues = useMemo(() => (measured ? titleProblems(project, measureNow()) : titleProblems(project)), [project, measured])
   const empties = useMemo(() => emptyTextClips(project), [project])
   const end = contentEnd(project)
   // a draft is offered only when the video is longer than the draft
@@ -124,8 +129,21 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
             </dl>
             {blocked && (
               <div className="signin-error vx-blocked" role="alert">
-                <Icon name="info" size={14} /><span>{blocked}</span>
-                {onShowMedia && /media/i.test(blocked) && !/empty/i.test(blocked) && <button type="button" className="btn sm vx-show-media" onClick={onShowMedia}>Show missing files</button>}
+                <Icon name="info" size={14} />
+                {titleIssues.length && blocked.includes('cannot be exported yet') ? (
+                  <div className="vx-title-issues">
+                    <span>{titleIssues.length} title{titleIssues.length === 1 ? '' : 's'} cannot be exported yet:</span>
+                    <ul>
+                      {titleIssues.map((p) => (
+                        <li key={p.clipId} data-clip={p.clipId}>
+                          <span><b>{p.label} at {formatShortTime(p.at)}</b> — {p.messages.join('; ')}</span>
+                          <button type="button" className="btn xs vx-show-title" onClick={() => { useVideoStore.getState().seek(p.at); useVideoStore.getState().selectClip(p.clipId); onClose() }}>Show</button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : <span>{blocked}</span>}
+                {onShowMedia && !blocked.includes('cannot be exported yet') && /media/i.test(blocked) && !/empty/i.test(blocked) && <button type="button" className="btn sm vx-show-media" onClick={onShowMedia}>Show missing files</button>}
               </div>
             )}
             {!blocked && empties.length > 0 && <p className="vx-note">{empties.length} title{empties.length === 1 ? '' : 's'} with nothing typed in {empties.length === 1 ? 'is' : 'are'} left out of the file.</p>}

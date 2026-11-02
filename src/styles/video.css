@@ -504,3 +504,55 @@
 .vw-kspec .vw-ksep { color: var(--text-3); font-size: 11.5px; }
 .vw-kspec .vw-kmouse { font: 500 12px/16px var(--ui); color: var(--text); }
 .vw-keys-more { position: sticky; bottom: -24px; display: flex; align-items: flex-end; justify-content: center; gap: 4px; height: 44px; margin: -44px -24px -24px; padding-bottom: 8px; font: 600 11.5px/1 var(--ui); color: var(--text-2); background: linear-gradient(transparent, var(--card) 70%); pointer-events: none; }
+
+/* ---------------------------------------------------------------- Phase 3: titles (TitlesPanel.tsx) */
+.vw-tag[data-tag="name-strap"] { --tag: #14b8a6; } .vw-tag[data-tag="quote"] { --tag: #7c3aed; } .vw-tag[data-tag="source"] { --tag: #64748b; }
+.vw-tag[data-tag="end-card"] { --tag: #0ea5e9; } .vw-tag[data-tag="intro"] { --tag: #a1a1aa; }
+.vw-titles-tab .vw-subhead { margin: 10px 2px 6px; }
+.vw-tt-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; padding: 6px 12px; background: var(--card); border-radius: var(--r-3); box-shadow: var(--card-shadow); min-height: 44px; flex-wrap: wrap; }
+.vw-tt-label { font-size: 12px; color: var(--text-2); flex: none; }
+.vw-tt-row .select { flex: 1 1 140px; min-width: 0; max-width: 200px; }
+.vw-tt-guides .seg-ctl { flex: none; }
+.vw-tt-note { margin: 0 2px 6px; }
+.vw-tt-story .vw-preset-header { align-items: flex-start; gap: 8px; }
+.vw-tt-story-head { min-width: 0; font: 600 12.5px/17px var(--ui), "Hind Siliguri", sans-serif; color: var(--text); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.vw-tt-story .btn.xs { flex: none; }
+.vw-tt-quotes { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 6px; }
+.vw-tt-quote { text-align: left; padding: 6px 8px; font: 400 12px/16px var(--ui), "Hind Siliguri", sans-serif; color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-2); overflow-wrap: anywhere; cursor: pointer; }
+.vw-tt-quote:hover { background: var(--fill-hover); color: var(--text); }
+.vw-tt-quote.on { background: var(--sel); color: var(--sel-ink, var(--text)); }
+.vw-tt-body { width: 100%; margin: 4px 0; padding: 8px 10px; resize: vertical; font: 400 12px/1.6 var(--ui), "Hind Siliguri", sans-serif; color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); }
+.vw-tt-body:focus { outline: 0; box-shadow: 0 0 0 2px var(--focus-ring); }
+.vw-tt-quote-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.vw-tt-quote-row .vw-preset-desc { min-width: 0; overflow-wrap: anywhere; }
+.vw-tt-quote-row .btn { flex: none; }
+.vw-sticker-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 4px; }
+.vw-sticker-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 60px; padding: 8px 4px; font: 500 11.5px/14px var(--ui); color: var(--text-2); background: var(--card); border: 0; border-radius: var(--r-3); box-shadow: var(--card-shadow); cursor: pointer; }
+.vw-sticker-btn svg { color: #e52d2d; }
+.vw-sticker-btn[data-shape="highlight"] svg { color: #d4b106; }
+.vw-sticker-btn:hover { color: var(--text); background: var(--fill-hover); }
+.vw-sticker-btn:active { transform: scale(.97); }
+.vw-planned .vw-preset-desc { color: var(--text-3); }
+.vw-planned-chip { font: 600 10.5px/18px var(--ui); letter-spacing: var(--track-chip); text-transform: uppercase; padding: 0 8px; border-radius: var(--r-pill); color: var(--text-3); border: 1px dashed var(--card-line); }
+.vw-title-fields { display: flex; flex-direction: column; gap: 10px; }
+.vw-title-fields .vw-field label { justify-content: flex-start; overflow-wrap: anywhere; }
+.vw-req { margin-left: auto; font-size: 10.5px; letter-spacing: var(--track-chip); text-transform: uppercase; }
+.vw-title-fields input.vw-tf { font-family: var(--ui), "Hind Siliguri", sans-serif; }
+.vw-title-problems { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; padding: 8px 10px; font-size: 11.5px; line-height: 16px; color: var(--text-2); background: var(--warning-soft); border-radius: var(--r-2); overflow-wrap: anywhere; }
+.vw-title-problems svg { margin-top: 2px; color: var(--warning); }
+.vw-title-panel .vw-field-row .select, .vw-title-panel .vw-field-row .colorfield { max-width: 168px; min-width: 0; flex: 1 1 auto; }
+.vw-title-panel .vw-field-row > label { flex: none; }
+.vw-title-classic { display: flex; flex-direction: column; gap: 8px; }
+.vw-title-classic .btn { align-self: flex-start; gap: 6px; }
+.vw-anim { display: flex; flex-direction: column; gap: 8px; }
+.vw-st-colors { display: flex; flex-wrap: wrap; gap: 6px; }
+.vw-st-color { width: 28px; height: 28px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--text) 30%, transparent); cursor: pointer; padding: 0; }
+.vw-st-color.on { box-shadow: 0 0 0 2px var(--side), 0 0 0 4px var(--text); }
+.vx-title-issues { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.vx-title-issues ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.vx-title-issues li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; overflow-wrap: anywhere; }
+.vx-title-issues li b { font-weight: 600; }
+.vx-title-issues li .btn { grid-row: span 1; }
+.vx-blocked:has(.vx-title-issues) { flex-wrap: nowrap; align-items: flex-start; }
+.vx-blocked:has(.vx-title-issues) > svg { flex: none; margin-top: 1px; }
+.vx-title-issues { flex: 1 1 auto; }
