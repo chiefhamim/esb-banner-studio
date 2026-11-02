@@ -1768,3 +1768,90 @@ run in the main process (a child process on a temp WAV) behind `whisperCppEngine
 - `npm run lint`: 0 errors (no warnings in the new files).
 - `npm test`: 1,014 passed (84 files; 5 new files, 91 new tests).
 - `npm run build`: ok.
+
+## Phase 4 — Part B: audio UI (2026-11-02, branch `video-p4-ui`)
+
+The UI half of Phase 4: voiceover recorder, music library, mixer, fade handles, clip Audio inspector, real waveforms
+in the bin, loudness readouts. **The audio engine is Part A's** (separate branch, merged by the lead): every call into
+it goes through one guarded door, `src/video/audioAdapter.ts`. Until Part A is merged, those controls are present but
+switched off with "Audio engine pending" (never a stored-but-ignored value, never a fake meter or loudness number).
+What works without Part A: the recorder, the library, mute, bin and timeline waveforms.
+
+### What was built
+- **Audio tab** (`AudioPanel.tsx`, `voiceover.ts`): *Voiceover* card: Record, then a 3-2-1 countdown overlay on the monitor
+  (Esc or Cancel aborts), live mic level meter, **punch-in** (the picture plays from the playhead while recording and
+  stops with the take), choice of the audio track (default: first unlocked audio track). The take is written to disk by
+  main (the existing `keepTake` path) and lands on the A track **at the playhead**. The header Record button and `R` use the
+  same controller. *Music library*: the owner chooses a folder in main's dialog (remembered); the list shows title, tags,
+  length (once read), preview play, Add (to a "Music" audio track, created on first use, at the playhead; one undo
+  step) or drag onto a lane; a per-track **Licence note** (kept in the project on `MediaAsset.licence`, with
+  `musicRel`). No bundled music; with no folder the tab says so. Template: `docs/VIDEO_ASSETS_LICENCES.md`.
+- **Music IPC** (`electron/video-music.cjs`, `esb:video-music-*`): read-only and confined. The renderer names a file only
+  by its path relative to the chosen folder; main refuses `..`, absolute, drive, UNC, `:` streams, control characters,
+  non-audio extensions, and symlinks and junctions whose real path leaves the folder (the listing skips them too), then
+  registers the file in the existing media registry so `esb-media://` serves it. Nothing outside the folder is ever
+  registered; "Forget folder" closes access.
+- **Mixer** (`MixerPanel.tsx`, toolbar *Mixer* button, Ctrl+Alt+M): a dock over the stage. One row per audio track (bus
+  select, fader in dB, pan, M, S, meter), master row (fader, limiter switch, meter), *Ducking* card (Music ducks under
+  voice, depth, threshold, attack, release), *Loudness* card (target -14 / -16 / -23 / Off; Measure gives integrated LUFS,
+  true peak, range, the time measured and the distance from target). Every drag is one undo step (`GSlider` wraps
+  `beginGesture` / `endGesture`; double-click resets).
+- **Fade handles** (`FadeHandles.tsx`): shapes and corner dots on audio clips (bottom corners; dot hit area 28 x 20),
+  drag = fade length (one undo step), right-click = curve (linear / equal power / log), double-click = remove, arrow
+  keys when focused. **Crossfade with next clip** (inspector): overlapping clips are faded as they are; clips that only
+  touch are widened by up to 0.5 s of spare source each side (refused with a sentence when there is none).
+- **Clip inspector, Audio section** (`ClipAudioSection.tsx`, jump chip "Audio"): gain, pan, fade in/out (seconds + curve),
+  crossfade, noise reduction amount, **Use selection as noise sample** (the in-out range, stored as source seconds in
+  `denoise.noiseRange`), **Mark beats** which shows a proposal ("N beats, about X BPM, nothing is added yet"); *Add as
+  markers* is one undo step.
+- **Waveforms** (`audioControls.tsx` `WaveThumb`): bin tiles for audio are drawn from the engine's real peaks
+  (`peaksFor`); "Reading" while they load, **"Silent"** for a file with no sound. The timeline already drew real waveforms
+  for every audio clip, including footage sound (its linked A1 clip), and "Silent" for silent spans.
+- **Status bar loudness chip** (`LoudnessChip.tsx`): last measured LUFS / dBTP, or "Loudness not measured"; opens the mixer.
+- **Export sheet**: a Loudness target select, and after an export a Loudness row from Part A's `exportLoudnessReport()`
+  ("Not measured" when absent).
+- **Shortcuts sheet**: new Audio group (R, Esc, Ctrl+Alt+M, dot gestures).
+- `trackLabels` moved out of `VideoWorkspace.tsx` into `trackLabels.ts` (the mixer shows the same A1 / A2 names).
+
+### Contract with Part A (everything in `src/video/audioAdapter.ts`)
+| Piece | Expected name / shape |
+|---|---|
+| Clip fields | `gain` (dB), `fadeIn` / `fadeOut` `{dur, curve}`, `pan`, `denoise {amount, noiseRange?: {start, end}}` (source seconds) |
+| Track fields | `bus`, `volume` (dB), `pan`, `solo` (mute = the existing `muted`) |
+| Project fields | `master {gain, limiter}`, `ducking {enabled, depthDb, threshold, attack, release}`, `loudnessTarget` (-14 / -16 / -23 / 'off') |
+| Store actions | `setClipAudio(id, patch)`, `setTrackAudio(id, patch)`, `setMasterAudio(patch)`, `setDucking(patch)`, `setLoudnessTarget(t)` (one undo step each; joining a gesture when one is open) |
+| Functions (exported from any of `audioModel.ts`, `audioMeter.ts`, `engine/audioEngine.ts`, `engine/audioMix.ts`, `engine/audioGraph.ts`, `exportVideo.ts`) | `measureProjectLoudness(project)` returning `{integrated, truePeak, range?}`; `audioMeterLevels()` returning `{tracks: {id: dBFS}, master}`; `markBeats(clipId)` returning `{bpm?, beats: number[]}`; `exportLoudnessReport()` |
+
+If Part A names things differently, change the names in the adapter only (`act()`, `find()` and the `write*` helpers).
+The functions are found with `import.meta.glob`, so a missing file is not a build error. The e2e tests can stand in for
+the functions through `globalThis.__esbAudioDev` (dev server only).
+
+### Tests and measurements
+- `tools/e2e/video-audio-ui-test.mjs` (in `npm run test:video`; fake microphone, ffmpeg tone and silence fixtures): all pass.
+  The tone tile is a ready waveform drawn across the tile, the silence tile says "Silent" with 0 drawn columns; the countdown
+  shows 3, 2, 1; the mic meter is live; the take lands on A1 at 2.000 s and punch-in stops the picture; the mixer with no
+  engine is off and honest, and mute is one undo step. **With a STAND-IN for Part A's actions** (clearly marked in the
+  file) every fader, pan, master, limiter, solo, ducking switch and slider, the target select and the inspector's gain /
+  fades / noise sample / beats / crossfade write the store with exactly one undo step; a fade dot drag changes the fade
+  by px / zoom; Measure shows the numbers and the status-bar chip follows; the export sheet has the select; the library
+  lists titles and tags from long Bangla and unbroken names with nothing cut or spilling at 900 px; every control is
+  at least 28 px.
+- `tools/e2e/video-music-electron-test.mjs` (in `npm run test:electron`): a real folder with a Bangla-named track, a
+  subfolder, a non-audio file, a file outside it and a junction leading out. The library lists exactly 3 files; IPC refuses
+  traversal, deep traversal, absolute, drive, UNC, non-audio and the junction; the list omits the junction target; a
+  registered track serves over `esb-media` (206); Add lands on a new "Music" track; a licence note can be typed; the folder
+  is remembered and "Forget" closes access.
+- `tools/unit/video-music-library.test.ts`: the same confinement rules on `electron/video-music.cjs` (6 tests).
+- `tools/audit/text-fit-audit.mjs` gained two steps (library with long Bangla names, mixer).
+- Screenshots in `tools/out/p4b/` (git-ignored): audio-tab-library / -empty, media-bin-audio-waveform, mixer-pending /
+  -open / -ducking, fade-handles, clip-audio-inspector (+ -pending), loudness-chip, voiceover-countdown / -recording,
+  export-setup; light and dark at 900 / 1366 / 1920 (`video-shots.mjs` states; they use the stand-in engine except the
+  `-pending` ones).
+
+### Not done / gated on Part A
+- Real audio in preview and export, real meters, Measure, normalising, ducking, denoise, beat detection, solo, buses: Part A.
+  Until merged the mixer says "Engine pending".
+- The dB-scaled waveform in the lane does not yet show clip gain (Part A can read `gain` in `laneCanvas.drawWave`, which this
+  part left alone). Fade shapes are drawn from the `audio/fades.ts` curves.
+- Library rows show a waveform only after the track was previewed or added (files are registered on use, not on listing).
+- A real microphone was not used: the recorder was tested with Chromium's fake device.

@@ -1,0 +1,156 @@
+/* Video desk, Phase 4 Part B: the Audio tab (voiceover + music library), the mixer, fade handles, waveform thumbnails,
+   the clip inspector's Audio section and the status bar's loudness chip. Every control is at least 28 px. */
+
+/* ---- waveform thumbnail (real peaks; "Silent" / "Reading" words instead of a fake wave) ---- */
+.vw-wave { position: relative; display: grid; place-items: center; flex: none; border-radius: 6px; background: var(--fill); color: var(--text-2); overflow: hidden; }
+.vw-wave canvas { display: block; }
+.vw-wave-word { font: 600 10px/1 var(--ui); color: var(--text-2); letter-spacing: 0.02em; }
+.vw-wave-word.dim { color: var(--text-3); font-weight: 500; }
+
+/* ---- level bars ---- */
+.vw-level { position: relative; display: block; flex: none; overflow: hidden; border-radius: 3px; background: var(--fill); }
+.vw-level:not(.v) { height: 8px; min-width: 56px; flex: 1 1 56px; }
+.vw-level.v { width: 8px; height: 100%; }
+.vw-level > i { position: absolute; left: 0; bottom: 0; display: block; background: var(--success); transition: width 60ms linear, height 60ms linear; }
+.vw-level:not(.v) > i { top: 0; }
+.vw-level.hot > i { background: var(--danger); }
+.vw-level.idle > i { width: 0 !important; }
+
+/* ---- Audio tab ---- */
+.vw-au { display: flex; flex-direction: column; gap: 10px; padding: 2px 2px 12px; }
+.vw-au-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--r-3); background: var(--card); box-shadow: var(--card-shadow); min-width: 0; }
+.vw-au-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
+.vw-au-head .btn { min-height: 32px; }
+.vw-au-meter-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.vw-au-meter-label { font: 600 11px/1 var(--ui); color: var(--text-2); white-space: nowrap; }
+.vw-au-meter-db { min-width: 44px; text-align: right; font-size: 11px; color: var(--text-2); }
+.vw-au-opts { display: flex; flex-direction: column; gap: 8px; }
+.vw-au-field { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
+.vw-au-field > label { font: 600 11px/1.2 var(--ui); color: var(--text-2); white-space: nowrap; }
+.vw-au-field .select { min-width: 0; max-width: 190px; }
+.vw-au-note, .vw-au-err { display: flex; align-items: flex-start; gap: 6px; margin: 0; font: 500 11.5px/1.45 var(--ui); color: var(--text-2); overflow-wrap: anywhere; }
+.vw-au-note svg, .vw-au-err svg { flex: none; margin-top: 2px; }
+.vw-au-err { color: var(--danger); }
+.vw-au-lib-acts { display: flex; gap: 2px; }
+.vw-au-folderline { display: flex; align-items: center; gap: 6px; min-height: 28px; font: 600 12px/1.3 var(--ui); color: var(--text); min-width: 0; }
+.vw-au-folderline span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.vw-au-folderline em { flex: none; font-style: normal; font-size: 11px; color: var(--text-3); }
+.vw-au-search { min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--r-2); background: var(--field); color: var(--text); font: 500 12px var(--ui); }
+.vw-au-list { display: flex; flex-direction: column; gap: 6px; }
+.vw-au-track { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: var(--r-2); background: var(--fill); }
+.vw-au-track.playing { box-shadow: inset 0 0 0 1px var(--ink); }
+.vw-au-track-main { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.vw-au-wave { width: 56px; height: 36px; }
+.vw-au-wave-empty { display: grid; place-items: center; border-radius: 6px; background: var(--fill); color: var(--text-3); }
+.vw-au-track-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.vw-au-title { font: 600 12.5px/1.35 var(--ui); color: var(--text); overflow-wrap: anywhere; }
+.vw-au-sub { display: flex; flex-wrap: wrap; gap: 4px 8px; font: 500 11px/1.3 var(--ui); color: var(--text-3); }
+.vw-au-folder { overflow-wrap: anywhere; }
+.vw-au-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.vw-au-tag { padding: 1px 6px; border-radius: var(--r-1); background: var(--fill-hover); font: 600 10.5px/16px var(--ui); color: var(--text-2); overflow-wrap: anywhere; }
+.vw-au-track-acts { display: flex; flex: none; gap: 2px; }
+.vw-au-track-acts .ibtn { width: 28px; height: 28px; }
+.vw-au-lic-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.vw-au-lic-btn { min-height: 28px; }
+.vw-au-lic-btn.has { color: var(--text); }
+.vw-au-lic-peek { flex: 1 1 auto; min-width: 0; font: 500 11px/1.3 var(--ui); color: var(--text-3); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.vw-au-lic { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 0; border-radius: var(--r-2); background: var(--field); color: var(--text); font: 500 12px/1.4 var(--ui); resize: vertical; }
+
+/* ---- countdown over the monitor ---- */
+.vw-au-countdown { position: absolute; inset: 0; z-index: 12; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(0, 0, 0, 0.55); color: #fff; pointer-events: none; }
+.vw-au-count-num { font: 800 120px/1 var(--ui); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; animation: vw-au-pop 0.9s var(--spring, cubic-bezier(0.16, 1, 0.3, 1)) both; }
+.vw-au-countdown p { margin: 0; font: 600 13px var(--ui); color: rgba(255, 255, 255, 0.85); }
+@keyframes vw-au-pop { from { transform: scale(1.35); opacity: 0.2; } 30% { opacity: 1; } to { transform: scale(1); opacity: 0.95; } }
+@media (prefers-reduced-motion: reduce) { .vw-au-count-num { animation: none; } }
+
+/* ---- fade shapes and handles on audio clips ---- */
+.vw-clip-block .vw-fade-shape { position: absolute; top: 0; bottom: 0; pointer-events: none; z-index: 1; }
+.vw-clip-block .vw-fade-shape.in { left: 0; }
+.vw-clip-block .vw-fade-shape.out { right: 0; }
+.vw-fade-shape path { fill: rgba(0, 0, 0, 0.42); stroke: rgba(255, 255, 255, 0.7); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.vw-fade-dot { position: absolute; bottom: 0; z-index: 4; width: 28px; height: 20px; margin: 0 -14px; padding: 0; border: 0; background: none; cursor: ew-resize; display: grid; place-items: end center; }
+.vw-fade-dot.out { margin: 0 -14px 0 0; }
+.vw-fade-dot.in { margin: 0 0 0 -14px; }
+.vw-fade-dot > i { display: block; width: 9px; height: 9px; margin-bottom: 3px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.55); opacity: 0.55; }
+.vw-clip-block:hover .vw-fade-dot > i, .vw-clip-block.selected .vw-fade-dot > i, .vw-fade-dot.set > i, .vw-fade-dot:focus-visible > i { opacity: 1; }
+.vw-fade-dot:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.vw-fade-dot.off { cursor: default; pointer-events: none; }
+
+/* ---- clip inspector: Audio section ---- */
+.vw-au-pending { margin-bottom: 4px; }
+.vw-au-fade { display: flex; align-items: center; gap: 8px; min-height: 32px; margin-bottom: 6px; }
+.vw-au-fade-label { width: 26px; flex: none; font: 600 11px var(--ui); color: var(--text-2); }
+.vw-au-fade .select { flex: 1 1 auto; min-width: 0; }
+.vw-numfield { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 32px; padding: 0 8px; border-radius: var(--r-2); background: var(--field); }
+.vw-numfield input { width: 46px; min-height: 28px; padding: 0; border: 0; background: none; color: var(--text); font: 600 12px var(--ui); font-variant-numeric: tabular-nums; text-align: right; outline: none; }
+.vw-numfield input:disabled { color: var(--text-3); }
+.vw-numfield em { font-style: normal; font: 500 11px var(--ui); color: var(--text-3); }
+.vw-au-xfade, .vw-au-beats, .vw-au-sample-btn { min-height: 32px; }
+.vw-au-sample { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-top: 4px; }
+.vw-au-sample-note { font: 500 11.5px/1.4 var(--ui); color: var(--text-2); overflow-wrap: anywhere; }
+.vw-au-proposal { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 8px; border-radius: var(--r-2); background: var(--fill); font: 500 12px/1.4 var(--ui); color: var(--text); }
+.vw-au-proposal .btn { min-height: 28px; }
+.vw-gslider { width: 100%; min-height: 28px; }
+.vw-gslider:disabled { opacity: 0.45; }
+
+/* ---- status bar chip ---- */
+.vw-sb-loud { display: inline-flex; align-items: center; gap: 8px; min-height: 22px; padding: 0 8px; border: 0; border-radius: var(--r-1); background: none; color: var(--text-2); font: 500 11.5px var(--ui); cursor: pointer; white-space: nowrap; }
+.vw-sb-loud:hover { background: var(--fill-hover); }
+.vw-sb-loud.measured b { color: var(--text); font-weight: 700; }
+.vw-sb-loud.hot span { color: var(--danger); }
+@media (max-width: 1100px) { .vw-sb-loud { display: none; } }
+
+/* ---- mixer dock ---- */
+.vw-mixer-btn.open { background: var(--raised, var(--fill-hover)); }
+.vw-mixer { position: absolute; right: 12px; z-index: 30; width: min(640px, calc(100% - 24px)); max-height: min(560px, calc(100% - 120px)); display: flex; flex-direction: column; border-radius: var(--r-3); background: var(--card); box-shadow: var(--card-shadow-open, 0 12px 40px rgba(0, 0, 0, 0.28)), inset 0 0 0 1px var(--card-line); overflow: hidden; }
+.vw-mx-head { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 8px 0 12px; border-bottom: 1px solid var(--card-line); color: var(--text); }
+.vw-mx-head b { font: 700 13px var(--ui); }
+.vw-mx-spacer { flex: 1; }
+.vw-mx-pending { padding: 2px 8px; border-radius: var(--r-pill, 9999px); background: var(--warning-soft); color: var(--warning); font: 700 10.5px/16px var(--ui); letter-spacing: var(--track-chip, 0.05em); text-transform: uppercase; }
+.vw-mx-body { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 12px; overflow: auto; }
+.vw-mx-banner { display: flex; gap: 6px; margin: 0; padding: 8px 10px; border-radius: var(--r-2); background: var(--warning-soft); color: var(--text); font: 500 11.5px/1.45 var(--ui); }
+.vw-mx-banner svg { flex: none; margin-top: 2px; }
+.vw-mx-empty { margin: 0; font: 500 12px var(--ui); color: var(--text-2); }
+.vw-mx-strips { display: flex; flex-direction: column; gap: 4px; }
+.vw-mx-strip { display: grid; grid-template-columns: minmax(70px, 1fr) 84px minmax(110px, 1.6fr) minmax(70px, 1fr) 64px minmax(48px, 0.8fr); align-items: center; gap: 8px; min-height: 40px; padding: 4px 8px; border-radius: var(--r-2); background: var(--fill); }
+.vw-mx-strip.muted .vw-mx-name { opacity: 0.55; }
+.vw-mx-strip.master { grid-template-columns: minmax(70px, 1fr) 84px minmax(110px, 1.6fr) minmax(70px, 1fr) 64px minmax(48px, 0.8fr); margin-top: 4px; box-shadow: inset 0 0 0 1px var(--card-line); }
+.vw-mx-strip.master > .switch { grid-column: 2; }
+.vw-mx-strip.master > .vw-mx-fader { grid-column: 3 / span 2; }
+.vw-mx-strip.master > .vw-level { grid-column: 5 / span 2; }
+.vw-mx-name { display: flex; align-items: baseline; gap: 6px; min-width: 0; font: 600 12px/1.3 var(--ui); color: var(--text); }
+.vw-mx-name b { font-weight: 800; color: var(--text-2); }
+.vw-mx-name span { min-width: 0; overflow-wrap: anywhere; }
+.vw-mx-bus { min-width: 0; }
+.vw-mx-fader, .vw-mx-pan { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.vw-mx-val { font-size: 10.5px; line-height: 1.2; color: var(--text-3); white-space: nowrap; }
+.vw-mx-btns { display: flex; gap: 4px; }
+.vw-mx-btn { width: 30px; height: 30px; border: 0; border-radius: var(--r-2); background: var(--fill-hover); color: var(--text-2); font: 800 12px var(--ui); cursor: pointer; }
+.vw-mx-btn:disabled { opacity: 0.45; cursor: default; }
+.vw-mx-btn.on.mute { background: var(--danger); color: #fff; }
+.vw-mx-btn.on.solo { background: var(--warning); color: #111; }
+.vw-mx-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+:root[data-theme=dark] .vw-mx-btn.on { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25); }
+.vw-mx-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 760px) { .vw-mx-cards { grid-template-columns: 1fr; } .vw-mx-strip, .vw-mx-strip.master { grid-template-columns: 1fr 1fr; } .vw-mx-strip.master > * { grid-column: auto !important; } }
+.vw-mx-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--r-2); background: var(--fill); min-width: 0; }
+.vw-mx-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; flex-wrap: wrap; }
+.vw-mx-card-head b { font: 700 12.5px var(--ui); color: var(--text); }
+.vw-mx-duck-grid { display: flex; flex-direction: column; gap: 4px; }
+.vw-mx-duck-grid.off { opacity: 0.6; }
+.vw-mx-slot { display: grid; grid-template-columns: 64px 1fr 52px; align-items: center; gap: 8px; min-height: 28px; }
+.vw-mx-slot-label { font: 600 11px var(--ui); color: var(--text-2); }
+.vw-mx-slot .vw-mx-val { text-align: right; }
+.vw-mx-readout { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.vw-mx-readout > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vw-mx-readout span { font: 600 10.5px var(--ui); color: var(--text-3); text-transform: uppercase; letter-spacing: var(--track-chip, 0.05em); }
+.vw-mx-readout b { font: 700 13px var(--ui); color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vw-mx-measure { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vw-mx-measure-btn { min-height: 32px; }
+.vw-mx-measure-note { flex: 1 1 120px; min-width: 0; font: 500 11.5px/1.4 var(--ui); color: var(--text-2); overflow-wrap: anywhere; }
+
+/* ---- export sheet: loudness ---- */
+.vx-loud-note { margin: 0; font: 500 11.5px/1.45 var(--ui); color: var(--text-2); }
+
+/* every button of the audio UI keeps a 28 px target (beats the .btn.xs height) */
+.vw-au .btn, .vw-mixer .btn, .vw-audio-panel .btn.xs, .vw-audio-panel .btn.sm { min-height: 28px; height: auto; }

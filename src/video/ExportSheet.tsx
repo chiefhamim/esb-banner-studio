@@ -4,7 +4,7 @@
 // streamed there while it renders (no copy of it is kept in memory); in the browser it downloads at the end.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Dialog, Seg } from '../ui/controls'
+import { Dialog, Select, Seg } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import type { VideoProject } from './timeline'
 import { contentEnd, formatShortTime } from './timeline'
@@ -13,6 +13,8 @@ import type { ExportContainer, ExportResult } from './exportVideo'
 import { useVideoStore } from './videoStore'
 import { videoBridge } from './media'
 import { canvasMeasure, measureNow, titleProblems } from './titleClip'
+import type { LoudnessTarget } from './audioAdapter'
+import { LOUDNESS_CHOICES, PENDING_NOTE, capabilities, fmtDbtp, fmtLufs, lastExportLoudness, projectTarget, writeTarget } from './audioAdapter'
 
 const DRAFT_SECONDS = 10
 
@@ -54,6 +56,8 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
   }, [project.width, project.height, project.fps])
 
   const audio = useMemo(() => audibleClips(project), [project])
+  const target = projectTarget(project)
+  const canTarget = capabilities().target
   // the title check measures with the real fonts once the canvas measurer exists (made on first use)
   const [measured, setMeasured] = useState(!!measureNow())
   useEffect(() => { if (!measured) void canvasMeasure().then(() => setMeasured(true)) }, [measured])
@@ -132,6 +136,17 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
                 ? <Seg<'full' | 'draft'> value={length} onChange={setLength} options={[{ value: 'full', label: `Full · ${formatShortTime(end)}` }, { value: 'draft', label: `First ${DRAFT_SECONDS} s` }]} />
                 : <span className="vx-value">{formatShortTime(end)} · the whole video</span>}
             </div>
+            <div className="vx-row vx-loud-row">
+              <span className="vx-label">Loudness</span>
+              <Select<string>
+                value={String(target)}
+                options={LOUDNESS_CHOICES.map((c) => ({ value: String(c.value), label: c.label, hint: c.hint }))}
+                onChange={(v) => writeTarget((v === 'off' ? 'off' : Number(v)) as LoudnessTarget)}
+                className="compact vx-loud-target"
+                title={canTarget ? 'The mix is normalised to this when exported' : PENDING_NOTE}
+              />
+            </div>
+            {!canTarget && <p className="vx-loud-note">Loudness normalising switches on when the audio engine is merged; until then the mix is exported as it plays.</p>}
             <dl className="vx-facts">
               <div><dt>Frame</dt><dd>{project.width} × {project.height} · {project.fps} fps</dd></div>
               <div><dt>Duration</dt><dd>{formatShortTime(duration)} · {Math.round(duration * project.fps)} frames</dd></div>
@@ -199,6 +214,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
               <div><dt>File</dt><dd>{result.container.toUpperCase()} · {mb(result.size)}</dd></div>
               <div><dt>Length</dt><dd>{formatShortTime(result.duration)}</dd></div>
               <div><dt>Codecs</dt><dd>{result.videoCodec}{result.audioCodec ? ` + ${result.audioCodec}` : ' · no sound'}</dd></div>
+              <div className="vx-loud-report"><dt>Loudness</dt><dd>{(() => { const r = lastExportLoudness(); return r ? `${fmtLufs(r.integrated)} · ${fmtDbtp(r.truePeak)}${r.target != null ? ` · target ${r.target} LUFS` : ''}` : result.audioCodec ? 'Not measured' : 'No sound' })()}</dd></div>
             </dl>
             <div className="vx-actions">
               {result.savedTo && videoBridge()?.reveal && <button type="button" className="btn" onClick={() => void videoBridge()!.reveal!(result.savedTo!)}>Show in folder</button>}

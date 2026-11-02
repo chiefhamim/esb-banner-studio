@@ -17,6 +17,7 @@ const { createTray } = require('./outreach-tray.cjs')
 const outreachGuard = require('./outreach-guard.cjs')
 const videoMedia = require('./video-media.cjs')
 const videoProject = require('./video-project.cjs')
+const videoMusic = require('./video-music.cjs')
 
 // The Video desk's media protocol (esb-media://m/<id>, electron/video-media.cjs). Registered before the app is ready so
 // <video>, fetch and the decoder can stream from it with range requests; served on the editor's session only.
@@ -341,6 +342,31 @@ ipcMain.handle('esb:video-store-take', (_e, name, bytes) => {
   if (!ext) throw new Error('Not a WebM, Ogg, WAV or M4A recording')
   const stem = guard.imageFileName(name).replace(/\.[a-z0-9]+$/i, '')
   const file = videoMedia.storeGenerated(path.join(app.getPath('userData'), 'video-takes'), stem, ext, bytes, videoMedia.TAKES_CAP)
+  return videoEntries([file])[0] || null
+})
+
+// ---------------------------------------------------------------- Video desk: the music library (one folder the owner chose)
+// Read-only. The renderer never names an absolute path: the folder comes from main's own dialog, files are named
+// relative to it and resolved through every link (electron/video-music.cjs). A file asked for is added to the media
+// registry only if it lies inside that folder.
+let videoMusicFolder = null
+const musicInfo = () => { const p = videoMusicFolder?.get(); return p ? { path: p, name: path.basename(p) || p } : null }
+ipcMain.handle('esb:video-music-folder', () => musicInfo())
+ipcMain.handle('esb:video-music-choose', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Choose your music folder', properties: ['openDirectory'], buttonLabel: 'Use this folder' })
+  if (r.canceled || !r.filePaths[0]) return musicInfo()
+  if (!videoMusicFolder.set(r.filePaths[0])) throw new Error('That is not a local folder')
+  return musicInfo()
+})
+ipcMain.handle('esb:video-music-clear', () => { videoMusicFolder.clear(); return null })
+ipcMain.handle('esb:video-music-list', () => {
+  const root = videoMusicFolder?.get()
+  return root ? videoMusic.listAudio(root) : { files: [], truncated: false }
+})
+ipcMain.handle('esb:video-music-use', (_e, rel) => {
+  const root = videoMusicFolder?.get()
+  const file = root ? videoMusic.confinedAudio(root, rel) : null
+  if (!file) throw new Error('That file is not in the music folder')
   return videoEntries([file])[0] || null
 })
 ipcMain.handle('esb:video-save-project', async (_e, name, text, existingPath) => {
@@ -967,6 +993,7 @@ app.whenReady().then(() => {
   videoRegistry = videoMedia.createMediaRegistry({ file: path.join(userData, 'video-media.json') })
   // folder ids are an HMAC with this install's own secret (userData/video-folder-secret), never a plain hash of the path
   videoFolders = videoProject.createFolderRegistry({ file: path.join(userData, 'video-folders.json'), secret: videoProject.loadInstallSecret(path.join(userData, 'video-folder-secret')) })
+  videoMusicFolder = videoMusic.createMusicFolder({ file: path.join(userData, 'video-music-folder.json') })
   cleanOnce(libraryRoot())
   // the editor's session only (the CMS window has its own partition, so it cannot read the editor's media)
   protocol.handle('esb-media', (request) => videoMedia.serveMedia(request, videoRegistry, { devUrl: DEV_URL, folderFile }))

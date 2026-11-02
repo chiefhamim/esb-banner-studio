@@ -25,6 +25,12 @@ export interface VideoBridge {
   videoResolve?: (paths: string[]) => Promise<ResolvedEntry[]>
   videoStoreStill?: (name: string, bytes: Uint8Array) => Promise<MediaEntry | null>
   videoStoreTake?: (name: string, bytes: Uint8Array) => Promise<MediaEntry | null>
+  // Phase 4 Part B: the music library (electron/video-music.cjs); files are named relative to the chosen folder
+  videoMusicFolder?: () => Promise<{ path: string; name: string } | null>
+  videoMusicChoose?: () => Promise<{ path: string; name: string } | null>
+  videoMusicClear?: () => Promise<null>
+  videoMusicList?: () => Promise<{ files: { rel: string; name: string; size: number; mtimeMs: number }[]; truncated: boolean }>
+  videoMusicUse?: (rel: string) => Promise<MediaEntry | null>
   videoSaveProject?: (name: string, text: string, existing: string | null) => Promise<string | null>
   videoOpenProject?: () => Promise<{ path: string; text: string; folder?: FolderRef } | null>
   videoAutosave?: (text: string, folderId?: string | null) => Promise<{ ok: boolean; at: number }>

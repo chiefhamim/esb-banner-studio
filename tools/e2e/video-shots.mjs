@@ -197,7 +197,7 @@ async function openSection(page, id) {
   else if (await head.count() && (await head.first().getAttribute('aria-expanded')) !== 'true') await head.first().click()
   await page.waitForTimeout(250)
 }
-const JUMP_LABEL = { title: /^Title$/, transform: /^(Transform|Sound|Opacity)$/, speed: /^Speed$/, colour: /^Colour$/, fx: /^Effects$/, keys: /^Keys$/ }
+const JUMP_LABEL = { title: /^Title$/, transform: /^(Transform|Sound|Opacity)$/, audio: /^Audio$/, speed: /^Speed$/, colour: /^Colour$/, fx: /^Effects$/, keys: /^Keys$/ }
 
 async function clickTab(page, label) {
   const bin = page.locator('.vw-bin-panel')
@@ -383,7 +383,91 @@ TITLE_STATES['export-blocked-title'] = async (page) => {
   return {}
 }
 
+
+// ------------------------------------------------------------------ Phase 4 Part B: audio UI
+// The audio ENGINE is Part A's. These states stand in for its store actions and functions (dev handles only), so the
+// ready look of the mixer, fades and inspector can be judged; the "pending" look is the build as it is.
+async function audioShim(page) {
+  await page.evaluate(() => {
+    const vs = window.__videoStore
+    const hist = (s, next) => (s.gesture ? { project: next, dirty: true, rev: s.rev + 1 } : { history: [...s.history, s.project], future: [], project: next, dirty: true, rev: s.rev + 1 })
+    const proj = (fn) => vs.setState((s) => hist(s, fn(s.project)))
+    vs.setState({
+      setClipAudio: (id, p) => proj((pr) => ({ ...pr, clips: pr.clips.map((c) => (c.id === id ? { ...c, ...p } : c)) })),
+      setTrackAudio: (id, p) => proj((pr) => ({ ...pr, tracks: pr.tracks.map((t) => (t.id === id ? { ...t, ...p } : t)) })),
+      setMasterAudio: (p) => proj((pr) => ({ ...pr, master: { gain: 0, limiter: true, ...(pr.master || {}), ...p } })),
+      setDucking: (p) => proj((pr) => ({ ...pr, ducking: { enabled: false, depthDb: 12, threshold: -35, attack: 0.05, release: 0.4, ...(pr.ducking || {}), ...p } })),
+      setLoudnessTarget: (t) => proj((pr) => ({ ...pr, loudnessTarget: t })),
+    })
+    globalThis.__esbAudioDev = { measureProjectLoudness: async () => ({ integrated: -14.2, truePeak: -1.3, range: 5.4 }), audioMeterLevels: () => ({ tracks: { a1: -18, a2: -26 }, master: -12 }), markBeats: async () => ({ bpm: 120, beats: [0.5, 1, 1.5] }) }
+  })
+}
+async function seedMixer(page, { shim = true } = {}) {
+  await seedTimeline(page, { extra: 'many-tracks' })
+  if (shim) await audioShim(page)
+  await page.evaluate(() => {
+    const vs = window.__videoStore
+    const st = vs.getState()
+    const t = (id, p) => st.setTrackAudio?.(id, p)
+    t('a1', { bus: 'voice', volume: -3, pan: 0 }); t('a2', { bus: 'music', volume: -9, pan: 0.2 })
+    st.setDucking?.({ enabled: true, depthDb: 12 }); st.setLoudnessTarget?.(-14)
+  })
+  await page.locator('.vw-mixer-btn').click()
+  await page.waitForSelector('.vw-mixer')
+}
+const AUDIO_STATES = {
+  'audio-tab-library': async (page) => {
+    await seedTimeline(page)
+    await page.evaluate(() => {
+      const LONG = 'অত্যন্ত দীর্ঘ বাংলা গানের নাম যেটি অনেক লম্বা [শান্ত, ধীর]'
+      const lib = [{ rel: 'Morning Drive [upbeat, tech].mp3', name: 'a.mp3', size: 1, mtimeMs: 1 }, { rel: LONG + '.wav', name: 'b.wav', size: 1, mtimeMs: 1 }, { rel: 'Calm/Piano #news.flac', name: 'c.flac', size: 1, mtimeMs: 1 }]
+      window.esb = { videoMusicFolder: async () => ({ path: 'C:\Music\ESB licensed', name: 'ESB licensed' }), videoMusicChoose: async () => null, videoMusicClear: async () => null, videoMusicList: async () => ({ files: lib, truncated: false }), videoMusicUse: async () => { throw new Error('preview needs the desktop app') } }
+    })
+    await clickTab(page, 'Audio')
+    await page.waitForSelector('.vw-au-track')
+    return { el: page.locator('.vw-bin-panel') }
+  },
+  'audio-tab-empty': async (page) => { await seedTimeline(page); await clickTab(page, 'Audio'); return { el: page.locator('.vw-bin-panel') } },
+  'media-bin-audio-waveform': async (page) => { await seedTimeline(page); await clickTab(page, 'Media'); return { el: page.locator('.vw-bin-panel') } },
+  'mixer-pending': async (page) => { await seedMixer(page, { shim: false }); return {} },
+  'mixer-open': async (page) => { await seedMixer(page); return {} },
+  'mixer-ducking': async (page) => { await seedMixer(page); await page.locator('.vw-mx-measure-btn').click(); await page.waitForTimeout(300); return { el: page.locator('.vw-mixer') } },
+  'fade-handles': async (page) => {
+    await seedTimeline(page, { select: 'shot-a1' })
+    await audioShim(page)
+    await page.evaluate(() => { const s = window.__videoStore.getState(); s.setClipAudio('shot-a1', { fadeIn: { dur: 1.2, curve: 'equal-power' }, fadeOut: { dur: 2, curve: 'log' } }); s.selectClip(null); s.selectClip('shot-a1') })
+    await page.waitForSelector('.vw-fade-dot.in')
+    return { el: page.locator('.vw-tracks-scroll') }
+  },
+  'clip-audio-inspector': async (page) => {
+    await seedTimeline(page, { select: 'shot-a1' })
+    await audioShim(page)
+    await page.evaluate(() => { const s = window.__videoStore.getState(); s.setClipAudio('shot-a1', { gain: 3, fadeIn: { dur: 0.5, curve: 'linear' }, denoise: { amount: 0.6, noiseRange: { start: 0.2, end: 0.9 } } }); s.selectClip(null); s.selectClip('shot-a1') })
+    await openSection(page, 'audio')
+    return {}
+  },
+  'clip-audio-inspector-pending': async (page) => { await seedTimeline(page, { select: 'shot-a1' }); await openSection(page, 'audio'); return {} },
+  'loudness-chip': async (page) => {
+    await seedMixer(page)
+    await page.locator('.vw-mx-measure-btn').click(); await page.waitForTimeout(300)
+    await page.locator('.vw-mixer .vw-mx-close').click()
+    return { el: page.locator('.vw-statusbar') }
+  },
+  'voiceover-countdown': async (page) => {
+    await seedTimeline(page)
+    await page.evaluate(() => window.__voiceover.setState({ phase: 'countdown', count: 2 }))
+    await page.waitForSelector('.vw-au-countdown')
+    return {}
+  },
+  'voiceover-recording': async (page) => {
+    await seedTimeline(page)
+    await clickTab(page, 'Audio')
+    await page.evaluate(() => window.__voiceover.setState({ phase: 'recording', seconds: 7, level: 0.35 }))
+    return { el: page.locator('.vw-bin-panel') }
+  },
+}
 const STATES = {
+  ...AUDIO_STATES,
   empty: async (page) => {
     const newBtn = page.locator('.vw-header button', { hasText: /^\s*New( project)?\s*$/i })
     if (await newBtn.count()) { await newBtn.first().click(); await page.waitForTimeout(200); const ok = page.locator('.dialog button', { hasText: /discard|new|ok/i }); if (await ok.count()) await ok.first().click(); return { note: 'via New button' } }

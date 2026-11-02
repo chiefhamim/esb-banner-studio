@@ -45,6 +45,9 @@ export interface MediaAsset {
   /** Taken out of the bin by the editor, but kept (hidden) while a clip on the timeline or in the undo history still
    * plays it, so the project file can still find the file and Relink still works. Undo brings it back to the bin. */
   removed?: boolean
+  /** Phase 4 Part B: a track from the music library: its path inside the owner's chosen music folder, and the editor's licence note. */
+  musicRel?: string
+  licence?: string
 }
 
 export interface Track {
@@ -522,6 +525,8 @@ export function serializeVideoProject(project: VideoProject, bin: MediaAsset[] =
     hasAudio: a.hasAudio,
     generated: a.generated,
     removed: a.removed || undefined,
+    musicRel: a.musicRel,
+    licence: a.licence,
     url: isRuntimeUrl(a.url) ? '' : a.url,
   }))
   const strip = (c: Clip): Clip => ({

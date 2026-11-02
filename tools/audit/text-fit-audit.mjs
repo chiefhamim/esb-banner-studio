@@ -259,6 +259,20 @@ try {
       await page.evaluate(() => { const st = window.__videoStore.getState(); const c = st.project.clips.find((x) => x.id === st.selectedClipId); st.updateClip({ ...c, keyframes: { scale: [{ t: 0, v: 1 }, { t: 1, v: 1.2 }], opacity: [{ t: 0.5, v: 1 }] } }); st.selectClip(c.id) })
       await page.waitForSelector('.vw-kf-lane .vw-kf-key')
     })
+    // Phase 4 Part B: the music library with long Bangla and unbroken file names, and the mixer
+    await tryStep('video-audio-library', async () => {
+      await page.evaluate(() => {
+        const LONG = 'অত্যন্ত দীর্ঘ বাংলা গানের নাম যেটি কোনো ফাঁকা জায়গা ছাড়াই অনেক লম্বা হতে পারে এবং সারিতে ধরা উচিত'
+        const lib = [{ rel: LONG + ' [শান্ত, ধীর, দীর্ঘ-ট্যাগ-নাম-অনেক-লম্বা].wav', name: 'a.wav', size: 1, mtimeMs: 1 }, { rel: 'Upbeat/Morning Drive - Corporate (energetic, uplifting, tech) [licence CC-BY].mp3', name: 'b.mp3', size: 1, mtimeMs: 1 }, { rel: 'averyveryveryveryveryveryveryveryveryveryveryveryveryveryveryverylongsingleword_without_spaces.flac', name: 'c.flac', size: 1, mtimeMs: 1 }]
+        window.esb = { ...(window.esb || {}), videoMusicFolder: async () => ({ path: 'C:\Music', name: 'ESB licensed music folder with a rather long name' }), videoMusicChoose: async () => null, videoMusicClear: async () => null, videoMusicList: async () => ({ files: lib, truncated: false }), videoMusicUse: async () => { throw new Error('x') } }
+      })
+      await page.keyboard.press('Escape')
+      await vtab('Audio')
+      await page.waitForSelector('.vw-au-track')
+      await page.locator('.vw-au-lic-btn').first().click()
+    })
+    await tryStep('video-mixer', async () => { await page.click('.vw-mixer-btn'); await page.waitForSelector('.vw-mixer') })
+    await page.click('.vw-mixer .vw-mx-close').catch(() => {})
     await tryStep('video-shortcuts', async () => { await page.click('.vw-keys-btn'); await page.waitForSelector('.dialog .vw-keys') })
     await page.keyboard.press('Escape')
     await tryStep('video-export', async () => { await page.click('.vw-header-actions button:has-text("Export")'); await page.waitForSelector('.vx') })

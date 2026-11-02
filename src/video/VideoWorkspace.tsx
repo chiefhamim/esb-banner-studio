@@ -19,6 +19,13 @@ import { renderFrame } from './engine/render'
 import { previewEngine } from './engine/previewEngine'
 import { audioEngine, audioSignature } from './engine/audioEngine'
 import { attachLaneCanvas } from './engine/laneCanvas'
+import { trackLabels } from './trackLabels'
+import { AudioPanel, CountdownOverlay } from './AudioPanel'
+import { MixerPanel } from './MixerPanel'
+import { FadeHandles } from './FadeHandles'
+import { ClipAudioSection } from './ClipAudioSection'
+import { LoudnessChip } from './LoudnessChip'
+import { cancelVoiceover, startVoiceover, stopVoiceover, useVoiceover } from './voiceover'
 import { onProxyReady, previewUrl } from './engine/mediaSource'
 import { renderPreviewStill } from './engine/still'
 import { holdBackground, holdProxies, noteScrub } from './engine/background'
@@ -30,7 +37,7 @@ import { EffectsPanel, FxSection, InspectorSections, openSection, useInspectorUi
 import { ColourPanel } from './ColourPanel'
 import { lutText } from './effects'
 import { animationSource } from './engine/animation'
-import { PROBE_CONCURRENCY, assetFromEntry, assetFromFile, hasDiskMedia, importOptions, keepTake, mapLimit, patchMeta, probeMedia, takeImportErrors, videoBridge } from './media'
+import { PROBE_CONCURRENCY, assetFromEntry, assetFromFile, hasDiskMedia, importOptions, mapLimit, patchMeta, probeMedia, takeImportErrors, videoBridge } from './media'
 import type { FolderRef } from './media'
 import { BinCard, BinImportMode, BinMissingBar } from './BinCard'
 import { clearSnapshots, describeSnapshot, latestSnapshot, loadProjectText, onAutosaved, saveProject, startAutosave } from './projectIO'
@@ -480,6 +487,7 @@ const Lanes = memo(function Lanes({ tracks, clips, selectedIds, zoom, tool, onGr
                       <span className="vw-clip-title">{clipLabel(clip)}</span>
                     </span>
                     <span className="vw-clip-duration mono">{speed ? <i className="vw-clip-speed">{clip.reverse ? '◂ ' : ''}{rampOfLabel(clip)}</i> : null}{clip.duration.toFixed(1)}s</span>
+                    {clip.kind === 'audio' && !clip.compound && <FadeHandles clip={clip} zoom={zoom} locked={isLocked} />}
                     {!isLocked && <div className="vw-trim-handle right" data-tip={TRIM_TIP[tool].right} onPointerDown={(e) => onGrab(e, clip, 'right')} />}
                   </div>
                 )
@@ -518,17 +526,17 @@ export function VideoWorkspace() {
 
 function VideoDesk() {
   const {
-    project, tl, playing, selectedClipId, selectedIds, tool, range, inCompound, zoom, exporting, canUndo, canRedo, mediaAssets, isRecordingVoiceover, dirty, generation, projectPath,
+    project, tl, playing, selectedClipId, selectedIds, tool, range, inCompound, zoom, exporting, canUndo, canRedo, mediaAssets, dirty, generation, projectPath,
   } = useVideoStore(useShallow((s) => ({
     project: s.project, tl: viewOf(s), playing: s.playing, selectedClipId: s.selectedClipId, selectedIds: s.selectedIds, tool: s.tool, range: s.range, inCompound: s.compoundPath.length > 0,
     zoom: s.zoom, exporting: s.exporting,
-    canUndo: s.history.length > 0, canRedo: s.future.length > 0, mediaAssets: s.mediaAssets, isRecordingVoiceover: s.isRecordingVoiceover,
+    canUndo: s.history.length > 0, canRedo: s.future.length > 0, mediaAssets: s.mediaAssets,
     dirty: s.dirty, generation: s.generation, projectPath: s.projectPath,
   })))
   const {
     setAspect, setProjectName, seek, togglePlay, stepFrame, addClip, addClips, updateClip,
     selectClip, setZoom, toggleTrackMute, toggleTrackLock, toggleTrackHidden, newProject, addMediaAsset, removeMediaAsset,
-    relinkAsset, setRecordingVoiceover, undo, redo, setBug, unlinkClip, beginGesture,
+    relinkAsset, undo, redo, setBug, unlinkClip, beginGesture,
   } = getState()
   useClockFormat()
   const wide = useMediaQuery(WIDE_INSPECTOR)
@@ -555,10 +563,9 @@ function VideoDesk() {
     | { kind: 'slip' | 'slide'; id: string; startX: number; speed: number }
   const drag = useRef<Drag | null>(null)
 
-  const [recordingSeconds, setRecordingSeconds] = useState(0)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const recordedChunksRef = useRef<Blob[]>([])
-  const recordingTimerRef = useRef<number | null>(null)
+  const voPhase = useVoiceover((v) => v.phase)
+  const voSeconds = useVoiceover((v) => v.seconds)
+  const [mixerOpen, setMixerOpen] = useState(false)
 
   const rulerRef = useRef<HTMLDivElement>(null)
   const tracksScrollRef = useRef<HTMLDivElement>(null)
@@ -714,6 +721,7 @@ function VideoDesk() {
       else if (ctrl && e.altKey && k === 'g') { e.preventDefault(); { const why = st.compoundIssue(); if (why || !st.compoundSelected()) flash(why ?? 'Select clips on unlocked tracks to make a compound clip.') } }
       else if (ctrl && e.shiftKey && k === 'g') { e.preventDefault(); if (!st.ungroupSelected()) flash('No group in the selection.') }
       else if (ctrl && k === 'g') { e.preventDefault(); if (!st.groupSelected()) flash('Shift+click two or more clips to group them.') }
+      else if (ctrl && e.altKey && k === 'm') { e.preventDefault(); setMixerOpen((o) => !o) }
       else if (ctrl && k === 'm') { e.preventDefault(); st.toggleMagnetic(); flash(getState().project.magnetic ? 'Magnetic main track on: V1 closes its gaps' : 'Magnetic main track off') }
       else if (ctrl) return
       else if (k === 'm' && e.shiftKey) { e.preventDefault(); st.jumpMarker(1) }
@@ -721,6 +729,7 @@ function VideoDesk() {
       else if (k === 'm') { e.preventDefault(); st.addMarker() }
       else if (k === 'x' && e.altKey) { e.preventDefault(); st.setRangeIn(null); st.setRangeOut(null) }
       else if (e.altKey) return
+      else if (k === 'r' && !e.shiftKey) { e.preventDefault(); const ph = useVoiceover.getState().phase; if (ph === 'recording') stopVoiceover(); else void startVoiceover() }
       else if (k === 'j' || k === 'k' || k === 'l') { e.preventDefault(); st.shuttle(k) }
       else if (k === 'i') { e.preventDefault(); st.setRangeIn(st.currentTime) }
       else if (k === 'o') { e.preventDefault(); st.setRangeOut(st.currentTime) }
@@ -894,47 +903,9 @@ function VideoDesk() {
     flash(`Relinked ${e.name}`)
   }
 
-  // ---------------------------------------------------------------- Microphone Voiceover Recording
-  const handleStartVoiceover = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const rec = new MediaRecorder(stream)
-      recordedChunksRef.current = []
-      const startedAt = performance.now()
-      const at = getState().currentTime
-      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data) }
-      rec.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop())
-        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
-        setRecordingVoiceover(false)
-        setRecordingSeconds(0)
-        const blob = new Blob(recordedChunksRef.current, { type: rec.mimeType || 'audio/webm' })
-        const dur = Math.max(1, Math.round((performance.now() - startedAt) / 100) / 10)
-        const name = `Voiceover ${fmtTime(Date.now(), { seconds: true })}`
-        // the take is written to disk (desktop) before it goes on the timeline, so a save or a crash restore keeps it
-        void keepTake(blob, name, dur).then(({ asset, onDisk, error }) => {
-          addMediaAsset(asset)
-          addClip({ id: `clip-vo-${Date.now()}`, trackId: trackForKind(view(), 'audio') ?? 'a1', title: name, kind: 'audio', start: at, duration: dur, in: 0, out: dur, color: '#7c3aed', sourceUrl: asset.url, mediaAssetId: asset.id, srcDuration: dur })
-          if (!onDisk && hasDiskMedia()) flash(`The voiceover could not be written to disk (${error ?? 'unknown error'}); it plays this session only.`)
-        })
-      }
-      rec.start()
-      mediaRecorderRef.current = rec
-      setRecordingVoiceover(true)
-      setRecordingSeconds(0)
-      recordingTimerRef.current = window.setInterval(() => setRecordingSeconds((n) => n + 1), 1000)
-    } catch (err) {
-      flash('Could not use the microphone: ' + (err as Error).message)
-      setRecordingVoiceover(false)
-    }
-  }
-  const handleStopVoiceover = () => { if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop() }
-  // leaving the desk stops a voiceover still recording (its timer and microphone)
-  useEffect(() => () => {
-    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
-    const rec = mediaRecorderRef.current
-    if (rec && rec.state !== 'inactive') { rec.onstop = null; rec.stop(); rec.stream.getTracks().forEach((t) => t.stop()) }
-  }, [])
+  // ---------------------------------------------------------------- Voiceover (voiceover.ts: countdown, meter, punch-in)
+  // leaving the desk stops a take still counting down or recording
+  useEffect(() => () => cancelVoiceover(), [])
 
   // ---------------------------------------------------------------- Project: new, open, save
   const doSave = async (saveAs = false): Promise<boolean> => {
@@ -1059,10 +1030,12 @@ function VideoDesk() {
           <button type="button" className="btn sm subtle vw-new" onClick={doNew} data-tip="New empty video"><Icon name="filePlus" size={13} /><span className="vw-lbl">New</span></button>
           <button type="button" className="btn sm subtle vw-open" onClick={doOpen} data-tip="Open a video project (.esbvideo)"><Icon name="folder" size={13} /><span className="vw-lbl">Open</span></button>
           <button type="button" className="btn sm subtle vw-save" onClick={() => void doSave()} data-tip="Save the project (Ctrl+S)"><Icon name="download" size={13} /><span className="vw-lbl">Save</span></button>
-          {isRecordingVoiceover ? (
-            <button type="button" className="btn danger sm" onClick={handleStopVoiceover} data-tip="Stop recording"><span className="vw-recording-dot" />Stop ({recordingSeconds}s)</button>
+          {voPhase === 'recording' ? (
+            <button type="button" className="btn danger sm vw-hdr-stop" onClick={stopVoiceover} data-tip="Stop recording"><span className="vw-recording-dot" />Stop ({voSeconds}s)</button>
+          ) : voPhase !== 'idle' ? (
+            <button type="button" className="btn sm vw-hdr-cancel" onClick={cancelVoiceover} data-tip="Cancel the countdown (Esc)">Cancel</button>
           ) : (
-            <button type="button" className="btn sm subtle" onClick={() => void handleStartVoiceover()} data-tip="Record a voiceover from the microphone"><Icon name="mic" size={13} /><span className="vw-lbl">Record</span></button>
+            <button type="button" className="btn sm subtle vw-hdr-record" onClick={() => void startVoiceover()} data-tip="Record a voiceover (R): 3-2-1, then it records at the playhead"><Icon name="mic" size={13} /><span className="vw-lbl">Record</span></button>
           )}
           <button type="button" className="btn primary sm" onClick={() => setExportModal(true)} disabled={exporting}>
             <Icon name="download" size={14} /> {exporting ? 'Exporting…' : 'Export'}
@@ -1129,21 +1102,7 @@ function VideoDesk() {
 
               {activeTab === 'story' && <StoryVideoPanel />}
               {activeTab === 'data' && <DataPanel />}
-              {activeTab === 'audio' && (
-                <div className="vw-preset-list">
-                  <div className="vw-preset-card">
-                    <div className="vw-preset-header">
-                      <span className="vw-tag" data-tag="voice">Voiceover</span>
-                      {isRecordingVoiceover ? (
-                        <button type="button" className="btn xs danger" onClick={handleStopVoiceover}>Stop ({recordingSeconds}s)</button>
-                      ) : (
-                        <button type="button" className="btn xs" onClick={() => void handleStartVoiceover()}><Icon name="mic" size={12} />Record</button>
-                      )}
-                    </div>
-                    <p className="vw-preset-desc">Records narration to A1 at the playhead{hasDiskMedia() ? ' and keeps the take with the app' : ''}. Footage sound arrives on A1 by itself when a clip is added.</p>
-                  </div>
-                </div>
-              )}
+              {activeTab === 'audio' && <AudioPanel />}
             </div>
           )}
         </aside>
@@ -1151,6 +1110,7 @@ function VideoDesk() {
         <section className="vw-monitor-panel" ref={monitorRef}>
           <div className="vw-monitor-container">
             <Monitor aspect={project.width / project.height} />
+            <CountdownOverlay />
             {empty && (
               <div className="vw-start" role="group" aria-label="Start a video">
                 {restore ? (
@@ -1206,6 +1166,7 @@ function VideoDesk() {
             <IconButton icon="magnet" className={`vw-magnet${project.magnetic ? ' on' : ''}`} active={!!project.magnetic} tip={project.magnetic ? 'Magnetic main track is on: V1 closes its gaps (Ctrl+M)' : 'Magnetic main track: V1 closes its gaps (Ctrl+M)'} onClick={() => { getState().toggleMagnetic(); flash(getState().project.magnetic ? 'Magnetic main track on: V1 closes its gaps' : 'Magnetic main track off') }} />
           </div>
           <div className="vw-tl-tools-right">
+            <button type="button" className={`btn sm subtle vw-mixer-btn${mixerOpen ? ' open' : ''}`} aria-expanded={mixerOpen} aria-label="Mixer" onClick={() => setMixerOpen((o) => !o)} data-tip="Mixer: faders, pan, ducking and loudness (Ctrl+Alt+M)"><Icon name="sliders" size={13} /><span className="vw-lbl">Mixer</span></button>
             <MarkersButton focusId={markerFocus} onFocusDone={() => setMarkerFocus(null)} />
             <MenuButton label="Track" icon="plus" className="sm subtle vw-add-track" menuClassName="vw-solid vw-add-track-menu" items={ADD_TRACK.map((k) => ({ label: `${TRACK_KIND_LABEL[k]} track`, icon: ADD_ICON[k], hint: ADD_HINT[k], onClick: () => { const id = getState().addTrack(k); const lb = trackLabels(view().tracks).get(id); flash(`Added ${lb ? `${lb.code} · ${lb.name}` : TRACK_KIND_LABEL[k]}`) } }))} align="end" />
             <span className="vw-tl-sep" />
@@ -1261,6 +1222,8 @@ function VideoDesk() {
         {selectedClip && <><span className="sep" /><span className="vw-sb-sel">{selectedIds.length > 1 ? `${selectedIds.length} clips selected` : clipLabel(selectedClip)}</span></>}
         {note && <><span className="sep" /><span className="vw-sb-note">{note}</span></>}
         <div className="spacer" />
+        <LoudnessChip onOpen={() => setMixerOpen(true)} />
+        <span className="sep" />
         <span className="muted vw-sb-tool" data-tip="Tool · drop and paste mode">{TOOLS.find((x) => x.id === tool)?.label} · {editMode === 'insert' ? 'Insert' : 'Overwrite'}{project.magnetic ? ' · Magnetic' : ''}</span>
         <span className="sep" />
         <span className={`muted vw-sb-save${autosave?.error && dirty ? ' failed' : ''}`} data-tip={autosave?.error && dirty ? `Autosave failed: ${autosave.error}` : undefined}>
@@ -1285,6 +1248,7 @@ function VideoDesk() {
         ]
         return <Popover anchor={{ x: trackMenu.x, y: trackMenu.y }} onClose={() => setTrackMenu(null)} className="menu ctx vw-solid" minWidth={200}><MenuList items={items} onDone={() => setTrackMenu(null)} /></Popover>
       })()}
+      {mixerOpen && <MixerPanel bottom={timelineH + 28 + 8} onClose={() => setMixerOpen(false)} />}
       {showKeys && <ShortcutsSheet onClose={() => setShowKeys(false)} />}
       {pasteAttrs && <PasteAttributesDialog onClose={() => setPasteAttrs(false)} flash={flash} />}
       {exportModal && <ExportSheet project={playable(project)} onClose={() => setExportModal(false)} onShowMedia={() => { setExportModal(false); showTab('media') }} />}
@@ -1342,7 +1306,7 @@ function kindWord(c: Clip): string {
 }
 
 /** The inspector's sections, in the order of the jump strip and of the column. */
-const SECTION_LABEL: Record<string, string> = { title: 'Title', data: 'Data', transform: 'Transform', speed: 'Speed', colour: 'Colour', fx: 'Effects', keys: 'Keys' }
+const SECTION_LABEL: Record<string, string> = { title: 'Title', data: 'Data', transform: 'Transform', speed: 'Speed', audio: 'Audio', colour: 'Colour', fx: 'Effects', keys: 'Keys' }
 
 function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, onGestureStart, closeLabel, linkedWith, flash, selectionCount }: { clip: Clip; locked: boolean; onChange: (c: Clip) => void; onDelete: () => void; onClose: () => void; onUnlink: () => void; onGestureStart: () => void; closeLabel: string; linkedWith?: Clip; flash: (s: string) => void; selectionCount: number }) {
   const isFootage = clip.kind === 'video' && !clip.compound
@@ -1360,7 +1324,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
   // the sections this clip has (a compound has none: it is edited inside; its opacity is a plain row)
   const isTitle = !clip.compound && clip.kind === 'overlay' && !!clip.titleData
   const isData = !clip.compound && !!clip.dataCard
-  const ids = clip.compound ? [] : [...(isTitle ? ['title'] : []), ...(isData ? ['data'] : []), 'transform', ...(timed ? ['speed'] : []), ...(visual ? ['colour', 'fx'] : []), 'keys']
+  const ids = clip.compound ? [] : [...(isTitle ? ['title'] : []), ...(isData ? ['data'] : []), 'transform', ...(timed ? ['speed'] : []), ...(clip.kind === 'audio' && !clip.compound ? ['audio'] : []), ...(visual ? ['colour', 'fx'] : []), 'keys']
   const stored = useInspectorUi((s) => s.open)
   const open = stored == null ? null : ids.includes(stored) ? stored : ids[0] ?? null
   const transformTitle = clip.kind === 'audio' ? 'Sound' : clip.adjustment ? 'Opacity' : 'Transform'
@@ -1494,6 +1458,7 @@ function ClipInspector({ clip, locked, onChange, onDelete, onClose, onUnlink, on
               <SpeedSection clip={clip} locked={locked} flash={flash} />
             </FxSection>
           )}
+          {clip.kind === 'audio' && !clip.compound && <ClipAudioSection clip={clip} locked={locked} flash={flash} />}
           {/* effects and colour act on a layer's own pixels; a compound is flattened into its clips, so it has none of its own */}
           {visual && <><ColourPanel clip={clip} onChange={onChange} /><EffectsPanel clip={clip} onChange={onChange} /></>}
           {!clip.compound && (
@@ -1533,36 +1498,6 @@ const keyCount = (c: Clip) => Object.values(c.keyframes ?? {}).reduce((n, k) => 
 function trackCodeOf(trackId: string): string {
   const v = view()
   return trackLabels(v.tracks).get(trackId)?.code ?? trackId.toUpperCase()
-}
-
-/** What the track headers call each track: picture tracks numbered from the bottom (V1 is the lowest), text,
- * caption and sound tracks from the top, so the numbers follow the order on screen; a default name is the kind,
- * with a number when two tracks share it ("Footage", "Footage 2"); a name the editor gave is kept. */
-function trackLabels(tracks: Track[]): Map<string, { code: string; name: string }> {
-  const out = new Map<string, { code: string; name: string }>()
-  const group = (t: Track) => (t.kind === 'video' || t.kind === 'overlay' ? 'V' : t.kind === 'text' ? 'T' : t.kind === 'caption' ? 'C' : 'A')
-  const fromBottom = (g: string) => g === 'V'
-  const byGroup = new Map<string, Track[]>()
-  for (const t of tracks) { const g = group(t); byGroup.set(g, [...(byGroup.get(g) ?? []), t]) }
-  const kindSeen = new Map<string, number>()
-  const kindTotal = new Map<string, number>()
-  for (const t of tracks) kindTotal.set(t.kind, (kindTotal.get(t.kind) ?? 0) + 1)
-  for (const [g, list] of byGroup) {
-    const ordered = fromBottom(g) ? [...list].reverse() : list
-    ordered.forEach((t, i) => {
-      const code = `${g}${i + 1}`
-      const custom = t.name.replace(/^[A-Z]\d+\s*·\s*/, '').trim()
-      const isDefault = !custom || custom === TRACK_KIND_LABEL[t.kind] || /^[A-Z]\d+$/.test(t.name.trim())
-      let name = custom
-      if (isDefault) {
-        const n = (kindSeen.get(t.kind) ?? 0) + 1
-        kindSeen.set(t.kind, n)
-        name = n > 1 && (kindTotal.get(t.kind) ?? 0) > 1 ? `${TRACK_KIND_LABEL[t.kind]} ${n}` : TRACK_KIND_LABEL[t.kind]
-      }
-      out.set(t.id, { code, name })
-    })
-  }
-  return out
 }
 
 const ADD_TRACK: TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']

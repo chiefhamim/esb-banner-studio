@@ -12,6 +12,8 @@ import { useMediaMeta } from './media'
 import { cancelProxy, retryProxy } from './proxies'
 import { relinkAllFound, setProjectSettings } from './projectIO'
 import type { MediaEntry } from './media'
+import { WaveThumb } from './audioControls'
+import { identityOf } from './engine/laneCanvas'
 import '../styles/video-bin.css'
 
 /** A codec string as people say it: avc1.64002a → H.264, hvc1 → HEVC, vp09 → VP9, mp4a → AAC. */
@@ -124,7 +126,9 @@ export const BinCard = memo(function BinCard({ asset, onAdd, onRelink, onRemove 
   const m = useMediaMeta((s) => s.byId[asset.id])
   const found = useMediaMeta((s) => s.found[asset.id])
   const isFound = !!asset.missing && !!found
-  const thumb = asset.thumbnailUrl && !asset.missing
+  const thumb = asset.type === 'audio' && asset.url && !asset.missing
+    ? <WaveThumb url={asset.url} identity={identityOf(asset, asset.url)} duration={asset.duration} className="vw-media-thumb vw-bin-wave" width={52} height={52} />
+    : asset.thumbnailUrl && !asset.missing
     ? <img src={asset.thumbnailUrl} alt="" className="vw-media-thumb" crossOrigin={/^(blob:|data:)/.test(asset.thumbnailUrl) ? undefined : 'anonymous'} />
     : <div className={`vw-media-thumb vw-thumb-icon${asset.missing && !isFound ? ' missing' : ''}`}><Icon name={isFound ? 'search' : asset.missing ? 'alert' : asset.type === 'audio' ? 'volume' : asset.type === 'image' ? 'image' : 'video'} size={18} /></div>
   const copy = m?.storage === 'copy'
