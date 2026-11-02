@@ -1150,3 +1150,104 @@ ripple-markers switch, paste-attributes speed note, LUT id + budget, dev `rampPr
 - `video-shots.mjs` → `tools/out/p2-merged`: 360 shots, 0 n/a, 0 failed, 0 geometry findings. Looked at compound-clip,
   markers, keyframe-lane, curve-editor, speed-panel, speed-ramp, lut-loaded, effects-panel, desk-error and
   adjustment-track in both themes at 1366 and 900.
+
+---
+
+## Phase 3 pre-build (titles & data cards) (2026-11-02, branch `video-pre-titles`)
+
+Pure, tested libraries for Phase 3 in `src/video/titles/` (barrel `index.ts`). **Nothing is wired yet**: the
+engine, compositor, timeline and UI do not import them. The Phase 3 session integrates them and passes the gate.
+
+### APIs
+- **`segment.ts`** — `graphemes(text)` (Intl.Segmenter clusters; `joinConjuncts` re-joins a hasanta-split conjunct
+  on engines without Unicode 15.1 GB9c; ZWNJ respected), `breakTokens(para)` (Segmenter words; punctuation stays on its
+  word, break after a hyphen/en dash), `hasBanglaText`.
+- **`layout.ts`** — `layoutTitle({ text, font, maxWidth, align, maxLines }, measure)` → lines / words / grapheme
+  clusters with x offsets measured as prefix widths (browser shaping respected), baselines from the Inter / Hind
+  Siliguri metrics in `core/fonts.ts`, `truncated` + ellipsis past `maxLines`, over-long words split between clusters.
+  The `Measurer` is injected (`canvasMeasurer(ctx)` in the app, a fake in tests); `createLayoutCache()` = lay out once.
+- **`anim.ts`** — `TextAnimSpec { duration, in?, out? }`, `AnimPhase { effects: fade|appear|slide|scale|blur|mask,
+  unit: all|line|word|grapheme, duration, delay, stagger, easing, direction, distance, fromScale, blurPx, order }`;
+  `evalTextAnim(spec, tLocal, layout)` → `{ unit, states[{opacity, dx, dy, scale, blur, clip}], block, settled,
+  hidden }` (the finer of the in/out units; the out phase ends exactly at `duration`). Presets: `typeOn(cps)`,
+  `wordByWord`, `lineByLine`, `slide(dir)`, `scaleIn`, `fade`, `maskReveal(dir)`, `blurIn`. `easing.ts`: named
+  curves, `esb` = cubic-bezier(0.16, 1, 0.3, 1), any bézier; the ends are exact.
+- **`draw.ts`** — `drawTitle(ctx, layout, animFrame | null, style, { x, y, karaoke })` (Canvas 2D / OffscreenCanvas):
+  fill or linear gradient, stroke, shadow, background box (block or per line), italic as the Graphics desk's 12°
+  shear. Settled units are drawn as whole words (exact shaping); moving units piece by piece (a cluster at least).
+- **`karaoke.ts`** — `matchTimings(layout, timings)`, `karaokeState(timings, t)` → the active word and past words;
+  style `karaoke { past, active, future, activeBox }`.
+- **`brand.ts`** — `ESB_BRAND` (name, kicker, esbpowerline.com, Facebook esbpowerlineofficial, YouTube @esbplbd),
+  `FIXED_LABELS` (BREAKING / ব্রেকিং, Source: / সূত্র:), `BRAND_TEXT` (the only fixed strings a template may emit),
+  `CATEGORY_PALETTE` 01–08 (CLAUDE.md §6), `resolveAccent`, `inkOn`, `fontFor(text, role, size)` (Inter 800/700/500
+  roles, kicker .09em, numbers −.02em; Bangla → Hind Siliguri, no tracking, +2 px leading), `FRAME_SIZES`,
+  `safeRect(w, h, { platform, config })` with `DEFAULT_SAFE_ZONES` (title-safe 90 %; 9:16 Reels/Shorts: bottom 20 %,
+  right 13–14 %, top 8 % — a config).
+- **`kit.ts`** — `lowerThird`, `nameStrap`, `headlineCard`, `breakingStrap`, `quoteCard` (quote + speaker + role +
+  optional photo slot), `sourceLine` (nothing unless a source is given), `endCard` (logo slot = the protected
+  `esb-logo`, drawn as-is). Each takes fields + `{ frame, measure, editor, platform, accent | categoryId, duration }`
+  and returns a `TitleSpec` (`spec.ts`: text / rect / image / chart elements; each text has an `origin` input | brand |
+  data and its `field`). Empty field: editor → dimmed label (`placeholder: true`); export → left out.
+- **`grid.ts`** — `parseGridDay(json, isoDate)` (typed and checked; refuses a file for another day),
+  `readMetric(day, id)` for evening/day peak generation and demand, max/min generation, energy generated / demand /
+  not served, gas to power, max temperature, highest hourly load shed (with its hour), load shed at the evening-peak
+  hour; `fuelMix`, `zoneSeries(demand | loadShed | generation)`, `zoneShedPct`, `hourlySeries`; `sharesOf` (derived);
+  `gridSourceLine(dateLabel)`. Unpublished = null, never 0.
+- **`numbers.ts`** — `formatExact` (the stored digits, grouped, optional Bangla digits; never rounded),
+  `countUpText(spec, t)` (same decimals while counting, exactly `formatExact(target)` from the end on).
+- **`charts.ts`** — `drawChart` bar / line / donut (ESB palette, or the site's own fuel colours), exact value labels.
+- **`dataCards.ts`** — `gridNumberCard(figure, opts)` (label, count-up figure, unit · hour, source line, "Derived:
+  formula" when derived), `gridChartCard(series, kind, opts)`.
+- **`render.ts`** — `renderTitleSpec(ctx, spec, t, { measure, image, karaoke })` draws a whole spec (an export spec
+  never draws placeholders); `settleTime` / `exitTime` / `titleIsStatic` tell the compositor when the raster stops
+  changing.
+- **`validate.ts`** — `validateTitleSpec(spec, { measure })` / `assertExportable`: required field empty, placeholder
+  element, filler text (lorem ipsum, TBD, XXX, `[Name]`, `{{…}}`, `<name>`, "Your … here", the kit's own labels; an
+  editor's `[insertion]` in a quote is allowed), text that no longer equals its field, brand text not in `BRAND_TEXT`,
+  a data card without its source line, text cut by its line limit.
+
+### Data source (verified in the website repo, read-only)
+- URL: `https://esbpowerline.com/data/daily/<YYYY-MM-DD>.json` (`lib/data/grid/date-utils.ts dailyReportPath`); days
+  published since the last deploy: `https://esbpowerline.com/api/data/daily/<date>.json` (same shape).
+- Shape: the site's `GridDailyData` (`lib/data/grid/types.ts`): `systemStats` (+ `peakTimes`), `generationData`,
+  `zoneGenerationData`, `regionalDemandData` + `regionalDemandSource`, `hourlyLoadData`, `borderImportsData`, … Units
+  are not in the file: MW (peaks, zone demand/shed, hourly), MKWh (energy totals, fuel mix, zone generation), MMCFD
+  (gas to power), °C. `systemStats.date` reads "21 Oct 2026"; the card shows it as stored.
+- Derived values in the file, labelled as such here: `regionalDemandData[].pct` (loadShed ÷ demand × 100, rounded
+  to 1 by the site's parser), zone demand when `regionalDemandSource` ≠ `p1-published`, `avgProductionCost` (not
+  exposed). Fuel shares are computed here (`sharesOf`) and carry their formula.
+- **Access is gated** (`middleware.ts`, `daily-access.ts`): production needs a same-site Referer/Origin, a non-bot
+  user agent (node-fetch, curl, headless… are refused) and a date inside the tier window (visitor 7 days, member 30,
+  paid plans longer). A plain fetch from the Studio will get 403.
+- Fixture: `tools/fixtures/video/grid-daily-2026-10-21.json`, an unmodified copy of the site's public grid file for
+  2026-10-21 (PGCB statistics and outage notes about substations and lines; no personal data).
+
+### Tests
+`tools/unit/video-titles.test.ts` (46): conjuncts ক্ষ / স্ত্র stay one cluster (built from code points), the
+hasanta-join fallback, break tokens; layout with a fake measurer (offsets, alignment, truncation, a Bangla over-long
+word); animation states at key times for every preset, the out phase, mixed units; karaoke; every template emits only
+its inputs + `BRAND_TEXT` and validates; placeholders are editor-only; category accent; safe areas for 16:9 / 9:16 /
+4:5 / 1:1 (9:16 inside the Reels zones); validation cases; the reader on the real fixture (values equal the JSON,
+date check, null not 0, derived labels); exact formatting and the count-up's final value; data cards; a string scan
+for invented names/figures in `src/video/titles`; a pixel smoke test with the optional `@napi-rs/canvas` (a lower
+third is empty at t = 0 and at its end and drawn when settled; a donut card), skipped automatically if that native
+module is absent. Checked by eye (napi canvas renders): lower third, breaking strap, Bangla quote card 9:16, big
+number 9:16, zone bars 4:5, fuel donut 1:1, end card.
+
+### Checks
+- `npm run lint`: exit 0, no findings in the new files.
+- `npm test`: 969 passed (80 files).
+- `npm run build`: ok.
+
+### What Phase 3 must still wire
+- Timeline/clip model: a title clip carrying `{ template, fields, anim overrides, accent/category }`; build the spec
+  with `editor: true` for the monitor and `editor: false` for export, and call `assertExportable` before an export.
+- Compositor: rasterise with `renderTitleSpec` into the existing text-texture path, keyed by content + `t` only while
+  `!titleIsStatic` (count-ups and in/out phases), then by content alone; pass the ESB logo and photos through `image`;
+  wait for `document.fonts` before measuring (`canvasMeasurer` caches widths per font).
+- Grid fetch: through main with the staff session or a same-site request (the static URL refuses direct access), a
+  date + metric picker, and the card built from `parseGridDay` (acceptance: the number equals the JSON value).
+- Decide the category palette: CLAUDE.md §6's 01–08 colours (used here) differ from the site's 10 categories that
+  Editorial stories carry (`src/core/tokens.ts`); an explicit story accent already wins in `resolveAccent`.
+- Karaoke captions need Phase 5 word timings; the intro/outro bumper, stickers and shapes are not started.
+- Tabular numerals: canvas cannot switch on Inter's `tnum`, so digits may shift slightly while a figure counts up.
