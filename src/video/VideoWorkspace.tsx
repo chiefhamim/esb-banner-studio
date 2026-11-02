@@ -1069,7 +1069,7 @@ function VideoDesk() {
           ) : (
             <button type="button" className="btn sm subtle vw-hdr-record" onClick={() => void startVoiceover()} data-tip="Record a voiceover (R): 3-2-1, then it records at the playhead"><Icon name="mic" size={13} /><span className="vw-lbl">Record</span></button>
           )}
-          <button type="button" className="btn sm vw-hdr-publish" onClick={() => setPublishModal(true)} data-tip="Render sizes, post to YouTube and Facebook (you approve every post)"><Icon name="send" size={13} /><span className="vw-lbl">Publish</span></button>
+          <button type="button" className="btn sm vw-hdr-publish" onClick={() => setPublishModal(true)} data-tip="Render sizes, post to YouTube and Facebook (you approve every post)" aria-label="Publish: render sizes and post"><Icon name="globe" size={13} /><span className="vw-lbl">Publish</span></button>
           <button type="button" className="btn primary sm" onClick={() => setExportModal(true)} disabled={exporting}>
             <Icon name="download" size={14} /> {exporting ? 'Exporting…' : 'Export'}
           </button>
