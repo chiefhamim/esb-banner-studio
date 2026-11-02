@@ -44,7 +44,8 @@ export interface EsbBridge {
   outreachStatus?: () => Promise<EsbOutreachStatus>
   outreachSave?: (settings: EsbSmtpSettings, password?: string) => Promise<{ ok: true; status: EsbOutreachStatus } | { ok: false; error: string }>
   outreachForgetPassword?: () => Promise<EsbOutreachStatus>
-  outreachVerify?: (force?: boolean) => Promise<{ ok: boolean; ms?: number; error?: string; at: number }>
+  /** `kind` says why a failed check failed: auth (wrong app password) | network (server unreachable) | tls | other. */
+  outreachVerify?: (force?: boolean) => Promise<{ ok: boolean; ms?: number; error?: string; kind?: 'auth' | 'network' | 'tls' | 'other'; code?: string; at: number }>
   outreachInbox?: (force?: boolean) => Promise<EsbInboxResult>
   outreachSend?: (mail: EsbOutreachMail) => Promise<{ ok: true; messageId: string; messageKey?: string | null; sent24h: number } | { ok: false; error: string; nextAt?: number; duplicate?: boolean }>
   outreachJobSubmit?: (spec: JobSpec) => Promise<{ ok: true; jobId: string; rejected: { index: number; error: string }[] } | { ok: false; error: string }>
@@ -195,7 +196,7 @@ export interface JobSnapshot {
   name: string
   kind: 'first' | 'followup'
   status: 'queued' | 'running' | 'waiting' | 'paused' | 'done' | 'stopped'
-  why?: 'window' | 'cap' | 'ramp' | 'gap' | 'domain' | 'offline' | 'quota' | 'schedule' | 'held' | null
+  why?: 'window' | 'cap' | 'ramp' | 'gap' | 'domain' | 'offline' | 'tls' | 'quota' | 'schedule' | 'held' | null
   until?: number | null
   /** What exactly the wait is for (engine job.wait): the organisation and its limit/spacing, the gap range, the hours. */
   wait?: JobWait | null

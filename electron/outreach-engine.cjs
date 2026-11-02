@@ -613,9 +613,12 @@ function createEngine(deps = {}) {
         return
       }
 
-      if (errInfo.kind === 'network') {
+      // the PC could not reach the mail server (a network blip) or could not set up the secure connection: nothing
+      // is wrong with this contact or the account, so no attempt is used up, the contact is not marked Failed and the
+      // circuit breaker is not fed — the job waits a minute and tries the same contact again
+      if (errInfo.kind === 'network' || errInfo.kind === 'tls') {
         job.status = 'waiting'
-        job.why = 'offline'
+        job.why = errInfo.kind === 'tls' ? 'tls' : 'offline'
         job.until = now + 60000
         jobs.saveState(job, { force: true })
         pushProgress(job)

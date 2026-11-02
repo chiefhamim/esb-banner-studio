@@ -231,3 +231,54 @@ describe('outreach-errors: classifySendError taxonomy (§4.5)', () => {
     expect(r2.kind).toBe('recipient_transient')
   })
 })
+
+// the status bar's mail check: a network blip or a TLS failure must never read as a wrong password
+describe('outreach-errors: classifyVerifyError (Mail pill)', () => {
+  const { classifyVerifyError, cleanServerText } = require('../../electron/outreach-errors.cjs')
+  const mk = (props: Record<string, unknown>) => Object.assign(new Error(String(props.message ?? '')), props)
+
+  it.each([
+    ['EAUTH 535 (Gmail refused the app password)', mk({ code: 'EAUTH', responseCode: 535, message: 'Invalid login: 535-5.7.8 Username and Password not accepted' }), 'auth'],
+    ['534 application-specific password required', mk({ code: 'EAUTH', responseCode: 534, message: 'Invalid login: 534-5.7.9 Application-specific password required' }), 'auth'],
+    ['ETIMEDOUT (smtp.gmail.com:587 not reachable)', mk({ code: 'ETIMEDOUT', command: 'CONN', message: 'Connection timeout' }), 'network'],
+    ['ECONNREFUSED', mk({ code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 142.250.4.108:587' }), 'network'],
+    ['ENOTFOUND', mk({ code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND smtp.gmail.com' }), 'network'],
+    ['EAI_AGAIN (DNS not ready yet)', mk({ code: 'EAI_AGAIN', message: 'getaddrinfo EAI_AGAIN smtp.gmail.com' }), 'network'],
+    ['ECONNRESET', mk({ code: 'ECONNRESET', message: 'read ECONNRESET' }), 'network'],
+    ['ESOCKET', mk({ code: 'ESOCKET', message: 'Socket closed unexpectedly' }), 'network'],
+    ['EDNS', mk({ code: 'EDNS', message: 'Failed to resolve smtp.gmail.com' }), 'network'],
+    ['ENETUNREACH', mk({ code: 'ENETUNREACH', message: 'connect ENETUNREACH' }), 'network'],
+    ['Greeting never received, no code', mk({ message: 'Greeting never received' }), 'network'],
+    ['ETLS (STARTTLS upgrade failed)', mk({ code: 'ETLS', message: 'Error initiating TLS - wrong version number' }), 'tls'],
+    ['ESOCKET carrying a certificate error', mk({ code: 'ESOCKET', message: 'certificate has expired' }), 'tls'],
+    ['CERT_HAS_EXPIRED', mk({ code: 'CERT_HAS_EXPIRED', message: 'certificate has expired' }), 'tls'],
+    ['ERR_SSL_WRONG_VERSION_NUMBER (465 vs 587)', mk({ code: 'ERR_SSL_WRONG_VERSION_NUMBER', message: 'ssl3_get_record:wrong version number' }), 'tls'],
+    ['530 must issue STARTTLS first', mk({ responseCode: 530, message: '530 5.7.0 Must issue a STARTTLS command first' }), 'tls'],
+    ['something else', mk({ message: 'Unexpected reply from server' }), 'other'],
+    ['a 421 service unavailable is not a wrong password', mk({ code: 'EPROTOCOL', responseCode: 421, message: '421 4.7.0 Try again later' }), 'other'],
+  ])('%s -> %s', (_name, err, kind) => {
+    const r = classifyVerifyError(err)
+    expect(r.kind).toBe(kind)
+    expect(typeof r.error).toBe('string')
+    expect(r.error.length).toBeGreaterThan(0)
+  })
+
+  it('keeps the server text on one line and never carries something that looks like a credential', () => {
+    const r = classifyVerifyError(mk({ code: 'EAUTH', responseCode: 535, message: 'Invalid login:\r\n535 rejected AUTH PLAIN AGJvYkBleGFtcGxlLmNvbQBzM2NyZXQtYXBwLXBhc3N3b3Jk password=hunter2' }))
+    expect(r.kind).toBe('auth')
+    expect(r.error).not.toMatch(/[\r\n]/)
+    expect(r.error).not.toContain('AGJvYkBleGFtcGxl')
+    expect(r.error).not.toContain('hunter2')
+    expect(r.error).toContain('535 rejected')
+    expect(cleanServerText('x'.repeat(500)).length).toBeLessThanOrEqual(200)
+  })
+
+  it('a send that hits a network blip is classified network or tls, never auth / recipient', () => {
+    for (const code of ['ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ESOCKET', 'EDNS', 'EHOSTUNREACH']) {
+      expect(classifySendError({ code, message: `connect ${code} smtp.gmail.com` }).kind).toBe('network')
+    }
+    // the mailer's own failed-send result (what the engine classifies again)
+    expect(classifySendError({ ok: false, error: 'Connection timeout', code: 'ETIMEDOUT' }).kind).toBe('network')
+    expect(classifySendError({ ok: false, error: 'certificate has expired', code: 'ESOCKET' }).kind).toBe('tls')
+  })
+})

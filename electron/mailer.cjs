@@ -297,7 +297,7 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
   let lastVerify = null
   async function verify(force = false) {
     const saved = read(settingsFile, null)
-    if (!saved || !saved.password) return { ok: false, error: 'No sender account saved', at: clock() }
+    if (!saved || !saved.password) return { ok: false, kind: 'other', error: 'No sender account saved', at: clock() }
     // even a forced check waits 10 s since the last, so a renderer in a loop cannot make the account log in non-stop
     if (lastVerify && lastVerify.user === saved.user && clock() - lastVerify.at < (force ? 10_000 : 60_000)) return lastVerify
     const t0 = clock()
@@ -305,7 +305,10 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
       await transportFor(saved).verify()
       lastVerify = { ok: true, ms: clock() - t0, user: saved.user, at: clock() }
     } catch (e) {
-      lastVerify = { ok: false, error: String(e && e.message || e).slice(0, 200), user: saved.user, at: clock() }
+      // why it failed, so the desk never calls a network blip "login failed": auth | network | tls | other, with the
+      // server's own words (no secrets) for the tooltip
+      const v = require('./outreach-errors.cjs').classifyVerifyError(e)
+      lastVerify = { ok: false, kind: v.kind, error: v.error || 'Mail check failed', ...(v.code !== undefined ? { code: String(v.code) } : {}), user: saved.user, at: clock() }
     }
     return lastVerify
   }
@@ -377,7 +380,8 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
       // the server's answer, without the account password (nodemailer does not echo it, but never risk it)
       const errText = String(e && e.message || e).slice(0, 300)
       const classified = require('./outreach-errors.cjs').classifySendError(e)
-      return { ok: false, error: errText, kind: classified.kind, scope: classified.scope, code: classified.code }
+      // the raw codes too, so the engine's own classification sees what the server and the socket said
+      return { ok: false, error: errText, kind: classified.kind, scope: classified.scope, code: (e && e.code) || classified.code, ...(e && e.responseCode ? { responseCode: e.responseCode } : {}) }
     }
   }
 

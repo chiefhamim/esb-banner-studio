@@ -1167,3 +1167,9 @@
 .or-pace-link > span { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
 .or-pace-link .or-link-btn { margin-left: auto; }
 .or-adv-label { font-size: 13px; font-weight: 500; color: var(--text); }
+
+/* Mail pill while the mail server is unreachable: a warning (amber, steady dot), not a failure — it retries itself */
+.ed-statusbar .sb-cms.warn { --sb: var(--warning); --sb2: color-mix(in srgb, var(--warning) 70%, #f59e5b); }
+/* a failed check's chip is longer than "Signed in": it takes its own row under the name instead of squeezing it */
+.or-sender .or-chip.or-chip-fail { grid-row: auto; grid-column: 1 / -1; justify-self: start; margin-top: 6px; }
+.or-sender .or-sender-fix { grid-column: 1 / -1; justify-self: start; margin-top: 4px; font-size: 12px; }

@@ -36,6 +36,7 @@ import { useStore } from '../store'
 import { Icon } from '../ui/Icon'
 import { MenuBar, Tabs, Seg, type MenuDef } from '../ui/controls'
 import { fmtTime, useClockFormat } from '../ui/time'
+import { mailFailView } from './mailCheck'
 
 export function OutreachWorkspace() {
   useClockFormat() // re-render when Home → Settings → Time format changes
@@ -54,8 +55,18 @@ export function OutreachWorkspace() {
     void s.refreshMail().then(() => { if (useOutreachStore.getState().mail?.hasPassword) void useOutreachStore.getState().checkSmtp() })
     const again = () => { if (useOutreachStore.getState().mail?.hasPassword) void useOutreachStore.getState().checkSmtp() }
     const t = setInterval(again, 5 * 60_000)
+    // the network came back: if the mail server was unreachable, check again now (a moment later, so DNS is up too)
+    let onlineT: ReturnType<typeof setTimeout> | undefined
+    const online = () => {
+      clearTimeout(onlineT)
+      onlineT = setTimeout(() => {
+        const st = useOutreachStore.getState()
+        if (st.mail?.hasPassword && st.smtp.state === 'bad' && st.smtp.kind === 'network') void st.checkSmtp(true)
+      }, 2000)
+    }
     window.addEventListener('focus', again)
-    return () => { clearInterval(t); window.removeEventListener('focus', again) }
+    window.addEventListener('online', online)
+    return () => { clearInterval(t); clearTimeout(onlineT); window.removeEventListener('focus', again); window.removeEventListener('online', online) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const audience = useMemo(() => s.contacts.filter((x) => inAudience(x, c?.audience)), [s.contacts, c?.audience])
@@ -160,8 +171,9 @@ export function OutreachWorkspace() {
   ]
 
   const smtp = s.smtp
-  const smtpOn = !!set && !!s.mail?.hasPassword && smtp.state !== 'bad'
-  const smtpText = !desktop ? 'Desktop app only' : !set ? 'No sender' : !s.mail?.hasPassword ? 'No app password' : smtp.state === 'busy' ? 'Checking' : smtp.state === 'bad' ? 'Login failed' : smtp.state === 'ok' ? <><span className="sb-text">{set.user}</span><span className="sb-ms">{smtp.ms} ms</span></> : <span className="sb-text">{set.user}</span>
+  const smtpFail = smtp.state === 'bad' ? mailFailView(smtp.kind, smtp.error, { host: set?.host, retryAtText: smtp.retryAt ? fmtTime(smtp.retryAt, { seconds: true }) : undefined }) : null
+  const smtpTone = !set || !s.mail?.hasPassword ? 'off' : smtpFail ? smtpFail.tone : 'on'
+  const smtpText = !desktop ? 'Desktop app only' : !set ? 'No sender' : !s.mail?.hasPassword ? 'No app password' : smtp.state === 'busy' ? 'Checking' : smtpFail ? smtpFail.text : smtp.state === 'ok' ? <><span className="sb-text">{set.user}</span><span className="sb-ms">{smtp.ms} ms</span></> : <span className="sb-text">{set.user}</span>
 
   return (
     <div className="outreach-workspace">
@@ -219,8 +231,8 @@ export function OutreachWorkspace() {
       )}
 
       <footer className="statusbar ed-statusbar or-status">
-        <button type="button" className={'sb-cms ' + (smtpOn ? 'on' : 'off')} onClick={() => { if (s.mail?.hasPassword) void s.checkSmtp(true); else if (desktop) ui.set({ sheet: 'sender' }) }}
-          data-tip={smtp.state === 'bad' ? `${smtp.error} — click to try again` : smtp.state === 'ok' ? `Signed in to ${set?.host} · checked ${fmtTime(smtp.at)} — click to check again` : set ? 'Click to sign in to the mail server now' : 'Set up the account that sends'}>
+        <button type="button" className={'sb-cms ' + smtpTone} onClick={() => { if (s.mail?.hasPassword && !smtpFail?.fixInSender) void s.checkSmtp(true); else if (desktop) ui.set({ sheet: 'sender' }) }}
+          data-tip={smtpFail ? (smtpFail.fixInSender ? `${smtpFail.tip} — click to open Sender` : smtpFail.tip) : smtp.state === 'ok' ? `Signed in to ${set?.host} · checked ${fmtTime(smtp.at)} — click to check again` : set ? 'Click to sign in to the mail server now' : 'Set up the account that sends'}>
           <span className="sb-k">Mail</span>
           <span className="sb-pill"><i className="sb-dot" aria-hidden />{smtpText}</span>
         </button>

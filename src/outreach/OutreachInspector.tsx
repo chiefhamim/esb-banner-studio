@@ -27,6 +27,7 @@ import { cloudAgo, lockBlock, useCloud } from './cloudStore'
 import { clickedText, engineSkipText, keyOf, openedText, outcomeOf } from './outcome'
 import { fmtCountdown, fmtDay, fmtGapRange, waitReason } from './activityFormat'
 import { useEngineStore } from './engineStore'
+import { mailFailView } from './mailCheck'
 import { fmtDateTime, useClockFormat } from '../ui/time'
 
 const fmtWhen = (t: number) => fmtDateTime(t, { weekday: false })
@@ -59,6 +60,7 @@ function SendTab() {
   const s = useDesk()
   const c = s.campaign()
   const desktop = !!window.esb?.outreachSend
+  const ui = useOutreachUi()
   const [testTo, setTestTo] = useState('')
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
@@ -77,6 +79,8 @@ function SendTab() {
   const set = s.mail?.settings
   const engineSet = useEngineStore((x) => x.settings)
   const ready = s.mail?.hasPassword && !!set
+  // why the last mail check failed, in plain words: only a refused login is a wrong app password
+  const smtpFail = s.smtp.state === 'bad' ? mailFailView(s.smtp.kind, s.smtp.error, { host: set?.host }) : null
   const limit = engineSet?.dailyLimit ?? set?.dailyLimit ?? 0
   const used = s.mail?.sentToday ?? s.mail?.sent24h ?? 0
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
@@ -100,7 +104,8 @@ function SendTab() {
         ) : set ? (
           <div className="or-sender">
             <b>{set.name}</b><span>{set.user}</span>
-            <span className={'or-chip ' + (ready ? (s.smtp.state === 'bad' ? 'bad' : 'good') : 'warn')}>{!ready ? 'No app password' : s.smtp.state === 'bad' ? 'Login failed' : s.smtp.state === 'ok' ? 'Signed in' : 'Saved'}</span>
+            <span className={'or-chip ' + (ready ? (smtpFail ? (smtpFail.tone === 'warn' ? 'warn' : 'bad') + ' or-chip-fail' : 'good') : 'warn')} data-tip={smtpFail?.tip}>{!ready ? 'No app password' : smtpFail ? smtpFail.chip : s.smtp.state === 'ok' ? 'Signed in' : 'Saved'}</span>
+            {ready && smtpFail?.fixInSender && <button type="button" className="or-link or-sender-fix" onClick={() => ui.set({ sheet: 'sender' })}>Change in Sender</button>}
           </div>
         ) : (
           <p className="or-muted">No sender yet. Use the account button at the top right to add the Gmail or Workspace account that sends, with a Google app password.</p>

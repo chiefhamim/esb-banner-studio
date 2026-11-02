@@ -16,6 +16,11 @@ import { contactsFromRows, groupNamesOf, readMailingFile } from './directory'
 import type { Sheet } from './directory'
 import { domainOf, type DomainCheckResult } from './addressCheck'
 import { idbDel, idbGet, idbSet } from './idb'
+import { mailFailKind, mailRetryDelay, type MailFailKind } from './mailCheck'
+
+// the mail check's own retry while the server is unreachable (one timer for the whole desk)
+let smtpRetry: ReturnType<typeof setTimeout> | null = null
+let smtpRetryStep = 0
 
 const KEY = 'esb-banner-studio/outreach/v2'
 const V1 = 'esb-banner-studio/outreach/v1'
@@ -161,7 +166,9 @@ export function applyInboxResultToCampaigns(
 export type RunState = 'idle' | 'running' | 'paused'
 export interface LogEntry { t: number; level: 'info' | 'ok' | 'warn' | 'error'; text: string }
 export type InboxCheck = { state: 'idle' } | { state: 'busy'; at?: number } | { state: 'ok'; at: number; scanned: number; note?: string } | { state: 'bad'; at: number; error: string }
-export type SmtpCheck = { state: 'idle' } | { state: 'busy' } | { state: 'ok'; ms: number; at: number } | { state: 'bad'; error: string; at: number }
+/** The last SMTP check. `bad` carries WHY (mailCheck.ts): only `auth` means the app password is wrong; `network` is
+ *  retried by itself (`retryAt`) and shown as a warning, not a failure. */
+export type SmtpCheck = { state: 'idle' } | { state: 'busy' } | { state: 'ok'; ms: number; at: number } | { state: 'bad'; kind: MailFailKind; error: string; at: number; retryAt?: number }
 
 interface OutreachState extends Saved {
   /** The open campaign's list, read from IndexedDB. */
@@ -612,9 +619,23 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     checkSmtp: async (force = false) => {
       const b = window.esb
       if (!b?.outreachVerify) return
-      set({ smtp: { state: 'busy' } })
-      const r = await b.outreachVerify(force).catch((e: Error) => ({ ok: false, error: e.message, at: Date.now() }) as { ok: boolean; ms?: number; error?: string; at: number })
-      set({ smtp: r.ok ? { state: 'ok', ms: r.ms ?? 0, at: r.at } : { state: 'bad', error: r.error ?? 'Could not log in', at: r.at } })
+      const prev = get().smtp
+      // while the server is unreachable the pill keeps saying so during a retry instead of flickering to "Checking"
+      if (!(prev.state === 'bad' && prev.kind === 'network')) set({ smtp: { state: 'busy' } })
+      const r = await b.outreachVerify(force).catch((e: Error) => ({ ok: false, kind: 'other', error: e.message, at: Date.now() }) as Awaited<ReturnType<NonNullable<typeof b.outreachVerify>>>)
+      if (smtpRetry) { clearTimeout(smtpRetry); smtpRetry = null }
+      if (r.ok) { smtpRetryStep = 0; set({ smtp: { state: 'ok', ms: r.ms ?? 0, at: r.at } }); return }
+      const kind = mailFailKind(r.kind)
+      let retryAt: number | undefined
+      if (kind === 'network') {
+        // 30 s → 2 min → 5 min while it stays unreachable; a cached answer (same time) does not move the ladder on
+        const fresh = !(prev.state === 'bad' && prev.at === r.at)
+        const delay = mailRetryDelay(fresh ? smtpRetryStep : Math.max(0, smtpRetryStep - 1))
+        if (fresh) smtpRetryStep++
+        retryAt = Date.now() + delay
+        smtpRetry = setTimeout(() => { smtpRetry = null; void get().checkSmtp(true) }, delay)
+      } else smtpRetryStep = 0
+      set({ smtp: { state: 'bad', kind, error: r.error ?? 'Mail check failed', at: r.at, ...(retryAt ? { retryAt } : {}) } })
     },
     addLog: (level, text) => set({ log: [...get().log.slice(-299), { t: Date.now(), level, text }] }),
     cloudApply: async (p) => {

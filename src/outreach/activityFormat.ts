@@ -108,6 +108,8 @@ export function waitReason(job: Pick<JobSnapshot, 'status' | 'why' | 'wait'> | n
       return 'Gmail asked to slow down'
     case 'offline':
       return 'offline — trying again every minute'
+    case 'tls':
+      return 'secure connection to the mail server failed — trying again every minute'
     case 'schedule':
       return 'scheduled start'
     case 'held':
@@ -219,6 +221,9 @@ export function describeRun(
         break
       case 'offline':
         sentence = 'Offline — trying again every minute'
+        break
+      case 'tls':
+        sentence = 'Secure connection to the mail server failed — trying again every minute'
         break
       case 'quota':
         sentence = `Gmail asked us to slow down — continues at ${fmtClock(until, tz)}`
