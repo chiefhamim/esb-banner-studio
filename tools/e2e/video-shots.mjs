@@ -622,6 +622,65 @@ const STATES = {
     return {}
   },
 
+  // ---- Phase 3 Part B: Grid data cards (a stand-in bridge answers with the committed 21 Oct 2026 fixture; the real
+  // app reads esbpowerline.com through the main process, which the dev server cannot)
+  'data-signed-out': async (page) => { await seedData(page, { signedIn: false }); await clickTab(page, 'Data'); await page.waitForSelector('.vw-data-signed-out', { timeout: 3000 }).catch(() => {}); return {} },
+  'data-day': async (page) => { await seedData(page); await clickTab(page, 'Data'); await page.waitForSelector('.vw-data-item[data-metric="eveningPeakGen"]'); return {} },
+  'data-card-number': async (page) => dataCardState(page, '.vw-data-item[data-metric="eveningPeakGen"] .vw-data-add'),
+  'data-card-donut': async (page) => dataCardState(page, '.vw-data-item[data-series="fuelMix"] .vw-data-add'),
+  'data-card-zones': async (page) => dataCardState(page, '.vw-data-item[data-series="zone:demand"] .vw-data-add'),
+  'data-card-number-916': async (page) => dataCardState(page, '.vw-data-item[data-metric="eveningPeakGen"] .vw-data-add', '9:16'),
+  'data-card-donut-916': async (page) => dataCardState(page, '.vw-data-item[data-series="fuelMix"] .vw-data-add', '9:16'),
+  'data-card-zones-916': async (page) => dataCardState(page, '.vw-data-item[data-series="zone:demand"] .vw-data-add', '9:16'),
+  'data-refresh-changed': async (page) => {
+    await dataCardState(page, '.vw-data-item[data-metric="eveningPeakGen"] .vw-data-add')
+    await page.evaluate(() => { window.__gridFakeBump = 7.56 })
+    await page.click('.vw-data-refresh-btn')
+    await page.waitForSelector('.vw-data-changed')
+    return {}
+  },
+}
+
+const GRID_FIXTURE = JSON.parse(fs.readFileSync(path.join(root, 'tools', 'fixtures', 'video', 'grid-daily-2026-10-21.json'), 'utf8'))
+/** Footage on V1 only, a synthetic staff session (example.com) unless signed out, and a stand-in for the desktop
+ * bridge's grid calls that answers with the fixture day. */
+async function seedData(page, { signedIn = true, aspect = null } = {}) {
+  await importMedia(page)
+  await page.evaluate(({ fixture, signedIn, aspect }) => {
+    const vs = window.__videoStore
+    const st = vs.getState()
+    const vid = st.mediaAssets.find((x) => x.type === 'video')
+    if (aspect) st.setAspect(aspect)
+    st.loadProject({ ...vs.getState().project, name: 'Sample project', duration: 12, clips: [{ id: 'shot-v1', trackId: 'v1', title: 'Sample clip', kind: 'video', start: 0, duration: 6, in: 0, out: 6, color: '#2563eb', sourceUrl: vid?.url, mediaAssetId: vid?.id, thumbnailUrl: vid?.thumbnailUrl }] }, { dirty: true })
+    vs.getState().seek(0)
+    const answer = () => {
+      const data = JSON.parse(JSON.stringify(fixture))
+      if (window.__gridFakeBump) data.systemStats.eveningPeakGen = Math.round((data.systemStats.eveningPeakGen + window.__gridFakeBump) * 100) / 100
+      return { ok: true, iso: '2026-10-21', fetchedAt: '2026-01-15T04:00:00.000Z', source: 'https://esbpowerline.com/data/daily/2026-10-21.json', data, cached: false }
+    }
+    window.esb = {
+      ...(window.esb || {}),
+      gridDay: async (_c, iso) => (iso === '2026-10-21' ? answer() : { ok: false, code: 'not-published', error: `No data published for ${iso}.` }),
+      gridLatest: async () => answer(),
+      gridCached: async (iso) => (iso === '2026-10-21' && !signedIn ? { ...answer(), cached: true } : { ok: false, code: 'not-cached', error: 'No saved copy.' }),
+      gridCachedDates: async () => (signedIn ? ['2026-10-21'] : []),
+    }
+    if (signedIn) {
+      const s = { email: 'editor@example.com', name: 'Sample Editor', role: 'EDITOR', token: 'sample-token', refreshToken: 'sample-refresh', expiresAt: Math.floor(Date.now() / 1000) + 36000, userId: 'u-sample', authenticatedAt: new Date().toISOString(), authType: 'supabase' }
+      localStorage.setItem('esb-banner-studio/site-session', JSON.stringify(s))
+      window.dispatchEvent(new CustomEvent('esb-session', { detail: s }))
+    }
+  }, { fixture: GRID_FIXTURE, signedIn, aspect })
+}
+/** Add one card from the Data tab at 0 s, select it, and park the playhead after its count-up (3.5 s). */
+async function dataCardState(page, addSelector, aspect = null) {
+  await seedData(page, { aspect })
+  await clickTab(page, 'Data')
+  await page.waitForSelector(addSelector)
+  await page.click(addSelector)
+  await page.waitForSelector('.vw-data-inspector')
+  await page.evaluate(() => window.__videoStore.getState().seek(3.5))
+  return {}
 }
 
 /** The timeline's geometry: every track header level with its lane (±1 px), the ruler on screen. */

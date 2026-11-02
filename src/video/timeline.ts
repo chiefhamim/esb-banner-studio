@@ -13,6 +13,7 @@ import { clipDurationFor, cutFreezes, isRetimed, rampOf, sanitizeFreezes, saniti
 
 import type { BlendMode } from './effects'
 import { BLEND_MODES, LUT_MAX_CHARS, lutText, lutsUsed, registerLut, sanitizeEffects } from './effects'
+import { sanitizeDataCard, type DataCardRef } from './dataCardClip'
 
 export type TrackKind = 'video' | 'overlay' | 'text' | 'caption' | 'audio'
 export const TRACK_KINDS: readonly TrackKind[] = ['video', 'overlay', 'text', 'caption', 'audio']
@@ -138,6 +139,9 @@ export interface Clip {
   effects?: ClipEffect[]
   transitionIn?: ClipTransition
   transitionOut?: ClipTransition
+  /** Phase 3 (Part B): a Grid data card — the published figure or series it shows, with its day, source and fetch
+   * time (dataCardClip.ts). Drawn from these stored values only; an export never fetches. */
+  dataCard?: DataCardRef
 }
 
 export interface VideoProject {
@@ -809,6 +813,7 @@ export function migrateTimeline(raw: { timelineVersion?: unknown; tracks?: unkno
     if (o.preservePitch !== undefined && o.preservePitch !== false) delete clip.preservePitch
     if (o.blendMode !== undefined && (!BLEND_MODES.includes(o.blendMode as BlendMode) || o.blendMode === 'normal')) delete clip.blendMode
     if (o.adjustment !== undefined && !(o.adjustment === true && kind === 'overlay')) delete clip.adjustment
+    if (o.dataCard !== undefined) { const dc = kind === 'overlay' ? sanitizeDataCard(o.dataCard) : undefined; if (dc) clip.dataCard = dc; else delete clip.dataCard }
     if (!track) {
       // the clip's track is gone: give it one of its kind rather than lose the clip
       const want = typeof o.trackId === 'string' && /^[\w-]{1,40}$/.test(o.trackId) && !seen.has(o.trackId) ? o.trackId : undefined

@@ -150,6 +150,8 @@ export function parseGridDay(raw: unknown, isoDate: string): GridDay {
 // ------------------------------------------------------------------ figures
 
 export type GridUnit = 'MW' | 'MKWh' | 'MMCFD' | '°C' | '%' | 'Tk/kWh'
+/** Every unit a grid figure may carry (the project-file sanitiser checks against it). */
+export const GRID_UNITS: readonly GridUnit[] = ['MW', 'MKWh', 'MMCFD', '°C', '%', 'Tk/kWh']
 
 export interface GridFigure {
   id: string

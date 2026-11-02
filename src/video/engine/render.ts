@@ -16,6 +16,7 @@ import type { GLCompositor, LayerDraw, LayerFx } from './glCompositor'
 import { frameQuad, layerQuad, uvOf } from './layerMath'
 import { hasKeyframes, sampleProp, srcAt } from './animation'
 import { beginFxFrame, resolveFx } from './fxResolve'
+import { dataCardLayer } from './dataCardAdapter'
 
 /** A footage picture for this instant: a decoded frame (ImageBitmap / VideoFrame) or, for a file the decoder cannot
  * read, its <video> element (`live`: the picture changes under the same object). */
@@ -110,6 +111,17 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
       const tex = comp.slotTexture(clip.id, f.image, f.width, f.height, f.live)
       const r = footageRect(f.width, f.height, w, h, p)
       return { tex, quad: layerQuad(r, p.rotation, clip.anchorX, clip.anchorY), uv: uvOf(r, f.width, f.height), alpha, fx: fxOf(clip) }
+    }
+    if (clip.kind === 'overlay' && clip.dataCard) {
+      // Grid data card (Phase 3 Part B) — through the adapter until Part A's title path is merged
+      const dc = dataCardLayer(clip, t, w, h, editor)
+      if (!dc) return null
+      let tex
+      if (dc.mode === 'live') { slots.add(dc.slot); tex = comp.slotTexture(dc.slot, dc.raster.src, dc.raster.width, dc.raster.height, true) }
+      else tex = comp.staticTexture(dc.key, dc.make)
+      if (!tex) return null
+      const p = poseAt(clip, t)
+      return { tex, quad: frameQuad(w, h, p.offX, p.offY, p.rotation, clip.anchorX, clip.anchorY), uv: FULL_UV, alpha, fx: fxOf(clip) }
     }
     if (clip.kind === 'overlay' || clip.kind === 'caption') {
       const tex = comp.staticTexture(rasterKey(clip, w, h, editor, captionBottom), () => rasterLayer(clip, w, h, editor, captionBottom))

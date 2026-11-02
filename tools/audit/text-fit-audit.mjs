@@ -200,7 +200,7 @@ try {
     await page.waitForTimeout(500)
     await tryStep('video-start', async () => { await page.waitForSelector('.vw-start-card') })
     const vtab = (t) => page.click(`.vw-bin-panel .side-tabs button:has-text("${t}")`)
-    for (const t of ['Media', 'Overlays', 'Captions', 'Audio', 'Story']) await tryStep(`video-${t}`, async () => { await vtab(t) })
+    for (const t of ['Media', 'Overlays', 'Captions', 'Audio', 'Story', 'Data']) await tryStep(`video-${t}`, async () => { await vtab(t) })
     await tryStep('video-overlay-inspector', async () => { await vtab('Overlays'); await page.click('.vw-preset-card[data-preset="card"] button:has-text("Add")'); await page.fill('.vw-f-text', LONG.headline); await page.fill('.vw-f-sub', LONG.deck) })
     await tryStep('video-media-imported', async () => {
       await vtab('Media')
@@ -211,6 +211,23 @@ try {
     await tryStep('video-sound-inspector', async () => { await page.click('.vw-clip-block[data-clip-kind="audio"]') })
     await tryStep('video-story-built', async () => { await vtab('Story'); await page.click('.vw-story-build'); await page.click('.vw-story-confirm button:has-text("Replace")'); await page.waitForSelector('.vw-story-note') })
     await tryStep('video-clip-selected', async () => { await page.locator('.vw-clip-block').first().click() })
+    // Phase 3 Part B: the Data tab with a day loaded and a chart card's inspector (a stand-in bridge answers with the
+    // committed 21 Oct 2026 fixture; the real app reads the site through main), signed in as a synthetic example.com staff
+    await tryStep('video-data-day', async () => {
+      const fixture = JSON.parse(fs.readFileSync(path.join(root, 'tools/fixtures/video/grid-daily-2026-10-21.json'), 'utf8'))
+      await page.evaluate((fx) => {
+        const answer = () => ({ ok: true, iso: '2026-10-21', fetchedAt: '2026-10-22T04:00:00.000Z', source: 'https://esbpowerline.com/data/daily/2026-10-21.json', data: fx, cached: false })
+        window.esb = { ...(window.esb || {}), gridDay: async () => answer(), gridLatest: async () => answer(), gridCached: async () => answer(), gridCachedDates: async () => ['2026-10-21'] }
+        const s = { email: 'editor@example.com', name: 'Sample Editor', role: 'EDITOR', token: 't', refreshToken: 'r', expiresAt: Math.floor(Date.now() / 1000) + 36000, userId: 'u', authenticatedAt: new Date().toISOString(), authType: 'supabase' }
+        localStorage.setItem('esb-banner-studio/site-session', JSON.stringify(s))
+        window.dispatchEvent(new CustomEvent('esb-session', { detail: s }))
+      }, fixture)
+      await page.keyboard.press('Escape')
+      await vtab('Media'); await vtab('Data')
+      await page.click('.vw-data-latest').catch(() => {})
+      await page.waitForSelector('.vw-data-item[data-series="fuelMix:share"]', { timeout: 8000 })
+    })
+    await tryStep('video-data-card', async () => { await page.click('.vw-data-item[data-series="fuelMix:share"] .vw-data-add'); await page.waitForSelector('.vw-data-inspector') })
     // Phase 2 editing: the tool menu, a named marker in the markers list, the speed panel with a ramp, the keyframe lane
     // under a clip with keys, the shortcuts sheet
     await tryStep('video-tools-menu', async () => { await page.click('.vw-tool-menu'); await page.waitForSelector('.vw-tool-pop') })

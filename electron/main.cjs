@@ -209,6 +209,19 @@ ipcMain.handle('esb:site-upload', async (_e, cookies, bytes, mime, name) => {
 ipcMain.handle('esb:site-upload-probe', async (_e, cookies) => siteUpload.probeUpload(cookies))
 ipcMain.handle('esb:site-revalidate', async (_e, cookies, slugs) => siteUpload.revalidateSite(cookies, slugs))
 
+// Video data cards: one day of esbpowerline.com's grid data, read as the signed-in editor and cached per date in
+// userData (electron/grid-data.cjs). The renderer names a date only; origin, path, size and time are fixed here.
+let gridDataInstance = null
+const gridData = () => (gridDataInstance ??= require('./grid-data.cjs').createGridData({
+  userDataDir: app.getPath('userData'),
+  origin: require('./grid-data.cjs').resolveOrigin(process.env.ESB_GRID_TEST_ORIGIN, app.isPackaged),
+  userAgent: `ESB-AI-Studio/${app.getVersion()} (desktop; +https://esbpowerline.com)`,
+}))
+ipcMain.handle('esb:grid-day', (_e, cookies, iso, opts) => gridData().fetchDay(cookies, iso, opts))
+ipcMain.handle('esb:grid-latest', (_e, cookies) => gridData().latest(cookies))
+ipcMain.handle('esb:grid-cached', (_e, iso) => gridData().cached(iso))
+ipcMain.handle('esb:grid-cached-dates', () => gridData().cachedDates())
+
 // Home → Quit: close every window and end the app (refused if sending is active, unless forced).
 ipcMain.handle('esb:quit', (_e, force) => {
   if (!force && outreachEngineInstance && outreachEngineInstance.isActive()) {
