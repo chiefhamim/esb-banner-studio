@@ -8,7 +8,7 @@
 // platform UI zones (brand.ts DEFAULT_SAFE_ZONES: bottom ~20 %, right edge strip, top band).
 
 import { fade, lineByLine, maskReveal, scaleIn, slide, wordByWord, type TextAnimSpec } from './anim'
-import { BRAND_TEXT, ESB_BRAND, ESB_STRIPES, FIXED_LABELS, QUOTE_MARK, fontFor, inkOn, kickerCase, resolveAccent, safeRect, type Platform, type Rect, type SafeZoneConfig, type TypeRole } from './brand'
+import { BRAND_TEXT, ESB_BRAND, accentText, ESB_STRIPES, FIXED_LABELS, QUOTE_MARK, fontFor, inkOn, kickerCase, resolveAccent, safeRect, type Platform, type Rect, type SafeZoneConfig, type TypeRole } from './brand'
 import type { TitleStyle } from './draw'
 import { layoutTitle, type Align, type Measurer } from './layout'
 import { hasBanglaText } from './segment'
@@ -52,19 +52,39 @@ export const ALL_PLACEHOLDER_LABELS: ReadonlySet<string> = new Set(Object.values
 
 // ------------------------------------------------------------------ helpers (shared with dataCards.ts)
 
-export interface KitCtx { o: KitOptions; s: number; safe: Rect; editor: boolean; accent: string | null; fields: Record<string, TitleField> }
+export interface KitCtx { o: KitOptions; s: number; safe: Rect; editor: boolean; accent: string | null; /** The accent lightened until it reads as text on the dark card (bars and edges use `accent`). */ accentText: string | null; fields: Record<string, TitleField> }
 
 export function ctxOf(o: KitOptions): KitCtx {
   const { w, h } = o.frame
   const platform = o.platform === undefined ? (h > w * 1.3 ? 'reels' : null) : o.platform
-  return { o, s: Math.min(w, h) / 1080, safe: safeRect(w, h, { platform, config: o.safeZones }), editor: !!o.editor, accent: resolveAccent({ accent: o.accent, categoryId: o.categoryId }), fields: {} }
+  const accent = resolveAccent({ accent: o.accent, categoryId: o.categoryId })
+  return { o, s: Math.min(w, h) / 1080, safe: safeRect(w, h, { platform, config: o.safeZones }), editor: !!o.editor, accent, accentText: accent ? accentText(accent) : null, fields: {} }
 }
 
-const clean = (v: string | null | undefined) => (v ?? '').replace(/\s+/g, ' ').trim()
+const ch = (...codes: number[]) => String.fromCharCode(...codes)
+const BENGALI = new RegExp(`[${ch(0x0980)}-${ch(0x09ff)}]`)
+// zero-width space, word joiner, soft hyphen, BOM, bidi marks (written as code points: the characters are invisible)
+const INVISIBLE = new RegExp(`[${[0x200b, 0x2060, 0x00ad, 0xfeff, 0x200e, 0x200f].map((c) => ch(c)).join('')}${ch(0x202a)}-${ch(0x202e)}${ch(0x2066)}-${ch(0x2069)}]`, 'g')
+const JOINERS = new RegExp(`[${ch(0x200c, 0x200d)}]`, 'g')
+/** Characters that draw nothing are removed. ZWNJ / ZWJ (U+200C/D) stay only between Bengali letters, where they are
+ * part of the spelling. */
+function stripInvisible(v: string): string {
+  return v.replace(INVISIBLE, '').replace(JOINERS, (m, i: number, all: string) => (BENGALI.test(all[i - 1] ?? '') && BENGALI.test(all[i + 1] ?? '') ? m : ''))
+}
+
+/** What a field shows: invisible characters removed; every run of whitespace is one space. With `multiline` the
+ * paragraph breaks stay (a line break is one newline, a blank line is kept once; tabs become spaces). */
+export function clean(v: string | null | undefined, multiline = false): string {
+  const t = stripInvisible(v ?? '')
+  if (!multiline) return t.replace(/\s+/g, ' ').trim()
+  return t.replace(/\r\n?/g, '\n').split('\n').map((l) => l.replace(/[^\S\n]+/g, ' ').trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+/** A field with nothing visible in it (empty, spaces, zero-width characters only). */
+export const isBlank = (v: string | null | undefined) => clean(v) === ''
 
 /** Register a field and give what it shows: its value, its label (editor), or null (export, empty). */
-export function take(c: KitCtx, key: string, value: string | null | undefined, label: string, required: boolean): { text: string; placeholder: boolean } | null {
-  const v = clean(value)
+export function take(c: KitCtx, key: string, value: string | null | undefined, label: string, required: boolean, multiline = false): { text: string; placeholder: boolean } | null {
+  const v = clean(value, multiline)
   c.fields[key] = { value: v, label, required }
   if (v) return { text: v, placeholder: false }
   return c.editor ? { text: label, placeholder: true } : null
@@ -120,9 +140,9 @@ export function lowerThird(f: { name?: string; role?: string; esbKicker?: boolea
   const textW = boxW - pad * 2 - 16 * s
   const els: TextElement[] = []
   let y = 0
-  if (f.esbKicker !== false) { const k = textEl(c, 'kicker', brandText(ESB_BRAND.kicker), null, textX, y, textW, { role: 'kicker', size: 17 * s, color: c.accent ?? '#a1a1aa', anim: timing(d, fade(0.3, 0.1)) }); els.push(k); y += heightOf(c, k) + 4 * s }
+  if (f.esbKicker !== false) { const k = textEl(c, 'kicker', brandText(ESB_BRAND.kicker), null, textX, y, textW, { role: 'kicker', size: 22 * s, color: c.accentText ?? '#a1a1aa', anim: timing(d, fade(0.3, 0.1)) }); els.push(k); y += heightOf(c, k) + 4 * s }
   if (name) { const n = textEl(c, 'name', name, 'name', textX, y, textW, { role: 'headline', size: 44 * s, maxLines: 2, anim: timing(d, wordByWord(0.07, 0.15)) }); els.push(n); y += heightOf(c, n) + 2 * s }
-  if (role) { const r = textEl(c, 'role', role, 'role', textX, y, textW, { role: 'body', size: 27 * s, maxLines: 2, color: role.placeholder ? undefined : INK_2, anim: timing(d, fade(0.35, 0.35)) }); els.push(r); y += heightOf(c, r) }
+  if (role) { const r = textEl(c, 'role', role, 'role', textX, y, textW, { role: 'body', size: 28 * s, maxLines: 2, color: role.placeholder ? undefined : INK_2, anim: timing(d, fade(0.35, 0.35)) }); els.push(r); y += heightOf(c, r) }
   if (!name && !role) return spec(c, 'lower-third', [], d)
   const boxH = y + pad * 2
   const boxY = safe.y + safe.h - boxH
@@ -162,14 +182,14 @@ export function headlineCard(f: { headline?: string; kicker?: string }, o: KitOp
   const d = o.duration ?? 6
   const { s, safe } = c
   const { w, h } = o.frame
-  const head = take(c, 'headline', f.headline, KIT_LABELS.headline, true)
+  const head = take(c, 'headline', f.headline, KIT_LABELS.headline, true, true)
   const kick = take(c, 'kicker', f.kicker, KIT_LABELS.kicker, false)
   if (!head && !kick) return spec(c, 'headline', [], d)
   const left = safe.x + 30 * s
   const width = safe.w - 30 * s
   const els: TextElement[] = []
   let y = 0
-  if (kick) { const k = textEl(c, 'kicker', kick, 'kicker', left, y, width, { role: 'kicker', size: 22 * s, transform: 'upper', color: kick.placeholder ? undefined : c.accent ?? '#e4e4e7', anim: timing(d, fade(0.3)) }); els.push(k); y += heightOf(c, k) + 10 * s }
+  if (kick) { const k = textEl(c, 'kicker', kick, 'kicker', left, y, width, { role: 'kicker', size: 22 * s, transform: 'upper', color: kick.placeholder ? undefined : c.accentText ?? '#e4e4e7', anim: timing(d, fade(0.3)) }); els.push(k); y += heightOf(c, k) + 10 * s }
   if (head) { const t = textEl(c, 'headline', head, 'headline', left, y, width, { role: 'headline', size: 66 * s, maxLines: 4, anim: timing(d, lineByLine(0.14, 0.1)) }); els.push(t); y += heightOf(c, t) }
   const top = safe.y + safe.h - y
   for (const e of els) e.y += top
@@ -218,7 +238,7 @@ export function quoteCard(f: { quote?: string; speaker?: string; speakerRole?: s
   const c = ctxOf(o)
   const d = o.duration ?? 8
   const { s, safe } = c
-  const quote = take(c, 'quote', f.quote, KIT_LABELS.quote, true)
+  const quote = take(c, 'quote', f.quote, KIT_LABELS.quote, true, true)
   const speaker = take(c, 'speaker', f.speaker, KIT_LABELS.speaker, true)
   const role = take(c, 'speakerRole', f.speakerRole, KIT_LABELS.speakerRole, false)
   if (!quote && !speaker) return spec(c, 'quote', [], d)
@@ -239,7 +259,7 @@ export function quoteCard(f: { quote?: string; speaker?: string; speakerRole?: s
   const byTop = y
   if (photo) els.push({ type: 'image', id: 'photo', x: textX, y: byTop, w: photoD, h: photoD, radius: photoD / 2, src: photo, field: 'photoUrl', anim: timing(d, fade(0.4, 0.5)) })
   let by = byTop + (photo ? photoD * 0.22 : 0)
-  if (speaker) { const n = textEl(c, 'speaker', speaker, 'speaker', nameX, by, nameW, { role: 'label', size: 30 * s, maxLines: 2, color: speaker.placeholder ? undefined : c.accent ?? INK, anim: timing(d, fade(0.35, 0.6)) }); els.push(n); by += heightOf(c, n) }
+  if (speaker) { const n = textEl(c, 'speaker', speaker, 'speaker', nameX, by, nameW, { role: 'label', size: 30 * s, maxLines: 2, color: speaker.placeholder ? undefined : c.accentText ?? INK, anim: timing(d, fade(0.35, 0.6)) }); els.push(n); by += heightOf(c, n) }
   if (role) { const r = textEl(c, 'speakerRole', role, 'speakerRole', nameX, by + 4 * s, nameW, { role: 'body', size: 24 * s, maxLines: 2, color: role.placeholder ? undefined : INK_2, anim: timing(d, fade(0.35, 0.7)) }); els.push(r); by += heightOf(c, r) + 4 * s }
   y = Math.max(by, byTop + photoD)
   const cardH = y + pad * 2

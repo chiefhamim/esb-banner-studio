@@ -14,6 +14,8 @@
 //
 // Nothing here rounds or computes a figure. The few values that are computed are flagged `derived` with the formula.
 
+import { MAX_FIGURE, isShowableNumber } from './numbers'
+
 export const GRID_DAILY_PATH = (iso: string) => `/data/daily/${iso}.json`
 export const GRID_DAILY_URL = (iso: string) => `https://esbpowerline.com${GRID_DAILY_PATH(iso)}`
 export const GRID_DAILY_RUNTIME_URL = (iso: string) => `https://esbpowerline.com/api${GRID_DAILY_PATH(iso)}`
@@ -72,6 +74,7 @@ export function labelToIso(label: string): string | null {
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const num = (v: unknown, path: string): number => {
   if (typeof v !== 'number' || !Number.isFinite(v)) throw new GridDataError(`${path} is not a number`)
+  if (Math.abs(v) >= MAX_FIGURE) throw new GridDataError(`${path} is out of range`)
   return v
 }
 const numOrNull = (v: unknown, path: string): number | null => (v === null || v === undefined ? null : num(v, path))
@@ -164,7 +167,7 @@ export interface GridFigure {
   /** Where it was read: a JSON path into the day's file. */
   sourceField: string
   /** Set when the value is computed rather than read; the card must say "derived". */
-  derived?: { formula: string }
+  derived?: { formula: string; short?: string }
   isoDate: string
   dateLabel: string
 }
@@ -190,8 +193,24 @@ const STAT_META: Record<Exclude<GridMetricId, 'peakLoadShed' | 'eveningPeakLoadS
 
 export const GRID_METRICS: GridMetricId[] = [...(Object.keys(STAT_META) as GridMetricId[]), 'peakLoadShed', 'eveningPeakLoadShed']
 
+/** What a metric's figure must look like (the project-file check compares a stored card against it): the site's
+ * label and unit, and where in the day's file it is read. The two load-shed metrics name the hour or zone in the
+ * label, so they match by prefix. */
+export function metricMeta(id: GridMetricId): { en: string; bn: string; unit: GridUnit; labelPrefix: boolean; field: RegExp } {
+  if (id === 'peakLoadShed') return { en: 'Highest ', bn: 'সর্বোচ্চ ', unit: 'MW', labelPrefix: true, field: /^(hourlyLoadData|regionalDemandData)\[\d+\]\.loadShed$/ }
+  if (id === 'eveningPeakLoadShed') return { en: 'Load shedding at evening peak', bn: 'সান্ধ্য পিকে লোডশেডিং', unit: 'MW', labelPrefix: false, field: /^hourlyLoadData\[\d+\]\.loadShed$/ }
+  const m = STAT_META[id]
+  return { en: m.en, bn: m.bn, unit: m.unit, labelPrefix: false, field: new RegExp(`^systemStats\\.${id}$`) }
+}
+
 /** One figure of the day, or null when the file does not publish it (never 0 in its place). */
 export function readMetric(day: GridDay, id: GridMetricId): GridFigure | null {
+  const fig = readMetricRaw(day, id)
+  // a figure that cannot be shown exactly (more than 12 decimals) is "not published" here, never rounded
+  return fig && isShowableNumber(fig.value) ? fig : null
+}
+
+function readMetricRaw(day: GridDay, id: GridMetricId): GridFigure | null {
   const base = { isoDate: day.isoDate, dateLabel: day.dateLabel }
   if (id === 'peakLoadShed') {
     // the day's highest hourly load shed (P4), as the site's home tile reads it; else the highest zone figure.
@@ -210,8 +229,9 @@ export function readMetric(day: GridDay, id: GridMetricId): GridFigure | null {
     return { ...base, id, label: { en: `Highest zone load shedding (${bz.zone})`, bn: `সর্বোচ্চ অঞ্চলভিত্তিক লোডশেডিং (${bz.zone})` }, value: bz.loadShed, unit: 'MW', sourceField: `regionalDemandData[${zones.indexOf(bz)}].loadShed` }
   }
   if (id === 'eveningPeakLoadShed') {
-    // load shed in the hour PGCB stamps as the evening peak
-    const t = day.systemStats.peakTimes?.eveningPeakGen
+    // load shed in the hour PGCB stamps as the evening DEMAND peak (shed = demand not served, so the demand peak's
+    // hour is where it matters); the generation-peak stamp is used only when the file has no demand-peak stamp
+    const t = day.systemStats.peakTimes?.eveningPeakDemand ?? day.systemStats.peakTimes?.eveningPeakGen
     const i = t ? (day.hourlyLoadData ?? []).findIndex((h) => h.time === t) : -1
     const h = i >= 0 ? day.hourlyLoadData![i] : null
     if (!h || h.loadShed === null) return null
@@ -232,7 +252,8 @@ export interface GridSeries {
   items: SeriesItem[]
   isoDate: string
   dateLabel: string
-  derived?: { formula: string }
+  /** `short` is the card's one-line form (the full formula stays in the clip data and its tooltip). */
+  derived?: { formula: string; short?: string }
 }
 
 /** The day's fuel mix (energy by fuel, MKWh), in the file's order; the site's own colour per fuel is kept. */
@@ -256,7 +277,7 @@ export function sharesOf(series: GridSeries, decimals = 1): GridSeries {
     title: { en: `${series.title.en} (share)`, bn: `${series.title.bn} (অংশ)` },
     unit: '%',
     items: series.items.map((it) => ({ ...it, value: total > 0 ? Math.round((it.value / total) * 100 * f) / f : 0 })),
-    derived: { formula: `share = value ÷ Σ values (${series.items.map((i) => i.sourceField).join(' + ')}) × 100, rounded to ${decimals} decimal${decimals === 1 ? '' : 's'}` },
+    derived: { short: 'share of total', formula: `share = value ÷ Σ values (${series.items.map((i) => i.sourceField).join(' + ')}) × 100, rounded to ${decimals} decimal${decimals === 1 ? '' : 's'}` },
   }
 }
 
@@ -277,7 +298,7 @@ export function zoneSeries(day: GridDay, metric: 'demand' | 'loadShed' | 'genera
     isoDate: day.isoDate, dateLabel: day.dateLabel,
   }
   // zone demand is PGCB's printed figure only when the file says so; otherwise the parser rebuilt it as served + shed
-  if (metric === 'demand' && day.regionalDemandSource !== 'p1-published') s.derived = { formula: 'zone demand = area served + area load shed (rebuilt by the site parser; PGCB printed no zone demand)' }
+  if (metric === 'demand' && day.regionalDemandSource !== 'p1-published') s.derived = { short: 'area served + load shed', formula: 'zone demand = area served + area load shed (rebuilt by the site parser; PGCB printed no zone demand)' }
   return s
 }
 
@@ -285,7 +306,7 @@ export function zoneSeries(day: GridDay, metric: 'demand' | 'loadShed' | 'genera
 export function zoneShedPct(day: GridDay): GridSeries | null {
   const r = day.regionalDemandData
   if (!r?.length) return null
-  return { id: 'zone:pct', title: { en: 'Load shedding share by zone', bn: 'অঞ্চলভিত্তিক লোডশেডিংয়ের হার' }, unit: '%', items: r.map((z, i) => ({ label: z.zone, value: z.pct, sourceField: `regionalDemandData[${i}].pct` })), isoDate: day.isoDate, dateLabel: day.dateLabel, derived: { formula: 'pct = loadShed ÷ demand × 100, rounded to 1 decimal (computed by the site parser, stored in the file)' } }
+  return { id: 'zone:pct', title: { en: 'Load shedding share by zone', bn: 'অঞ্চলভিত্তিক লোডশেডিংয়ের হার' }, unit: '%', items: r.map((z, i) => ({ label: z.zone, value: z.pct, sourceField: `regionalDemandData[${i}].pct` })), isoDate: day.isoDate, dateLabel: day.dateLabel, derived: { short: 'load shed ÷ demand', formula: 'pct = loadShed ÷ demand × 100, rounded to 1 decimal (computed by the site parser, stored in the file)' } }
 }
 
 /** An hourly line (MW) of generation, demand or load shed; hours the file leaves null are dropped, never zeroed. */

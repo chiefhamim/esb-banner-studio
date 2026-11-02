@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('esb', {
   gridLatest: (cookies) => ipcRenderer.invoke('esb:grid-latest', cookies),
   gridCached: (iso) => ipcRenderer.invoke('esb:grid-cached', iso),
   gridCachedDates: () => ipcRenderer.invoke('esb:grid-cached-dates'),
+  // the e2e's stand-in for the site (main honours it in an unpackaged build only); null in normal use
+  gridTestOrigin: process.env.ESB_GRID_TEST_ORIGIN || null,
   startDrag: (filePath) => ipcRenderer.send('esb:start-drag', filePath),
   outreachStatus: () => ipcRenderer.invoke('esb:outreach-status'),
   outreachSave: (settings, password) => ipcRenderer.invoke('esb:outreach-save', settings, password),

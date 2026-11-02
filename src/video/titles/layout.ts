@@ -35,12 +35,13 @@ export function canvasMeasurer(ctx: Ctx): Measurer {
     const ls = font.letterSpacing ?? 0
     const k = `${cssFont(font)}|${ls}|${text}`
     const hit = cache.get(k)
-    if (hit !== undefined) return hit
+    if (hit !== undefined) { cache.delete(k); cache.set(k, hit); return hit } // most recently used last
     ctx.font = cssFont(font)
     ;(ctx as CanvasRenderingContext2D).letterSpacing = `${ls}px`
     // canvas letterSpacing adds the space after the last letter too; drop it, as src/core/text.ts does
     const w = text ? Math.max(0, ctx.measureText(text).width - ls) : 0
-    if (cache.size > 4000) cache.clear()
+    // least recently used out, a quarter at a time (the working set stays warm; never a wholesale clear)
+    if (cache.size >= 4000) { let n = 1000; for (const key of cache.keys()) { cache.delete(key); if (--n <= 0) break } }
     cache.set(k, w)
     return w
   }
@@ -183,11 +184,14 @@ export function layoutTitle(spec: LayoutSpec, measure: Measurer): TitleLayout {
 
 /** A small cache so the same title is laid out once (the renderer calls this every frame). */
 export function createLayoutCache(limit = 256) {
-  const memo = new Map<string, TitleLayout>()
+  // one memo per measurer: a layout made with the measurer of before the fonts arrived is never served to the new one
+  const memos = new WeakMap<Measurer, Map<string, TitleLayout>>()
   return (spec: LayoutSpec, measure: Measurer): TitleLayout => {
+    let memo = memos.get(measure)
+    if (!memo) { memo = new Map(); memos.set(measure, memo) }
     const k = layoutKey(spec)
     const hit = memo.get(k)
-    if (hit) return hit
+    if (hit) { memo.delete(k); memo.set(k, hit); return hit }
     const out = layoutTitle(spec, measure)
     if (memo.size >= limit) memo.delete(memo.keys().next().value as string)
     memo.set(k, out)

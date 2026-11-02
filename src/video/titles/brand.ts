@@ -66,6 +66,41 @@ export function inkOn(hex: string): string {
   return L > 0.36 ? '#0b0b0e' : '#ffffff'
 }
 
+// ------------------------------------------------------------------ accent as TEXT
+
+const rgbOf = (hex: string): [number, number, number] => {
+  const h = hex.replace('#', '')
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h.slice(0, 6)
+  return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as [number, number, number]
+}
+const lum = ([r, g, b]: [number, number, number]) => {
+  const [lr, lg, lb] = [r, g, b].map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4) })
+  return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
+}
+/** WCAG contrast ratio of two #rgb / #rrggbb colours. */
+export function contrastRatio(a: string, b: string): number {
+  const la = lum(rgbOf(a)), lb = lum(rgbOf(b))
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+/** The dark card fills accent text sits on: #0e0e12 (the card) and the panel (rgba(16,16,20,.92)) as it looks over
+ * white footage, the worst case. */
+export const CARD_FILLS = ['#0e0e12', '#232327'] as const
+const hex2 = (n: number) => Math.round(n).toString(16).padStart(2, '0')
+
+/** An accent used as TEXT on a dark card: the raw accent when it already reads (>= 4.5:1), else mixed toward white
+ * until it does. Bars and edges keep the raw accent. */
+export function accentText(accent: string, fills: readonly string[] = CARD_FILLS, min = 4.5): string {
+  const base = rgbOf(accent)
+  const ok = (rgb: [number, number, number]) => { const h = `#${hex2(rgb[0])}${hex2(rgb[1])}${hex2(rgb[2])}`; return fills.every((f) => contrastRatio(h, f) >= min) }
+  if (ok(base)) return `#${hex2(base[0])}${hex2(base[1])}${hex2(base[2])}`
+  for (let k = 1; k <= 20; k++) {
+    const m = k / 20
+    const rgb = base.map((v) => v + (255 - v) * m) as [number, number, number]
+    if (ok(rgb)) return `#${hex2(rgb[0])}${hex2(rgb[1])}${hex2(rgb[2])}`
+  }
+  return '#ffffff'
+}
+
 // ------------------------------------------------------------------ type roles (CLAUDE.md §8)
 
 export type TypeRole = 'headline' | 'label' | 'body' | 'number' | 'kicker'

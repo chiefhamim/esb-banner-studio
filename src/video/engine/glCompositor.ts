@@ -483,6 +483,16 @@ export class GLCompositor {
     return e
   }
 
+  /** Free the static textures whose key matches (stale rasters: fonts arrived since they were made). */
+  evictStatics(match: (key: string) => boolean) {
+    for (const [k, v] of this.statics) {
+      if (!match(k)) continue
+      this.gl.deleteTexture(v.tex)
+      this.statics.delete(k)
+      this.staticBytes -= v.bytes
+    }
+  }
+
   get staticCount() { return this.statics.size }
 
   /** One layer over what is drawn. */

@@ -7,6 +7,7 @@
 // an overlay with nothing filled in is left out of the file altogether. Nothing here supplies a name, title or figure.
 
 import { DEFAULT_SAFE_ZONES } from './titles/brand'
+import { fontEpochNow } from './fontEpoch'
 import type { Clip } from './timeline'
 import logoUrl from '../assets/images/esb-logo.png'
 
@@ -121,13 +122,7 @@ const ESB_STRIPES = ['#1e9b4a', '#e52d2d', '#ec8e3c']
 // raster is made again only when something that changes its pixels changes (its words, accent, place, the frame size,
 // editor or export, a picture finishing loading, fonts arriving).
 
-let fontEpoch = 0
-if (typeof document !== 'undefined' && document.fonts) {
-  document.fonts.addEventListener?.('loadingdone', () => { fontEpoch++; if (typeof window !== 'undefined') window.dispatchEvent(new Event('esb:video-media-ready')) })
-}
-
-/** Bumped whenever web fonts finish loading (a raster or a measurement made before is stale). */
-export const fontEpochNow = () => fontEpoch
+export { fontEpochNow }
 /** The ESB logo, once loaded (titles' end card draws it as-is). */
 export const stationLogo = (): HTMLImageElement | null => (stationLogoImg && stationLogoImg.complete && stationLogoImg.naturalWidth > 0 ? stationLogoImg : null)
 
@@ -164,7 +159,7 @@ const imageState = (url?: string) => {
 /** Everything that changes a text/graphic layer's pixels, as one string (the compositor's texture key). */
 export function rasterKey(clip: Clip, w: number, h: number, editor: boolean, captionBottom: number): string {
   const pic = clip.kind === 'overlay' && (clip.overlayType === 'logo' || clip.sourceUrl) ? imageState(clip.sourceUrl) : ''
-  return JSON.stringify([clip.kind, clip.overlayType, clip.overlayText, clip.overlaySub, clip.captionText, clip.accent, clip.sourceUrl, clip.scale, clip.posX, clip.posY, w, h, editor, clip.kind === 'caption' ? Math.round(captionBottom) : 0, pic, fontEpoch])
+  return JSON.stringify([clip.kind, clip.overlayType, clip.overlayText, clip.overlaySub, clip.captionText, clip.accent, clip.sourceUrl, clip.scale, clip.posX, clip.posY, w, h, editor, clip.kind === 'caption' ? Math.round(captionBottom) : 0, pic, fontEpochNow()])
 }
 
 /** Draw an overlay or caption clip into a frame-sized canvas. Null when it draws nothing (an empty title in an
@@ -181,7 +176,7 @@ export function rasterLayer(clip: Clip, w: number, h: number, editor: boolean, c
 
 const emptyOverlay = (c: Clip) => c.overlayType !== 'logo' && !c.sourceUrl && !(c.overlayText ?? '').trim() && !(c.overlaySub ?? '').trim()
 
-export const offlineKey = (clip: Clip, w: number, h: number) => JSON.stringify(['offline', clip.title, w, h, fontEpoch])
+export const offlineKey = (clip: Clip, w: number, h: number) => JSON.stringify(['offline', clip.title, w, h, fontEpochNow()])
 
 /** Editor-only words on the monitor (the offline slate, an empty card's hint) never go below a legible size: `px` at
  * the frame's scale, but at least `min` CSS pixels on a small monitor (the raster is drawn in device pixels). */

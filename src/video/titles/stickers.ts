@@ -41,6 +41,22 @@ function ink(hex: string): string {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 150 ? '#0b0b0e' : '#ffffff'
 }
 
+/** A callout's text box: at least 320 px wide at 1080 (a tiny sticker is not a 40 px column) and never wider than 90 % of
+ * the frame; the text shrinks (34 → 20 px at 1080) until it fits three lines. `truncated` is true only when even the
+ * smallest size does not fit: the export is then refused (titleClip.ts) rather than shown with an ellipsis. */
+export function calloutBox(text: string, size: number, w: number, h: number, measure: Measurer) {
+  const short = Math.min(w, h)
+  const s = short / 1080
+  const pad = 22 * s
+  const maxWidth = Math.max(40, Math.min(w * 0.9 - pad * 2, Math.max(size * short - pad * 2, 320 * s)))
+  let lay = layouts({ text, font: fontFor(text, 'label', Math.round(34 * s)), maxWidth, align: 'left', maxLines: 3 }, measure)
+  for (const px of [30, 27, 24, 22, 20]) {
+    if (!lay.truncated) break
+    lay = layouts({ text, font: fontFor(text, 'label', Math.round(px * s)), maxWidth, align: 'left', maxLines: 3 }, measure)
+  }
+  return { lay, pad, truncated: lay.truncated }
+}
+
 /** Draw a sticker into a frame of w × h at local time t of a clip `duration` long. */
 export function drawSticker(ctx: Ctx, st: StickerDraw, w: number, h: number, t: number, duration: number, measure: Measurer): void {
   const short = Math.min(w, h)
@@ -119,9 +135,7 @@ export function drawSticker(ctx: Ctx, st: StickerDraw, w: number, h: number, t: 
     case 'callout': {
       const shown = st.text?.trim() ? st.text.trim() : st.placeholder ?? null
       if (!shown) break
-      const font = fontFor(shown, 'label', Math.round(34 * s))
-      const pad = 22 * s
-      const lay = layouts({ text: shown, font, maxWidth: Math.max(40, L - pad * 2), align: 'left', maxLines: 3 }, measure)
+      const { lay, pad } = calloutBox(shown, st.size, w, h, measure)
       const bw = Math.max(lay.width, 10) + pad * 2, bh = lay.height + pad * 1.4
       const k = 0.85 + 0.15 * p
       ctx.globalAlpha = outA * Math.min(1, p * 1.4)

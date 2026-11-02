@@ -28,6 +28,12 @@ export function plainDigits(value: number): string {
   return (neg ? '-' : '') + out
 }
 
+/** Largest magnitude and most decimals a figure may have to be shown exactly (a crafted file or a bad answer must not
+ * reach the renderer with 1e300 or 1e-300). Real grid figures have at most a handful of decimals. */
+export const MAX_FIGURE = 1e15
+export const MAX_FIGURE_DECIMALS = 12
+export const isShowableNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < MAX_FIGURE && sourceDecimals(v) <= MAX_FIGURE_DECIMALS
+
 const BN_DIGITS = '০১২৩৪৫৬৭৮৯'
 export const toBanglaDigits = (s: string) => s.replace(/[0-9]/g, (d) => BN_DIGITS[Number(d)])
 
@@ -45,7 +51,8 @@ export function formatExact(value: number, fmt: NumberFormat = {}): string {
 /** `value` at `decimals` places (for count-up intermediates). With `exact`, the digits are the stored ones. */
 function formatFixed(value: number, decimals: number, fmt: NumberFormat, exact = false): string {
   const neg = value < 0
-  const body = exact ? plainDigits(Math.abs(value)) : Math.abs(value).toFixed(decimals)
+  // toFixed throws above 100 digits (a crafted 1e-300): clamp, never throw
+  const body = exact ? plainDigits(Math.abs(value)) : Math.abs(value).toFixed(Math.min(100, Math.max(0, Math.trunc(decimals))))
   const [ip, fp] = body.split('.')
   const grouped = fmt.group === false ? ip : ip.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   const s = (neg ? '-' : '') + grouped + (fp !== undefined ? '.' + fp : '')

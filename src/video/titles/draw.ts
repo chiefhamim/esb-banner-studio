@@ -73,7 +73,15 @@ export function withState(ctx: Ctx, s: UnitState, box: { x: number; y: number; w
     ctx.rect(box.x + box.w * s.clip.x0, box.y + box.h * s.clip.y0, box.w * (s.clip.x1 - s.clip.x0), box.h * (s.clip.y1 - s.clip.y0))
     ctx.clip()
   }
-  if (s.blur > 0.05 && 'filter' in ctx) ctx.filter = `blur(${s.blur.toFixed(2)}px)`
+  if (s.blur > 0.05 && 'filter' in ctx) {
+    // blur only what this unit can touch: clip to its box plus the blur's reach, so the filter works on a small area
+    // and not on the whole canvas for every word
+    const pad = s.blur * 3 + 24
+    ctx.beginPath()
+    ctx.rect(box.x - pad, box.y - pad, box.w + pad * 2, box.h + pad * 2)
+    ctx.clip()
+    ctx.filter = `blur(${s.blur.toFixed(2)}px)`
+  }
   fn()
   ctx.restore()
 }
@@ -84,12 +92,20 @@ function glyphText(ctx: Ctx, text: string, x: number, y: number, style: TitleSty
     ctx.save(); ctx.translate(x, y); ctx.transform(1, 0, ITALIC_SHEAR, 1, 0, 0); f(0, 0); ctx.restore()
   }
   if (style.stroke && style.stroke.width > 0) {
+    // the shadow is cast once, by the plain letters (a shadow of the wide outline path costs 3x as much at 4K and is
+    // hardly different); then the outline, then the letters again on top without a shadow
+    ctx.fillStyle = fill
+    at((tx, ty) => ctx.fillText(text, tx, ty))
     ctx.save()
+    ctx.shadowColor = 'transparent'
     ctx.lineWidth = style.stroke.width * 2
     ctx.lineJoin = 'round'
     ctx.strokeStyle = style.stroke.color
     at((tx, ty) => ctx.strokeText(text, tx, ty))
+    ctx.fillStyle = fill
+    at((tx, ty) => ctx.fillText(text, tx, ty))
     ctx.restore()
+    return
   }
   ctx.fillStyle = fill
   at((tx, ty) => ctx.fillText(text, tx, ty))

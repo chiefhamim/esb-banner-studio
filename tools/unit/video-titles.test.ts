@@ -393,7 +393,7 @@ describe('Grid data cards', () => {
   })
   it('chart card with derived shares says so; removing the source line fails validation', () => {
     const s = gridChartCard(sharesOf(fuelMix(day)!), 'donut', o)
-    expect(textEls(s).find((e) => e.id === 'derived')!.text).toMatch(/^Derived: share = /)
+    expect(textEls(s).find((e) => e.id === 'derived')!.text).toMatch(/^Derived: share of total/)
     expect(validateTitleSpec(s)).toEqual([])
     const t = structuredClone(s)
     t.elements = t.elements.filter((e) => e.id !== 'source')

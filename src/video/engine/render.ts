@@ -12,11 +12,11 @@
 import type { Clip, VideoProject } from '../timeline'
 import { footageRect, layersAt } from '../timeline'
 import { bugKey, captionLimit, getCachedImage, offlineKey, rasterBug, rasterKey, rasterLayer, rasterOffline } from '../compositor'
-import type { GLCompositor, LayerDraw, LayerFx } from './glCompositor'
+import { fxActive, type GLCompositor, type LayerDraw, type LayerFx } from './glCompositor'
 import { frameQuad, layerQuad, uvOf } from './layerMath'
 import { hasKeyframes, sampleProp, srcAt } from './animation'
 import { beginFxFrame, resolveFx } from './fxResolve'
-import { titleTexture, titleTop } from './titleRaster'
+import { titleTexture, titleTop, type Box } from './titleRaster'
 import { legacyView } from '../titleModel'
 import { guidesKey, rasterGuides, type Guides } from './guides'
 
@@ -79,6 +79,17 @@ export function poseAt(c: Clip, t: number): Readonly<Pose> {
 }
 
 /** An adjustment layer: an overlay clip whose effects apply to what is below it. */
+/** A rectangle of the frame as a layer quad, moved and turned about the frame's anchor exactly as `frameQuad` does. */
+function boxQuad(box: Box, w: number, h: number, offX = 0, offY = 0, deg = 0, ax = 0.5, ay = 0.5) {
+  if (box.x === 0 && box.y === 0 && box.w === w && box.h === h) return frameQuad(w, h, offX, offY, deg, ax, ay)
+  const x0 = offX * w + box.x, y0 = offY * h + box.y, x1 = x0 + box.w, y1 = y0 + box.h
+  if (!deg) return [x0, y0, x1, y0, x1, y1, x0, y1] as ReturnType<typeof frameQuad>
+  const px = offX * w + ax * w, py = offY * h + ay * h
+  const a = (deg * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a)
+  const rot = (x: number, y: number) => [px + (x - px) * cos - (y - py) * sin, py + (x - px) * sin + (y - py) * cos]
+  return [...rot(x0, y0), ...rot(x1, y0), ...rot(x1, y1), ...rot(x0, y1)] as ReturnType<typeof frameQuad>
+}
+
 export const isAdjustment = (c: Clip) => (c as { adjustment?: boolean }).adjustment === true
 
 export function renderFrame(comp: GLCompositor, project: VideoProject, t: number, w: number, h: number, opts: RenderOptions): RenderReport {
@@ -123,10 +134,12 @@ export function renderFrame(comp: GLCompositor, project: VideoProject, t: number
       return { tex, quad: layerQuad(r, p.rotation, clip.anchorX, clip.anchorY), uv: uvOf(r, f.width, f.height), alpha, fx: fxOf(clip) }
     }
     if (clip.kind === 'overlay' && (clip.titleData || clip.dataCard)) {
-      const tex = titleTexture(comp, clip, t, w, h, editor, slots)
-      if (!tex) return null
+      const fx = fxOf(clip)
+      // the title's texture is its bounding box; a clip with effects acting on its whole layer gets the whole frame
+      const layer = titleTexture(comp, clip, t, w, h, editor, slots, project.fps, fxActive(fx))
+      if (!layer) return null
       const p = poseAt(clip, t)
-      return { tex, quad: frameQuad(w, h, p.offX, p.offY, p.rotation, clip.anchorX, clip.anchorY), uv: FULL_UV, alpha, fx: fxOf(clip) }
+      return { tex: layer.tex, quad: boxQuad(layer.box, w, h, p.offX, p.offY, p.rotation, clip.anchorX, clip.anchorY), uv: FULL_UV, alpha, fx }
     }
     if (clip.kind === 'overlay' || clip.kind === 'caption') {
       const tex = comp.staticTexture(rasterKey(clip, w, h, editor, captionBottom), () => rasterLayer(clip, w, h, editor, captionBottom))

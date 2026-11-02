@@ -1568,3 +1568,38 @@ UI-only round on the merged Phase 3 (titles + data cards). Each item was re-chec
 
 Other edits: `FxSection` takes `bare`; `video-test.mjs` and `text-fit-audit.mjs` follow the new Titles-tab toggles and the
 header-less title section; `tools/unit/video-p3-ui.test.ts`.
+
+## Phase 3 fix round — logic/data/engine (2026-11-02, branch `video-p3-fix`)
+
+Tests: `tools/unit/video-p3-fix.test.ts` (38 cases, one per item; the reviewers' probes were re-run by hand against the
+new code). Goldens updated deliberately: `p3b-number-final-960x540.png` (unit test) and `p3b-export-final-480x270.png`
+(video-data-electron-test): both changed because the card text sizes grew. New goldens: `p3fix-916-fit-540x960.png`
+(9:16 fit-to-width), `p3fix-split-960x540.png` (second half of a split data card), `p3fix-donut-45-540x675.png`.
+
+| Item | Result |
+|---|---|
+| C1 figure cut with "…" | Fixed. `fitNumberSize` shrinks the figure (150 px down to 40 px at 1080) until the exact string fits; tested on all 4 aspects and every metric. |
+| C2 short card never exact | Fixed. `fitCount`: the count-up lands `0.35 s (out) + 0.3 s (hold)` before the end, or shows the figure at once. `titleProblems` also blocks a card whose visible part ends before `settleTime`, naming "lengthen it to at least X s". A 1.2 s card now ends on 15,552.54. |
+| C3 split blinks | Fixed. `Clip.titleLen` carries the whole title length through `splitClip` (both halves); `titleDuration` takes it, so the out animation plays only at the true end. A tail trim drops it. Known limit: deleting the second half by hand leaves the first half without its fade. |
+| C4 sticker "…" | Fixed. `calloutBox`: min width 320 px at 1080 (max 90 % of the frame), text shrinks 34 → 20 px; `titleProblems` blocks a callout that still does not fit. Stickers stay frame-sized rasters (rare, short). |
+| C5 derived formula | Fixed. Card shows `Derived: share of total (see tooltip)` (`derived.short` in grid.ts); the formula is in `spec.data.derived` and the element's data. A formula with no short form shows whole if it fits 3 lines, else "Derived: computed value (see tooltip)". |
+| C6 invisible chars | Fixed. `clean()` strips U+200B/2060/00AD/FEFF/bidi marks and ZWNJ/ZWJ except between Bengali letters (they are spelling there; stripping them would change Bangla words). `titleProblems` uses `isBlank`. |
+| C7 accent text contrast | Fixed. `accentText()` mixes toward white until >= 4.5:1 on both `#0e0e12` and the panel over white footage; bars/edges keep the raw accent. Test covers all 10 site categories and the 8 palette colours. |
+| C8 newlines flattened | Fixed for quote and headline (`clean(v, true)`). |
+| C9 undo per keystroke | Fixed store-side: `updateClipCoalesced(clip, key)` + `endCoalesce()`. |
+| C10 filler | Fixed. Only whole-field stand-ins (lorem ipsum start, TBD, [Name], {{x}}, Your name here, "placeholder", the kit labels). |
+| C11 stale measurer | Fixed. `titleMeasure.ts` (epoch-aware, shared by `titleClip.canvasMeasure`, the engine and the export check); layout caches are keyed by measurer; settle/exit memoised per measurer. |
+| C12 cross-checks | Fixed. dateLabel vs date, source must be the site's own daily file for that date, figure id/label/unit/field vs `metricMeta`, series id/title/unit/item fields vs `SERIES_EXPECT`, derived series must carry a formula. |
+| C13 | Line chart spaced by clock time; zero donut legend rows left out and each value placed right after its label; `eveningPeakLoadShed` reads the hour of the evening DEMAND peak (`peakTimes.eveningPeakDemand`, else the generation-peak stamp). The site types do not say which peak "load shed at peak" belongs to; shed is unserved demand, so demand is the consistent choice. |
+| S1 | Fixed. Decimals clamped 0-100; `isShowableNumber` (< 1e15, <= 12 decimals) in parseGridDay (abs), `dataCardFor` and `sanitizeDataCard`. `titleRaster` never throws (logs once, draws nothing); `titleProblems` trial-draws every title and blocks with "could not be drawn". |
+| S2 | Fixed. `pickDay` keeps only the report's known top-level keys, depth <= 6, must stringify. |
+| S3 | Fixed. Only `https://esbpowerline.com/(api/)data/daily/<date>.json` for the card's own date; the loopback origin only when the app exposes `esb.gridTestOrigin` (preload, set by the e2e's env var). |
+| P1 | Title rasters are the title's bounding box, drawn as a quad (`titleBounds`, `boxQuad`); clips with active effects keep a frame-sized texture. Blur is clipped to the unit's box. Stroke+shadow: the shadow is cast once by the fill. Measured at 4K (draw + GPU sync, mean ms): kit word/type-on 0.6-0.9 (was 32 for "word, all styles"); stroke+shadow+gradient heavy style word 32 -> 18, blur-in + heavy 78 -> 30. **Target of 10 ms not met for the heaviest custom style (stroke + shadow + blur at 4K); kit looks are under 2 ms.** Texture memory: headline 33 MB -> 13 MB at 4K, lower third roughly 1/10. |
+| P2 | Moving titles are quantised to the project frame time (`frameTime`); the e2e still shows 10 frames -> 10 rasters. |
+| P3 | Measurer cache evicts the oldest 1000 of 4000 (LRU), not everything. Layout still measures every grapheme prefix (636-char Bangla paragraph 5.7 ms cold, 1.3 ms warm): deferred, needs an API change to make grapheme offsets lazy. |
+| P4 | Stale-epoch title textures are evicted at the first draw after fonts load (`GLCompositor.evictStatics`); spec/bounds caches drop with the epoch. |
+| P5 | `latest()` asks the 8 days together under one 20 s deadline and stops at the first settling answer. |
+
+UI-review additions (kit.ts / dataCards.ts): lower third kicker 17 -> 22 px, role 27 -> 28 px; data cards: label/title >= 30, unit/derived/source/chart text >= 24 px at 1080 (chart base size 26 -> 32), portrait padding 48 -> 32 px, value column right after the label in the donut. The card already spans the full platform-safe width (885 px of 1080 on a Reels frame: the Reels right strip is 13 %), so it was not widened into the button column.
+
+Checks: lint (warnings only, none new), `npm test` 1175 passed, build ok, `test:video` all pass (one dropped-frame case, reverse 2x, failed once while vitest ran alongside and passed on rerun), `test:electron` all three pass, text-fit and center audits below.
