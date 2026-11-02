@@ -303,6 +303,26 @@ ipcMain.handle('esb:save-video', async (_e, name, bytes) => {
 // The renderer plays approved files through opaque esb-media:// URLs; naming a path back never grants a read.
 let videoRegistry = null
 const videoExports = videoMedia.createExportWriter()
+// Phase 7 render queue: a render goes to Pictures/ESB Banners/Video renders under a free name, with no dialog (the editor
+// asked for it by queueing it); it is written by the same confined export writer and registered like any export.
+ipcMain.handle('esb:video-render-begin', async (_e, name, kind) => {
+  const k = kind === 'webm' ? 'webm' : 'mp4'
+  const base = guard.imageFileName(String(name ?? 'video')).replace(/\.[a-z0-9]+$/i, '')
+  const dir = path.join(defaultDir(), 'Video renders')
+  fs.mkdirSync(dir, { recursive: true })
+  let target = path.join(dir, base + '.' + k)
+  for (let i = 2; fs.existsSync(target) && i < 500; i++) target = path.join(dir, base + '-' + i + '.' + k)
+  fsScope.allowFile(target)
+  fsScope.assertAllowed(target, 'render queue target')
+  return videoExports.begin(target)
+})
+// Phase 7: renders this app made (by opaque id) and the publishing IPC (YouTube / Facebook, behind the Approve dialog)
+const videoRenders = require('./video-renders.cjs').createRenderRegistry({ file: path.join(app.getPath('userData'), 'video-renders.json') })
+const videoPublish = require('./video-publish/ipc.cjs').registerVideoPublishIpc({
+  ipcMain, dialog, shell, app, safeStorage: require('electron').safeStorage, getWindow: () => win, renders: videoRenders,
+  createPublishing: (o) => require('./video-publish/index.cjs').createVideoPublishing(o),
+  onUpdate: (job) => { try { if (win && !win.isDestroyed()) win.webContents.send('esb:vpub-update', job) } catch { /* window gone */ } },
+})
 const videoAutosaveDir = () => path.join(app.getPath('userData'), 'video-autosave')
 const MEDIA_FILTERS = [
   { name: 'Video, audio and pictures', extensions: [...videoMedia.MEDIA_EXT] },
@@ -669,7 +689,12 @@ ipcMain.handle('esb:video-cache-write', async (_e, fid, key, bytes) => {
   return true
 })
 ipcMain.handle('esb:video-export-write', (_e, id, position, bytes) => videoExports.write(id, position, bytes))
-ipcMain.handle('esb:video-export-end', (_e, id, ok) => videoExports.end(id, ok === true))
+ipcMain.handle('esb:video-export-end', (_e, id, ok) => {
+  const out = videoExports.end(id, ok === true)
+  // a finished render (never a .partial left behind) is remembered by id, so it can be shown in its folder and published
+  if (ok === true && typeof out === 'string' && !out.endsWith('.partial')) { try { videoRenders.register(out) } catch { /* not remembered */ } }
+  return out
+})
 
 ipcMain.handle('esb:pick-folder', async () => {
   fs.mkdirSync(defaultDir(), { recursive: true })
@@ -1118,11 +1143,14 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  // continue posts the owner already approved that a quit cut off; never starts a new one
+  void videoPublish.resume()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
 
 app.on('before-quit', () => {
   isQuitting = true
+  void videoPublish.stop()
   if (outreachEngineInstance) {
     outreachEngineInstance.shutdown({ clean: true })
   }

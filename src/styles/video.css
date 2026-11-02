@@ -701,3 +701,29 @@
 .vw-tpl-row { display: flex; flex-direction: column; gap: 2px; }
 .vw-story-tpl-sec .vw-story-styles { max-height: 260px; overflow: auto; padding-right: 2px; }
 .vx-preset { margin: 0 0 8px; font: 500 12px/1.4 var(--ui); color: var(--text-2); }
+
+/* Phase 7: Publish sheet (renders, post, connections) */
+.vw-pub { display: flex; flex-direction: column; gap: 12px; max-height: min(78vh, 760px); }
+.vw-pub-body { overflow: auto; padding-right: 4px; display: flex; flex-direction: column; }
+.vw-visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
+.vw-size:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
+.vw-pub-select { width: 100%; font: 500 13px/1.5 var(--ui); color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); padding: 6px 10px; min-height: 32px; }
+.vw-pub input[type="text"], .vw-pub input[type="password"], .vw-pub input[type="datetime-local"] { width: 100%; font: 500 13px/1.5 var(--ui); color: var(--text); background: var(--field); border: 0; border-radius: var(--r-2); padding: 5px 10px; min-height: 28px; }
+.vw-pub .vw-cut-row { grid-template-columns: 96px 1fr; }
+.vw-pub .vw-cut-row.vw-check { grid-template-columns: 20px 1fr; }
+.vw-pub .vw-cut-row select { grid-column: 2; }
+.vw-pub-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; font: 400 12px/1.5 var(--ui); color: var(--text-2); }
+.vw-q-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.vw-q-job { display: grid; gap: 6px; padding: 10px; border-radius: var(--r-2); background: var(--field); }
+.vw-q-head, .vw-q-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.vw-q-out { display: grid; gap: 4px; }
+.vw-q-aspect { font: 800 12px/1.3 var(--ui); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.vw-q-status { font: 500 12px/1.3 var(--ui); color: var(--text-2); flex: 1; }
+.vw-q-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.vw-q-bar { height: 6px; border-radius: 3px; background: var(--border-subtle); overflow: hidden; }
+.vw-q-bar i { display: block; height: 100%; background: var(--text); transition: width 0.3s; }
+.vw-q-steps { display: flex; flex-wrap: wrap; gap: 4px 10px; font: 500 11px/1.4 var(--ui); color: var(--text-2); }
+.vw-q-step.st-done { color: var(--success); }
+.vw-q-step.st-failed { color: var(--danger); }
+.vw-q-out.st-failed .vw-q-status, .vw-q-job.st-failed .vw-q-head b { color: var(--danger); }
+.vw-tag.ok { color: var(--success); }

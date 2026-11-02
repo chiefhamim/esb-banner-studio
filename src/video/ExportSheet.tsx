@@ -11,6 +11,7 @@ import { contentEnd, formatShortTime } from './timeline'
 import { audibleClips, downloadVideoBlob, exportLoudnessReport, emptyTextClips, exportBlocker, exportDuration, exportFilename, exportTimelineVideo, pickCodecs } from './exportVideo'
 import type { ExportContainer, ExportResult } from './exportVideo'
 import { useVideoStore } from './videoStore'
+import { useRenderQueue } from './publish/renderQueue'
 import { videoBridge } from './media'
 import { canvasMeasure, measureNow, titleProblems } from './titleClip'
 import type { LoudnessTarget } from './audioAdapter'
@@ -90,6 +91,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
 
   const run = async () => {
     const b = videoBridge()
+    if (useRenderQueue.getState().busy) { setError('A render from the queue is running. Wait for it to finish, or cancel it in Publish → Renders.'); setStep('error'); return }
     // desktop: choose the place first, then the render streams into it
     let job: { id: string; path: string } | null = null
     if (b?.videoExportBegin && b.videoExportWrite && b.videoExportEnd) {

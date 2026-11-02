@@ -469,7 +469,7 @@ function createPublishEngine({
 
   function status() {
     const fb = credentials.facebook?.()
-    return { dryRun, ytUploadsToday: ytQuota.used(), ytDailyLimit: cfg.ytDailyUploads, reels24h: fb?.pageId ? reels.used(fb.pageId) : 0, reelsLimit: cfg.reelsPer24h }
+    return { dryRun, running: running.size, ytUploadsToday: ytQuota.used(), ytDailyLimit: cfg.ytDailyUploads, reels24h: fb?.pageId ? reels.used(fb.pageId) : 0, reelsLimit: cfg.reelsPer24h }
   }
 
   return {

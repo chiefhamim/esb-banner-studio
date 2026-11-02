@@ -25,7 +25,7 @@
     "test": "vitest run",
     "census": "node tools/audit/css-census.mjs",
     "test:extract": "node tools/e2e/extract-test.mjs",
-    "test:electron": "node tools/e2e/electron-test.mjs && node tools/e2e/video-electron-test.mjs && node tools/e2e/video-data-electron-test.mjs && node tools/e2e/video-music-electron-test.mjs && node tools/e2e/video-ai-electron-test.mjs",
+    "test:electron": "node tools/e2e/electron-test.mjs && node tools/e2e/video-electron-test.mjs && node tools/e2e/video-data-electron-test.mjs && node tools/e2e/video-music-electron-test.mjs && node tools/e2e/video-ai-electron-test.mjs && node tools/e2e/video-publish-electron-test.mjs",
     "audit:center": "node tools/audit/center-audit.mjs",
     "audit:text-fit": "node tools/audit/text-fit-audit.mjs",
     "audit:contrast": "node tools/audit/contrast-audit.mjs",

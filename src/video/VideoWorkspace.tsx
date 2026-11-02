@@ -32,6 +32,8 @@ import { renderPreviewStill } from './engine/still'
 import { holdBackground, holdProxies, noteScrub } from './engine/background'
 import { releaseFilmstrips } from './engine/filmstrip'
 import { ExportSheet } from './ExportSheet'
+import { PublishSheet } from './publish/PublishSheet'
+import { startPublishActivity } from './publish/activityLog'
 import { StoryVideoPanel } from './StoryVideoPanel'
 import { TranscriptPanel } from './TranscriptPanel'
 import { CaptionTranslatePanel } from './CaptionTranslatePanel'
@@ -547,6 +549,9 @@ function VideoDesk() {
 
   const [activeTab, setActiveTab] = useState<BinTab>('media')
   const [exportModal, setExportModal] = useState(false)
+  const [publishModal, setPublishModal] = useState(false)
+  // finished posts (with their links, or the platform's own error) go to Activity, even when this sheet is closed
+  useEffect(() => { startPublishActivity() }, [])
   const [note, setNote] = useState<string | null>(null)
   const noteTimer = useRef<number | null>(null)
   const [autosave, setAutosave] = useState<{ at: number | null; error?: string } | null>(null)
@@ -1041,6 +1046,7 @@ function VideoDesk() {
           ) : (
             <button type="button" className="btn sm subtle vw-hdr-record" onClick={() => void startVoiceover()} data-tip="Record a voiceover (R): 3-2-1, then it records at the playhead"><Icon name="mic" size={13} /><span className="vw-lbl">Record</span></button>
           )}
+          <button type="button" className="btn sm vw-hdr-publish" onClick={() => setPublishModal(true)} data-tip="Render sizes, post to YouTube and Facebook (you approve every post)"><Icon name="send" size={13} /><span className="vw-lbl">Publish</span></button>
           <button type="button" className="btn primary sm" onClick={() => setExportModal(true)} disabled={exporting}>
             <Icon name="download" size={14} /> {exporting ? 'Exporting…' : 'Export'}
           </button>
@@ -1263,6 +1269,7 @@ function VideoDesk() {
       {mixerOpen && <MixerPanel bottom={timelineH + 28 + 8} onClose={() => setMixerOpen(false)} />}
       {showKeys && <ShortcutsSheet onClose={() => setShowKeys(false)} />}
       {pasteAttrs && <PasteAttributesDialog onClose={() => setPasteAttrs(false)} flash={flash} />}
+      {publishModal && <PublishSheet onClose={() => setPublishModal(false)} />}
       {exportModal && <ExportSheet project={playable(project)} onClose={() => setExportModal(false)} onShowMedia={() => { setExportModal(false); showTab('media') }} />}
       {confirmReplace && (
         <Dialog

@@ -45,6 +45,8 @@ export interface VideoBridge {
   videoExportBegin?: (name: string, kind: 'mp4' | 'webm', folderId?: string | null) => Promise<{ id: string; path: string } | null>
   videoExportWrite?: (id: string, position: number, bytes: Uint8Array) => Promise<boolean>
   videoExportEnd?: (id: string, ok: boolean) => Promise<string | null>
+  /** Phase 7 render queue: a render under Pictures/ESB Banners/Video renders, no dialog. */
+  videoRenderBegin?: (name: string, kind: 'mp4' | 'webm') => Promise<{ id: string; path: string } | null>
   reveal?: (p: string) => Promise<unknown>
   // Phase 1: project folders, relink by hash, proxies, cache (electron/video-project.cjs)
   videoFolderCreate?: (name: string) => Promise<FolderRef | null>
