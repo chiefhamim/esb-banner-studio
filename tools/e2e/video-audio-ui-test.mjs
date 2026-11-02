@@ -1,8 +1,8 @@
-// Phase 4 Part B acceptance (browser, dev server): the audio UI. Voiceover countdown + take on the A track at the playhead,
-// real waveform tiles (a tone is drawn, silence says "Silent"), the mixer (mute works with no engine; with a stand-in for
-// Part A's actions every control writes the store with ONE undo step per gesture), fade handles, the clip inspector's
-// Audio section, the loudness readout, and the music library list (a fake desktop bridge with long Bangla names: no text
-// cut or spilling). The audio ENGINE is Part A's: where this file stands in for it, it says so (STAND-IN).
+// Phase 4 Part B acceptance (browser, dev server), against the REAL audio engine of Part A: the audio UI. Voiceover
+// countdown + take on the A track at the playhead, real waveform tiles (a tone is drawn, silence says "Silent"), the mixer
+// (every control writes the store with ONE undo step per gesture), fade handles, the clip inspector's Audio section
+// (noise sample, beat markers from a click-train fixture), the loudness readout compared with ffmpeg ebur128, and the
+// music library list (a fake desktop bridge with long Bangla names: no text cut or spilling).
 //   node tools/e2e/video-audio-ui-test.mjs      PORT=5293 (default) · SHOTS=dir keeps screenshots
 import { chromium } from 'playwright-core'
 import { spawn, spawnSync } from 'node:child_process'
@@ -26,6 +26,9 @@ const SILENCE = path.join(dir, 'silence.wav')
 const ff = (args, out) => { if (!fs.existsSync(out)) { const r = spawnSync('ffmpeg', ['-y', '-v', 'error', ...args, out]); if (r.status !== 0) throw new Error('ffmpeg: ' + r.stderr) } }
 ff(['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=6', '-c:a', 'pcm_s16le'], TONE)
 ff(['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=mono', '-t', '6', '-c:a', 'pcm_s16le'], SILENCE)
+const CLICKS = path.join(dir, 'clicks-120bpm.wav')
+ff(['-f', 'lavfi', '-i', 'aevalsrc=sin(2*PI*1000*t)*lt(mod(t\\,0.5)\\,0.02):d=6:s=48000', '-c:a', 'pcm_s16le'], CLICKS)
+const ebu = (f) => { const r = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', f, '-af', 'pan=stereo|c0=c0|c1=c0,ebur128=peak=true', '-f', 'null', '-']); const m = /I:\s+(-?[\d.]+)\s+LUFS/.exec(String(r.stderr).split('Summary:')[1] ?? ''); return m ? Number(m[1]) : NaN }
 
 const vite = spawn(process.execPath, [path.join(root, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(PORT), '--strictPort'], { cwd: root, stdio: 'ignore' })
 const up = async () => { for (let i = 0; i < 80; i++) { try { if ((await fetch(BASE)).ok) return } catch { /* not yet */ } await new Promise((r) => setTimeout(r, 500)) } throw new Error('Vite did not start') }
@@ -60,8 +63,8 @@ try {
   await openVideo(page)
 
   // ---------------------------------------------------------------- waveform tiles (real peaks)
-  await page.locator('.video-workspace input[type=file][multiple]').first().setInputFiles([TONE, SILENCE])
-  await page.waitForFunction(() => window.__videoStore.getState().mediaAssets.length >= 2)
+  await page.locator('.video-workspace input[type=file][multiple]').first().setInputFiles([TONE, SILENCE, CLICKS])
+  await page.waitForFunction(() => window.__videoStore.getState().mediaAssets.length >= 3)
   await page.waitForSelector('.vw-bin-wave[data-wave="ready"]', { timeout: 20000 }).catch(() => {})
   await page.waitForSelector('.vw-bin-wave[data-wave="silent"]', { timeout: 20000 }).catch(() => {})
   const tiles = await state(page, () => [...document.querySelectorAll('.vw-bin-card')].map((c) => {
@@ -100,13 +103,16 @@ try {
   }
   await page.waitForSelector('.vw-au-stop')
   await page.waitForTimeout(1800)
-  const meter = await page.locator('.vw-au-rec [role=meter]').getAttribute('data-db')
+  // the fake microphone beeps now and then: watch the meter for a few seconds
+  let meter = ''
+  for (let k = 0; k < 40 && !(meter !== '' && meter != null && Number(meter) > -60); k++) { meter = await page.locator('.vw-au-rec [role=meter]').getAttribute('data-db'); await page.waitForTimeout(100) }
   check('mic level meter reads a live level while recording', meter !== '' && meter != null && Number(meter) > -60, `data-db=${meter}`)
   await shot(page, 'recording-live')
   await page.locator('.vw-au-stop').click()
   await page.waitForFunction(() => window.__videoStore.getState().project.clips.some((c) => /^Voiceover/.test(c.title)), null, { timeout: 15000 })
-  const vo = await state(page, () => { const s = window.__videoStore.getState(); const c = s.project.clips.find((x) => /^Voiceover/.test(x.title)); const tr = s.project.tracks.find((t) => t.id === c.trackId); return { start: c.start, dur: c.duration, kind: c.kind, track: tr.kind, trackId: c.trackId, assets: s.mediaAssets.filter((a) => a.generated).length } })
+  const vo = await state(page, () => { const s = window.__videoStore.getState(); const c = s.project.clips.find((x) => /^Voiceover/.test(x.title)); const tr = s.project.tracks.find((t) => t.id === c.trackId); return { start: c.start, dur: c.duration, kind: c.kind, track: tr.kind, trackId: c.trackId, bus: tr.bus, assets: s.mediaAssets.filter((a) => a.generated).length } })
   check('the take lands on the A track at the playhead (2 s)', vo.track === 'audio' && Math.abs(vo.start - 2) < 0.05 && vo.dur >= 1.5, JSON.stringify(vo))
+  check('the voiceover track is set to the Voice bus (so ducking sees it)', vo.bus === 'voice', String(vo.bus))
   await page.waitForTimeout(300)
   const playing = await state(page, () => window.__videoStore.getState().playing)
   check('punch-in stopped the picture again after the take', playing === false)
@@ -115,39 +121,31 @@ try {
   await state(page, () => { const vs = window.__videoStore, s = vs.getState(); const a = s.mediaAssets.find((x) => /tone/.test(x.name)); s.addClip({ id: 'p4-a', trackId: 'a1', title: 'Tone A', kind: 'audio', start: 0, duration: 6, in: 0, out: 6, color: '#8b5cf6', sourceUrl: a.url, mediaAssetId: a.id, srcDuration: 6 }); s.selectClip(null) })
   await page.locator('.vw-mixer-btn').click()
   await page.waitForSelector('.vw-mixer')
-  check('mixer says the engine is pending and switches the controls off', (await page.locator('.vw-mixer').getAttribute('data-engine')) === 'pending' && (await page.locator('.vw-mx-vol').first().isDisabled()) && (await page.locator('.vw-mx-pending').count()) === 1)
-  check('mixer shows no fake meter without a graph', (await page.locator('.vw-mx-strip [role=meter].idle').count()) >= 1)
-  await shot(page, 'mixer-pending')
+  check('with the audio engine present the mixer is on (not pending) and its faders are enabled', (await page.locator('.vw-mixer').getAttribute('data-engine')) === 'ready' && !(await page.locator('.vw-mx-vol').first().isDisabled()) && (await page.locator('.vw-mx-pending').count()) === 0)
+  check('meters are idle (no made-up level) while nothing plays', (await page.locator('.vw-mx-strip [role=meter].idle').count()) >= 1)
+  await shot(page, 'mixer-idle')
   const h0 = await state(page, () => window.__videoStore.getState().history.length)
   await page.locator('.vw-mx-strip[data-track-id="a1"] .vw-mx-btn.mute').click()
   const m1 = await state(page, () => ({ muted: window.__videoStore.getState().project.tracks.find((t) => t.id === 'a1').muted, h: window.__videoStore.getState().history.length }))
   check('mute works now and is one undo step', m1.muted === true && m1.h === h0 + 1, JSON.stringify(m1))
   await state(page, () => window.__videoStore.getState().undo())
+  // the measurer on a project of just the tone, against ffmpeg's ebur128 on the same file as stereo (the mix is stereo: a mono file plays on both sides)
+  const saved = await state(page, () => { const s = window.__videoStore.getState(); const p = JSON.parse(JSON.stringify(s.project)); s.loadProject({ ...s.project, clips: s.project.clips.filter((c) => c.id === 'p4-a') }, { dirty: true }); return p })
+  await page.locator('.vw-mx-measure-btn').click()
+  await page.waitForFunction(() => document.querySelector('.vw-mx-readout')?.dataset.state === 'measured', null, { timeout: 60000 })
+  const rd0 = await page.evaluate(() => ({ l: document.querySelector('.vw-mx-lufs').textContent, tp: document.querySelector('.vw-mx-tp').textContent, chip: document.querySelector('.vw-sb-loud')?.textContent }))
+  const ours = -Number(/([0-9.]+)/.exec(rd0.l)[1])
+  const theirs = ebu(TONE)
+  check('Measure matches ffmpeg ebur128 on the same file (within 0.7 LU) and the status chip follows', Math.abs(ours - theirs) < 0.7 && /LUFS/.test(rd0.chip ?? ''), `ours=${ours} ffmpeg=${theirs} ${JSON.stringify(rd0)}`)
+  await shot(page, 'mixer-loudness')
+  await state(page, (p) => { window.__videoStore.getState().loadProject(p, { dirty: true }) }, saved)
   await page.locator('.vw-mixer .vw-mx-close').click()
 
-  // ---------------------------------------------------------------- STAND-IN for Part A's actions (to test this UI's wiring)
-  await state(page, () => {
-    const vs = window.__videoStore
-    const hist = (s, next) => (s.gesture ? { project: next, dirty: true, rev: s.rev + 1 } : { history: [...s.history, s.project], future: [], project: next, dirty: true, rev: s.rev + 1 })
-    const proj = (fn) => vs.setState((s) => hist(s, fn(s.project)))
-    vs.setState({
-      setClipAudio: (id, p) => proj((pr) => ({ ...pr, clips: pr.clips.map((c) => (c.id === id ? { ...c, ...p } : c)) })),
-      setTrackAudio: (id, p) => proj((pr) => ({ ...pr, tracks: pr.tracks.map((t) => (t.id === id ? { ...t, ...p } : t)) })),
-      setMasterAudio: (p) => proj((pr) => ({ ...pr, master: { gain: 0, limiter: true, ...(pr.master || {}), ...p } })),
-      setDucking: (p) => proj((pr) => ({ ...pr, ducking: { enabled: false, depthDb: 12, threshold: -35, attack: 0.05, release: 0.4, ...(pr.ducking || {}), ...p } })),
-      setLoudnessTarget: (t) => proj((pr) => ({ ...pr, loudnessTarget: t })),
-    })
-    globalThis.__esbAudioDev = {
-      measureProjectLoudness: async () => ({ integrated: -14.2, truePeak: -1.3, range: 5.4 }),
-      audioMeterLevels: () => ({ tracks: { a1: -18 }, master: -12 }),
-      markBeats: async () => ({ bpm: 120, beats: [0.5, 1, 1.5] }),
-    }
-  })
+  // ---------------------------------------------------------------- every control writes the store (real actions)
   const hist = () => state(page, () => window.__videoStore.getState().history.length)
   const proj = () => state(page, () => JSON.parse(JSON.stringify(window.__videoStore.getState().project)))
   await page.locator('.vw-mixer-btn').click()
   await page.waitForSelector('.vw-mixer[data-engine="ready"]')
-  check('with the stand-in engine the faders are on and meters read the graph', !(await page.locator('.vw-mx-vol').first().isDisabled()) && (await page.locator('.vw-mx-strip[data-track-id="a1"] [role=meter]').getAttribute('data-db')) === '-18.0')
   const drag = async (loc, fx) => {
     const b = await loc.boundingBox()
     await page.mouse.move(b.x + b.width * 0.5, b.y + b.height / 2)
@@ -172,7 +170,7 @@ try {
   h = await hist()
   await page.locator('.vw-mx-strip.master .switch').click()
   p = await proj()
-  check('limiter switch writes master.limiter (one step)', p.master.limiter === false && (await hist()) === h + 1)
+  check('limiter switch writes master.limiter (one step)', p.master.limiter === true && (await hist()) === h + 1)
   h = await hist()
   await page.locator('.vw-mx-strip[data-track-id="a1"] .vw-mx-btn.solo').click()
   p = await proj()
@@ -189,10 +187,6 @@ try {
   await page.getByText('−14 LUFS', { exact: false }).first().click()
   p = await proj()
   check('loudness target select writes project.loudnessTarget', p.loudnessTarget === -14, String(p.loudnessTarget))
-  await page.locator('.vw-mx-measure-btn').click()
-  await page.waitForFunction(() => document.querySelector('.vw-mx-readout')?.dataset.state === 'measured')
-  const rd = await page.evaluate(() => ({ l: document.querySelector('.vw-mx-lufs').textContent, tp: document.querySelector('.vw-mx-tp').textContent, chip: document.querySelector('.vw-sb-loud')?.textContent, note: document.querySelector('.vw-mx-measure-note').textContent }))
-  check('Measure shows integrated LUFS and true peak, and the status-bar chip follows', /14\.2/.test(rd.l) && /1\.3/.test(rd.tp) && /14\.2/.test(rd.chip ?? ''), JSON.stringify(rd))
   await shot(page, 'mixer-loudness')
   await page.locator('.vw-mixer .vw-mx-close').click()
 
@@ -243,14 +237,16 @@ try {
   await page.locator('.vw-au-sample-btn').click()
   p = await proj()
   const nr = p.clips.find((c) => c.id === 'p4-a').denoise?.noiseRange
-  check('"use selection as noise sample" stores the range as source seconds', nr && Math.abs(nr.start - 1) < 1e-6 && Math.abs(nr.end - 2) < 1e-6, JSON.stringify(nr))
+  check('"use selection as noise sample" stores the range as clip-local seconds [t0, t1]', Array.isArray(nr) && Math.abs(nr[0] - 1) < 1e-6 && Math.abs(nr[1] - 2) < 1e-6, JSON.stringify(nr))
+  await state(page, () => { const s = window.__videoStore.getState(); const a = s.mediaAssets.find((x) => /clicks/.test(x.name)); const t = s.addTrack('audio'); s.addClip({ id: 'p4-c', trackId: t, title: 'Clicks', kind: 'audio', start: 20, duration: 6, in: 0, out: 6, color: '#8b5cf6', sourceUrl: a.url, mediaAssetId: a.id, srcDuration: 6 }); s.selectClip('p4-c') })
+  await page.locator('.vw-jump button', { hasText: /^Audio$/ }).first().click()
   h = await hist()
   await page.locator('.vw-au-beats').click()
   await page.waitForSelector('.vw-au-proposal')
-  check('Mark beats shows a proposal and adds nothing yet', (await proj()).markers?.length === undefined || (await proj()).markers.length === 0)
+  check('Mark beats shows a proposal and adds nothing yet', ((await proj()).markers?.length ?? 0) === 0 && /120|beat/i.test(await page.locator('.vw-au-proposal').innerText()), await page.locator('.vw-au-proposal').innerText())
   await page.locator('.vw-au-accept').click()
   p = await proj()
-  check('accepting the proposal adds one marker per beat as ONE undo step', p.markers?.length === 3 && (await hist()) === h + 1, `markers=${p.markers?.length}`)
+  check('accepting the proposal adds the detected beats (a 120 BPM click train: 12 clicks) as ONE undo step', p.markers?.length >= 8 && p.markers.length <= 14 && (await hist()) === h + 1, `markers=${p.markers?.length} steps=${(await hist()) - h}`)
   await shot(page, 'clip-audio-inspector')
   // crossfade between adjacent clips
   await state(page, () => { const s = window.__videoStore.getState(); const a = s.mediaAssets.find((x) => /tone/.test(x.name)); { const vo = s.project.clips.find((c) => /^Voiceover/.test(c.title)); s.updateClip({ ...vo, start: 30 }) } { const a0 = s.project.clips.find((c) => c.id === 'p4-a'); s.updateClip({ ...a0, duration: 5, out: 5 }) } s.addClip({ id: 'p4-b', trackId: 'a1', title: 'Tone B', kind: 'audio', start: 5, duration: 4, in: 1, out: 5, color: '#8b5cf6', sourceUrl: a.url, mediaAssetId: a.id, srcDuration: 6 }); s.selectClip('p4-a') })

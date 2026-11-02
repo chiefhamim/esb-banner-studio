@@ -41,7 +41,7 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
   const sampleOk = lo != null && hi != null && hi - lo >= 0.1
   const useSample = () => {
     if (!sampleOk || lo == null || hi == null) return
-    writeClip(clip.id, { denoise: { amount: dn.amount > 0 ? dn.amount : 0.6, noiseRange: { start: clip.in + (lo - clip.start), end: clip.in + (hi - clip.start) } } })
+    writeClip(clip.id, { denoise: { amount: dn.amount > 0 ? dn.amount : 0.6, noiseRange: [lo - clip.start, hi - clip.start] } })
     flash('Noise sample set from the selection')
   }
 
@@ -49,10 +49,8 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
     setBusy(true)
     try {
       const p = await proposeBeats(clip)
-      if (!p || !p.times.length) { setBeats(null); flash('No beats found in this clip.'); return }
-      // clip-local to timeline seconds if the detector answered in clip time
-      const times = p.times.map((t) => (t < clip.start - 1e-6 || t > clip.start + clip.duration + 1e-6 ? clip.start + t : t)).filter((t) => t >= clip.start && t <= clip.start + clip.duration)
-      setBeats({ ...p, times })
+      if (!p || (!p.beats.length && !p.onsets.length)) { setBeats(null); flash('No beats found in this clip.'); return }
+      setBeats(p)
     } catch (e) {
       flash('Could not find beats: ' + String((e as Error).message || e).slice(0, 100))
     } finally { setBusy(false) }
@@ -92,7 +90,7 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
       <div className="vw-au-sample">
         <button type="button" className="btn sm vw-au-sample-btn" disabled={off || !sampleOk} data-tip={sampleOk ? 'Learn the noise from the in–out range on the timeline (a stretch with no one speaking)' : 'Set an in–out range on the timeline over a stretch with only noise (I and O keys)'} onClick={useSample}>Use selection as noise sample</button>
         {dn.noiseRange
-          ? <span className="vw-au-sample-note">Sample {formatShortTime(dn.noiseRange.start)}–{formatShortTime(dn.noiseRange.end)} <button type="button" className="btn xs subtle vw-au-sample-clear" disabled={off} onClick={() => writeClip(clip.id, { denoise: { amount: dn.amount, noiseRange: undefined } })}>Clear</button></span>
+          ? <span className="vw-au-sample-note">Sample {formatShortTime(dn.noiseRange[0])}–{formatShortTime(dn.noiseRange[1])} <button type="button" className="btn xs subtle vw-au-sample-clear" disabled={off} onClick={() => writeClip(clip.id, { denoise: { amount: dn.amount, noiseRange: undefined } })}>Clear</button></span>
           : <span className="vw-au-sample-note">No sample: the quietest part of the clip is used.</span>}
       </div>
 
@@ -102,9 +100,9 @@ export function ClipAudioSection({ clip, locked, flash }: { clip: Clip; locked: 
       </button>
       {beats && (
         <div className="vw-au-proposal" role="group" aria-label="Beat proposal">
-          <span><b>{beats.times.length}</b> beat{beats.times.length === 1 ? '' : 's'}{beats.bpm ? ` · about ${Math.round(beats.bpm)} BPM` : ''} found. Nothing is added yet.</span>
+          <span><b>{beats.beats.length || beats.onsets.length}</b> {beats.beats.length ? 'beat' : 'strong onset'}{(beats.beats.length || beats.onsets.length) === 1 ? '' : 's'}{beats.tempo ? ` · about ${Math.round(beats.tempo.bpm)} BPM` : ''} found. Nothing is added yet.</span>
           <div className="vw-btn-row">
-            <button type="button" className="btn xs primary vw-au-accept" onClick={() => { acceptBeats(beats); flash(`Added ${beats.times.length} markers`); setBeats(null) }}>Add as markers</button>
+            <button type="button" className="btn xs primary vw-au-accept" onClick={() => { const n = acceptBeats(beats); flash(n ? `Added ${n} markers` : 'Those markers are already there'); setBeats(null) }}>Add as markers</button>
             <button type="button" className="btn xs vw-au-dismiss" onClick={() => setBeats(null)}>Dismiss</button>
           </div>
         </div>

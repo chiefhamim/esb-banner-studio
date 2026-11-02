@@ -7,6 +7,7 @@ import { create } from 'zustand'
 import { keepTake, hasDiskMedia } from './media'
 import { trackForKind } from './timeline'
 import { useVideoStore } from './videoStore'
+import { capabilities, writeTrack } from './audioAdapter'
 import { fmtTime } from '../ui/time'
 
 export type VoPhase = 'idle' | 'asking' | 'countdown' | 'recording'
@@ -141,8 +142,21 @@ async function finish(r: MediaRecorder, at: number) {
   const { asset, onDisk, error } = await keepTake(blob, name, dur)
   const s = useVideoStore.getState()
   s.addMediaAsset(asset)
-  const trackId = takeTrackId()
+  s.beginGesture()
+  let trackId = takeTrackId()
+  if (capabilities().track) {
+    // a track with no bus set sends footage sound to Voice and anything else to Music (where it would be ducked): a
+    // voiceover goes on a track marked Voice, a free one if possible, else a new Voiceover track
+    const tr = useVideoStore.getState().project.tracks.find((t) => t.id === trackId)
+    const bus = (tr as unknown as { bus?: string } | undefined)?.bus
+    const others = useVideoStore.getState().project.clips.some((c) => c.trackId === trackId && !/^Voiceover/.test(c.title))
+    if (bus !== 'voice') {
+      if (!others && !bus) writeTrack(trackId, { bus: 'voice' })
+      else { trackId = s.addTrack('audio'); s.renameTrack(trackId, 'Voiceover'); writeTrack(trackId, { bus: 'voice' }) }
+    }
+  }
   s.addClip({ id: `clip-vo-${Date.now()}`, trackId, title: name, kind: 'audio', start: at, duration: dur, in: 0, out: dur, color: '#7c3aed', sourceUrl: asset.url, mediaAssetId: asset.id, srcDuration: dur })
+  useVideoStore.getState().endGesture()
   set({ note: !onDisk && hasDiskMedia() ? `The voiceover could not be written to disk (${error ?? 'unknown error'}); it plays this session only.` : null })
 }
 

@@ -112,9 +112,9 @@
 .vw-mx-banner svg { flex: none; margin-top: 2px; }
 .vw-mx-empty { margin: 0; font: 500 12px var(--ui); color: var(--text-2); }
 .vw-mx-strips { display: flex; flex-direction: column; gap: 4px; }
-.vw-mx-strip { display: grid; grid-template-columns: minmax(70px, 1fr) 84px minmax(110px, 1.6fr) minmax(70px, 1fr) 64px minmax(48px, 0.8fr); align-items: center; gap: 8px; min-height: 40px; padding: 4px 8px; border-radius: var(--r-2); background: var(--fill); }
+.vw-mx-strip { display: grid; grid-template-columns: minmax(70px, 1fr) 100px minmax(110px, 1.6fr) minmax(70px, 1fr) 64px minmax(48px, 0.8fr); align-items: center; gap: 8px; min-height: 40px; padding: 4px 8px; border-radius: var(--r-2); background: var(--fill); }
 .vw-mx-strip.muted .vw-mx-name { opacity: 0.55; }
-.vw-mx-strip.master { grid-template-columns: minmax(70px, 1fr) 84px minmax(110px, 1.6fr) minmax(70px, 1fr) 64px minmax(48px, 0.8fr); margin-top: 4px; box-shadow: inset 0 0 0 1px var(--card-line); }
+.vw-mx-strip.master { grid-template-columns: minmax(70px, 1fr) 100px minmax(110px, 1.6fr) minmax(70px, 1fr) 64px minmax(48px, 0.8fr); margin-top: 4px; box-shadow: inset 0 0 0 1px var(--card-line); }
 .vw-mx-strip.master > .switch { grid-column: 2; }
 .vw-mx-strip.master > .vw-mx-fader { grid-column: 3 / span 2; }
 .vw-mx-strip.master > .vw-level { grid-column: 5 / span 2; }
@@ -154,3 +154,5 @@
 
 /* every button of the audio UI keeps a 28 px target (beats the .btn.xs height) */
 .vw-au .btn, .vw-mixer .btn, .vw-audio-panel .btn.xs, .vw-audio-panel .btn.sm { min-height: 28px; height: auto; }
+
+.vw-mx-note { margin: 0; font: 500 11.5px/1.45 var(--ui); color: var(--text-3); }

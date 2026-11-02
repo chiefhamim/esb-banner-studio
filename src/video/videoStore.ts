@@ -7,6 +7,7 @@ import {
   allClips,
   breakCompound,
   compoundView,
+  flattenCompounds,
   ensureTracksFor,
   extractRange,
   groupClips,
@@ -49,6 +50,10 @@ import {
   unlinkClip,
 } from './timeline'
 import { forgetFile } from './media'
+import { analyseClipBeats } from './engine/audioRender'
+import type { Bus, ClipDenoise, ClipFade, LoudnessTarget } from './audioModel'
+import type { BeatProposal, ClipAudioPatch, ProjectAudioPatch, TrackAudioPatch } from './audioEdit'
+import { applyBeatMarkers, beatProposal, proposalTimes, updateClipAudio, updateProjectAudio, updateTrackAudio } from './audioEdit'
 
 /** An undo step. Removing a bin item changes no clip, so its step carries which bin items undo shows again (`unhide`)
  * and redo hides again (`hide`). */
@@ -188,6 +193,35 @@ interface VideoState {
   setRecordingVoiceover: (recording: boolean) => void
   undo: () => void
   redo: () => void
+  // ---- Phase 4 audio (Part A). A slider or fade handle drag wraps these in beginGesture / endGesture: one undo step.
+  /** Clip gain in dB (null = 0). */
+  setClipGain: (clipId: string, db: number | null) => void
+  /** A clip's fade-in / fade-out (null = none). */
+  setClipFade: (clipId: string, side: 'in' | 'out', fade: ClipFade | null) => void
+  setClipPan: (clipId: string, pan: number | null) => void
+  /** Noise reduction on a clip (null or amount 0 = off). */
+  setClipDenoise: (clipId: string, d: ClipDenoise | null) => void
+  /** Several clip audio fields at once (one undo step). */
+  patchClipAudio: (clipId: string, patch: ClipAudioPatch) => void
+  /** An audio track's bus (null = automatic), fader (dB), pan, mute, solo. */
+  setTrackBus: (trackId: string, bus: Bus | null) => void
+  setTrackVolume: (trackId: string, db: number | null) => void
+  setTrackPan: (trackId: string, pan: number | null) => void
+  setTrackMute: (trackId: string, muted: boolean) => void
+  setTrackSolo: (trackId: string, solo: boolean) => void
+  patchTrackAudio: (trackId: string, patch: TrackAudioPatch) => void
+  /** Master fader (dB) and limiter. */
+  setMaster: (patch: { gain?: number; limiter?: boolean } | null) => void
+  /** Auto ducking of the music bus under the voice bus. */
+  setDucking: (patch: { enabled?: boolean; depthDb?: number; threshold?: number; attack?: number; release?: number } | null) => void
+  /** The loudness an export is normalised to (null = not normalised). */
+  setLoudnessTarget: (t: LoudnessTarget) => void
+  setBusVolume: (bus: Bus, db: number | null) => void
+  patchProjectAudio: (patch: ProjectAudioPatch) => void
+  /** Beat and onset detection on an audio clip: returns a PROPOSAL (nothing is added); null when the clip has no sound. */
+  markBeats: (clipId: string) => Promise<BeatProposal | null>
+  /** Add a proposal's markers (the beat grid, or the strongest onsets) in one undo step; returns how many were added. */
+  applyBeats: (proposal: BeatProposal, use?: 'beats' | 'onsets') => number
   /** Start a gesture (pointer down on a clip, a trim handle or a slider): one undo step for everything until end. */
   beginGesture: () => void
   /** End the gesture; a gesture that changed nothing leaves no undo step. */
@@ -695,6 +729,39 @@ export const useVideoStore = create<VideoState>((set, get) => ({
       compoundPath: validPath(bare(next), s.compoundPath),
       mediaAssets: hide.size ? mediaAssets.map((a) => (hide.has(a.id) ? { ...a, removed: true } : a)) : mediaAssets,
     }))
+  },
+
+  setClipGain: (clipId, db) => set((s) => edit(s, updateClipAudio(viewOf(s), clipId, { gain: db }))),
+  setClipFade: (clipId, side, fade) => set((s) => edit(s, updateClipAudio(viewOf(s), clipId, side === 'in' ? { fadeIn: fade } : { fadeOut: fade }))),
+  setClipPan: (clipId, pan) => set((s) => edit(s, updateClipAudio(viewOf(s), clipId, { pan }))),
+  setClipDenoise: (clipId, d) => set((s) => edit(s, updateClipAudio(viewOf(s), clipId, { denoise: d }))),
+  patchClipAudio: (clipId, patch) => set((s) => edit(s, updateClipAudio(viewOf(s), clipId, patch))),
+  setTrackBus: (trackId, bus) => set((s) => edit(s, updateTrackAudio(viewOf(s), trackId, { bus }))),
+  setTrackVolume: (trackId, db) => set((s) => edit(s, updateTrackAudio(viewOf(s), trackId, { volume: db }))),
+  setTrackPan: (trackId, pan) => set((s) => edit(s, updateTrackAudio(viewOf(s), trackId, { pan }))),
+  setTrackMute: (trackId, muted) => set((s) => edit(s, updateTrackAudio(viewOf(s), trackId, { muted }))),
+  setTrackSolo: (trackId, solo) => set((s) => edit(s, updateTrackAudio(viewOf(s), trackId, { solo }))),
+  patchTrackAudio: (trackId, patch) => set((s) => edit(s, updateTrackAudio(viewOf(s), trackId, patch))),
+  setMaster: (patch) => set((s) => edit(s, updateProjectAudio(viewOf(s), { master: patch }))),
+  setDucking: (patch) => set((s) => edit(s, updateProjectAudio(viewOf(s), { ducking: patch }))),
+  setLoudnessTarget: (t) => set((s) => edit(s, updateProjectAudio(viewOf(s), { loudnessTarget: t }))),
+  setBusVolume: (bus, db) => set((s) => edit(s, updateProjectAudio(viewOf(s), { busVolume: { [bus]: db } }))),
+  patchProjectAudio: (patch) => set((s) => edit(s, updateProjectAudio(viewOf(s), patch))),
+
+  markBeats: async (clipId) => {
+    const s = get()
+    const a = await analyseClipBeats(flattenCompounds(viewOf(s)), clipId)
+    return a ? beatProposal({ clipId, clipStart: a.clipStart, clipDuration: a.clipDuration, onsets: a.onsets, beats: a.beats, tempo: a.tempo }) : null
+  },
+
+  applyBeats: (proposal, use = 'beats') => {
+    const s = get()
+    const v = viewOf(s)
+    const times = proposalTimes(proposal, use)
+    const next = applyBeatMarkers(v, times, Date.now().toString(36))
+    if (next === v) return 0
+    set((st) => edit(st, next))
+    return (next.markers?.length ?? 0) - (v.markers?.length ?? 0)
   },
 
   beginGesture: () => set((s) => {

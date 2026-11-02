@@ -8,13 +8,13 @@ import { Dialog, Select, Seg } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import type { VideoProject } from './timeline'
 import { contentEnd, formatShortTime } from './timeline'
-import { audibleClips, downloadVideoBlob, emptyTextClips, exportBlocker, exportDuration, exportFilename, exportTimelineVideo, pickCodecs } from './exportVideo'
+import { audibleClips, downloadVideoBlob, exportLoudnessReport, emptyTextClips, exportBlocker, exportDuration, exportFilename, exportTimelineVideo, pickCodecs } from './exportVideo'
 import type { ExportContainer, ExportResult } from './exportVideo'
 import { useVideoStore } from './videoStore'
 import { videoBridge } from './media'
 import { canvasMeasure, measureNow, titleProblems } from './titleClip'
 import type { LoudnessTarget } from './audioAdapter'
-import { LOUDNESS_CHOICES, PENDING_NOTE, capabilities, fmtDbtp, fmtLufs, lastExportLoudness, projectTarget, writeTarget } from './audioAdapter'
+import { LOUDNESS_CHOICES, PENDING_NOTE, capabilities, projectTarget, writeTarget } from './audioAdapter'
 
 const DRAFT_SECONDS = 10
 
@@ -44,6 +44,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
   const [startedAt, setStartedAt] = useState(0)
   const [result, setResult] = useState<(ExportResult & { savedTo: string | null; chosen: string | null }) | null>(null)
   const [error, setError] = useState('')
+  const [audioStatus, setAudioStatus] = useState('')
   const abort = useRef<AbortController | null>(null)
   const lastTick = useRef(0)
 
@@ -93,13 +94,14 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
     try {
       const writable = job && id ? new WritableStream<{ type: 'write'; data: Uint8Array; position: number }>({ write: async (chunk) => { await b!.videoExportWrite!(id, chunk.position, chunk.data) } }) : undefined
       lastTick.current = 0
+      setAudioStatus('')
       const res = await exportTimelineVideo(project, (cur, total) => {
         const now = performance.now()
         if (cur < total && now - lastTick.current < PROGRESS_MS) return
         lastTick.current = now
         setFrames({ cur, total })
         setExporting(true, Math.round((cur / total) * 100))
-      }, { container: kind, maxDuration: useDraft ? DRAFT_SECONDS : undefined, signal: abort.current.signal, writable })
+      }, { container: kind, maxDuration: useDraft ? DRAFT_SECONDS : undefined, signal: abort.current.signal, writable, onAudioStatus: (t) => setAudioStatus(t) })
       let savedTo: string | null = null
       if (id) {
         savedTo = await b!.videoExportEnd!(id, true)
@@ -117,6 +119,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
     }
   }
 
+  const loudRep = result ? exportLoudnessReport(result) : null
   const elapsed = (performance.now() - startedAt) / 1000
   const left = frames.cur > 5 ? (elapsed / frames.cur) * (frames.total - frames.cur) : null
   const pct = Math.round((frames.cur / Math.max(1, frames.total)) * 100)
@@ -147,6 +150,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
               />
             </div>
             {!canTarget && <p className="vx-loud-note">Loudness normalising switches on when the audio engine is merged; until then the mix is exported as it plays.</p>}
+            {canTarget && <p className="vx-loud-note">The target is applied to the exported file, not to the preview. Noise reduction, ducking, a target and the limiter add a sound-processing stage before the picture starts (about 14 s for 10 minutes of plain sound, up to about 90 s with all of them).</p>}
             <dl className="vx-facts">
               <div><dt>Frame</dt><dd>{project.width} × {project.height} · {project.fps} fps</dd></div>
               <div><dt>Duration</dt><dd>{formatShortTime(duration)} · {Math.round(duration * project.fps)} frames</dd></div>
@@ -195,6 +199,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
               <span>Frame {frames.cur} of {frames.total}{left != null ? ` · about ${left < 60 ? `${Math.ceil(left)} s` : `${Math.ceil(left / 60)} min`} left` : ''}</span>
             </div>
             <div className="vw-progress-bar-bg"><div className="vw-progress-bar-fill" style={{ width: `${pct}%` }} /></div>
+            {audioStatus && <p className="vx-note vx-audio-status" role="status">Sound: {audioStatus}</p>}
             <p className="vx-note">Every frame is drawn once its footage is at that exact instant, and stamped with its own time, so the file plays at true speed.</p>
             <div className="vx-actions">
               <button type="button" className="btn vx-cancel" onClick={() => abort.current?.abort()}>Stop</button>
@@ -214,7 +219,7 @@ export function ExportSheet({ project, onClose, onShowMedia }: { project: VideoP
               <div><dt>File</dt><dd>{result.container.toUpperCase()} · {mb(result.size)}</dd></div>
               <div><dt>Length</dt><dd>{formatShortTime(result.duration)}</dd></div>
               <div><dt>Codecs</dt><dd>{result.videoCodec}{result.audioCodec ? ` + ${result.audioCodec}` : ' · no sound'}</dd></div>
-              <div className="vx-loud-report"><dt>Loudness</dt><dd>{(() => { const r = lastExportLoudness(); return r ? `${fmtLufs(r.integrated)} · ${fmtDbtp(r.truePeak)}${r.target != null ? ` · target ${r.target} LUFS` : ''}` : result.audioCodec ? 'Not measured' : 'No sound' })()}</dd></div>
+              <div className={`vx-loud-report${loudRep ? (loudRep.ok ? ' ok' : ' off') : ''}`}><dt>Loudness</dt><dd>{loudRep ? loudRep.lines.join(' · ') : result.audioCodec ? 'Not measured' : 'No sound'}{loudRep && <em className="vx-loud-verdict">{loudRep.ok ? ' · on target' : ' · check'}</em>}</dd></div>
             </dl>
             <div className="vx-actions">
               {result.savedTo && videoBridge()?.reveal && <button type="button" className="btn" onClick={() => void videoBridge()!.reveal!(result.savedTo!)}>Show in folder</button>}

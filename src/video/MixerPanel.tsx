@@ -3,15 +3,16 @@
 // graph's analysers; loudness numbers come from the measurer; with no engine they are absent, never invented.
 // Every drag is one undo step (GSlider). Styles: styles/video-audio.css (vw-mx-).
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Icon } from '../ui/Icon'
 import { IconButton, Select, Switch } from '../ui/controls'
 import { useVideoStore, viewOf } from './videoStore'
 import type { Track } from './timeline'
 import { GSlider, LevelBar } from './audioControls'
-import type { Bus, LoudnessTarget } from './audioAdapter'
+import type { BusChoice, LoudnessTarget } from './audioAdapter'
+import { useLiveLevels } from './useAudioMeters'
 import {
-  BUSES, LOUDNESS_CHOICES, PENDING_NOTE, capabilities, enginePending, fmtDb, fmtDbtp, fmtLufs, measureLoudnessNow, projectDucking, projectMaster, projectTarget, readMeters,
+  BUSES, LOUDNESS_CHOICES, PENDING_NOTE, capabilities, enginePending, fmtDb, fmtDbtp, fmtLufs, measureLoudnessNow, projectDucking, projectMaster, projectTarget,
   trackBus, trackPan, trackSolo, trackVolumeDb, useLoudness, writeDucking, writeMaster, writeTarget, writeTrack,
 } from './audioAdapter'
 import { fmtTime } from '../ui/time'
@@ -19,22 +20,8 @@ import { trackLabels } from './trackLabels'
 
 const panText = (p: number) => (Math.abs(p) < 0.02 ? 'C' : p < 0 ? `L${Math.round(-p * 100)}` : `R${Math.round(p * 100)}`)
 
-/** Poll the graph's analysers while the mixer is open (rAF, ~30 fps). */
-function useMeters(open: boolean) {
-  const [m, setM] = useState<ReturnType<typeof readMeters>>(null)
-  useEffect(() => {
-    if (!open) return
-    let raf = 0
-    let last = 0
-    const tick = (t: number) => {
-      if (t - last > 33) { last = t; setM(readMeters()) }
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [open])
-  return m
-}
+/** Peak level (dBFS) of one meter reading; -Infinity (silence) reads as the floor. */
+const peakDb = (l: { peak: number } | null | undefined) => (l ? Math.max(-60, l.peak) : null)
 
 function Strip({ track, code, name, db, pending }: { track: Track; code: string; name: string; db: number | null; pending: boolean }) {
   const toggleMute = useVideoStore((s) => s.toggleTrackMute)
@@ -45,10 +32,10 @@ function Strip({ track, code, name, db, pending }: { track: Track; code: string;
   return (
     <div className={`vw-mx-strip${track.muted ? ' muted' : ''}`} data-track-id={track.id} role="group" aria-label={`${code} ${name}`}>
       <div className="vw-mx-name" data-tip={`${code} · ${name}`}><b>{code}</b><span>{name}</span></div>
-      <Select<Bus>
+      <Select<BusChoice>
         value={bus}
-        options={BUSES.map((b) => ({ value: b.value, label: b.label }))}
-        onChange={(v) => writeTrack(track.id, { bus: v })}
+        options={BUSES.map((b) => ({ value: b.value, label: b.label, hint: b.hint }))}
+        onChange={(v) => writeTrack(track.id, { bus: v === 'auto' ? null : v })}
         className="compact vw-mx-bus"
         title={pending ? PENDING_NOTE : 'Which bus this track feeds'}
       />
@@ -111,7 +98,7 @@ function DuckingCard({ pending }: { pending: boolean }) {
 
 function LoudnessCard() {
   const project = useVideoStore((s) => s.project)
-  const { reading, measuring, error } = useLoudness()
+  const { reading, measuring, error, silent, progress } = useLoudness()
   const caps = capabilities()
   const target = projectTarget(project)
   const num = typeof target === 'number' ? target : null
@@ -133,14 +120,15 @@ function LoudnessCard() {
         <div><span>True peak</span><b className="mono vw-mx-tp">{reading ? fmtDbtp(reading.truePeak) : '—'}</b></div>
         <div><span>Range</span><b className="mono">{reading?.range != null ? `${reading.range.toFixed(1)} LU` : '—'}</b></div>
       </div>
+      {reading && reading.target != null && reading.gainDb != null && <p className="vw-mx-measure-note vw-mx-gain">The export would apply {reading.gainDb >= 0 ? '+' : '−'}{Math.abs(reading.gainDb).toFixed(1)} dB{reading.wouldLimit ? ' and the true-peak limiter' : ''}. The preview does not apply the target.</p>}
       <div className="vw-mx-measure">
         <button type="button" className="btn sm vw-mx-measure-btn" disabled={!caps.measure || measuring} data-tip={caps.measure ? 'Measure the whole mix the way the export will play it' : 'The loudness measurer is not in this build yet'} onClick={() => void measureLoudnessNow(useVideoStore.getState().project)}>
-          <Icon name="activity" size={13} />{measuring ? 'Measuring' : 'Measure'}
+          <Icon name="activity" size={13} />{measuring ? `Measuring ${Math.round(progress * 100)}%` : 'Measure'}
         </button>
         <span className="vw-mx-measure-note">
-          {error ?? (reading
+          {error ?? (silent ? 'Nothing audible to measure.' : reading
             ? `Measured ${fmtTime(reading.at, { seconds: true })}${dev != null ? ` · ${Math.abs(dev) < 0.05 ? 'on target' : `${dev > 0 ? '+' : '−'}${Math.abs(dev).toFixed(1)} LU from target`}` : ''}`
-            : caps.measure ? 'Not measured yet.' : 'Measuring needs the audio engine (pending).')}
+            : 'Not measured yet.')}
         </span>
       </div>
     </section>
@@ -150,7 +138,8 @@ function LoudnessCard() {
 export function MixerPanel({ onClose, bottom }: { onClose: () => void; bottom: number }) {
   const project = useVideoStore((s) => viewOf(s))
   const pending = enginePending()
-  const meters = useMeters(true)
+  const playing = useVideoStore((s) => s.playing)
+  const levels = useLiveLevels(playing)
   const labels = useMemo(() => trackLabels(project.tracks), [project.tracks])
   const audio = project.tracks.filter((t) => t.kind === 'audio')
   useEffect(() => {
@@ -170,9 +159,10 @@ export function MixerPanel({ onClose, bottom }: { onClose: () => void; bottom: n
         {pending && <p className="vw-mx-banner"><Icon name="info" size={12} />The audio graph is not merged into this build yet, so volume, pan, solo, buses, ducking and normalising are switched off. Mute works now.</p>}
         <div className="vw-mx-strips">
           {audio.length === 0 && <p className="vw-mx-empty">No audio tracks yet. Add an Audio track from the timeline toolbar.</p>}
-          {audio.map((t) => { const lb = labels.get(t.id) ?? { code: t.id.toUpperCase(), name: t.name }; return <Strip key={t.id} track={t} code={lb.code} name={lb.name} db={meters ? meters.tracks[t.id] ?? null : null} pending={pending} /> })}
-          <MasterStrip db={meters ? meters.master : null} pending={pending} />
+          {audio.map((t) => { const lb = labels.get(t.id) ?? { code: t.id.toUpperCase(), name: t.name }; return <Strip key={t.id} track={t} code={lb.code} name={lb.name} db={peakDb(levels?.tracks[t.id])} pending={pending} /> })}
+          <MasterStrip db={peakDb(levels?.master)} pending={pending} />
         </div>
+        <p className="vw-mx-note">The preview limiter is a safety compressor; the export applies the true-peak limiter and the loudness target. Faders and ducking are heard in the preview.</p>
         <div className="vw-mx-cards">
           <DuckingCard pending={pending} />
           <LoudnessCard />

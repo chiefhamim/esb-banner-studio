@@ -1775,7 +1775,7 @@ The UI half of Phase 4: voiceover recorder, music library, mixer, fade handles, 
 in the bin, loudness readouts. **The audio engine is Part A's** (separate branch, merged by the lead): every call into
 it goes through one guarded door, `src/video/audioAdapter.ts`. Until Part A is merged, those controls are present but
 switched off with "Audio engine pending" (never a stored-but-ignored value, never a fake meter or loudness number).
-What works without Part A: the recorder, the library, mute, bin and timeline waveforms.
+Part A is now merged into this branch (bbdb8c6; the only conflicts were package.json's test:video line and this file). What works without Part A: the recorder, the library, mute, bin and timeline waveforms.
 
 ### What was built
 - **Audio tab** (`AudioPanel.tsx`, `voiceover.ts`): *Voiceover* card: Record, then a 3-2-1 countdown overlay on the monitor
@@ -1813,27 +1813,28 @@ What works without Part A: the recorder, the library, mute, bin and timeline wav
 - **Shortcuts sheet**: new Audio group (R, Esc, Ctrl+Alt+M, dot gestures).
 - `trackLabels` moved out of `VideoWorkspace.tsx` into `trackLabels.ts` (the mixer shows the same A1 / A2 names).
 
-### Contract with Part A (everything in `src/video/audioAdapter.ts`)
-| Piece | Expected name / shape |
-|---|---|
-| Clip fields | `gain` (dB), `fadeIn` / `fadeOut` `{dur, curve}`, `pan`, `denoise {amount, noiseRange?: {start, end}}` (source seconds) |
-| Track fields | `bus`, `volume` (dB), `pan`, `solo` (mute = the existing `muted`) |
-| Project fields | `master {gain, limiter}`, `ducking {enabled, depthDb, threshold, attack, release}`, `loudnessTarget` (-14 / -16 / -23 / 'off') |
-| Store actions | `setClipAudio(id, patch)`, `setTrackAudio(id, patch)`, `setMasterAudio(patch)`, `setDucking(patch)`, `setLoudnessTarget(t)` (one undo step each; joining a gesture when one is open) |
-| Functions (exported from any of `audioModel.ts`, `audioMeter.ts`, `engine/audioEngine.ts`, `engine/audioMix.ts`, `engine/audioGraph.ts`, `exportVideo.ts`) | `measureProjectLoudness(project)` returning `{integrated, truePeak, range?}`; `audioMeterLevels()` returning `{tracks: {id: dBFS}, master}`; `markBeats(clipId)` returning `{bpm?, beats: number[]}`; `exportLoudnessReport()` |
-
-If Part A names things differently, change the names in the adapter only (`act()`, `find()` and the `write*` helpers).
-The functions are found with `import.meta.glob`, so a missing file is not a build error. The e2e tests can stand in for
-the functions through `globalThis.__esbAudioDev` (dev server only).
+### Contract with Part A (merged: video-p4-engine bbdb8c6 is in this branch; everything in `src/video/audioAdapter.ts`)
+- Reads the model fields as Part A defined them (`audioModel.ts`): clip `gain` dB, `fadeIn` / `fadeOut` {dur, curve}, `pan`,
+  `denoise` {amount, noiseRange [t0, t1] clip-local seconds}; track `bus` (unset = automatic), `volume`, `pan`, `solo`, `muted`;
+  project `master`, `ducking`, `loudnessTarget`.
+- Writes through the store actions `patchClipAudio`, `patchTrackAudio`, `setMaster`, `setDucking`, `setLoudnessTarget`, `markBeats`,
+  `applyBeats` (one undo step each; drags are wrapped in beginGesture / endGesture). If one is missing, its control stays off with
+  "Audio engine pending".
+- Meters: `useLiveLevels(playing)` (idle, never made up, while nothing plays). Measure: `measureProjectLoudness` (the same graph as the
+  export), shown with the gain an export would apply; the mixer says the preview does not apply the target and that the preview
+  limiter is a safety compressor. Export sheet: `onAudioStatus` text while the sound is prepared, the `exportLoudnessReport(result)`
+  lines after the export, and a note that noise reduction, ducking, a target and the limiter add processing time.
+- A voiceover goes on a track marked Voice (an unset track would send it to Music, where it is ducked): a free track is marked,
+  otherwise a new "Voiceover" track is made. A music-library track goes on a Music track.
+- The bus select has Auto (footage sound = Voice, other audio = Music) plus Voice / Music / FX / None.
 
 ### Tests and measurements
 - `tools/e2e/video-audio-ui-test.mjs` (in `npm run test:video`; fake microphone, ffmpeg tone and silence fixtures): all pass.
   The tone tile is a ready waveform drawn across the tile, the silence tile says "Silent" with 0 drawn columns; the countdown
   shows 3, 2, 1; the mic meter is live; the take lands on A1 at 2.000 s and punch-in stops the picture; the mixer with no
-  engine is off and honest, and mute is one undo step. **With a STAND-IN for Part A's actions** (clearly marked in the
-  file) every fader, pan, master, limiter, solo, ducking switch and slider, the target select and the inspector's gain /
+  engine is off and honest, and mute is one undo step. **Against the real engine** every fader, pan, master, limiter, solo, ducking switch and slider, the target select and the inspector's gain /
   fades / noise sample / beats / crossfade write the store with exactly one undo step; a fade dot drag changes the fade
-  by px / zoom; Measure shows the numbers and the status-bar chip follows; the export sheet has the select; the library
+  by px / zoom; Measure on the tone file reads -18.7 LUFS, the same as ffmpeg ebur128 on the stereo version of the file; the status-bar chip follows; the export sheet has the select; the library
   lists titles and tags from long Bangla and unbroken names with nothing cut or spilling at 900 px; every control is
   at least 28 px.
 - `tools/e2e/video-music-electron-test.mjs` (in `npm run test:electron`): a real folder with a Bangla-named track, a
@@ -1843,15 +1844,49 @@ the functions through `globalThis.__esbAudioDev` (dev server only).
   is remembered and "Forget" closes access.
 - `tools/unit/video-music-library.test.ts`: the same confinement rules on `electron/video-music.cjs` (6 tests).
 - `tools/audit/text-fit-audit.mjs` gained two steps (library with long Bangla names, mixer).
-- Screenshots in `tools/out/p4b/` (git-ignored): audio-tab-library / -empty, media-bin-audio-waveform, mixer-pending /
-  -open / -ducking, fade-handles, clip-audio-inspector (+ -pending), loudness-chip, voiceover-countdown / -recording,
-  export-setup; light and dark at 900 / 1366 / 1920 (`video-shots.mjs` states; they use the stand-in engine except the
-  `-pending` ones).
+- Screenshots in `tools/out/p4b/` (git-ignored): audio-tab-library / -empty, media-bin-audio-waveform, mixer-open /
+  -ducking, fade-handles, clip-audio-inspector, loudness-chip, voiceover-countdown / -recording,
+  export-setup; light and dark at 900 / 1366 / 1920 (`video-shots.mjs` states, real engine).
 
 ### Not done / gated on Part A
-- Real audio in preview and export, real meters, Measure, normalising, ducking, denoise, beat detection, solo, buses: Part A.
-  Until merged the mixer says "Engine pending".
+- Nothing is gated on Part A any more. The build without Part A would show "Engine pending" and off controls.
 - The dB-scaled waveform in the lane does not yet show clip gain (Part A can read `gain` in `laneCanvas.drawWave`, which this
   part left alone). Fade shapes are drawn from the `audio/fades.ts` curves.
 - Library rows show a waveform only after the track was previewed or added (files are registered on use, not on listing).
 - A real microphone was not used: the recorder was tested with Chromium's fake device.
+
+## Phase 4 — Part A: audio engine (2026-11-02, branch `video-p4-engine`)
+
+Part A = the engine: one audio graph for preview and export, per-clip/track/bus/master processing, ducking, noise
+reduction, loudness. Part B (mixer UI, fade handles, voiceover, music library, waveform UI) is built in parallel; this
+part gives it the model, the store actions and the hooks below. No UI was changed.
+
+### Contract (what Part B calls)
+Model (`src/video/audioModel.ts`; all optional, absent = Phase 0-3 behaviour; sanitised on open like Phase 2's fields):
+- Clip: `gain` dB (-60..24), `fadeIn` / `fadeOut` `{dur, curve: 'linear'|'equal-power'|'log'}`, `pan` -1..1, `denoise {amount 0..1, noiseRange?: [t0, t1]}` (clip-local seconds). Audio clips only.
+- Track (audio): `bus?: 'voice'|'music'|'fx'|'none'` (unset = automatic: a footage clip's own sound -> voice, other audio -> music; `busOf`), `volume` dB, `pan`, `solo`, and the existing `muted` (= the mixer's mute).
+- Project: `master {gain, limiter}`, `ducking {enabled, source:'voice', target:'music', depthDb, threshold (dBFS), attack, release}`, `loudnessTarget: null|-14|-16|-23`, `busVolume` (dB per bus; extra to the contract).
+
+Store actions (`videoStore`; each one undo step; wrap a drag in `beginGesture/endGesture`; a no-change call leaves no step): `setClipGain, setClipFade(id,'in'|'out',fade|null), setClipPan, setClipDenoise, patchClipAudio, setTrackBus, setTrackVolume, setTrackPan, setTrackMute, setTrackSolo, patchTrackAudio, setMaster, setDucking, setLoudnessTarget, setBusVolume, patchProjectAudio, markBeats(clipId): Promise<BeatProposal|null>` (a proposal, nothing added) and `applyBeats(proposal, 'beats'|'onsets'): number` (markers with empty names, one undo step). Pure versions: `src/video/audioEdit.ts`.
+
+Engine API: `measureProjectLoudness(project, {signal,onProgress}): Promise<ProjectLoudness>` (`engine/audioRender.ts`: integrated, lra, truePeak, samplePeak, momentary[] / shortTerm[] every 100 ms, momentaryMax, shortTermMax, duration, silent, target, gainDb, wouldLimit; cached by `mixSignature`). Hooks in `src/video/useAudioMeters.ts`: `useLoudnessMeter({auto, delayMs})` -> `{status, report, error, progress, measure()}` and `useLiveLevels(active)` (peak/rms dBFS of master, buses, tracks while playing; same as `audioEngine().levels()`). Background job state: `useAudioJobs` (`src/video/audioJobs.ts`: `denoise[clipId]`, `duck`). Export: `ExportResult.loudness` (`{target, before, after, gainDb, limited, ceiling, note}`; `after` is measured on what was written), `exportLoudnessReport(result) -> {lines, ok, target}`, `ExportOptions.onAudioStatus(text)` ("Reducing noise", "Ducking", "Measuring loudness", "Setting the limiter"). `peaksFor(clipId)` is unchanged.
+
+### How it works
+- `engine/audioGraph.ts` is the ONE graph, built by the live preview (`AudioEngine.start`) and by the export (an OfflineAudioContext per 10 s piece): source -> clip gain (gain dB x volume incl. keyframes x fades, `clipGainFn`, applied as automation: a constant where nothing changes, a 100 Hz value curve in fades/keyframes) -> clip pan -> track (fader, mute/solo, pan) -> bus (fader) -> ducking (music bus only; a gain curve as automation) -> master -> [preview safety limiter] -> output. Mono files are spread to stereo before panning, so Web Audio's pan law is the same everywhere.
+- `engine/audioRender.ts`: `renderChunk`, `renderClipSpan`, `denoiseClip` / `ensureDenoised` (the clip rendered through its speed mapping, denoised in a worker `denoiseWorker.ts`, cached by content `denoiseKey`), `computeDuckCurve` (the voice bus rendered in sidechain mode, its level followed by `ducking.ts`, streaming `VoiceLevels`), `prepareMix` (the export's audio plan), `measureProjectLoudness`, `analyseClipBeats`. Speed/reverse/freeze/preservePitch go through the Phase 2 mapping (`ClipSpeedAudio`); compounds are flattened first. In the preview, noise reduction and the ducking curve are prepared in the background 0.5 s after an edit; a clip whose render is not ready plays unprocessed and the sound restarts when it is.
+- Loudness stage (export only): pass 1 measures the mix with the streaming R128 meter (`audio/streamMeter.ts`, equal to `measureLoudness`; true peak only where the sample peak is near the maximum), gain = target - integrated. If that gain would cross -1 dBTP, a dry pass with the true-peak limiter (`limiterGain` on 10 s pieces with 0.5 s left context and 0.1 s look-ahead, silence padded at both ends) raises the gain to make up the limiter's loss (up to 2 passes); the real pass writes. Master `limiter: true` without a target runs the same limiter at -1 dBTP. The preview does not normalise (its predicted gain is in `measureProjectLoudness`); its master limiter is a DynamicsCompressor safety.
+- `ducking.ts` gained `VoiceLevels` (streaming) and `duckFromLevels`; `duckingCurve` is built on both (tested equal for any piece size). `loudness.ts` gained `summarizeBlocks` (shared by both meters).
+
+### Measured (this PC; `node tools/e2e/video-audio-test.mjs`; ffmpeg 9.0.2 on the exported MP4/AAC)
+- Loudness: target -14 -> I -14.0, true peak -1.3 dBTP; -16 -> -16.0 / -1.3; -23 -> -23.0 / -2.2 (the fixture has strong transients, so -14 needs the limiter). The export's own report: after -14.005 LUFS, -1.39 dBTP.
+- Ducking (voice hard-left, music hard-right so the right channel is pure music): depth 12 -> 12.00 dB lower under the voice, depth 6 -> 6.00 dB; the music returns to within 0.02 dB after the voice.
+- Fades (linear, equal-power, log; in and out; 5 sampled times each): worst error 0.01 dB (0.29 dB for log, whose -50 dB region sits at the AAC noise floor).
+- Preview vs export: the engine's own `start()` rendered into an OfflineAudioContext vs the exported file, 0.5 s windows (fades, pan, track/bus/master faders, clip gain, ducking): worst 0.31 dB over 44 windows (limit 0.5).
+- Noise reduction (speech-like fixture + white noise, SNR 8.7 dB in the exported file): +16.3 dB (amount 0.8), +17.2 (1.0), +16.4 (0.8 with a marked noise range). A 60 s clip: 2.0-2.3 s in the worker; longest main-thread stall 14-21 ms (limit 50).
+- Mute / solo / bus / pan / track fader / clip gain / bus fader + master: exact to 0.1 dB. Old project (no Phase 4 field): audio length = video length within 6 ms (10.005 vs 10.000 s, AAC priming); level = the plain volume (-21.07 dB measured, -21.07 expected); volume keyframes still followed.
+- markBeats on a fixture with a transient every 3 s: 2.999, 5.999, 8.999 s; proposal first, apply = one undo step.
+- 10-minute project, audio stage only (voice + music): plain mix 13.8 s (what the old export spent); with ducking + -14 LUFS + limiter 93.7 s (voice pre-pass, measuring pass, dry limiter pass, final pass). Peak working set of the browser's processes about 890-920 MB either way (flat: the audio is processed in 10 s pieces). The picture part of a 10-minute export is unchanged; the longer start is reported through `onAudioStatus`. Not run: a full 10-minute video export (the audio-stage figures are the regression check).
+
+### Files
+New: `src/video/audioModel.ts`, `audioEdit.ts`, `audioJobs.ts`, `useAudioMeters.ts`, `src/video/engine/{audioGraph,audioRender,denoiseJob,denoiseWorker}.ts`, `src/video/audio/streamMeter.ts`, `tools/unit/video-p4-audio.test.ts` (14 tests), `tools/e2e/video-audio-test.mjs` (added to `test:video`).
+Changed: `timeline.ts` (types, migration/sanitising, `audibleClips` honours solo), `videoStore.ts` (actions), `engine/audioEngine.ts` (graph, denoised clips, ducking, `levels()`, `prepare`, `master` getter), `exportVideo.ts` (mix via `prepareMix`, `loudness`, `exportLoudnessReport`, `onAudioStatus`; the old `mixPiece` is gone, `mixAudio` re-exported), `audio/ducking.ts`, `audio/loudness.ts`, `package.json`.

@@ -18,7 +18,7 @@
 // MP4 (H.264) is the default. Audio is AAC where the platform encodes it (Windows, macOS) and Opus otherwise. WebM
 // (VP9 + Opus) is the fallback when H.264 is unavailable.
 
-import { AudioBufferSink, AudioBufferSource, BufferTarget, CanvasSource, EncodedPacketSink, Mp4OutputFormat, Output, QUALITY_HIGH, StreamTarget, VideoSampleSink, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny'
+import { AudioBufferSource, BufferTarget, CanvasSource, EncodedPacketSink, Mp4OutputFormat, Output, QUALITY_HIGH, StreamTarget, VideoSampleSink, WebMOutputFormat, canEncodeAudio, canEncodeVideo } from 'mediabunny'
 import type { Input, StreamTargetChunk, VideoSample } from 'mediabunny'
 import type { Clip, VideoProject } from './timeline'
 import { audibleClips, clipsMissingMedia, contentEnd, isActive } from './timeline'
@@ -30,9 +30,9 @@ import { renderFrame } from './engine/render'
 import type { FrameInput } from './engine/render'
 import { exportUrl } from './engine/mediaSource'
 import { holdBackgroundFor, holdProxies } from './engine/background'
-import { animated, isPlainSpeed, sampleProp, srcAt } from './engine/animation'
-import { PcmSource } from './engine/pcmSource'
-import { ClipSpeedAudio } from './engine/speedAudio'
+import { isPlainSpeed, srcAt } from './engine/animation'
+import { prepareMix } from './engine/audioRender'
+import type { ExportLoudness, PreparedMix } from './engine/audioRender'
 
 /** The graphics context went away mid-export (GPU reset, driver update): the frames would be black. */
 export const CONTEXT_LOST_MESSAGE = 'The graphics context was lost during the export (the GPU was reset), so the remaining frames could not be drawn. Nothing was saved; export again.'
@@ -48,6 +48,8 @@ export interface ExportResult {
   container: ExportContainer
   videoCodec: string
   audioCodec: string | null
+  /** Phase 4: the measured loudness of the exported sound (null when the file has none). */
+  loudness?: ExportLoudness | null
 }
 
 export interface ExportOptions {
@@ -59,10 +61,11 @@ export interface ExportOptions {
   signal?: AbortSignal
   /** Stream the file here instead of keeping it in memory (desktop: a file main opened in the chosen place). */
   writable?: WritableStream<StreamTargetChunk>
+  /** Called with what the audio stage is doing before the picture starts (Reducing noise, Ducking, Measuring loudness). */
+  onAudioStatus?: (text: string) => void
 }
 
 const SAMPLE_RATE = 48000
-const AUDIO_CHUNK_SECONDS = 10
 
 export { audibleClips }
 
@@ -222,115 +225,23 @@ async function seekElement(c: Clip, time: number, fps: number): Promise<FrameInp
 }
 
 // ---------------------------------------------------------------- sound
+// The sound is engine/audioRender.ts: the same audio graph the preview plays through, rendered offline in 10 s pieces
+// (noise reduction, ducking, master and the loudness stage included). Re-exported here for the callers that always
+// imported it from the export module.
+export { mixAudio, newSpeedAudioState, closeSpeedAudio } from './engine/audioRender'
+export type { SpeedAudioState, ExportLoudness } from './engine/audioRender'
 
-interface AudioReader { buffers(from: number, to: number): AsyncIterable<{ buffer: AudioBuffer; timestamp: number }>; close(): void }
-
-/** A reader over one file's sound: mediabunny's decoder, or (a file it cannot read) the whole file through
- * decodeAudioData. Null when the file has no sound. */
-async function openAudio(url: string): Promise<AudioReader | null> {
-  try {
-    const input = inputFor(url)
-    const track = await input.getPrimaryAudioTrack()
-    if (track && (await track.canDecode())) {
-      const sink = new AudioBufferSink(track)
-      return { buffers: (a, b) => sink.buffers(a, b), close: () => input.dispose() }
-    }
-    input.dispose()
-    if (!track) return null
-  } catch { /* fall through to decodeAudioData */ }
-  try {
-    const bytes = await (await fetch(url)).arrayBuffer()
-    const buffer = await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(bytes)
-    return {
-      buffers: async function* () { yield { buffer, timestamp: 0 } },
-      close: () => {},
-    }
-  } catch {
-    return null
-  }
-}
-
-/** Per export: the speed-changed clips' sound renderers (by clip id) and their source readers (by URL). */
-export interface SpeedAudioState { clips: Map<string, ClipSpeedAudio>; sources: Map<string, PcmSource> }
-export const newSpeedAudioState = (): SpeedAudioState => ({ clips: new Map(), sources: new Map() })
-export function closeSpeedAudio(st: SpeedAudioState) { st.sources.forEach((p) => p.dispose()); st.sources.clear(); st.clips.clear() }
-
-const decodeWhole = async (url: string) => {
-  try { return await new OfflineAudioContext(2, 1, SAMPLE_RATE).decodeAudioData(await (await fetch(url)).arrayBuffer()) } catch { return null }
-}
-
-/** A clip's volume over [a, b) of the timeline as a gain curve (100 values a second), when it has volume keyframes. */
-function volumeCurve(c: Clip, a: number, b: number): Float32Array | null {
-  if (!animated(c, 'volume')) return null
-  const n = Math.max(2, Math.ceil((b - a) * 100) + 1)
-  const out = new Float32Array(n)
-  for (let i = 0; i < n; i++) out[i] = Math.max(0, Math.min(1, sampleProp(c, 'volume', a + ((b - a) * i) / (n - 1) - c.start, c.volume ?? 1)))
-  return out
-}
-
-/** Mix the audible clips over [t0, t1) of the timeline into one stereo 48 kHz buffer (silence where nothing plays). */
-async function mixPiece(clips: Clip[], readers: Map<string, AudioReader | null>, t0: number, t1: number, speed: SpeedAudioState = newSpeedAudioState()): Promise<AudioBuffer> {
-  const length = Math.max(1, Math.round((t1 - t0) * SAMPLE_RATE))
-  const here = clips.filter((c) => c.start < t1 && c.start + c.duration > t0)
-  if (!here.length) return new AudioBuffer({ length, numberOfChannels: 2, sampleRate: SAMPLE_RATE })
-  const ctx = new OfflineAudioContext(2, length, SAMPLE_RATE)
-  for (const c of here) {
-    const url = exportUrl(c)!
-    if (!readers.has(url)) readers.set(url, await openAudio(url))
-    const reader = readers.get(url)
-    if (!reader) continue
-    const a = Math.max(t0, c.start)
-    const b = Math.min(t1, c.start + c.duration)
-    if (b <= a) continue
-    const gain = ctx.createGain()
-    gain.gain.value = c.volume ?? 1
-    const curve = volumeCurve(c, a, b)
-    if (curve) gain.gain.setValueCurveAtTime(curve, a - t0, b - a)
-    gain.connect(ctx.destination)
-    if (!isPlainSpeed(c)) {
-      // speed-changed: the stretcher makes this span's samples (pitch kept unless the clip says otherwise)
-      let sa = speed.clips.get(c.id)
-      if (!sa) {
-        let pcm = speed.sources.get(url)
-        if (!pcm) { pcm = new PcmSource(url, decodeWhole); speed.sources.set(url, pcm) }
-        sa = new ClipSpeedAudio(c, pcm, SAMPLE_RATE)
-        speed.clips.set(c.id, sa)
-      }
-      const chans = await sa.render(a, b)
-      if (!chans || !chans[0]?.length) continue
-      const buf = new AudioBuffer({ length: chans[0].length, numberOfChannels: 2, sampleRate: SAMPLE_RATE })
-      buf.copyToChannel(chans[0] as Float32Array<ArrayBuffer>, 0)
-      buf.copyToChannel((chans[1] ?? chans[0]) as Float32Array<ArrayBuffer>, 1)
-      const src = ctx.createBufferSource()
-      src.buffer = buf
-      src.connect(gain)
-      src.start(a - t0)
-      continue
-    }
-    for await (const wb of reader.buffers(srcTime(c, a), srcTime(c, b))) {
-      // where this decoded piece's first sample lands in the mix, clipped to the part of the clip inside [t0, t1)
-      const when = c.start + (wb.timestamp - (c.in || 0)) - t0
-      let start = when
-      let offset = 0
-      if (start < a - t0) { offset = a - t0 - start; start = a - t0 }
-      const end = Math.min(when + wb.buffer.duration, b - t0)
-      if (end <= start) continue
-      const src = ctx.createBufferSource()
-      src.buffer = wb.buffer
-      src.connect(gain)
-      src.start(start, offset, end - start)
-    }
-  }
-  return ctx.startRendering()
-}
-
-/** Mix the audible clips into one stereo buffer the length of the export (tests and short previews). */
-export async function mixAudio(project: VideoProject, duration: number): Promise<AudioBuffer | null> {
-  const clips = audibleClips(project).filter((c) => c.start < duration)
-  if (!clips.length) return null
-  const readers = new Map<string, AudioReader | null>()
-  const speed = newSpeedAudioState()
-  try { return await mixPiece(clips, readers, 0, duration, speed) } finally { readers.forEach((r) => r?.close()); closeSpeedAudio(speed) }
+/** The loudness story of a finished export as short lines for the export sheet (null when there was no sound):
+ * `ok` = the target was reached within 0.5 LU and the true peak is under the ceiling. */
+export function exportLoudnessReport(r: Pick<ExportResult, 'loudness'>): { lines: string[]; ok: boolean; target: number | null } | null {
+  const l = r.loudness
+  if (!l) return null
+  const f = (v: number, unit: string) => (Number.isFinite(v) ? `${v.toFixed(1)} ${unit}` : 'silent')
+  const lines = [`Loudness ${f(l.after.integrated, 'LUFS')}${l.target != null ? ` (target ${l.target} LUFS)` : ''}`, `True peak ${f(l.after.truePeak, 'dBTP')}`, `Range ${l.after.lra.toFixed(1)} LU`]
+  if (l.target != null) lines.push(`Gain ${l.gainDb >= 0 ? '+' : ''}${l.gainDb.toFixed(1)} dB${l.limited ? ', limiter on' : ''}`)
+  if (l.note) lines.push(l.note)
+  const ok = l.target == null ? l.after.truePeak <= l.ceiling + 0.5 : Number.isFinite(l.after.integrated) && Math.abs(l.after.integrated - l.target) <= 0.5 && l.after.truePeak <= l.ceiling + 0.3
+  return { lines, ok, target: l.target }
 }
 
 async function fontsReady() {
@@ -385,16 +296,19 @@ export async function exportTimelineVideo(
 
   const footage = timeline.clips.filter((c) => c.kind === 'video' && !c.still && !!c.sourceUrl)
   const readers = new Map<string, FootageReader | null>()
-  const audioReaders = new Map<string, AudioReader | null>()
-  const speedAudio = newSpeedAudioState()
+  let mix: PreparedMix | null = null
   let audioUpTo = 0
   const addAudioUntil = async (t: number) => {
-    if (!audioSource) return
+    if (!audioSource || !mix) return
     while (audioUpTo < Math.min(t, duration) - 1e-9) {
-      const t1 = Math.min(duration, audioUpTo + AUDIO_CHUNK_SECONDS)
-      await audioSource.add(await mixPiece(sounding, audioReaders, audioUpTo, t1, speedAudio))
-      audioUpTo = t1
+      const piece = await mix.next()
+      if (!piece) break
+      await audioSource.add(piece)
+      audioUpTo += piece.length / SAMPLE_RATE
     }
+  }
+  if (audioSource) {
+    try { mix = await prepareMix(timeline, duration, { signal: options.signal, onStatus: options.onAudioStatus }) } catch (err) { await output.cancel().catch(() => {}); throw err }
   }
 
   // filmstrips, waveforms and proxies wait while the export runs (they would take decoder and GPU time from it)
@@ -405,7 +319,7 @@ export async function exportTimelineVideo(
       if (options.signal?.aborted) throw new DOMException('Export cancelled', 'AbortError')
       const t = i / fps
       // the sound for the next 10 s goes in as the picture reaches it
-      if (t >= audioUpTo) await addAudioUntil(t + AUDIO_CHUNK_SECONDS)
+      if (t >= audioUpTo) await addAudioUntil(t + 10)
       const frames = new Map<string, FrameInput>()
       const samples: FootageFrame[] = []
       try {
@@ -454,8 +368,7 @@ export async function exportTimelineVideo(
     releaseBackground()
     releaseProxies()
     readers.forEach((r) => r?.input.dispose())
-    audioReaders.forEach((r) => r?.close())
-    closeSpeedAudio(speedAudio)
+    mix?.dispose()
     comp.dispose()
     comp.gl.getExtension('WEBGL_lose_context')?.loseContext()
     canvas.width = canvas.height = 0
@@ -471,6 +384,7 @@ export async function exportTimelineVideo(
     container: codecs.container,
     videoCodec: codecs.video === 'avc' ? 'H.264' : codecs.video.toUpperCase(),
     audioCodec: audioSource ? (codecs.audio === 'aac' ? 'AAC' : 'Opus') : null,
+    loudness: mix?.loudness() ?? null,
   }
 }
 
