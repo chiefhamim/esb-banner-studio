@@ -88,6 +88,7 @@ import {
 } from './siteApi'
 import { parseArticleDocument } from './extract'
 import { fmtTime, useClockFormat } from '../ui/time'
+import { UserAvatar, useAvatarSync } from './avatar'
 
 if (typeof window !== 'undefined') {
   // Test seam: lets the Playwright extraction suite run page fixtures through the real extractor.
@@ -179,6 +180,7 @@ export function EditorialWorkspace() {
   const draft = useEditorialStore((s) => s.draft)
   const siteStatus = useEditorialStore((s) => s.siteStatus)
   const staffSession = useEditorialStore((s) => s.staffSession)
+  useAvatarSync() // the signed-in editor's profile picture (esbpowerline.com profiles.avatar_url)
   const liveArticles = useEditorialStore((s) => s.liveArticles)
   const slugStatus = useEditorialStore((s) => s.slugStatus)
   const translationProvider = useEditorialStore((s) => s.translationProvider)
@@ -1283,7 +1285,7 @@ export function EditorialWorkspace() {
         </button>
         <button type="button" className={'ed-account' + (staffSession ? ' in' : '')} onClick={() => setShowLoginModal(true)} aria-label={staffSession ? 'Staff sign-in' : 'Staff sign-in'} data-tip={staffSession ? `${staffSession.name} · ${staffSession.email} — account and connection check` : 'Sign in with your esbpowerline.com newsroom account'}>
           {staffSession
-            ? <><span className="ed-avatar">{(staffSession.name || staffSession.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span></>
+            ? <UserAvatar name={staffSession.name || staffSession.email} className="ed-avatar" />
             : <><Icon name="user" size={14} /><span className="ed-account-label">Sign in</span></>}
         </button>
         <button type="button" className="btn primary" onClick={openPublish} disabled={!draft.headline.trim()} data-tip="Review the checklist and publish to esbpowerline.com">

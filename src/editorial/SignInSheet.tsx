@@ -14,6 +14,7 @@ import { FacebookDialog } from './FacebookDialog'
 import { getFacebook, verifyFacebook } from './facebook'
 import siteIcon from '../assets/images/site/site-icon.png'
 import { fmtTime, useClockFormat } from '../ui/time'
+import { AvatarPicker, UserAvatar } from './avatar'
 
 /** The role colours esbpowerline.com uses (lib/constants.ts ROLES), so the badge matches the site's own RoleBadge. */
 const ROLE_COLOR: Record<string, string> = { SUPER_ADMIN: '#ff3b6f', ADMIN: '#8b5cf6', EDITOR: '#3b82f6', AUTHOR: '#10b981', CONTRIBUTOR: '#f59e0b' }
@@ -34,6 +35,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const [busy, setBusy] = useState(false)
   const [opening, setOpening] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [picking, setPicking] = useState(false)
   const [checks, setChecks] = useState<ConnectionCheck[] | null>(null)
   const [checking, setChecking] = useState(false)
   const emailRef = useRef<HTMLInputElement>(null)
@@ -109,7 +111,6 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   }
   const failed = checks?.filter((c) => c.status === 'fail').length ?? 0
 
-  const initials = (session?.name || session?.email || '?').split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')
   const expires = session?.expiresAt ? new Date(session.expiresAt * 1000) : null
 
   return createPortal(
@@ -150,12 +151,17 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
         ) : (
           <div className="acct">
             <header className="acct-head">
-              <div className="signin-avatar" aria-hidden>{initials}</div>
+              <button type="button" className="signin-avatar av-btn" onClick={() => setPicking((v) => !v)} aria-expanded={picking} aria-label="Change profile picture" data-tip="Change profile picture">
+                <UserAvatar name={session.name || session.email} />
+                <span className="av-edit" aria-hidden><Icon name="edit" size={11} /></span>
+              </button>
               <div className="acct-id">
                 <div className="acct-name"><h2>{session.name}</h2><span className="acct-role" style={{ ['--role' as string]: (session.role && ROLE_COLOR[session.role]) || '#6b7280' } as React.CSSProperties}>{session.role ? ROLE_LABEL[session.role] ?? session.role : 'Staff'}</span></div>
                 <p>{session.email}</p>
               </div>
             </header>
+
+            {picking && <AvatarPicker onToast={onToast} onDone={() => setPicking(false)} />}
 
             <section className="acct-sec" aria-label="Connections">
               <h3>Connections</h3>

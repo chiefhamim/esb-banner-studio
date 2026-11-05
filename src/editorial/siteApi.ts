@@ -298,8 +298,10 @@ async function sessionFromTokens(t: TokenResponse, fallbackEmail: string): Promi
   type ProfileRow = { role?: string | null; status?: string | null; full_name?: string | null }
   let profile: ProfileRow | null = null
   try {
-    // RLS on profiles lets a signed-in account read its own row and nothing else (migration 0018).
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role,status,full_name`, {
+    // RLS on profiles lets a signed-in account read its own row and nothing else (migration 0018). `select=*`, not a
+    // column list: the live table has no `status` column, and naming it made PostgREST refuse the whole read (400), so
+    // the role and name silently fell back to the auth metadata. A status column, if the site adds one, is still read.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=*`, {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${t.access_token}`, Accept: 'application/json' },
     })
     if (res.ok) profile = ((await res.json()) as ProfileRow[])[0] ?? null
