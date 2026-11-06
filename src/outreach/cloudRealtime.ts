@@ -26,6 +26,10 @@ export interface RealtimeDeps {
   onPoke: (tables: string[]) => void
   WebSocketImpl?: typeof WebSocket
   now?: () => number
+  /** Tables to watch (default: Outreach's). Editorial's Published list watches Article with its own channel. */
+  tables?: readonly string[]
+  /** Channel name (default 'outreach-sync'). */
+  channel?: string
 }
 
 export interface RealtimeHandle {
@@ -44,12 +48,12 @@ export function realtimeUrl(base: string, anonKey: string): string {
   return `${base.replace(/^http/, 'ws').replace(/\/$/, '')}/realtime/v1/websocket?apikey=${encodeURIComponent(anonKey)}&vsn=1.0.0`
 }
 
-export function joinPayload(accessToken: string) {
+export function joinPayload(accessToken: string, tables: readonly string[] = REALTIME_TABLES) {
   return {
     config: {
       broadcast: { self: false },
       presence: { key: '' },
-      postgres_changes: REALTIME_TABLES.map((table) => ({ event: '*', schema: 'public', table })),
+      postgres_changes: tables.map((table) => ({ event: '*', schema: 'public', table })),
     },
     access_token: accessToken,
   }
@@ -58,7 +62,8 @@ export function joinPayload(accessToken: string) {
 export function createRealtime(deps: RealtimeDeps): RealtimeHandle {
   const WS = deps.WebSocketImpl ?? (typeof WebSocket !== 'undefined' ? WebSocket : undefined)
   const now = deps.now ?? (() => Date.now())
-  const topic = 'realtime:outreach-sync'
+  const topic = `realtime:${deps.channel ?? 'outreach-sync'}`
+  const tables = deps.tables ?? REALTIME_TABLES
   let ws: WebSocket | null = null
   let joined = false
   let confirmed = false
@@ -140,7 +145,7 @@ export function createRealtime(deps: RealtimeDeps): RealtimeHandle {
     sock.onopen = () => {
       ref++
       joinRef = String(ref)
-      sock.send(JSON.stringify({ topic, event: 'phx_join', payload: joinPayload(t), ref: joinRef, join_ref: joinRef }))
+      sock.send(JSON.stringify({ topic, event: 'phx_join', payload: joinPayload(t, tables), ref: joinRef, join_ref: joinRef }))
       hb = setInterval(() => send('heartbeat', {}, 'phoenix'), HEARTBEAT_MS)
     }
     sock.onmessage = (e: MessageEvent) => onMessage(typeof e.data === 'string' ? e.data : '')

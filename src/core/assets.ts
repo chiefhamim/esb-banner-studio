@@ -11,6 +11,7 @@ import oswald500 from '../assets/fonts/oswald-500.woff2?url'
 import oswald700 from '../assets/fonts/oswald-700.woff2?url'
 import bengali600 from '../assets/fonts/bengali-600.woff2?url'
 import bengali700 from '../assets/fonts/bengali-700.woff2?url'
+import bnDigits600 from '../assets/fonts/bn/noto-sans-bengali-bengali-600-normal.woff2?url'
 
 let fontsReady: Promise<void> | null = null
 
@@ -29,6 +30,9 @@ export function loadFonts(): Promise<void> {
         new FontFace('Oswald', `url(${oswald500}) format('woff2')`, { weight: '500', style: 'normal' }),
         new FontFace('Oswald', `url(${oswald700}) format('woff2')`, { weight: '700', style: 'normal' }),
         new FontFace('Hind Siliguri', `url(${bengali600}) format('woff2')`, { weight: '600', style: 'normal' }),
+        // Hind Siliguri 600 draws the Bangla digit one (U+09E7) tiny and raised, so it reads as a stray mark: its ten digits
+        // come from Noto Sans Bengali 600 (added after the main face, so it wins for that range). Mirrors src/fonts.css.
+        new FontFace('Hind Siliguri', `url(${bnDigits600}) format('woff2')`, { weight: '600', style: 'normal', unicodeRange: 'U+09E6-09EF' }),
         new FontFace('Hind Siliguri', `url(${bengali700}) format('woff2')`, { weight: '700', style: 'normal' }),
       ]
       await Promise.all(faces.map((f) => f.load()))

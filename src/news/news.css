@@ -40,6 +40,11 @@
 .nw-yeasin:hover { text-decoration: underline; text-underline-offset: 2px; }
 .nw-head .nw-when > svg:first-child { color: var(--nw-teal); }
 .nw-check { min-width: 112px; justify-content: center; font-variant-numeric: tabular-nums; }
+/* Check now wears EnergyWatch's teal, the colour of "Watch" in the name beside it */
+.topbar .btn.primary.nw-check { color: #fff; background: var(--nw-teal); border-color: color-mix(in srgb, var(--nw-teal-ink) 60%, transparent); }
+.topbar .btn.primary.nw-check:hover:not(:disabled) { background: var(--nw-teal-ink); }
+:root[data-theme='dark'] .topbar .btn.primary.nw-check { color: #042f2e; background: var(--nw-teal); border-color: rgba(255, 255, 255, .14); }
+:root[data-theme='dark'] .topbar .btn.primary.nw-check:hover:not(:disabled) { background: var(--nw-teal-ink); }
 .nw-check.is-busy > svg { animation: nw-spin .9s linear infinite; }
 .nw-check:disabled { opacity: 1; }
 @keyframes nw-spin { to { transform: rotate(360deg); } }
@@ -52,8 +57,9 @@
 .nw-left { border-right: 1px solid var(--card-line); }
 .nw-right { border-left: 1px solid var(--card-line); }
 .nw-left-scroll, .nw-right-scroll { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
-.nw-left-scroll { gap: 18px; padding: 14px 8px 16px 12px; }
-.nw-right-scroll { gap: 10px; padding: 12px 8px 12px 12px; }
+.nw-left-scroll { gap: 18px; padding: 14px 0 16px 12px; }
+/* the 12px scrollbar gutter is the right-hand margin, so content sits 12px from both edges of a column */
+.nw-right-scroll { gap: 10px; padding: 12px 0 12px 12px; }
 
 /* section labels: the app's small capitals */
 .nw-sec { display: flex; flex-direction: column; gap: 6px; }
@@ -99,7 +105,11 @@
 
 /* ---------------------------------------------------------------- centre */
 .nw-center { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; padding: 12px 16px; }
-.nw-toolbar { display: flex; align-items: center; gap: 8px; flex: none; }
+.nw-toolbar { position: relative; display: flex; align-items: center; gap: 8px; flex: none; }
+/* the check's progress: a slim track in the gap under the toolbar, so it takes no room and nothing covers it */
+.nw-progress { position: absolute; left: 0; right: 0; bottom: -7px; height: 3px; overflow: hidden; background: color-mix(in srgb, var(--nw-teal) 14%, transparent); border-radius: var(--r-pill); pointer-events: none; }
+.nw-progress > span { display: block; width: max(6%, var(--p)); height: 100%; background: linear-gradient(90deg, #14b8a6, #0e7490); border-radius: inherit; transition: width .35s cubic-bezier(.16, 1, .3, 1); }
+:root[data-theme='dark'] .nw-progress > span { background: linear-gradient(90deg, #5eead4, #2dd4bf); }
 .nw-search { position: relative; display: flex; align-items: center; flex: 1 1 auto; max-width: 520px; min-width: 200px; }
 .nw-search > svg { position: absolute; left: 11px; color: var(--text-3); pointer-events: none; }
 .nw-search input[type='search'] { width: 100%; height: 32px; padding: 0 34px; }
@@ -121,11 +131,13 @@
 .nw-bar { position: absolute; left: 0; bottom: 0; z-index: 2; height: 2px; width: var(--p); background: var(--nw-teal); border-radius: 0 2px 2px 0; transition: width .3s var(--ease); }
 
 /* the sheet: one white card holding the groups */
-.nw-sheet { position: relative; flex: 1 1 auto; min-height: 0; margin-right: -12px; padding-right: 6px; overflow-y: auto; scrollbar-gutter: stable; scroll-padding-top: 44px; }
-.nw-sheet-bar { position: sticky; top: 0; display: block; margin-bottom: -2px; }
+/* the list: 4px of room each side so a card's hover shadow is never cut by the scroller; the scrollbar sits in the
+   centre column's own padding */
+.nw-sheet { position: relative; flex: 1 1 auto; min-height: 0; margin: 0 -16px 0 -4px; padding: 0 4px; overflow-y: auto; scrollbar-gutter: stable; scroll-padding-top: 44px; }
+.nw-sheet[data-top] { overflow-anchor: none; }
 .nw-group + .nw-group { margin-top: 2px; }
 /* time headings: readable at a glance (ink, not the faint caption grey), a count chip, a hairline to the edge */
-.nw-group-h { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 2px 8px; font: 700 12px/16px var(--font-ui); letter-spacing: var(--track-chip); text-transform: uppercase; color: var(--text);
+.nw-group-h { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 0 8px; font: 700 12px/16px var(--font-ui); letter-spacing: var(--track-chip); text-transform: uppercase; color: var(--text);
   background: var(--bg-0); }
 .nw-group-h::after { content: ''; flex: 1 1 auto; height: 1px; margin-left: 4px; background: var(--card-line); }
 .nw-group-h small { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 7px; font: 700 11px/1 var(--font-ui); letter-spacing: 0; color: var(--text-2); background: var(--fill-hover); border-radius: var(--r-pill); font-variant-numeric: tabular-nums; }
@@ -139,7 +151,8 @@
 .nw-row { position: relative; display: flex; align-items: center; gap: 8px; overflow: hidden; background: var(--card); border-radius: var(--r-3); box-shadow: var(--card-shadow);
   transition: background-color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring); }
 .nw-row:hover { background: color-mix(in srgb, var(--card) 96%, var(--text) 4%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent), 0 2px 8px rgba(16, 18, 28, .06); }
-.nw-row.on { background: color-mix(in srgb, var(--nw-teal) 6%, var(--card)); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--nw-teal) 60%, transparent), 0 2px 10px rgba(16, 18, 28, .06); }
+/* the ring sits INSIDE the card's edge: drawn outside, the sticky time heading covered the first card's top edge */
+.nw-row.on { background: color-mix(in srgb, var(--nw-teal) 6%, var(--card)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--nw-teal) 70%, transparent), 0 2px 10px rgba(16, 18, 28, .06); }
 /* what the last check added: a soft teal glow from the right and a corner ribbon, as on EnergyWatch / the phone */
 .nw-row.is-new:not(.on) { background: linear-gradient(270deg, color-mix(in srgb, var(--nw-teal) 14%, transparent) 0%, color-mix(in srgb, var(--nw-teal) 5%, transparent) 38%, transparent 70%), var(--card); }
 .nw-ribbon { position: absolute; z-index: 1; right: -26px; bottom: 11px; width: 92px; padding: 2px 0; transform: rotate(-45deg); text-align: center; font: 800 9px/1.3 var(--font-ui); letter-spacing: .12em; text-transform: uppercase;
@@ -291,6 +304,9 @@
 
 /* ---------------------------------------------------------------- scrollbars: no arrow buttons, a slim rounded thumb (as the Editorial
    launcher lists), so a rounded container never cuts them */
+/* the app sets scrollbar-width: thin everywhere, and while it is set Chromium ignores every ::-webkit-scrollbar rule (so
+   Windows' thin bar with its arrow buttons showed): these scrollers opt out, as Editorial's launcher lists do */
+.news-workspace :is(.nw-sheet, .nw-left-scroll, .nw-right-scroll), .nw-portals { scrollbar-width: auto; scrollbar-color: auto; }
 .news-workspace :is(.nw-sheet, .nw-left-scroll, .nw-right-scroll)::-webkit-scrollbar, .nw-portals::-webkit-scrollbar { width: 12px; }
 .news-workspace :is(.nw-sheet, .nw-left-scroll, .nw-right-scroll)::-webkit-scrollbar-button, .nw-portals::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 .news-workspace :is(.nw-sheet, .nw-left-scroll, .nw-right-scroll)::-webkit-scrollbar-track, .nw-portals::-webkit-scrollbar-track { background: transparent; }

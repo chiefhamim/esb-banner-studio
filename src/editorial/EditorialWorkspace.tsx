@@ -11,6 +11,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import './editorial.css'
 import { useEditorialStore } from './editorialStore'
+import { startPublishedLive } from './publishedLive'
 import { BannerCard } from './BannerCard'
 import { bodyForPublish, richOf } from './richBody'
 import { RichBodyEditor } from './RichBodyEditor'
@@ -404,6 +405,10 @@ export function EditorialWorkspace() {
       void syncFromLiveFeed()
     }
   }, [checkConnection, syncFromLiveFeed, liveArticles.length])
+  // Published stays live: a story published, updated or taken down anywhere (this PC, the phone, the CMS) re-reads the list
+  useEffect(() => {
+    startPublishedLive(() => { void useEditorialStore.getState().syncFromLiveFeed() }, () => useEditorialStore.getState().staffSession)
+  }, [])
 
   // Toast auto-clear
   const showToast = useCallback((msg: string) => {
@@ -1174,7 +1179,7 @@ export function EditorialWorkspace() {
             {filteredLiveArticles.length === 0 ? (
               <p className="hint ed-feed-empty">{liveArticles.length ? 'No published stories match that filter.' : 'No stories loaded from esbpowerline.com yet. Sync to fetch the latest.'}</p>
             ) : (
-              filteredLiveArticles.slice(0, 50).map((art) => {
+              filteredLiveArticles.map((art) => {
                 const cat = CATEGORIES.find((c) => c.name.toLowerCase() === art.category.trim().toLowerCase() || c.chip.toLowerCase() === art.category.trim().toLowerCase() || c.id === art.category.trim())
                 return (
                 <div key={art.slug} className="ed-feed-item" style={cat ? ({ '--cat-accent': cat.accent, '--cat-band': cat.band, '--cat-ink': cat.footer } as CSSProperties) : undefined}>

@@ -15,6 +15,7 @@ import { syncArticlePhotosToBanner, importImageToBanner } from './automation'
 import { useStore } from '../store'
 import { useShellStore } from '../shell/shellStore'
 import { autoDesk } from './deskFlag'
+import { fetchPublishedFromDatabase } from './publishedLive'
 import {
   probeSite,
   fetchLiveArticles,
@@ -261,6 +262,13 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
   },
 
   syncFromLiveFeed: async () => {
+    // the site's database first (what is live this second, as ESB Studio Phone reads it); the public feed only when the
+    // database does not answer, because the CDN serves the feed up to ~15 minutes old
+    const fromDb = await fetchPublishedFromDatabase(get().staffSession)
+    if (fromDb && fromDb.length > 0) {
+      set({ liveArticles: fromDb, siteCategories: [...new Set(fromDb.map((a) => a.category))] })
+      return
+    }
     const { articles, categories } = await fetchLiveArticles()
     if (articles.length > 0) {
       set({ liveArticles: articles, siteCategories: categories })

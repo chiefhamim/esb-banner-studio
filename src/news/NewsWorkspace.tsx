@@ -240,6 +240,16 @@ export function NewsWorkspace() {
     }
   })
   useEffect(() => { const h = (e: KeyboardEvent) => keyRef.current(e); window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h) }, [])
+  // At the top of the list, headlines a check adds above must show, not be scrolled out of sight by the browser's scroll
+  // anchoring (which keeps the old first row in place). Lower down, anchoring stays on so reading is not disturbed.
+  useEffect(() => {
+    const el = sheetRef.current
+    if (!el) return
+    const mark = () => el.toggleAttribute('data-top', el.scrollTop < 8)
+    mark()
+    el.addEventListener('scroll', mark, { passive: true })
+    return () => el.removeEventListener('scroll', mark)
+  }, [])
 
   // ---- menus
   const headlineItems = (x: WatchItem | null): MenuEntry[] => [
@@ -360,6 +370,8 @@ export function NewsWorkspace() {
             {portal && <button type="button" className="nw-filter" onClick={() => setPortal(null)} data-tip="Show every portal"><PortalIcon name={portal} size={12} />{portal}<Icon name="x" size={12} /></button>}
             <span className="nw-grow" />
             {freshCount > 0 && <button type="button" className="btn nw-markall" onClick={markAll} data-tip="Mark all as read"><Icon name="checkDouble" size={15} /><b>{freshCount}</b> new</button>}
+            {/* the check's progress: a track under the toolbar (inside the list, the sticky time headings covered it) */}
+            {busy && !range && <span className="nw-progress" role="progressbar" aria-label="Reading the feeds" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span style={{ '--p': `${pct}%` } as React.CSSProperties} /></span>}
           </div>
           {range && (
             <div className="nw-range">
@@ -373,7 +385,6 @@ export function NewsWorkspace() {
           )}
 
           <div ref={sheetRef} className="nw-sheet">
-            {busy && !range && <span className="nw-bar nw-sheet-bar" style={{ '--p': `${pct}%` } as React.CSSProperties} aria-hidden />}
             {groups.map((g) => (
               <section key={g.label} className={'nw-group' + (g.label.startsWith('New') ? ' is-new' : '')} aria-label={g.label}>
                 <h5 className="nw-group-h"><span>{g.label}</span><small>{g.items.length}</small></h5>

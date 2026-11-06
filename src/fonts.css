@@ -11,6 +11,10 @@
    SIL Open Font License 1.1 — licences beside the files in assets/fonts/bn/. Loaded on first use. */
 @font-face { font-family: 'Hind Siliguri'; font-weight: 400; font-display: swap; src: url('./assets/fonts/bn/hind-siliguri-bengali-400-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Hind Siliguri'; font-weight: 500; font-display: swap; src: url('./assets/fonts/bn/hind-siliguri-bengali-500-normal.woff2') format('woff2'); }
+/* Hind Siliguri 400-600 draw the Bangla digit one (U+09E7) tiny and raised (it reads as a stray mark at text sizes; 700 is fine):
+   the ten Bangla digits come from Noto Sans Bengali instead. Declared after the main faces so they win for that range. */
+@font-face { font-family: 'Hind Siliguri'; font-weight: 400 500; font-display: swap; src: url('./assets/fonts/bn/noto-sans-bengali-bengali-400-normal.woff2') format('woff2'); unicode-range: U+09E6-09EF; }
+@font-face { font-family: 'Hind Siliguri'; font-weight: 600; font-display: swap; src: url('./assets/fonts/bn/noto-sans-bengali-bengali-600-normal.woff2') format('woff2'); unicode-range: U+09E6-09EF; }
 @font-face { font-family: 'Noto Sans Bengali'; font-weight: 400; font-display: swap; src: url('./assets/fonts/bn/noto-sans-bengali-bengali-400-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Noto Sans Bengali'; font-weight: 600; font-display: swap; src: url('./assets/fonts/bn/noto-sans-bengali-bengali-600-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Noto Serif Bengali'; font-weight: 400; font-display: swap; src: url('./assets/fonts/bn/noto-serif-bengali-bengali-400-normal.woff2') format('woff2'); }
