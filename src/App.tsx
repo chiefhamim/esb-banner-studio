@@ -79,6 +79,12 @@ export default function App() {
       root.setProperty('--cat-ink', '#ffffff')
       return
     }
+    // News is EnergyWatch's desk: its teal marks selection there (Yeasin's app: #0d9488, dark #2dd4bf)
+    if (workspace === 'news') {
+      root.setProperty('--cat', theme === 'dark' ? '#2dd4bf' : '#0d9488')
+      root.setProperty('--cat-ink', theme === 'dark' ? '#042f2e' : '#ffffff')
+      return
+    }
     const c = CATEGORIES.find((x) => x.id === categoryId)
     if (c) {
       root.setProperty('--cat', c.accent)

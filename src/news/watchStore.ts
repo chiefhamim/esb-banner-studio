@@ -5,6 +5,8 @@
 //   - Feeds are fetched through the desktop bridge (window.esb.fetchUrl → electron/net-guard.cjs), as the Wire does: the
 //     renderer's own fetch would hit CORS. At most 6 at a time, the main process's own limit (MAX_FETCHES).
 //   - Its data lives under esb-banner-studio/news/... (the phone keeps its own under esb-phone/watch/...).
+//   - A check is shown live: headlines are merged into the list as each portal answers (at most every 250 ms), and
+//     `progress` counts the portals read, so the desk fills while the check runs instead of all at once at the end.
 // Bing News feeds are still left out (Bing answers with a web page, not RSS; every portal it covers has another feed).
 // Google News links are encoded and open in the browser; a portal's own copy of the same story wins.
 // Tenders, press releases and research stay on the office server (they need a computer that is always on).
@@ -127,6 +129,8 @@ interface WatchState {
   /** headlines the latest refresh added (empty after the very first check): they carry the NEW tag until the next refresh */
   newKeys: string[]
   running: boolean
+  /** portals read so far in the running check (null when no check runs) */
+  progress: { done: number; total: number } | null
   setPrefs: (p: Partial<WatchPrefs>) => void
   resetPrefs: () => void
   hide: (key: string) => void
@@ -145,6 +149,7 @@ export const useWatch = create<WatchState>((set, get) => {
     prefs: load(PREFS_KEY, DEFAULT_PREFS),
     ...initial,
     running: false,
+    progress: null,
     setPrefs: (p) => { const prefs = { ...get().prefs, ...p }; save(PREFS_KEY, prefs); set({ prefs }) },
     resetPrefs: () => { save(PREFS_KEY, DEFAULT_PREFS); set({ prefs: DEFAULT_PREFS }) },
     hide: (key) => { set({ hidden: [...get().hidden, key].slice(-2000) }); persist() },
@@ -164,6 +169,19 @@ export const useWatch = create<WatchState>((set, get) => {
       const states: Record<number, FeedState> = { ...get().feeds }
       const found: WatchItem[] = []
       let failed = 0
+      const prev = get().items
+      let done = 0
+      let flushAt = 0
+      let timer: ReturnType<typeof setTimeout> | null = null
+      // the list as it stands with what has come in so far; the first check of all marks nothing new
+      const publish = () => {
+        timer = null
+        flushAt = Date.now()
+        const m = mergeFound(prev, found, started)
+        set({ items: m.items, feeds: { ...states }, newKeys: prev.length ? m.addedKeys : [], progress: { done, total: feeds.length } })
+      }
+      const soon = () => { if (!timer) timer = setTimeout(publish, Math.max(0, 250 - (Date.now() - flushAt))) }
+      set({ progress: { done: 0, total: feeds.length } })
       await pool(feeds, CONCURRENCY, async (f) => {
         try {
           const list = parseFeed(await fetchText(f.url))
@@ -181,38 +199,45 @@ export const useWatch = create<WatchState>((set, get) => {
           failed++
           states[f.id] = { ok: false, at: Date.now(), count: 0, error: e instanceof Error ? e.message : String(e) }
         }
+        done++
+        soon()
       })
-      // Merge: one row per headline per portal. A direct link beats a Google one for the same story.
-      const prev = get().items
-      const byTwin = new Map<string, WatchItem>()
-      const keys = new Set<string>()
-      for (const x of prev) { byTwin.set(x.source + '\n' + norm(x.title), x); keys.add(x.key) }
-      let added = 0
-      const addedKeys: string[] = []
-      for (const x of found.sort((a, b) => (a.published || '').localeCompare(b.published || ''))) {
-        const twin = x.source + '\n' + norm(x.title)
-        const had = byTwin.get(twin)
-        if (had) {
-          if (had.google && !x.google) byTwin.set(twin, { ...had, link: x.link, google: false })
-          continue
-        }
-        if (keys.has(x.key)) continue
-        keys.add(x.key)
-        byTwin.set(twin, x)
-        addedKeys.push(x.key)
-        added++
-      }
-      const cutoff = started - 7 * 24 * 3600_000
-      const items = [...byTwin.values()]
-        .filter((x) => (x.published ? Date.parse(x.published) : x.foundAt) >= cutoff)
-        .sort((a, b) => (b.published || '').localeCompare(a.published || '') || b.foundAt - a.foundAt)
-        .slice(0, ITEM_CAP)
-      set({ items, feeds: states, lastRun: started, running: false, seenAt: prev.length ? get().seenAt : started, newKeys: prev.length ? addedKeys : [] })
+      if (timer) clearTimeout(timer)
+      const { items, addedKeys } = mergeFound(prev, found, started)
+      const added = addedKeys.length
+      set({ items, feeds: states, lastRun: started, running: false, progress: null, seenAt: prev.length ? get().seenAt : started, newKeys: prev.length ? addedKeys : [] })
       persist()
       return { checked: feeds.length, added, failed }
     },
   }
 })
+
+/** Merge a check's finds into the list: one row per headline per portal (a direct link beats a Google one for the same
+ *  story), a week kept, newest first. `addedKeys` = rows that were not in `prev`. */
+export function mergeFound(prev: WatchItem[], found: WatchItem[], started: number): { items: WatchItem[]; addedKeys: string[] } {
+  const byTwin = new Map<string, WatchItem>()
+  const keys = new Set<string>()
+  for (const x of prev) { byTwin.set(x.source + '\n' + norm(x.title), x); keys.add(x.key) }
+  const addedKeys: string[] = []
+  for (const x of [...found].sort((a, b) => (a.published || '').localeCompare(b.published || ''))) {
+    const twin = x.source + '\n' + norm(x.title)
+    const had = byTwin.get(twin)
+    if (had) {
+      if (had.google && !x.google) byTwin.set(twin, { ...had, link: x.link, google: false })
+      continue
+    }
+    if (keys.has(x.key)) continue
+    keys.add(x.key)
+    byTwin.set(twin, x)
+    addedKeys.push(x.key)
+  }
+  const cutoff = started - 7 * 24 * 3600_000
+  const items = [...byTwin.values()]
+    .filter((x) => (x.published ? Date.parse(x.published) : x.foundAt) >= cutoff)
+    .sort((a, b) => (b.published || '').localeCompare(a.published || '') || b.foundAt - a.foundAt)
+    .slice(0, ITEM_CAP)
+  return { items, addedKeys }
+}
 
 /** Rows to show: the kinds switched on, not hidden, and (optionally) a search and a category filter. */
 export function visibleItems(items: WatchItem[], hidden: string[], prefs: WatchPrefs, q: string, cat: 'all' | WatchCat): WatchItem[] {
