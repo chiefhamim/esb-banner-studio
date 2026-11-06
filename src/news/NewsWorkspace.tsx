@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { useShellStore } from '../shell/shellStore'
+import { useStore } from '../store'
 import { Icon } from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { Dialog, IconButton, MenuBar, MenuButton, Seg, Toggle } from '../ui/controls'
@@ -113,6 +114,7 @@ export function NewsWorkspace() {
   const newKeys = useWatch((s) => s.newKeys)
   const feeds = useWatch((s) => s.feeds)
   const range = useRange((s) => s.range)
+  const theme = useStore((s) => s.theme)
   useClockFormat()
   const tickNow = useNow()
   const [q, setQ] = useState('')
@@ -282,6 +284,10 @@ export function NewsWorkspace() {
       { divider: true },
       { label: 'Search headlines', icon: 'search', shortcut: '/', onClick: () => searchRef.current?.focus() },
       { label: 'Clear filters', icon: 'x', disabled: !needle && cat === 'all' && !portal, onClick: clearFilters },
+      { divider: true },
+      { heading: 'Appearance' },
+      { label: 'Light', icon: 'sun', checked: theme !== 'dark', onClick: () => useStore.getState().setTheme('light') },
+      { label: 'Dark', icon: 'moon', checked: theme === 'dark', onClick: () => useStore.getState().setTheme('dark') },
     ] },
     { label: 'Headline', items: headlineItems(selected) },
   ]
