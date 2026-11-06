@@ -305,7 +305,8 @@ export async function listModels(provider: AiProviderId, apiKey: string, signal?
   try {
     let out: AiModelInfo[] = []
     if (provider === 'gemini') {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}&pageSize=200`, { signal: t.signal })
+      // the key goes in a header, never the URL (URLs end up in logs, proxies and error text)
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key }, signal: t.signal })
       if (!res.ok) throw new Error(await errorText(res))
       const data = await res.json() as { models?: { name?: string; supportedGenerationMethods?: string[] }[] }
       const ids = (data.models ?? [])
@@ -422,9 +423,9 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
   const model = req.model
   try {
     if (provider === 'gemini') {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         signal: t.signal,
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: system }] },
