@@ -6,8 +6,10 @@
 //     renderer's own fetch would hit CORS. At most 6 at a time, the main process's own limit (MAX_FETCHES).
 //   - Its data lives under esb-banner-studio/news/... (the phone keeps its own under esb-phone/watch/...).
 //   - A check is shown live: headlines are merged into the list as each portal answers (at most every 250 ms), and
-//     `progress` counts the portals read, so the desk fills while the check runs instead of all at once at the end.
-// Bing News feeds are still left out (Bing answers with a web page, not RSS; every portal it covers has another feed).
+//     `progress` counts the feeds read, so the desk fills while the check runs instead of all at once at the end.
+//   - Every feed EnergyWatch has switched on is read, Bing News included (77 feeds from 53 portals): Bing answers this
+//     computer with RSS (checked 2026-11-06), it only sent the phone a web page. Bing's click-through links are unpacked
+//     to the article's own address, so its stories can start a story like a portal's own feed.
 // Google News links are encoded and open in the browser; a portal's own copy of the same story wins.
 // Tenders, press releases and research stay on the office server (they need a computer that is always on).
 import { create } from 'zustand'
@@ -53,11 +55,14 @@ const TIMEOUT_MS = 20000
 const load = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(k); return v ? { ...d, ...JSON.parse(v) } : d } catch { return d } }
 const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* storage full: the list is rebuilt on the next check */ } }
 
-/** Bing News answers the phone with a web page, not RSS: those feeds are left out here (see the header). */
+/** A feed this computer reads: every one EnergyWatch has switched on, Bing News included (see the header). The name is
+ *  the phone's, kept so the copied modules (rangeSearch) stay in step with it. */
 export const isPhoneFeed = (f: { on: boolean; url: string }) => {
   if (!f.on) return false
-  try { return !/(^|\.)bing\.com$/i.test(new URL(f.url).hostname) } catch { return false }
+  try { return /^https?:$/.test(new URL(f.url).protocol) } catch { return false }
 }
+/** How many feeds are read (77 with EnergyWatch's list): the count EnergyWatch itself shows. */
+export const FEED_COUNT = EW_FEEDS.filter((f) => isPhoneFeed(f)).length
 
 /** Every portal (feeds grouped by name), in EnergyWatch's order. */
 export const PORTALS: { name: string; feeds: number }[] = (() => {

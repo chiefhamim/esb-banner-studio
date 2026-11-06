@@ -37,3 +37,12 @@ describe('mergeFound (live merge during a check)', () => {
     expect(second.addedKeys.sort()).toEqual(['x', 'y'])
   })
 })
+
+describe('range search sites with Bing feeds read', () => {
+  it('never searches bing.com as if it were a portal', async () => {
+    const { portalSites } = await import('./rangeSearch')
+    const all = portalSites().flatMap((p) => p.sites)
+    expect(all.some((s) => /bing\.com|google\.com/.test(s))).toBe(false)
+    expect(portalSites().find((p) => p.name === 'bdnews24')?.sites).toContain('bdnews24.com')
+  })
+})

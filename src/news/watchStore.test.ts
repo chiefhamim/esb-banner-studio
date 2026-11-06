@@ -1,4 +1,5 @@
-// Copied unchanged from ESB Studio Phone (src/mobile/watch/watchStore.test.ts, 2026-11-06). Keep the two copies in step.
+// Copied from ESB Studio Phone (src/mobile/watch/watchStore.test.ts, 2026-11-06). Keep the two copies in step. Desktop
+// difference: Bing News feeds are read here (the phone skips them).
 import { describe, expect, it } from 'vitest'
 import { unwrapLink, PORTALS } from './watchStore'
 import { parseFeed } from './feedparse'
@@ -24,10 +25,11 @@ describe('EnergyWatch on the phone', () => {
   })
 })
 
-describe('phone feeds', () => {
-  it('skips Bing News feeds and keeps the others', async () => {
-    const { isPhoneFeed } = await import('./watchStore')
-    expect(isPhoneFeed({ on: true, url: 'https://www.bing.com/news/search?q=site%3Abdnews24.com&format=rss' })).toBe(false)
+describe('desktop feeds', () => {
+  it('reads every switched-on feed, Bing News included: 77 feeds from 53 portals', async () => {
+    const { isPhoneFeed, FEED_COUNT } = await import('./watchStore')
+    expect(FEED_COUNT).toBeGreaterThan(PORTALS.length)
+    expect(isPhoneFeed({ on: true, url: 'https://www.bing.com/news/search?q=site%3Abdnews24.com&format=rss' })).toBe(true)
     expect(isPhoneFeed({ on: true, url: 'https://www.tbsnews.net/rss.xml' })).toBe(true)
     expect(isPhoneFeed({ on: false, url: 'https://www.tbsnews.net/rss.xml' })).toBe(false)
   })

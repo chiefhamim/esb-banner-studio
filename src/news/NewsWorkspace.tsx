@@ -16,7 +16,7 @@ import { Dialog, IconButton, MenuBar, MenuButton, Seg, Toggle } from '../ui/cont
 import type { MenuDef, MenuEntry } from '../ui/controls'
 import { fmtDateTime, fmtTime, useClockFormat } from '../ui/time'
 import { relTime } from '../editorial/wire'
-import { PORTALS, isPhoneFeed, useWatch, visibleItems, type WatchCat, type WatchItem } from './watchStore'
+import { FEED_COUNT, PORTALS, isPhoneFeed, useWatch, visibleItems, type WatchCat, type WatchItem } from './watchStore'
 import { EW_FEEDS } from './ewSources'
 import { MAX_RANGE_DAYS, checkRange, useRange } from './rangeSearch'
 import { PORTAL_BRANDS } from './portalBrands'
@@ -40,7 +40,7 @@ const itemTime = (x: WatchItem) => (x.published ? Date.parse(x.published) : x.fo
 export function EwMark({ size = 28 }: { size?: number }) {
   return (
     <span className="nw-mark" style={{ width: size, height: size, borderRadius: Math.round(size * 0.28) }} aria-hidden>
-      <svg viewBox="0 0 24 24" width={Math.round(size * 0.56)} height={Math.round(size * 0.56)}><path d="M13 3 6 14h5l-1 7 7-11h-5z" fill="#fff" /></svg>
+      <svg viewBox="0 0 24 24" width={Math.round(size * 0.56)} height={Math.round(size * 0.56)}><path d="M13.5 3 6.5 14h5l-1 7 7-11h-5z" fill="#fff" /></svg>
     </span>
   )
 }
@@ -84,6 +84,21 @@ function useNow(every = 15_000) {
   return now
 }
 
+/** The left column's sections open and close; the choice is remembered. Portals starts closed (53 rows). */
+type Folds = { show: boolean; trending: boolean; portals: boolean }
+const FOLDS_KEY = 'esb-banner-studio/news/folds'
+const loadFolds = (): Folds => { const d = { show: true, trending: true, portals: false }; try { return { ...d, ...JSON.parse(localStorage.getItem(FOLDS_KEY) ?? '{}') } } catch { return d } }
+function Fold({ id, title, aside, open, onToggle, children }: { id: keyof Folds; title: string; aside?: React.ReactNode; open: boolean; onToggle: (id: keyof Folds) => void; children: React.ReactNode }) {
+  return (
+    <section className={'nw-sec nw-fold' + (open ? ' open' : '')}>
+      <button type="button" className="nw-sec-h nw-fold-h" aria-expanded={open} onClick={() => onToggle(id)}>
+        <Icon name="chevDown" size={13} className="nw-fold-chev" /><span>{title}</span>{aside ? <small>{aside}</small> : null}
+      </button>
+      <div className="nw-fold-body" inert={!open}><div className="nw-fold-inner">{children}</div></div>
+    </section>
+  )
+}
+
 interface Toast { text: string; undo?: () => void; id: number }
 type Group = { label: string; items: WatchItem[] }
 
@@ -106,6 +121,8 @@ export function NewsWorkspace() {
   const [sel, setSel] = useState<string | null>(null)
   const [dialog, setDialog] = useState<null | 'settings' | 'range'>(null)
   const [toast, setToast] = useState<Toast | null>(null)
+  const [folds, setFolds] = useState<Folds>(loadFolds)
+  const toggleFold = (id: keyof Folds) => setFolds((f) => { const n = { ...f, [id]: !f[id] }; try { localStorage.setItem(FOLDS_KEY, JSON.stringify(n)) } catch { /* ignore */ } return n })
   const searchRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   useAutoCheck()
@@ -292,8 +309,7 @@ export function NewsWorkspace() {
         {/* ---------------------------------------------------------------- left: what to show */}
         <aside className="nw-left" aria-label="Filters">
           <div className="nw-left-scroll">
-            <section className="nw-sec">
-              <h4 className="nw-sec-h">Show</h4>
+            <Fold id="show" title="Show" open={folds.show} onToggle={toggleFold} aside={folds.show ? null : cat === 'all' ? 'All' : CAT_LABEL[cat]}>
               <div className="nw-nav" role="radiogroup" aria-label="Kinds of news">
                 {cats.map((c) => (
                   <button key={c} type="button" role="radio" aria-checked={cat === c} className={'nw-nav-row' + (cat === c ? ' on' : '') + ' is-' + c} onClick={() => setCat(c)}>
@@ -303,22 +319,21 @@ export function NewsWorkspace() {
                   </button>
                 ))}
               </div>
-            </section>
+            </Fold>
 
             {trending.length > 0 && (
-              <section className="nw-sec">
-                <h4 className="nw-sec-h">Trending</h4>
+              <Fold id="trending" title="Trending" open={folds.trending} onToggle={toggleFold} aside={folds.trending ? null : needle ? q.trim() : `${trending.length} topics`}>
                 <div className="nw-trend">
                   {trending.map(([t, n]) => {
                     const on = needle === t.toLowerCase()
                     return <button key={t} type="button" lang={lang(t)} className={'nw-chip' + (on ? ' on' : '')} aria-pressed={on} onClick={() => setQ(on ? '' : t)} data-tip={`${n} ${n === 1 ? 'headline mentions' : 'headlines mention'} ${t}`}>{t}<small>{n}</small></button>
                   })}
                 </div>
-              </section>
+              </Fold>
             )}
 
-            <section className="nw-sec">
-              <h4 className="nw-sec-h">Portals<small>{down ? <><b className="nw-warn">{down} not answering</b> · </> : null}{portalsOn} on</small></h4>
+            <Fold id="portals" title="Portals" open={folds.portals} onToggle={toggleFold}
+              aside={<>{down ? <><b className="nw-warn">{down} not answering</b> · </> : null}{portal && !folds.portals ? <b className="nw-fold-pick">{portal}</b> : <>{portalsOn} · {FEED_COUNT} feeds</>}</>}>
               <div className="nw-nav">
                 {portalRows.map((p) => (
                   <button key={p.name} type="button" className={'nw-nav-row nw-portal' + (portal === p.name ? ' on' : '') + (p.count ? '' : ' is-empty')} aria-pressed={portal === p.name}
@@ -330,7 +345,7 @@ export function NewsWorkspace() {
                   </button>
                 ))}
               </div>
-            </section>
+            </Fold>
           </div>
         </aside>
 
@@ -374,7 +389,6 @@ export function NewsWorkspace() {
                             <span className="nw-time">{when(x)}</span>
                             {x.categories.includes('leadership') && <span className="nw-tag is-lead" data-tip="PM & President"><Icon name="users" size={12} /></span>}
                             {x.google && <span className="nw-tag" data-tip="Google News link: opens in the browser"><Icon name="globe" size={12} /></span>}
-                            {isNew.has(x.key) && <span className="nw-newtag">New</span>}
                           </span>
                           <span className="nw-hl" lang={lang(x.title)}>{x.title}</span>
                         </button>
@@ -382,6 +396,7 @@ export function NewsWorkspace() {
                           {!x.google && <button type="button" className="btn nw-start" onClick={() => startStory(x)} data-tip="Start a story from this link (Enter)"><Icon name="filePlus" size={14} />Start a story</button>}
                           <IconButton icon="externalLink" tip="Open in the browser" onClick={() => openExternal(x.link)} />
                         </span>
+                        {isNew.has(x.key) && <span className="nw-ribbon">New</span>}
                       </li>
                     )
                   })}
@@ -436,9 +451,9 @@ export function NewsWorkspace() {
           <span className="sb-k">Portals</span>
           <span className="sb-pill"><i className="sb-dot" aria-hidden />
             {range ? (range.running ? `Searching ${pct}%` : `${range.items.length} found`)
-              : running ? `Reading feed ${progress?.done ?? 0} of ${progress?.total ?? 0}`
+              : running ? `Reading ${progress?.done ?? 0} of ${progress?.total ?? FEED_COUNT} feeds`
               : !lastRun ? 'Not checked yet'
-              : down ? `${portalsOn - down} of ${portalsOn} answering` : `${portalsOn} answering`}
+              : down ? `${portalsOn - down} of ${portalsOn} answering` : `${portalsOn} answering · ${FEED_COUNT} feeds`}
           </span>
         </button>
         <div className="sep" />
@@ -574,7 +589,7 @@ function SettingsDialog({ onClose, onRestored }: { onClose: () => void; onRestor
           <section className="nw-dsec">
             <h4 className="nw-sec-h">Check by itself while News is open</h4>
             <Seg<number> label="Check by itself" value={prefs.autoMin} onChange={(v) => setPrefs({ autoMin: v })}
-              options={[{ value: 0, label: 'Off' }, { value: 5, label: '5 min' }, { value: 10, label: '10 min' }, { value: 30, label: '30 min' }]} />
+              options={[{ value: 0, label: 'Off' }, { value: 1, label: '1 min' }, { value: 5, label: '5 min' }, { value: 10, label: '10 min' }, { value: 30, label: '30 min' }]} />
           </section>
         </div>
 
@@ -584,7 +599,7 @@ function SettingsDialog({ onClose, onRestored }: { onClose: () => void; onRestor
           words={prefs.never} onChange={(never) => setPrefs({ never })} placeholder="e.g. cricket" />
 
         <section className="nw-dsec">
-          <h4 className="nw-sec-h">Portals<small>{PORTALS.length - prefs.portalsOff.length} of {PORTALS.length} on</small></h4>
+          <h4 className="nw-sec-h">Portals<small>{PORTALS.length - prefs.portalsOff.length} of {PORTALS.length} on · {FEED_COUNT} feeds: own, Google News and Bing News</small></h4>
           <div className="nw-rows nw-portals">
             {PORTALS.map((p) => {
               const st = portalState(p.name)
