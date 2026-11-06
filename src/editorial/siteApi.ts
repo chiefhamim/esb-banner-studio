@@ -399,7 +399,7 @@ export async function signOutStaff(session: StaffSession | null) {
   clearStaffSession()
   if (!session?.token) return
   try {
-    await fetch(`${SUPABASE_URL}/auth/v1/logout`, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.token}` } })
+    await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=local`, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.token}` } })
   } catch { /* already signed out locally */ }
 }
 
