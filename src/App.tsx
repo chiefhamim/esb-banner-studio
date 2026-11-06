@@ -26,9 +26,11 @@ installBannerLink()
 const loadEditorial = () => import('./editorial/EditorialWorkspace')
 const loadVideo = () => import('./video/VideoWorkspace')
 const loadOutreach = () => import('./outreach/OutreachWorkspace')
+const loadNews = () => import('./news/NewsWorkspace')
 const EditorialWorkspace = lazy(() => loadEditorial().then((m) => ({ default: m.EditorialWorkspace })))
 const VideoWorkspace = lazy(() => loadVideo().then((m) => ({ default: m.VideoWorkspace })))
 const OutreachWorkspace = lazy(() => loadOutreach().then((m) => ({ default: m.OutreachWorkspace })))
+const NewsWorkspace = lazy(() => loadNews().then((m) => ({ default: m.NewsWorkspace })))
 const ComponentGallery = lazy(() => import('./ui/ComponentGallery').then((m) => ({ default: m.ComponentGallery })))
 const toHome = () => useShellStore.getState().setWorkspace('home')
 const DeskLoading = () => <div className="loading"><div className="spinner" />Opening the desk</div>
@@ -45,7 +47,7 @@ export default function App() {
     // a campaign scheduled on the Outreach desk starts at its time whichever desk is open
     startScheduler()
     // warm the other desks while the editor is still looking at the first screen
-    const warm = () => { void loadEditorial(); void loadOutreach(); void loadVideo() }
+    const warm = () => { void loadEditorial(); void loadOutreach(); void loadVideo(); void loadNews() }
     const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback
     if (idle) idle(warm, { timeout: 3000 }); else setTimeout(warm, 1500)
   }, [])
@@ -122,6 +124,7 @@ export default function App() {
           {workspace === 'editorial' && <DeskBoundary desk="Editorial" onLeave={toHome}><EditorialWorkspace /></DeskBoundary>}
           {workspace === 'video' && <DeskBoundary desk="Video" onLeave={toHome}><VideoWorkspace /></DeskBoundary>}
           {workspace === 'outreach' && <DeskBoundary desk="Outreach" onLeave={toHome}><OutreachWorkspace /></DeskBoundary>}
+          {workspace === 'news' && <DeskBoundary desk="News" onLeave={toHome}><NewsWorkspace /></DeskBoundary>}
         </Suspense>
         {workspace === 'graphics' && (
           base ? <DeskBoundary desk="Graphics" onLeave={toHome}><GraphicsWorkspace base={base} /></DeskBoundary> : (

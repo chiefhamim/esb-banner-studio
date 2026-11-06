@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { reducedMotion } from '../ui/motion'
 
-export type WorkspaceId = 'home' | 'graphics' | 'editorial' | 'video' | 'outreach' | 'audio'
+export type WorkspaceId = 'home' | 'news' | 'graphics' | 'editorial' | 'video' | 'outreach' | 'audio'
 /** How every time of day in the app reads: "4:58 PM" or "16:58" (Home → Settings → Time format; helpers in `ui/time.ts`). */
 export type ClockFormat = '12h' | '24h'
 
@@ -17,6 +17,10 @@ interface ShellState {
   returnTo: WorkspaceId | null
   openGraphicsFrom: (from: WorkspaceId, focus: 'photos' | null) => void
   consumeGraphicsFocus: () => 'photos' | null
+  /** News → Editorial hand-off: a headline's link for the Link tab, consumed once by Editorial (the editor presses Fetch). */
+  pendingLink: string | null
+  openStoryFrom: (url: string) => void
+  consumePendingLink: () => string | null
   quitPrompt: boolean
   setQuitPrompt: (on: boolean) => void
   triggerQuit: (force?: boolean) => Promise<void>
@@ -29,7 +33,7 @@ let moving = false
 let queued: WorkspaceId | null = null
 /** Which way the last desk change went (+1 toward Video, -1 toward Home); App.tsx animates the arriving desk with it. */
 export const deskMotion = { dir: 1 as 1 | -1 }
-const ORDER: WorkspaceId[] = ['home', 'editorial', 'graphics', 'video', 'outreach', 'audio']
+const ORDER: WorkspaceId[] = ['home', 'news', 'editorial', 'graphics', 'video', 'outreach', 'audio']
 
 /** The app always opens on Home, whichever workspace was open when it was closed. */
 const loadSavedWorkspace = (): WorkspaceId => 'home'
@@ -90,6 +94,16 @@ export const useShellStore = create<ShellState>((set, get) => ({
     const f = get().graphicsFocus
     if (f) set({ graphicsFocus: null })
     return f
+  },
+  pendingLink: null,
+  openStoryFrom: (url) => {
+    set({ pendingLink: url })
+    get().setWorkspace('editorial')
+  },
+  consumePendingLink: () => {
+    const u = get().pendingLink
+    if (u) set({ pendingLink: null })
+    return u
   },
   quitPrompt: false,
   setQuitPrompt: (quitPrompt) => set({ quitPrompt }),

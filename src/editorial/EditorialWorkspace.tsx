@@ -414,6 +414,16 @@ export function EditorialWorkspace() {
 
   // Check whether desk is empty or active
   const hasStory = !!(source?.title || draft.headline.trim() || draft.body.trim())
+  // News → "Start a story": the headline's link waits in the Link tab, as a Wire pick does; nothing is fetched until
+  // the editor presses Fetch (and a story already on the desk is left alone until then).
+  const pendingLink = useShellStore((s) => s.pendingLink)
+  useEffect(() => {
+    if (!pendingLink) return
+    const url = useShellStore.getState().consumePendingLink()
+    if (!url) return
+    setUrlInput(url); setLauncherTab('url'); setErrorMsg(null); setErrorDetail(null)
+    if (hasStory) { setSourceOpenState(true); setLeftTab('intake') }
+  }, [pendingLink, hasStory])
   // a story with no source yet (a headline typed in Graphics, a draft written by hand) opens the left column on the
   // link intake rather than on an empty "Original story"
   const hasSource = !!source

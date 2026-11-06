@@ -9,6 +9,7 @@ interface WorkspaceItem { id: WorkspaceId; label: string; icon: IconName; title:
 // Home stands on its own; the three working desks sit together in one segmented control
 const HOME: WorkspaceItem = { id: 'home', label: 'Home', icon: 'home', title: 'Home — projects and recent work' }
 const DESKS: WorkspaceItem[] = [
+  { id: 'news', label: 'News', icon: 'inbox', title: 'News — EnergyWatch headlines from the portals' },
   { id: 'editorial', label: 'Editorial', icon: 'newspaper', title: 'Editorial — source, translation, CMS' },
   { id: 'graphics', label: 'Graphics', icon: 'layers', title: 'Graphics — banners and social images' },
   { id: 'video', label: 'Video', icon: 'video', title: 'Video — timeline editor' },
