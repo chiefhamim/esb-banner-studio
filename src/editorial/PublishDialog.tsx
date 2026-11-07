@@ -42,11 +42,13 @@ export function PublishDialog(p: {
   onOpenCms: () => void
   onPublish: (status: 'PUBLISHED' | 'DRAFT') => void
   onUpdateExisting: (slug: string) => void
+  onBackToNews?: () => void
   onClose: () => void
 }) {
   const { draft } = p
   const blocked = p.busy || !draft.headline.trim()
   const verb = p.updating ? 'Update' : 'Publish'
+  const publishedDone = !!(p.result?.ok && p.result.url && !p.busy)
   const budget = (n: number, max: number) => <b className={n > max ? 'over' : ''}>{n}/{max}{n > max ? ' · over' : ''}</b>
   return (
     <Dialog
@@ -62,10 +64,16 @@ export function PublishDialog(p: {
           <button type="button" className="btn" onClick={() => p.onPublish('DRAFT')} disabled={blocked} title="Keep it hidden from readers; visible in the CMS">
             <Icon name="check" size={14} /><span>{p.updating ? 'Save as draft' : 'Save draft'}</span>
           </button>
-          <button type="button" className="btn primary" onClick={() => p.onPublish('PUBLISHED')} disabled={blocked}
-            title={p.updating ? 'Change the article that is live now' : 'Publish live to esbpowerline.com'}>
-            <Icon name="upload" size={14} /><span>{p.busy ? (p.updating ? 'Updating…' : 'Publishing…') : verb + (p.fbOn && p.fbPage ? ' + Facebook' : '')}</span>
-          </button>
+          {publishedDone && p.onBackToNews ? (
+            <button type="button" className="btn primary" onClick={p.onBackToNews}>
+              <span>Back to News</span>
+            </button>
+          ) : (
+            <button type="button" className="btn primary" onClick={() => p.onPublish('PUBLISHED')} disabled={blocked}
+              title={p.updating ? 'Change the article that is live now' : 'Publish live to esbpowerline.com'}>
+              <Icon name="upload" size={14} /><span>{p.busy ? (p.updating ? 'Updating…' : 'Publishing…') : verb + (p.fbOn && p.fbPage ? ' + Facebook' : '')}</span>
+            </button>
+          )}
         </>
       }
     >
@@ -97,6 +105,11 @@ export function PublishDialog(p: {
               {p.result.url && (
                 <button type="button" className="btn sm" onClick={() => { for (const u of [p.result!.url, p.result!.fbUrl]) if (u) window.open(u, '_blank', 'noopener') }}>
                   <Icon name="globe" size={12} /><span>{p.result.fbUrl ? 'Open the article and the Facebook post' : 'View on esbpowerline.com'}</span>
+                </button>
+              )}
+              {publishedDone && p.onBackToNews && (
+                <button type="button" className="btn sm primary" onClick={p.onBackToNews}>
+                  <span>Back to News</span>
                 </button>
               )}
               {p.result.existingSlug && <button type="button" className="btn sm primary" onClick={() => p.onUpdateExisting(p.result!.existingSlug!)}><Icon name="refresh" size={12} /><span>Update that article instead</span></button>}

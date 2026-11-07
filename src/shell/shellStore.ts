@@ -35,8 +35,14 @@ let queued: WorkspaceId | null = null
 export const deskMotion = { dir: 1 as 1 | -1 }
 const ORDER: WorkspaceId[] = ['home', 'news', 'editorial', 'graphics', 'video', 'outreach', 'audio']
 
-/** The app always opens on Home, whichever workspace was open when it was closed. */
-const loadSavedWorkspace = (): WorkspaceId => 'home'
+/** The app opens on Home by default, or URL parameter ?workspace= if specified. */
+const loadSavedWorkspace = (): WorkspaceId => {
+  try {
+    const p = new URLSearchParams(window.location.search).get('workspace')
+    if (p && ORDER.includes(p as WorkspaceId)) return p as WorkspaceId
+  } catch { /* noop */ }
+  return 'home'
+}
 
 const CLOCK_KEY = 'esb-banner-studio/clock'
 /** This computer's own habit (Windows region settings): h11/h12 → 12-hour, otherwise 24-hour. */

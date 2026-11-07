@@ -311,4 +311,41 @@ describe('Editorial Desk — Intake robustness', () => {
     expect(describeIntakeError(new IntakeError('dns_error', 'ENOTFOUND', 'https://blocked.invalid/story')).title).toContain('could not be found')
     expect(describeIntakeError(new Error('boom')).detail).toBe('boom')
   })
+
+  it('extracts Next.js streamed chunks, WordPress author/tag classes, Bootstrap hidden-xs wrappers, and div/br bodies', async () => {
+    const { JSDOM } = await import('jsdom')
+    const prevDOMParser = globalThis.DOMParser
+    globalThis.DOMParser = new JSDOM('').window.DOMParser as typeof DOMParser
+    try {
+      // 1. Next.js streamed suspense + placeholder chunks (B:0 and P:1) + WordPress body.author-* / article.tag-* + hidden-xs
+      const streamedHtml = `<!doctype html><html><head><title>বিদ্যুৎ উৎপাদন বৃদ্ধি</title></head>
+        <body class="wp-singular author-desk tdc-footer-template">
+          <article class="post type-post tag-627">
+            <div class="desktopDetailBody hidden-xs"><template id="B:0"></template></div>
+          </article>
+          <div hidden id="S:0"><div class="dp2-body"><p>দেশের জাতীয় গ্রিডে নতুন করে আরও পাঁচশ মেগাওয়াট বিদ্যুৎ যুক্ত হতে যাচ্ছে বলে জানিয়েছে পিডিবি।</p><template id="P:1"></template></div></div>
+          <div hidden id="S:1"><p>আগামী মাসের শুরু থেকেই দক্ষিণ-পশ্চিমাঞ্চলের জেলাগুলোতে নিরবচ্ছিন্ন সরবরাহ নিশ্চিত করা সম্ভব হবে বলে আশা করা হচ্ছে।</p></div>
+        </body></html>`
+      const a1 = parseArticleDocument(streamedHtml, 'https://example.com/news/1')
+      expect(a1.paragraphs.length).toBe(2)
+      expect(a1.paragraphs[0]).toContain('পাঁচশ মেগাওয়াট')
+      expect(a1.paragraphs[1]).toContain('নিরবচ্ছিন্ন সরবরাহ')
+
+      // 2. Portal using <br><br> inside .news-details instead of <p> tags
+      const brHtml = `<!doctype html><html><head><title>গ্যাস অনুসন্ধান জোরদার</title></head>
+        <body><div class="news-details">সিলেট অঞ্চলে নতুন গ্যাস কূপ খননের কাজ দ্রুতগতিতে এগিয়ে চলছে বলে জানিয়েছেন পেট্রোবাংলার চেয়ারম্যান।<br><br>আগামী বছরের মাঝামাঝি সময়ে এই কূপ থেকে প্রতিদিন বিশ মিলিয়ন ঘনফুট গ্যাস জাতীয় গ্রিডে সরবরাহ করা যাবে।</div></body></html>`
+      const a2 = parseArticleDocument(brHtml, 'https://example.com/news/2')
+      expect(a2.paragraphs.length).toBe(2)
+    } finally {
+      globalThis.DOMParser = prevDOMParser
+    }
+  })
+
+  it('unwraps Bing News redirect URLs in net-guard before fetching', async () => {
+    const { createRequire } = await import('node:module')
+    const req = createRequire(import.meta.url)
+    const { unwrapFeedRedirectUrl } = req('../../electron/net-guard.cjs')
+    expect(unwrapFeedRedirectUrl('http://www.bing.com/news/apiclick.aspx?ref=FexRss&url=https%3a%2f%2fthefinancialexpress.com.bd%2feconomy%2flng-import')).toBe('https://thefinancialexpress.com.bd/economy/lng-import')
+    expect(unwrapFeedRedirectUrl('https://prothomalo.com/business/energy')).toBe('https://prothomalo.com/business/energy')
+  })
 })

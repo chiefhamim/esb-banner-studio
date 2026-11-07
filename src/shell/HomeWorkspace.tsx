@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import lightBgUrl from '../assets/images/home/home-light.jpg'
 import darkBgUrl from '../assets/images/home/home-dark-gradient.jpg'
 import markUrl from '../assets/images/home/esb-mark-light.png'
@@ -7,13 +7,18 @@ import type { RecentProject } from '../project'
 import { useShellStore } from './shellStore'
 import { useStore } from '../store'
 import { FORMAT_LIST } from '../core/tokens'
+import { useEditorialStore } from '../editorial/editorialStore'
+import { SignInSheet } from '../editorial/SignInSheet'
+import { openSiteCms } from '../editorial/siteApi'
+import { UserAvatar, useAvatarSync } from '../editorial/avatar'
 
 // the sizes the desk reaches for every day; the others (Facebook Classic, lower third, title and end cards) stay in the
 // Graphics format picker
 const HOME_FORMATS = ['fb45', 'story', 'sq', 'web', 'yt'].map((id) => FORMAT_LIST.find((f) => f.id === id)!)
 import type { FormatId } from '../core/types'
 import { Icon } from '../ui/Icon'
-import { Dialog, Seg } from '../ui/controls'
+import { Dialog, MenuList, Popover, Seg } from '../ui/controls'
+import type { MenuEntry } from '../ui/controls'
 import { fmtHm, fmtTime } from '../ui/time'
 
 const HOME_BG_POS_KEY = 'esb-banner-studio/home-bg-pos'
@@ -42,14 +47,40 @@ function ago(at: number): string {
 }
 
 export function HomeWorkspace() {
+  useAvatarSync()
   const setWorkspace = useShellStore((s) => s.setWorkspace)
   const theme = useStore((s) => s.theme)
+  const session = useEditorialStore((s) => s.staffSession)
+  const logoutStaff = useEditorialStore((s) => s.logoutStaff)
   // Quit exists only in the desktop app; a browser tab is closed by the browser
   const canQuit = typeof window !== 'undefined' && !!window.esb?.quit
   const [recents, setRecents] = useState<RecentProject[]>([])
   const top = recents[0] ?? null
   const [recoverySnapshot, setRecoverySnapshot] = useState<{ at: number; name: string } | null>(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [toastNotice, setToastNotice] = useState<string | null>(null)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userBtnRef = useRef<HTMLButtonElement>(null)
   const clock = useShellStore((s) => s.clock)
+
+  const userMenuItems: MenuEntry[] = useMemo(() => {
+    if (session) {
+      return [
+        { heading: session.name || 'Newsroom editor' },
+        { label: session.email, hint: session.role || 'Staff', disabled: true },
+        { divider: true },
+        { label: 'Account & connection', icon: 'user', onClick: () => setShowLoginModal(true) },
+        { label: 'Open CMS in browser', icon: 'link', onClick: () => void openSiteCms(session, '/cms/articles') },
+        { divider: true },
+        { label: 'Sign out', icon: 'power', danger: true, onClick: () => { logoutStaff(); setToastNotice('Signed out of esbpowerline.com') } },
+      ]
+    }
+    return [
+      { heading: 'Account' },
+      { label: 'Sign in to esbpowerline.com', icon: 'user', onClick: () => setShowLoginModal(true) },
+      { label: 'Connection & diagnostics', icon: 'sliders', onClick: () => setShowLoginModal(true) },
+    ]
+  }, [session, logoutStaff])
 
   useEffect(() => {
     setRecents(readRecent())
@@ -159,21 +190,48 @@ export function HomeWorkspace() {
   return (
     <div className="home-shell">
     <header className="topbar home-topbar">
-      <div className="home-head-actions">
-        <button type="button" className="home-head-btn" data-tip="Settings" aria-label="Settings" onClick={() => setShowSettings(true)}>
-          <Icon name="sliders" size={15} />
-        </button>
-        <button type="button" className="home-head-btn" data-tip={theme === 'dark' ? 'Switch to light appearance' : 'Switch to dark appearance'} aria-label="Toggle appearance" onClick={() => useStore.getState().setTheme(theme === 'dark' ? 'light' : 'dark')}>
-          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
-        </button>
-        {canQuit && <i className="home-head-sep" aria-hidden />}
+      <div className={'home-head-actions' + (userMenuOpen ? ' open' : '')}>
         {canQuit && (
           <button type="button" className="home-head-btn quit" data-tip="Quit ESB AI Studio (Ctrl+Q)" onClick={() => void useShellStore.getState().triggerQuit()}>
             <Icon name="x" size={14} />
             <span>Quit</span>
           </button>
         )}
-        <span className="home-fold" aria-hidden><Icon name="more" size={18} /></span>
+        {canQuit && <i className="home-head-sep" aria-hidden />}
+        <button type="button" className="home-head-btn" data-tip={theme === 'dark' ? 'Switch to light appearance' : 'Switch to dark appearance'} aria-label="Toggle appearance" onClick={() => useStore.getState().setTheme(theme === 'dark' ? 'light' : 'dark')}>
+          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
+        </button>
+        <button type="button" className="home-head-btn" data-tip="Settings" aria-label="Settings" onClick={() => setShowSettings(true)}>
+          <Icon name="sliders" size={15} />
+        </button>
+        <i className="home-head-sep" aria-hidden />
+        <button
+          ref={userBtnRef}
+          type="button"
+          className={'home-head-btn home-user-btn' + (session ? ' in' : '') + (userMenuOpen ? ' open' : '')}
+          onClick={() => setUserMenuOpen((o) => !o)}
+          aria-label={session ? `Signed in as ${session.name || session.email}` : 'Sign in'}
+          data-tip={session ? `${session.name || session.email} — account options` : 'Sign in with your esbpowerline.com newsroom account'}
+        >
+          {session ? (
+            <>
+              <UserAvatar name={session.name || session.email} className="ed-avatar" />
+              <span className="home-user-name">{session.name || session.email}</span>
+              <Icon name="chevDown" size={12} className="home-user-chev" />
+            </>
+          ) : (
+            <>
+              <Icon name="user" size={14} />
+              <span className="home-user-label">Sign in</span>
+              <Icon name="chevDown" size={12} className="home-user-chev" />
+            </>
+          )}
+        </button>
+        {userMenuOpen && userBtnRef.current && (
+          <Popover anchor={{ el: userBtnRef.current }} onClose={() => setUserMenuOpen(false)} align="end" className="menu home-user-menu" minWidth={220}>
+            <MenuList items={userMenuItems} onDone={() => setUserMenuOpen(false)} />
+          </Popover>
+        )}
       </div>
     </header>
     <input ref={bgInput} type="file" accept="image/*" hidden onChange={(e) => { void pickBackground(e.target.files?.[0]); e.target.value = '' }} />
@@ -232,14 +290,14 @@ export function HomeWorkspace() {
           <div className="home-header-brand">
             <div className="home-title-group">
               <h1 className="home-title" aria-label="ESB Power Line AI Studio"><img className="home-mark" src={markUrl} alt="" aria-hidden draggable={false} /><span className="home-stick" aria-hidden /><span className="home-name"><span className="home-ai">Ai</span> <span className="home-title-accent">Studio</span></span></h1>
-              <p className="home-subtitle">Where stories are written, imagination is designed and reality is cut</p>
+              <p className="home-subtitle">Where stories are written, imagination is designed<br />and reality is cut</p>
             </div>
           </div>
         </header>
 
         <svg className="home-defs" aria-hidden focusable="false">
           <defs>
-            {([['1', '#0aa37a', '#1fd3a8', '#3b82f6'], ['2', '#3b82f6', '#7c5cff', '#d946ef'], ['3', '#ff7a1a', '#ff3b6b', '#b24bf3'], ['4', '#0284c7', '#38bdf8', '#818cf8']] as const).map(([n, c1, c2, c3]) => (
+            {([['0', '#0d9488', '#14b8a6', '#0284c7'], ['1', '#0aa37a', '#1fd3a8', '#3b82f6'], ['2', '#3b82f6', '#7c5cff', '#d946ef'], ['3', '#ff7a1a', '#ff3b6b', '#b24bf3'], ['4', '#0284c7', '#38bdf8', '#818cf8']] as const).map(([n, c1, c2, c3]) => (
               <linearGradient key={n} id={`home-ig-${n}`} gradientUnits="userSpaceOnUse" x1="-24" y1="0" x2="0" y2="24" spreadMethod="reflect">
                 <stop offset="0" stopColor={c1} /><stop offset=".5" stopColor={c2} /><stop offset="1" stopColor={c3} />
                 <animate attributeName="x1" values="-24;0;-24" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
@@ -250,16 +308,22 @@ export function HomeWorkspace() {
         </svg>
         <nav className="home-launch" aria-label="Workspaces">
           {([
-            { id: 'editorial', icon: 'newspaper', name: 'Editorial', note: 'Link in, English story out', run: () => setWorkspace('editorial') },
-            { id: 'graphics', icon: 'layers', name: 'Graphics', note: 'Banners and cards', run: () => setWorkspace('graphics') },
-            { id: 'video', icon: 'video', name: 'Video', note: 'Timeline, titles and export', run: () => setWorkspace('video') },
-            { id: 'outreach', icon: 'send', name: 'Outreach', note: 'Promotions and campaigns', run: () => setWorkspace('outreach') },
-            { id: 'open', icon: 'folder', name: 'Open project', note: 'Continue a saved project', run: () => void handleOpenProject() },
+            { id: 'news', icon: 'inbox', name: 'News', line1: 'EnergyWatch', line2: 'portals & press', run: () => setWorkspace('news') },
+            { id: 'editorial', icon: 'newspaper', name: 'Editorial', line1: 'Link in, English', line2: 'story out', run: () => setWorkspace('editorial') },
+            { id: 'graphics', icon: 'layers', name: 'Graphics', line1: 'News banners', line2: 'and social cards', run: () => setWorkspace('graphics') },
+            { id: 'video', icon: 'video', name: 'Video', line1: 'Timeline, titles', line2: 'and export', run: () => setWorkspace('video') },
+            { id: 'outreach', icon: 'send', name: 'Outreach', line1: 'Promotions and', line2: 'campaigns', run: () => setWorkspace('outreach') },
+            { id: 'open', icon: 'folder', name: 'Open project', line1: 'Continue a', line2: 'saved project', run: () => void handleOpenProject() },
           ] as const).map((w) => (
             <button key={w.id} type="button" className="launch-tile" onClick={w.run}>
               <span className="launch-icon"><Icon name={w.icon} size={20} /></span>
-              <span className="launch-name">{w.name}</span>
-              <span className="launch-note">{w.note}</span>
+              <div className="launch-text">
+                <span className="launch-name">{w.name}</span>
+                <span className="launch-note">
+                  <span>{w.line1}</span>
+                  <span>{w.line2}</span>
+                </span>
+              </div>
             </button>
           ))}
         </nav>
@@ -345,6 +409,18 @@ export function HomeWorkspace() {
         </footer>
       </div>
     </main>
+    {showLoginModal && (
+      <SignInSheet
+        onClose={() => setShowLoginModal(false)}
+        onToast={(m) => setToastNotice(m)}
+      />
+    )}
+    {toastNotice && (
+      <div className="toast home-toast" role="status" onClick={() => setToastNotice(null)}>
+        <Icon name="info" size={15} />
+        <span>{toastNotice}</span>
+      </div>
+    )}
     </div>
   )
 }

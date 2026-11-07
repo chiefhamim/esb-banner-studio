@@ -42,6 +42,7 @@ import { FileTypeIcon, FileTypePair } from './FileTypeIcon'
 import { fmtPublished } from './fmtPublished'
 import { WireInbox } from './WireInbox'
 import { useWirePoll } from './wire'
+import { useWatch } from '../news/watchStore'
 import { readDocument, readPdfWithAi, documentKind, fmtFileSize, DocumentImportError } from './importDocument'
 import { Field, Select, Check, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
@@ -419,16 +420,6 @@ export function EditorialWorkspace() {
 
   // Check whether desk is empty or active
   const hasStory = !!(source?.title || draft.headline.trim() || draft.body.trim())
-  // News → "Start a story": the headline's link waits in the Link tab, as a Wire pick does; nothing is fetched until
-  // the editor presses Fetch (and a story already on the desk is left alone until then).
-  const pendingLink = useShellStore((s) => s.pendingLink)
-  useEffect(() => {
-    if (!pendingLink) return
-    const url = useShellStore.getState().consumePendingLink()
-    if (!url) return
-    setUrlInput(url); setLauncherTab('url'); setErrorMsg(null); setErrorDetail(null)
-    if (hasStory) { setSourceOpenState(true); setLeftTab('intake') }
-  }, [pendingLink, hasStory])
   // a story with no source yet (a headline typed in Graphics, a draft written by hand) opens the left column on the
   // link intake rather than on an empty "Original story"
   const hasSource = !!source
@@ -518,6 +509,8 @@ export function EditorialWorkspace() {
 
     try {
       const result = await automateNewsFromUrl(cleanUrl, (status: string) => setProgressStatus(status))
+      const resolvedUrl = useEditorialStore.getState().source?.url
+      if (resolvedUrl && resolvedUrl !== cleanUrl) setUrlInput(resolvedUrl)
 
       setDraftField('headline', result.englishHeadline)
       setDraftField('deck', result.deck)
@@ -544,6 +537,22 @@ export function EditorialWorkspace() {
       setLoading(false)
     }
   }
+
+  // News → "Start a story": keeps any existing story in the queue, opens a fresh slot, and immediately fetches & translates the link.
+  const pendingLink = useShellStore((s) => s.pendingLink)
+  const fetchUrlRef = useRef(handleFetchUrl)
+  fetchUrlRef.current = handleFetchUrl
+  useEffect(() => {
+    if (!pendingLink) return
+    const url = useShellStore.getState().consumePendingLink()
+    if (!url) return
+    if (hasStory) {
+      useStoryQueue.getState().newStory()
+      if (bannerLink) useStore.getState().newBanner(true)
+    }
+    setUrlInput(url); setLauncherTab('url'); setErrorMsg(null); setErrorDetail(null)
+    void fetchUrlRef.current(url, true)
+  }, [pendingLink, hasStory, bannerLink])
 
   // Translate Raw Pasted Bengali Story
   const handleTranslateRawBengali = async (rawOverride?: string) => {
@@ -1757,6 +1766,26 @@ export function EditorialWorkspace() {
           onOpenCms={handleOpenInSiteCms}
           onPublish={(st) => void handleLivePublishToCms(st)}
           onUpdateExisting={(slug) => { useStoryQueue.getState().linkArticle({ slug, url: `${SITE_BASE_URL}/articles/${slug}` }); void handleLivePublishToCms('PUBLISHED') }}
+          onBackToNews={() => {
+            const ed = useEditorialStore.getState()
+            const srcUrl = ed.source?.url || urlInput
+            const srcTitle = ed.source?.title
+            useWatch.getState().cleanPublishedStory(srcUrl, srcTitle)
+            const activeId = useStoryQueue.getState().activeId
+            setShowPublishModal(false)
+            setPublishResult(null)
+            setPublishJobId(null)
+            if (activeId) useStoryQueue.getState().remove(activeId)
+            else ed.clear()
+            useStore.getState().newBanner(true)
+            setUrlInput('')
+            setRawBengaliInput('')
+            setDocInfo(null)
+            setErrorMsg(null)
+            setErrorDetail(null)
+            setDraftNotice(null)
+            useShellStore.getState().setWorkspace('news')
+          }}
           onClose={() => setShowPublishModal(false)}
         />
       )}

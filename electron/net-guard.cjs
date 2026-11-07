@@ -228,7 +228,8 @@ async function resolveAndValidateHost(hostname, resolver = null, allowLoopback =
       }
     }
 
-    return { ok: true, ip: addresses[0].address, family: addresses[0].family }
+    const picked = addresses.find((a) => a.family === 4) || addresses[0]
+    return { ok: true, ip: picked.address, family: picked.family }
   } catch (err) {
     return { ok: false, code: 'dns_error', error: `DNS lookup failed for ${hostname}: ${err.message}` }
   }
@@ -330,6 +331,30 @@ async function safeFetch(targetUrl, options = {}) {
       req.on('error', (err) => {
         if (aborted) return
         cleanup()
+        // If a portal's certificate only covers the bare domain (e.g. dailynayadiganta.com) while the feed linked to www.,
+        // step to the bare domain under the redirect budget.
+        if (isHttps && /^www\./i.test(parsed.hostname) && err && /does not match certificate's altnames/i.test(err.message)) {
+          const bare = parsed.hostname.replace(/^www\./i, '')
+          if (err.message.toLowerCase().includes(`dns:${bare.toLowerCase()}`)) {
+            const next = new URL(currentUrl)
+            next.hostname = bare
+            resolve({ redirect: true, nextUrl: next.href })
+            return
+          }
+        }
+        // Many Bangladesh National Portal (.gov.bd / .org.bd) servers omit the intermediate BCC CA certificate
+        // from their TLS handshake chain in Node's https client; fall back to http:// for those .bd hosts.
+        if (isHttps && /\.(gov|org)\.bd$/i.test(parsed.hostname) && err && (
+          err.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+          err.code === 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY' ||
+          err.code === 'UNABLE_TO_GET_ISSUER_CERT' ||
+          /unable to verify the first certificate|unable to get local issuer certificate/i.test(err.message)
+        )) {
+          const next = new URL(currentUrl)
+          next.protocol = 'http:'
+          resolve({ redirect: true, nextUrl: next.href })
+          return
+        }
         resolve({ ok: false, code: 'network_error', error: err.message })
       })
 
@@ -438,6 +463,109 @@ async function safeFetch(targetUrl, options = {}) {
 }
 
 /**
+ * Unwraps Bing News click-through URLs (?url=https://...) when handed directly to fetchArticleHtml.
+ */
+function unwrapFeedRedirectUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl)
+    if (/(^|\.)bing\.com$/i.test(u.hostname) && /apiclick/i.test(u.pathname)) {
+      const real = u.searchParams.get('url')
+      if (real && /^https?:\/\//i.test(real)) return real
+    }
+  } catch { /* keep as-is */ }
+  return rawUrl
+}
+
+/**
+ * Resolves an encoded Google News RSS article link (news.google.com/rss/articles/CBMi...) to the publisher's own URL.
+ */
+async function resolveGoogleNewsUrl(rawUrl, options = {}) {
+  const m = String(rawUrl || '').match(/^https?:\/\/(?:www\.)?news\.google\.com\/(?:rss\/)?articles\/([A-Za-z0-9_-]+)/i)
+  if (!m) return null
+  const id = m[1]
+
+  // 1. Legacy CBMi base64url payloads carry the destination URL directly in the bytes.
+  try {
+    const buf = Buffer.from(id.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
+    const str = buf.toString('latin1')
+    const httpIdx = str.indexOf('http')
+    if (httpIdx !== -1) {
+      const sub = str.slice(httpIdx)
+      const urlMatch = sub.match(/^https?:\/\/[^\x00-\x1f\x7f-\xff"'\s<>]+/)
+      if (urlMatch && !/news\.google\.com/i.test(urlMatch[0])) return urlMatch[0]
+    }
+  } catch { /* fall through to batchexecute */ }
+
+  // 2. Modern AU_yqL tokens: read signature (data-n-a-sg) and timestamp (data-n-a-ts) from the splash HTML, then exchange
+  //    via Google News's Fbv4je batchexecute RPC.
+  for (const prefix of ['https://news.google.com/rss/articles/', 'https://news.google.com/articles/']) {
+    const splash = await safeFetch(`${prefix}${id}?oc=5`, {
+      maxBytes: MAX_HTML_BYTES,
+      allowedTypes: ALLOWED_HTML_TYPES,
+      dnsResolver: options.dnsResolver,
+      timeoutMs: Math.min(options.timeoutMs || ARTICLE_TIMEOUT_MS, 12000),
+      allowLoopbackForTesting: options.allowLoopbackForTesting,
+    })
+    if (!splash.ok || !splash.buffer) continue
+    const splashHtml = splash.buffer.toString('utf8')
+    const sg = splashHtml.match(/data-n-a-sg="([^"]+)"/)?.[1]
+    const ts = splashHtml.match(/data-n-a-ts="([^"]+)"/)?.[1]
+    if (!sg || !ts) continue
+
+    const hostCheck = await resolveAndValidateHost('news.google.com', options.dnsResolver || null, options.allowLoopbackForTesting === true)
+    if (!hostCheck.ok) return null
+
+    const inner = `["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],"X","X",1,[1,1,1],1,1,null,0,0,null,0],"${id}",${ts},"${sg}"]`
+    const payload = `f.req=${encodeURIComponent(JSON.stringify([[['Fbv4je', inner, null, 'generic']]]))}`
+
+    const decoded = await new Promise((resolve) => {
+      const req = https.request({
+        protocol: 'https:',
+        host: hostCheck.ip,
+        port: 443,
+        path: '/_/DotsSplashUi/data/batchexecute',
+        method: 'POST',
+        servername: 'news.google.com',
+        timeout: 10000,
+        headers: {
+          'Host': 'news.google.com',
+          'User-Agent': USER_AGENT,
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'Referer': 'https://news.google.com/',
+          'Content-Length': Buffer.byteLength(payload),
+          'Connection': 'close',
+        },
+      }, (res) => {
+        const chunks = []
+        let total = 0
+        res.on('data', (c) => {
+          total += c.length
+          if (total <= 512 * 1024) chunks.push(c)
+        })
+        res.on('end', () => {
+          try {
+            const text = Buffer.concat(chunks).toString('utf8')
+            const hit = text.match(/\\"garturlres\\",\\"(https?:[^\\"]+)\\"/)
+            if (hit && hit[1]) {
+              try { resolve(JSON.parse(`"${hit[1]}"`)) } catch { resolve(hit[1]) }
+              return
+            }
+          } catch { /* ignore */ }
+          resolve(null)
+        })
+        res.on('error', () => resolve(null))
+      })
+      req.on('timeout', () => { req.destroy(); resolve(null) })
+      req.on('error', () => resolve(null))
+      req.write(payload)
+      req.end()
+    })
+    if (decoded && /^https?:\/\//i.test(decoded)) return decoded
+  }
+  return null
+}
+
+/**
  * Hardened fetch for news article HTML.
  */
 async function fetchArticleHtml(rawUrl, options = {}) {
@@ -448,6 +576,11 @@ async function fetchArticleHtml(rawUrl, options = {}) {
   // Only add https:// if no scheme is present (e.g. prothomalo.com/...)
   if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(targetUrl)) {
     targetUrl = 'https://' + targetUrl
+  }
+  targetUrl = unwrapFeedRedirectUrl(targetUrl)
+  if (/^https?:\/\/(?:www\.)?news\.google\.com\/(?:rss\/)?articles\//i.test(targetUrl)) {
+    const resolved = await resolveGoogleNewsUrl(targetUrl, options)
+    if (resolved) targetUrl = resolved
   }
 
   const res = await safeFetch(targetUrl, {
@@ -525,6 +658,8 @@ module.exports = {
   validateImageMagicBytes,
   resolveAndValidateHost,
   safeFetch,
+  unwrapFeedRedirectUrl,
+  resolveGoogleNewsUrl,
   fetchArticleHtml,
   fetchImageData,
 }

@@ -322,6 +322,7 @@ export async function automateNewsFromUrl(
       throw new IntakeError(res.code || 'network_error', res.error || 'Failed to fetch the page', cleanUrl)
     }
     html = res.html
+    if (res.url && /^https?:\/\//i.test(res.url)) cleanUrl = res.url
   } else {
     try {
       const res = await fetch(cleanUrl)

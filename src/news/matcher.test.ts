@@ -1,4 +1,3 @@
-// Copied unchanged from ESB Studio Phone (src/mobile/watch/matcher.test.ts, 2026-11-06). Keep the two copies in step.
 // EnergyWatch's own matcher cases (Yeasin, scripts/test-matcher.mjs, office copy of 2026-11-05), unchanged, run against
 // the keyword list bundled in ewSources.ts (the office server's live list).
 import { describe, expect, it } from 'vitest'
@@ -79,6 +78,10 @@ cases.push(
   ['ex-PM Hasina verdict on power deals due Monday', KEEP],
   ['PM Seeks More British Support To Boost Power Sector Investment', KEEP],
   ['প্রধানমন্ত্রীর সঙ্গে বিদ্যুৎ উপদেষ্টার বৈঠক', KEEP],
+  ['ঢাকা ক্লাবের প্রেসিডেন্ট নির্বাচিত হলেন কামরুল', DROP],
+  ['বিশ্বব্যাংকের প্রেসিডেন্ট ঢাকায় আসছেন', DROP],
+  ['এডিবির প্রেসিডেন্টের সঙ্গে অর্থ উপদেষ্টার বৈঠক', DROP],
+  ['বিজিএমইএর প্রেসিডেন্ট বললেন রপ্তানি বাড়ছে', DROP],
 );
 
 

@@ -151,8 +151,8 @@
 /* the three stripes of the ESB banner, as a quiet divider between name and actions */
 .home-shell .home-header-brand { order: 0; }
 .home-shell .home-quick-actions { order: 2; }
-/* ---- launcher: the three desks plus Outreach and Open, then a compact format strip ---- */
-.home-shell .home-launch { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+/* ---- launcher: the four desks plus Outreach and Open, then a compact format strip ---- */
+.home-shell .home-launch { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
 .home-shell .launch-tile {
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 14px; row-gap: 2px; align-items: center; text-align: left;
   padding: clamp(12px, 2.2vh, 18px) 16px; cursor: pointer; color: var(--text);
@@ -173,6 +173,7 @@
 .home-shell .launch-tile:nth-child(3) { --i: 2; }
 .home-shell .launch-tile:nth-child(4) { --i: 3; }
 .home-shell .launch-tile:nth-child(5) { --i: 4; }
+.home-shell .launch-tile:nth-child(6) { --i: 5; }
 /* format strip: name + size only, one tidy line each */
 .home-shell .format-note { display: none !important; }
 .home-shell .format-card { align-items: center !important; padding: 10px 12px; }
@@ -182,6 +183,7 @@
 /* footer: version and the one shortcut that matters */
 .home-shell .home-footer { gap: 14px; font-size: 11px; color: var(--text-3); }
 .home-shell .home-footer span + span::before { content: '·'; margin-right: 14px; }
+@media (max-width: 1280px) { .home-shell .home-launch { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1100px) { .home-shell .home-launch { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-height: 680px) { .home-shell .launch-note { display: none; } .home-shell .home-footer { display: none; } }
 /* ---- no top bar on Home: the desks are the launcher tiles; only a small floating control group (settings, appearance, quit) stays in the corner ---- */
@@ -241,22 +243,139 @@
 .home-shell .launch-icon { margin-bottom: auto; padding-bottom: 14px; }
 .home-shell .launch-name, .home-shell .launch-note { align-self: flex-start; margin-top: 0; grid-row: auto; }
 .home-shell .launch-note { margin-top: 2px; }
-/* ---- proportions: one 1000 px column, one 12 px radius, one rhythm. Launcher on top; formats (3 x 3) and recents side by side at 2 : 1 and equal height. ---- */
-.home-shell .home-container { max-width: 1000px; gap: clamp(18px, 3.4vh, 32px); }
-.home-shell .home-launch, .home-shell .format-card, .home-shell .recent-card, .home-shell .empty-notice { border-radius: 12px; }
-.home-shell .launch-tile { flex-direction: row; align-items: center; justify-content: flex-start; gap: 14px; min-height: clamp(68px, 10.5vh, 92px); padding: 0 20px; }
-.home-shell .launch-icon { margin: 0; padding: 0; flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: color-mix(in srgb, var(--text) 6%, transparent) !important; color: var(--text) !important; }
+/* ---- proportions: one balanced 1160 px column, 12 px radius. Launcher on top; formats (3 x 2) and recents side by side ---- */
+.home-shell .home-container { max-width: 1160px; gap: clamp(18px, 3.4vh, 32px); }
+.home-shell .home-launch, .home-shell .format-card, .home-shell .recent-card, .home-shell .empty-notice { border-radius: 14px; }
+.home-shell .home-launch {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  box-shadow: var(--h-shadow);
+  background: color-mix(in srgb, var(--card, #fff) 86%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+}
+:root[data-theme=dark] .home-shell .home-launch {
+  background: color-mix(in srgb, #161626 78%, transparent);
+  border-color: rgba(255, 255, 255, .14);
+}
+.home-shell .launch-tile {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  padding: 12px 14px !important;
+  min-height: 74px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.home-shell .launch-tile:first-child {
+  border-top-left-radius: 15px !important;
+  border-bottom-left-radius: 15px !important;
+}
+.home-shell .launch-tile:last-child {
+  border-top-right-radius: 15px !important;
+  border-bottom-right-radius: 15px !important;
+}
+.home-shell .launch-tile + .launch-tile {
+  border-left: 1px solid var(--line-2) !important;
+}
+:root[data-theme=dark] .home-shell .launch-tile + .launch-tile {
+  border-left-color: rgba(255, 255, 255, .12) !important;
+}
+.home-shell .launch-tile:hover {
+  background: rgba(255, 255, 255, .38) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75), 0 4px 16px -4px rgba(20, 20, 50, .08) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.3) !important;
+  backdrop-filter: blur(12px) saturate(1.3) !important;
+}
+.home-shell .launch-tile:hover .launch-name {
+  color: var(--ink) !important;
+}
+:root[data-theme=dark] .home-shell .launch-tile:hover {
+  background: rgba(255, 255, 255, .08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 6px 20px -4px rgba(0, 0, 0, .45) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.3) !important;
+  backdrop-filter: blur(12px) saturate(1.3) !important;
+}
+:root[data-theme=dark] .home-shell .launch-tile:hover .launch-name {
+  color: #fff !important;
+}
+.home-shell .launch-icon {
+  margin: 0 !important;
+  padding: 0 !important;
+  flex: none !important;
+  display: grid !important;
+  place-items: center;
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 11px !important;
+  background: color-mix(in srgb, var(--text) 7%, transparent) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+  transition: background-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
 .home-shell .launch-icon svg { width: 20px; height: 20px; }
-.home-shell .launch-tile > .launch-name, .home-shell .launch-tile > .launch-note { align-self: auto; }
-.home-shell .launch-tile { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; align-content: center; column-gap: 14px; row-gap: 1px; }
-.home-shell .launch-icon { grid-row: 1 / 3; }
-.home-shell .launch-name { align-self: end; margin: 0; }
-.home-shell .launch-note { align-self: start; margin: 0; }
+.home-shell .launch-tile:hover .launch-icon {
+  background: color-mix(in srgb, var(--ink) 9%, transparent) !important;
+  color: var(--ink) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent) !important;
+}
+:root[data-theme=dark] .home-shell .launch-tile:hover .launch-icon {
+  background: rgba(255, 255, 255, .08) !important;
+  color: #fff !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16) !important;
+}
+.home-shell .launch-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.home-shell .launch-name {
+  font-size: 14px !important;
+  font-weight: 650 !important;
+  line-height: 18px !important;
+  color: var(--text) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  letter-spacing: -.01em;
+  margin: 0 !important;
+  align-self: auto !important;
+}
+.home-shell .launch-note {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1px !important;
+  font-size: 11px !important;
+  line-height: 14px !important;
+  color: var(--text-3) !important;
+  margin: 0 !important;
+  align-self: auto !important;
+}
+.home-shell .launch-note span {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  display: block;
+}
 .home-shell .home-split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
 .home-shell .home-split > .home-section { display: flex; flex-direction: column; min-width: 0; }
 .home-shell .formats-grid { flex: 1; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 10px; }
-.home-shell .format-card { padding: 0 14px; gap: 10px; min-height: clamp(54px, 8.4vh, 70px); }
-.home-shell .format-glyph { width: 32px; height: 32px; }
+.home-shell .format-card { padding: 0 14px; gap: 10px; min-height: clamp(54px, 8.4vh, 70px); border-radius: 14px !important; }
+.home-shell .format-glyph { width: 40px; height: 40px; border-radius: 10px !important; }
 .home-shell .format-head { gap: 6px; }
 .home-shell .format-tag { display: none !important; }
 .home-shell .format-dims { margin-top: 2px; }
@@ -310,8 +429,8 @@
 .home-shell .format-card:hover, .home-shell .recent-card:hover { background: rgba(255, 255, 255, .66); border-color: rgba(255, 255, 255, .9); }
 :root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .32); }
 .home-shell .home-head-btn { background: transparent; }
-.home-shell .home-head-actions { padding: 2px; gap: 2px; border-radius: 10px; }
-.home-shell .home-version { background: rgba(255, 255, 255, .5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.home-shell .home-head-actions { border-radius: 999px; }
+.home-shell .home-version { border-radius: 999px; padding: 4px 10px; background: rgba(255, 255, 255, .5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 :root[data-theme=dark] .home-shell .home-version { background: rgba(255, 255, 255, .1); }
 /* ---- calmer glass: less blur and see-through, softer edge light ---- */
 .home-bg::after { background: color-mix(in srgb, var(--bg-0) 14%, transparent); }
@@ -345,63 +464,320 @@
   -webkit-backdrop-filter: blur(6px) saturate(1.15); backdrop-filter: blur(6px) saturate(1.15);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 6px 18px -10px rgba(0, 0, 0, .5);
 }
-/* ---- hover you can see in the light theme: the panel turns near-solid white, the outline darkens, a soft shadow lifts it ---- */
-.home-shell .format-card:hover, .home-shell .recent-card:hover { background: rgba(255, 255, 255, .92); border-color: rgba(30, 30, 70, .34); box-shadow: inset 0 1px 0 #fff, 0 8px 20px -10px rgba(30, 30, 70, .38); }
-.home-shell .launch-tile:hover { background: rgba(255, 255, 255, .82) !important; box-shadow: inset 0 0 0 1px rgba(30, 30, 70, .22) !important; }
-.home-shell .launch-tile:hover .launch-name { color: var(--ink); }
-:root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: rgba(255, 255, 255, .15); border-color: rgba(255, 255, 255, .4); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 8px 20px -10px rgba(0, 0, 0, .6); }
-:root[data-theme=dark] .home-shell .launch-tile:hover { background: rgba(255, 255, 255, .11) !important; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .26) !important; }
-:root[data-theme=dark] .home-shell .launch-tile:hover .launch-name { color: #fff; }
-/* ---- corner controls hide until the pointer comes near the top-right corner (or they take keyboard focus) ---- */
-.home-shell .home-topbar { position: absolute; top: 0; right: 0; left: auto; width: 340px; height: 80px; z-index: 6; }
-.home-shell .home-topbar .home-head-actions { opacity: 0; transform: translateY(-4px); transition: opacity .25s ease, transform .25s ease; }
-.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { opacity: 1; transform: none; }
-@media (hover: none) { .home-shell .home-topbar .home-head-actions { opacity: 1; transform: none; } }
-/* ---- refined hover: a gentle lift in brightness and a clearer outline, never a white slab ---- */
-.home-shell .format-card:hover, .home-shell .recent-card:hover { background: rgba(255, 255, 255, .66); border-color: rgba(30, 30, 70, .2); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7), 0 8px 18px -10px rgba(30, 30, 70, .3); }
-.home-shell .launch-tile:hover { background: rgba(30, 30, 70, .055) !important; box-shadow: none !important; }
-.home-shell .launch-tile:hover .launch-name { color: var(--text); }
-:root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .34); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 8px 18px -10px rgba(0, 0, 0, .6); }
-:root[data-theme=dark] .home-shell .launch-tile:hover { background: rgba(255, 255, 255, .08) !important; box-shadow: none !important; }
-/* ---- corner controls: quietly visible at rest, fully there on approach ---- */
-.home-shell .home-topbar .home-head-actions { opacity: .6; transform: none; }
-.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { opacity: 1; }
-.home-shell .launch-tile:hover { background: rgba(30, 30, 70, .085) !important; }
-.home-shell .format-card:hover, .home-shell .recent-card:hover { border-color: rgba(30, 30, 70, .28); }
-/* ---- corner controls, folded: one small round handle; hover or focus unfolds Settings, Appearance and Quit to its left ---- */
-.home-shell .home-topbar { width: 240px; height: 64px; }
-.home-shell .home-topbar .home-head-actions {
-  flex-direction: row; justify-content: flex-end; align-items: center; white-space: nowrap; overflow: hidden;
-  width: 36px; height: 36px; padding: 2px; gap: 2px; border-radius: 999px; opacity: .75;
-  transition: width .38s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, border-radius .38s ease;
+/* ---- subtle, soft, blurry hover: gentle frosted lift, soft diffused shadow, zero harsh dark hairlines ---- */
+.home-shell .format-card:hover, .home-shell .recent-card:hover {
+  background: rgba(255, 255, 255, .78);
+  border-color: rgba(255, 255, 255, .9);
+  box-shadow: inset 0 1px 0 #fff, 0 8px 24px -8px rgba(30, 30, 70, .18);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
 }
-.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { width: 192px; opacity: 1; border-radius: 18px; }
-.home-shell .home-fold { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--text-2); }
-.home-shell .home-topbar:hover .home-fold, .home-shell .home-topbar:focus-within .home-fold { color: var(--text-3); }
-.home-shell .home-topbar .home-head-btn { flex: none; opacity: 0; transform: translateX(8px); transition: opacity .2s ease, transform .3s cubic-bezier(.22, 1, .36, 1), background-color .15s ease; }
-.home-shell .home-topbar:hover .home-head-btn, .home-shell .home-topbar:focus-within .home-head-btn { opacity: 1; transform: none; transition-delay: .06s; }
-.home-shell .home-topbar .home-head-btn:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
-.home-shell .home-topbar { top: 12px; right: 14px; }
-.home-shell .home-topbar .home-head-actions { position: absolute; top: 0; right: 0; }
-@media (hover: none) { .home-shell .home-topbar .home-head-actions { width: 192px; border-radius: 18px; opacity: 1; } .home-shell .home-topbar .home-head-btn { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .home-shell .home-topbar .home-head-actions, .home-shell .home-topbar .home-head-btn { transition: none; } }
-/* ---- pill: every control is itself a pill, so hover and selection follow the pill's own curve ---- */
-.home-shell .home-topbar .home-head-actions { padding: 3px; gap: 2px; border-radius: 999px; }
-.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { border-radius: 999px; }
-.home-shell .home-topbar .home-head-btn { height: 30px; min-width: 30px; padding: 0; border-radius: 999px; }
-.home-shell .home-topbar .home-head-btn.quit { padding: 0 13px 0 11px; }
-.home-shell .home-fold { width: 30px; height: 30px; }
-.home-shell .home-topbar .home-head-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
-.home-shell .home-topbar .home-head-btn.quit:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
-.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { width: 172px; }
-@media (hover: none) { .home-shell .home-topbar .home-head-actions { width: 172px; } }
-/* ---- brand lockup: logo | vertical ESB stripe | name ---- */
+.home-shell .launch-tile:hover {
+  background: rgba(255, 255, 255, .38) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75), 0 4px 16px -4px rgba(20, 20, 50, .08) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.3) !important;
+  backdrop-filter: blur(12px) saturate(1.3) !important;
+}
+.home-shell .launch-tile:hover .launch-name { color: var(--ink); }
+:root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover {
+  background: rgba(255, 255, 255, .10);
+  border-color: rgba(255, 255, 255, .22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .15), 0 8px 24px -8px rgba(0, 0, 0, .55);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+}
+:root[data-theme=dark] .home-shell .launch-tile:hover {
+  background: rgba(255, 255, 255, .08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 6px 20px -4px rgba(0, 0, 0, .45) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(1.3) !important;
+  backdrop-filter: blur(12px) saturate(1.3) !important;
+}
+:root[data-theme=dark] .home-shell .launch-tile:hover .launch-name { color: #fff; }
+/* ---- corner controls: top-right collapsable user pill that unfolds Settings, Appearance & Quit on hover/focus ---- */
+.home-shell .home-topbar {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  left: auto;
+  width: auto;
+  height: 44px;
+  z-index: 25;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  overflow: visible;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  pointer-events: none;
+}
+.home-shell .home-head-actions {
+  pointer-events: auto;
+  position: relative;
+  display: inline-flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  height: 38px;
+  width: 38px;
+  min-width: 38px;
+  max-width: 38px;
+  padding: 3px;
+  gap: 0;
+  border-radius: 999px !important;
+  opacity: .9;
+  background: color-mix(in srgb, var(--card, #fff) 88%, transparent);
+  border: 1px solid var(--line-2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: 0 2px 10px rgba(20, 20, 40, .08), inset 0 1px 0 rgba(255, 255, 255, .7);
+  transition: width .36s cubic-bezier(.22, 1, .36, 1), max-width .36s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, box-shadow .25s ease, gap .25s ease, padding .25s ease;
+}
+:root[data-theme=dark] .home-shell .home-head-actions {
+  background: color-mix(in srgb, #161626 84%, transparent);
+  border-color: rgba(255, 255, 255, .14);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+
+/* Expanded state on hover, focus-within, or when popover is open */
+.home-shell .home-topbar:hover .home-head-actions,
+.home-shell .home-head-actions:hover,
+.home-shell .home-head-actions:focus-within,
+.home-shell .home-head-actions.open {
+  width: auto;
+  min-width: 38px;
+  max-width: 360px;
+  padding: 3px 4px 3px 6px;
+  gap: 3px;
+  justify-content: flex-end;
+  opacity: 1;
+  box-shadow: 0 4px 20px rgba(20, 20, 40, .14), inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+:root[data-theme=dark] .home-shell .home-topbar:hover .home-head-actions,
+:root[data-theme=dark] .home-shell .home-head-actions:hover,
+:root[data-theme=dark] .home-shell .home-head-actions:focus-within,
+:root[data-theme=dark] .home-shell .home-head-actions.open {
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .15);
+}
+
+/* Secondary controls (Settings, Appearance, Quit, separators) fade and slide in */
+.home-shell .home-head-btn:not(.home-user-btn) {
+  max-width: 0;
+  min-width: 0;
+  width: 0;
+  height: 30px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: scale(.8);
+  flex: none;
+  transition: max-width .32s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, transform .28s ease, padding .2s ease;
+}
+.home-shell .home-topbar:hover .home-head-btn:not(.home-user-btn),
+.home-shell .home-head-actions:hover .home-head-btn:not(.home-user-btn),
+.home-shell .home-head-actions:focus-within .home-head-btn:not(.home-user-btn),
+.home-shell .home-head-actions.open .home-head-btn:not(.home-user-btn) {
+  max-width: 72px;
+  min-width: 30px;
+  width: auto;
+  opacity: 1;
+  overflow: visible;
+  pointer-events: auto;
+  transform: scale(1);
+}
+.home-shell .home-topbar:hover .home-head-btn.quit,
+.home-shell .home-head-actions:hover .home-head-btn.quit,
+.home-shell .home-head-actions:focus-within .home-head-btn.quit,
+.home-shell .home-head-actions.open .home-head-btn.quit {
+  padding: 0 10px 0 8px;
+}
+
+.home-shell .home-head-sep {
+  max-width: 0;
+  width: 0;
+  margin: 0;
+  opacity: 0;
+  overflow: hidden;
+  flex: none;
+  transition: max-width .3s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, margin .2s ease;
+}
+.home-shell .home-topbar:hover .home-head-sep,
+.home-shell .home-head-actions:hover .home-head-sep,
+.home-shell .home-head-actions:focus-within .home-head-sep,
+.home-shell .home-head-actions.open .home-head-sep {
+  max-width: 1px;
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  opacity: 1;
+}
+
+.home-shell .home-head-btn {
+  height: 30px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  flex: none;
+  transition: background-color .15s ease, color .15s ease;
+}
+.home-shell .home-head-btn:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--text);
+}
+.home-shell .home-head-btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+.home-shell .home-head-btn.quit:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.home-shell .home-head-sep {
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+/* User button pill: stays at the right end of the actions capsule */
+.home-shell .home-user-btn {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  gap: 0;
+  border-radius: 999px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 550;
+  cursor: pointer;
+  flex: none;
+  opacity: 1 !important;
+  transform: none !important;
+  pointer-events: auto !important;
+  transition: width .32s cubic-bezier(.22, 1, .36, 1), padding .32s cubic-bezier(.22, 1, .36, 1), gap .32s cubic-bezier(.22, 1, .36, 1), background-color .15s ease;
+}
+.home-shell .home-topbar:hover .home-user-btn,
+.home-shell .home-head-actions:hover .home-user-btn,
+.home-shell .home-head-actions:focus-within .home-user-btn,
+.home-shell .home-head-actions.open .home-user-btn {
+  width: auto;
+  padding: 0 8px 0 4px;
+  gap: 6px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.home-shell .home-user-btn:hover,
+.home-shell .home-user-btn.open {
+  background: color-mix(in srgb, var(--text) 12%, transparent) !important;
+  color: var(--ink);
+}
+:root[data-theme=dark] .home-shell .home-user-btn:hover,
+:root[data-theme=dark] .home-shell .home-user-btn.open {
+  color: #fff;
+}
+.home-shell .home-user-btn .ed-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 50% !important;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.home-shell .home-user-name,
+.home-shell .home-user-label {
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+  transition: max-width .32s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, margin .32s ease;
+}
+.home-shell .home-topbar:hover .home-user-name,
+.home-shell .home-topbar:hover .home-user-label,
+.home-shell .home-head-actions:hover .home-user-name,
+.home-shell .home-head-actions:hover .home-user-label,
+.home-shell .home-head-actions:focus-within .home-user-name,
+.home-shell .home-head-actions:focus-within .home-user-label,
+.home-shell .home-head-actions.open .home-user-name,
+.home-shell .home-head-actions.open .home-user-label {
+  max-width: 130px;
+  opacity: 1;
+  margin-left: 2px;
+}
+.home-shell .home-user-chev {
+  opacity: 0;
+  max-width: 0;
+  width: 0;
+  flex: none;
+  transition: opacity .2s ease, width .2s ease, max-width .2s ease, transform .15s ease;
+}
+.home-shell .home-topbar:hover .home-user-chev,
+.home-shell .home-head-actions:hover .home-user-chev,
+.home-shell .home-head-actions:focus-within .home-user-chev,
+.home-shell .home-head-actions.open .home-user-chev {
+  opacity: .65;
+  width: 12px;
+  max-width: 14px;
+}
+.home-shell .home-user-btn.open .home-user-chev {
+  transform: rotate(180deg);
+}
+/* popover menu and toast */
+.home-user-menu {
+  z-index: 1000;
+  border-radius: 14px !important;
+  padding: 6px !important;
+  background: color-mix(in srgb, var(--card, #fff) 96%, transparent);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 10px 30px -6px rgba(10, 12, 30, .25), 0 2px 8px rgba(10, 12, 30, .08);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  backdrop-filter: blur(24px) saturate(1.8);
+}
+:root[data-theme=dark] .home-user-menu {
+  background: color-mix(in srgb, #161626 94%, transparent);
+  border-color: rgba(255, 255, 255, .15);
+  box-shadow: 0 14px 40px -6px rgba(0, 0, 0, .6), 0 4px 12px rgba(0, 0, 0, .4);
+}
+.home-user-menu .menu-item,
+.home-user-menu button {
+  border-radius: 8px !important;
+}
+:root[data-theme=dark] .home-user-menu {
+  background: color-mix(in srgb, #161626 94%, transparent);
+  border-color: rgba(255, 255, 255, .15);
+  box-shadow: 0 14px 40px -6px rgba(0, 0, 0, .6), 0 4px 12px rgba(0, 0, 0, .4);
+}
+.home-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1200;
+}
+/* ---- refined hover ---- */
+.home-shell .format-card:hover, .home-shell .recent-card:hover { border-color: rgba(30, 30, 70, .28); }
 .home-shell .home-header-brand { gap: clamp(14px, 2.2vh, 20px); }
 .home-shell .home-header { gap: clamp(14px, 2.8vh, 26px); }
-/* ---- pill: a hairline sets Quit apart from the two everyday controls ---- */
-.home-shell .home-head-sep { flex: none; width: 1px; height: 16px; margin: 0 3px; background: color-mix(in srgb, var(--text) 18%, transparent); }
-.home-shell .home-topbar:hover .home-head-actions, .home-shell .home-topbar:focus-within .home-head-actions { width: 182px; }
-@media (hover: none) { .home-shell .home-topbar .home-head-actions { width: 182px; } }
 /* the hero sits on the bright centre in dark mode too, so its text stays dark ink */
 :root[data-theme=dark] .home-shell .home-title { color: #16123a; }
 :root[data-theme=dark] .home-shell .home-subtitle { color: color-mix(in srgb, #16123a 78%, transparent); }
@@ -594,13 +970,14 @@
 @media (prefers-reduced-motion: reduce) { .home-shell .home-header-brand::after { animation: none; } }
 /* title and the longer tagline share one width again (title = 3.02 x the tagline size, measured) */
 .home-shell .home-title { font-size: calc(var(--hs) * 3.02); }
-/* ---- hover on Editorial / Graphics / Video / Outreach: the icon's line fills with its own shimmering colour gradient (SVG gradients defined once in HomeWorkspace; each slides slowly back and forth) ---- */
-.home-shell .launch-tile:nth-child(1):hover .launch-icon svg, .home-shell .launch-tile:nth-child(1):focus-visible .launch-icon svg { stroke: url(#home-ig-1); }
-.home-shell .launch-tile:nth-child(2):hover .launch-icon svg, .home-shell .launch-tile:nth-child(2):focus-visible .launch-icon svg { stroke: url(#home-ig-2); }
-.home-shell .launch-tile:nth-child(3):hover .launch-icon svg, .home-shell .launch-tile:nth-child(3):focus-visible .launch-icon svg { stroke: url(#home-ig-3); }
-.home-shell .launch-tile:nth-child(4):hover .launch-icon svg, .home-shell .launch-tile:nth-child(4):focus-visible .launch-icon svg { stroke: url(#home-ig-4); }
-.home-shell .launch-tile:nth-child(-n+4) .launch-icon svg { stroke-width: 2; transition: filter .3s ease; }
-.home-shell .launch-tile:nth-child(-n+4):hover .launch-icon svg { filter: drop-shadow(0 0 5px rgba(120, 110, 255, .45)); }
+/* ---- hover on News / Editorial / Graphics / Video / Outreach: the icon's line fills with its own shimmering colour gradient (SVG gradients defined once in HomeWorkspace; each slides slowly back and forth) ---- */
+.home-shell .launch-tile:nth-child(1):hover .launch-icon svg, .home-shell .launch-tile:nth-child(1):focus-visible .launch-icon svg { stroke: url(#home-ig-0); }
+.home-shell .launch-tile:nth-child(2):hover .launch-icon svg, .home-shell .launch-tile:nth-child(2):focus-visible .launch-icon svg { stroke: url(#home-ig-1); }
+.home-shell .launch-tile:nth-child(3):hover .launch-icon svg, .home-shell .launch-tile:nth-child(3):focus-visible .launch-icon svg { stroke: url(#home-ig-2); }
+.home-shell .launch-tile:nth-child(4):hover .launch-icon svg, .home-shell .launch-tile:nth-child(4):focus-visible .launch-icon svg { stroke: url(#home-ig-3); }
+.home-shell .launch-tile:nth-child(5):hover .launch-icon svg, .home-shell .launch-tile:nth-child(5):focus-visible .launch-icon svg { stroke: url(#home-ig-4); }
+.home-shell .launch-tile:nth-child(-n+5) .launch-icon svg { stroke-width: 2; transition: filter .3s ease; }
+.home-shell .launch-tile:nth-child(-n+5):hover .launch-icon svg { filter: drop-shadow(0 0 5px rgba(120, 110, 255, .45)); }
 .home-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
 /* an unsaved session found after a crash is the first card of Recent projects */
 .home-shell .recovery-card { cursor: default; border-color: color-mix(in srgb, #f0953a 55%, var(--line-2)); }
@@ -618,8 +995,8 @@
 .home-shell .formats-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .home-shell .format-card { grid-column: span 2; }
 .home-shell .format-card:nth-child(n + 4) { grid-column: span 3; }
-.home-shell .format-glyph { width: 40px; height: 40px; }
-.home-shell .format-glyph i { position: relative; overflow: hidden; background: var(--card, #fff); border: 1px solid color-mix(in srgb, var(--text) 24%, transparent); border-radius: 3px; box-shadow: 0 1px 2px rgba(20, 20, 40, .14); }
+.home-shell .format-glyph { width: 40px; height: 40px; border-radius: 10px !important; }
+.home-shell .format-glyph i { position: relative; overflow: hidden; background: var(--card, #fff); border: 1px solid color-mix(in srgb, var(--text) 24%, transparent); border-radius: 4px !important; box-shadow: 0 1px 2px rgba(20, 20, 40, .14); }
 .home-shell .format-glyph i::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 14%; min-height: 2px; background: linear-gradient(90deg, #0aa37a 0 34%, #f4c20d 34% 67%, #e53935 67%); }
 .home-shell .format-glyph i::after { content: ''; position: absolute; left: 14%; right: 22%; bottom: 16%; height: 26%; background: linear-gradient(var(--text) 0 0) 0 0 / 100% 36% no-repeat, linear-gradient(var(--text) 0 0) 0 100% / 62% 36% no-repeat; opacity: .5; border-radius: 1px; }
 @media (max-width: 1100px) { .home-shell .formats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .home-shell .format-card, .home-shell .format-card:nth-child(n + 4) { grid-column: auto; } }
@@ -700,22 +1077,42 @@
 
 
 /* the title lockup: the original monogram, the ESB stripe, "Ai Studio" — as tall as one another (ink height of the lettering, .78em), standing on one baseline,
-   and spread to exactly the width of the tagline underneath (it is justified to the lockup if the lockup is the wider one) */
-.home-shell .home-title-group { width: fit-content; max-width: 100%; }
-.home-shell .home-title { display: flex; align-items: baseline; justify-content: space-between; gap: .32em; width: 100%; white-space: nowrap; }
+   centred over the balanced two-line tagline underneath */
+.home-shell .home-title-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: auto;
+  max-width: 100%;
+}
+.home-shell .home-title {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: .32em;
+  white-space: nowrap;
+}
 .home-shell .home-mark { display: block; flex: none; height: .78em; width: auto; margin: 0; user-select: none; }
 .home-shell .home-stick { flex: none; width: .075em; height: .78em; border-radius: 2px; background: linear-gradient(180deg, #1f9d57 0 33.3%, #e53935 33.3% 66.6%, #f0953a 66.6%); box-shadow: inset 1px 0 0 rgba(255, 255, 255, .3); }
 :root[data-theme=dark] .home-shell .home-stick { filter: drop-shadow(0 2px 12px rgba(0, 0, 14, .7)) saturate(1.1); }
 .home-shell .home-name { flex: none; }
-.home-shell .home-subtitle { text-align: justify; text-align-last: justify; }
+.home-shell .home-subtitle {
+  text-align: center;
+  margin-top: 8px;
+  line-height: 1.5;
+  font-size: clamp(13px, 1.8vh, 15px);
+  color: var(--text-2);
+  letter-spacing: normal;
+}
 
 /* Recent projects is one container, the same box as the empty note, holding up to two project rows; it takes the same two rows of height whatever it holds */
-.home-shell .recents-box { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px; align-items: stretch; justify-content: stretch; text-align: left; border-style: solid; color: inherit; }
-.home-shell .recents-box .recent-card.recent-card { position: relative; -webkit-backdrop-filter: none; backdrop-filter: none; background: transparent; border-color: transparent; box-shadow: none; border-radius: 8px; padding: 0 10px; transform: none; }
+.home-shell .recents-box { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px; align-items: stretch; justify-content: stretch; text-align: left; border-style: solid; color: inherit; border-radius: 14px !important; }
+.home-shell .recents-box .recent-card.recent-card { position: relative; -webkit-backdrop-filter: none; backdrop-filter: none; background: transparent; border-color: transparent; box-shadow: none; border-radius: 10px !important; padding: 0 10px; transform: none; }
 .home-shell .recents-box .recent-card.recent-card:hover { background: var(--fill-hover); border-color: transparent; box-shadow: none; }
 .home-shell .recents-box .recent-card.recent-card:active { background: var(--fill-active); }
 .home-shell .recents-box .recent-card + .recent-card::before { content: ''; position: absolute; left: 10px; right: 10px; top: -4px; height: 1px; background: var(--line-2); }
-.home-shell .recents-box .recent-icon { background: var(--fill); }
+.home-shell .recents-box .recent-icon, .home-shell .recent-icon { width: 40px !important; height: 40px !important; border-radius: 10px !important; background: var(--fill); }
 
 /* one row, filling the container: the unsaved session if there is one, otherwise the latest project */
 .home-shell .recents-box { grid-template-rows: minmax(0, 1fr); }
@@ -739,25 +1136,79 @@
 .home-shell .recent-main .recent-meta { font-size: 11.5px; font-weight: 500; }
 .home-shell .recent-warn i { margin-left: 3px; }
 
-/* ---- Small windows, down to the app's 884 × 641 minimum (2026-11-01) ----------------------------------------------
-   Home keeps its desktop arrangement and scales it — five launch cells in one row, New graphic (three over two) beside
-   Recent projects — instead of the old ≤1100 px fallback (two-column tiles with Open project alone on a third row, one
-   column for everything, Recent pushed off the bottom). Below 1000 px the secondary parts go first: tile notes, then
-   the format pictures, so names never wrap or collide. */
+/* ---- Responsive scaling for smaller windows ---- */
 @media (max-width: 1100px) {
-  .home-shell .home-launch { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .home-shell .launch-tile:nth-child(n) { border-top: 0; }
-  .home-shell .launch-tile + .launch-tile { border-left-width: 1px; border-left-style: solid; }
+  .home-shell .home-launch {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  .home-shell .launch-tile {
+    border-radius: 0 !important;
+  }
+  .home-shell .launch-tile:first-child {
+    border-top-left-radius: 15px !important;
+    border-bottom-left-radius: 0 !important;
+  }
+  .home-shell .launch-tile:nth-child(3) {
+    border-top-right-radius: 15px !important;
+    border-bottom-right-radius: 0 !important;
+  }
+  .home-shell .launch-tile:nth-child(4) {
+    border-bottom-left-radius: 15px !important;
+    border-top-left-radius: 0 !important;
+  }
+  .home-shell .launch-tile:last-child {
+    border-bottom-right-radius: 15px !important;
+    border-top-right-radius: 0 !important;
+  }
+  .home-shell .launch-tile:nth-child(n) {
+    border-top: 0;
+  }
+  .home-shell .launch-tile:nth-child(n + 4) {
+    border-top: 1px solid var(--line-2) !important;
+  }
+  .home-shell .launch-tile:nth-child(3n + 1) {
+    border-left: 0 !important;
+  }
   .home-shell .home-split { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
   .home-shell .formats-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .home-shell .format-card { grid-column: span 2; }
   .home-shell .format-card:nth-child(n + 4) { grid-column: span 3; }
 }
+@media (max-width: 760px) {
+  .home-shell .home-launch {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .home-shell .launch-tile {
+    border-radius: 0 !important;
+  }
+  .home-shell .launch-tile:first-child {
+    border-top-left-radius: 15px !important;
+    border-bottom-left-radius: 0 !important;
+  }
+  .home-shell .launch-tile:nth-child(2) {
+    border-top-right-radius: 15px !important;
+    border-bottom-right-radius: 0 !important;
+  }
+  .home-shell .launch-tile:nth-child(5) {
+    border-bottom-left-radius: 15px !important;
+    border-top-left-radius: 0 !important;
+  }
+  .home-shell .launch-tile:last-child {
+    border-bottom-right-radius: 15px !important;
+    border-top-right-radius: 0 !important;
+  }
+  .home-shell .launch-tile:nth-child(2n + 1) {
+    border-left: 0 !important;
+  }
+  .home-shell .launch-tile:nth-child(n + 3) {
+    border-top: 1px solid var(--line-2) !important;
+  }
+}
 @media (max-width: 1000px) {
-  .home-shell .launch-tile { padding: 0 12px; column-gap: 10px; }
-  .home-shell .launch-note { display: none; }
-  .home-shell .launch-name { grid-row: 1 / span 2; align-self: center; font-size: 14px; white-space: nowrap; }
-  .home-shell .launch-icon { width: 34px; height: 34px; }
+  .home-shell .launch-tile { padding: 10px 12px !important; gap: 10px !important; }
+  .home-shell .launch-icon { width: 36px !important; height: 36px !important; border-radius: 10px !important; }
+  .home-shell .launch-name { font-size: 13.5px !important; }
+  .home-shell .launch-note { font-size: 10.5px !important; line-height: 13.5px !important; }
   .home-shell .format-glyph { display: none; }
   .home-shell .format-card { padding-inline: 14px; }
 }

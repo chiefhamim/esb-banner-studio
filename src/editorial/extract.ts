@@ -242,6 +242,8 @@ export function parseArticleDocument(html: string, url?: string): ExtractedArtic
   if (typeof DOMParser !== 'undefined') {
     const parser = new DOMParser()
     doc = parser.parseFromString(html, 'text/html')
+    unwrapNextStreamingChunks(doc)
+    unwrapNationalPortalEncodedContent(doc)
   }
 
   // Fallback for Node test environments if DOMParser is unavailable
@@ -340,9 +342,27 @@ export function parseArticleDocument(html: string, url?: string): ExtractedArtic
       warnings.push("Story text was recovered from the page's embedded data, not its markup — check paragraph order against the page.")
     }
   }
+  const deckEl = doc.querySelector('.sub-title, .subtitle, .news-sub-title, .story-deck, .article-subtitle, .lead-text, .standfirst, .excerpt, h2.subtitle, h3.subtitle')
+  const elDeck = deckEl?.textContent?.trim()
+  const ogDesc = doc.querySelector('meta[property="og:description"], meta[name="og:description"]')?.getAttribute('content')?.trim()
+  const metaDesc = doc.querySelector('meta[name="description"], meta[name="twitter:description"]')?.getAttribute('content')?.trim()
+
   if (paragraphs.length === 0) {
     method = 'metadata-only'
-    warnings.push('No article text found on the page (it may render the story in the browser). Use "Paste Text or File".')
+    for (const c of [ld?.description, ogDesc, metaDesc]) {
+      if (c && c.length >= 60 && !isBoilerplateParagraph(c) && stripSiteSuffix(c, ogSiteName) !== title) {
+        const metaParas = cleanAndDedupeParagraphs(splitBodyText(c))
+        if (metaParas.length > 0) {
+          paragraphs = metaParas
+          break
+        }
+      }
+    }
+    if (paragraphs.length > 0) {
+      warnings.push('Only the lead summary was in the HTML (this site renders the full body in the browser).')
+    } else {
+      warnings.push('No article text found on the page (it may render the story in the browser). Use "Paste Text or File".')
+    }
   } else if (paragraphs.length < 3) {
     warnings.push(`Only ${paragraphs.length} paragraph${paragraphs.length === 1 ? '' : 's'} extracted — compare the source pane with the page.`)
   }
@@ -353,11 +373,6 @@ export function parseArticleDocument(html: string, url?: string): ExtractedArtic
   const dedupedParagraphs = paragraphs
 
   // 4. Deck / Description (punchy catch sentence under 200 characters)
-  const deckEl = doc.querySelector('.sub-title, .subtitle, .news-sub-title, .story-deck, .article-subtitle, .lead-text, .standfirst, .excerpt, h2.subtitle, h3.subtitle')
-  const elDeck = deckEl?.textContent?.trim()
-  const ogDesc = doc.querySelector('meta[property="og:description"], meta[name="og:description"]')?.getAttribute('content')?.trim()
-  const metaDesc = doc.querySelector('meta[name="description"], meta[name="twitter:description"]')?.getAttribute('content')?.trim()
-
   let deck: string | undefined
   for (const c of [elDeck, ld?.description, ogDesc, metaDesc]) {
     if (c && c.length > 15 && !isBoilerplateParagraph(c) && stripSiteSuffix(c, ogSiteName) !== title) { deck = extractCatchSentence(c, 200); break }
@@ -507,6 +522,41 @@ function decodeEntities(s: string): string {
   return s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
 }
 
+/** Next.js App Router streams suspense boundaries at the tail of <body> as <div hidden id="S:0"> and pairs each with
+ *  <template id="B:0"> or <template id="P:0"> inside the article layout. Move them into place and drop `hidden` before scoring the DOM. */
+function unwrapNextStreamingChunks(doc: Document): void {
+  doc.querySelectorAll('div[hidden][id^="S:"]').forEach((chunk) => {
+    chunk.removeAttribute('hidden')
+    const suffix = (chunk.getAttribute('id') || '').slice(2)
+    const marker = suffix ? (doc.getElementById(`B:${suffix}`) || doc.getElementById(`P:${suffix}`)) : null
+    if (marker && marker.parentNode) {
+      marker.parentNode.insertBefore(chunk, marker)
+    }
+  })
+}
+
+/** Bangladesh Government National Portal (*.gov.bd / *.org.bd) stores press release & news body HTML inside
+ *  <rt-renderer encoded-content="BASE64_UTF8">. Decode it into standard article markup before scoring. */
+function unwrapNationalPortalEncodedContent(doc: Document): void {
+  doc.querySelectorAll('[encoded-content]').forEach((el) => {
+    const b64 = (el.getAttribute('encoded-content') || '').trim()
+    if (!b64) return
+    try {
+      const bin = atob(b64.replace(/\s+/g, ''))
+      const bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      const decoded = new TextDecoder('utf-8').decode(bytes).trim()
+      if (decoded) {
+        const wrapper = doc.createElement('article')
+        wrapper.setAttribute('itemprop', 'articleBody')
+        wrapper.className = 'article-body'
+        wrapper.innerHTML = decoded
+        el.replaceWith(wrapper)
+      }
+    } catch { /* ignore malformed base64 */ }
+  })
+}
+
 /** A JSON-LD articleBody is one string: split on blank lines, else on line breaks, else into groups of sentences. */
 export function splitBodyText(text: string): string[] {
   const clean = text.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, '').trim()
@@ -522,16 +572,45 @@ export function splitBodyText(text: string): string[] {
 
 const CONTENT_SELECTORS = [
   '[itemprop="articleBody"]', 'article', '.article-content', '.article-body', '.story-content', '.story-body', '.entry-content',
-  '.news-details', '.details-content', '.post-content', '.content-body', '.news-content', '.story-element', '#article-body', 'main',
+  '.news-details', '.details-content', '.post-content', '.content-body', '.news-content', '.story-element', '#article-body',
+  '.jw_article_body', '.new-details .description', '.new-details', '.desktopDetailBody', '.detailBody', '.dp2-body',
+  '.td-post-content', '.tdb_single_content .tdb-block-inner', '#mvp-content-main', '#mvp-content-body', '.details-main-col', 'main',
 ]
-const NOISE_ANCESTOR = 'header, nav, footer, aside, .sidebar, .related-news, .comment, .comments, [class*="related"], [class*="recommend"], [class*="trending"], [class*="popular"], [class*="newsletter"], [class*="share"], [class*="social"], [class*="breadcrumb"], [class*="footer"], [class*="menu"]'
+const NOISE_ANCESTOR = 'header, nav, footer, aside, .sidebar, .related-news, .comment, .comments, .tabArea, .tabList, [class*="tabArea"], [class*="tabList"], [class*="related"], [class*="recommend"], [class*="trending"], [class*="popular"], [class*="newsletter"], [class*="share"], [class*="social"], [class*="breadcrumb"], .footer, .site-footer, [class*="menu"]'
 
 function textLen(s: string | null | undefined): number { return (s || '').replace(/\s+/g, ' ').trim().length }
+
+/** Non-<p> prose inside a block for portals that format articles with <div> or <br> instead of <p>. */
+function nonParagraphProseLen(el: Element): number {
+  if (['BODY', 'MAIN', 'HEADER', 'NAV', 'FOOTER', 'ASIDE', 'UL', 'OL'].includes(el.tagName)) return 0
+  let total = 0
+  for (const child of Array.from(el.children)) {
+    if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'HEADER', 'NAV', 'FOOTER', 'ASIDE', 'UL', 'OL', 'FIGURE', 'FIGCAPTION'].includes(child.tagName)) continue
+    if (child.querySelector('div, article, section, ul, ol, table')) continue
+    const t = (child.textContent || '').replace(/\s+/g, ' ').trim()
+    if (t.length >= 60 && /[।.!?]/.test(t)) total += t.length
+  }
+  if (total >= 150) return total
+  const brCount = el.querySelectorAll('br').length
+  if (brCount >= 2 && el.children.length <= 25) {
+    const raw = (el.textContent || '').replace(/\s+/g, ' ').trim()
+    if (raw.length >= 200 && raw.length <= 15000 && (raw.match(/[।.!?]/g) ?? []).length >= 2) return raw.length
+  }
+  return total
+}
 
 /** Score a block by the prose it holds: paragraph text, minus link text (navigation reads as links), minus noise ancestry. */
 function scoreBlock(el: Element): number {
   let text = 0
-  el.querySelectorAll('p').forEach((p) => { const l = textLen(p.textContent); if (l >= 40) text += l })
+  el.querySelectorAll('p').forEach((p) => {
+    if (p.closest('header, nav, footer, aside, .sidebar, .related-news, .comment, .tabArea, .tabList, [class*="tabArea"], [class*="tabList"], [class*="related"]')) return
+    const l = textLen(p.textContent)
+    if (l >= 40) text += l
+  })
+  if (text < 200) {
+    const alt = nonParagraphProseLen(el)
+    if (alt > text) text = alt
+  }
   if (!text) return 0
   let links = 0
   el.querySelectorAll('a').forEach((a) => { links += textLen(a.textContent) })
@@ -549,9 +628,10 @@ function selectorFor(el: Element): string {
 export function pickContentRoot(doc: Document): { root: Element; selector: string; score: number } | null {
   const candidates = new Set<Element>()
   for (const sel of CONTENT_SELECTORS) doc.querySelectorAll(sel).forEach((el) => candidates.add(el))
-  doc.querySelectorAll('div, section').forEach((el) => {
+  doc.querySelectorAll('div, section, article').forEach((el) => {
     let own = 0
     for (const child of Array.from(el.children)) if (child.tagName === 'P') own += textLen(child.textContent)
+    if (own < 200) own = nonParagraphProseLen(el)
     if (own >= 200) candidates.add(el)
   })
   let best: { root: Element; selector: string; score: number } | null = null
@@ -562,27 +642,81 @@ export function pickContentRoot(doc: Document): { root: Element; selector: strin
   return best
 }
 
+function isNoisyInnerNode(el: Element): boolean {
+  if (el.hasAttribute('hidden') && !/^[SBP]:[\da-f]+$/i.test(el.getAttribute('id') || '')) return true
+  if (/display\s*:\s*none/i.test(el.getAttribute('style') || '')) return true
+  const cls = el.getAttribute('class') || ''
+  if (!cls) return false
+  // Word-bounded hidden classes so Bootstrap responsive utilities (hidden-xs, hidden-print) on desktop wrappers are kept.
+  if (/\b(?:hidden|d-none|sr-only|visually-hidden|mfp-hide|advertisement|comment|comments|footer|site-footer|author-box|copyright|address-box|print-info|sidebar|related-news|tabArea|tabList)\b/i.test(cls)) return true
+  if (/(?:^|[\s_-])(?:related|recommend|caption|share|social|byline|breadcrumb|post-tags|tag-list|article-tags|tabArea|tabList|paywall)(?:$|[\s_-])/i.test(cls)) return true
+  return false
+}
+
+function isExcludedWithinRoot(node: Element, root: Element): boolean {
+  if (node.closest('header, nav, footer, aside, figcaption')) return true
+  let cur: Element | null = node
+  while (cur && cur !== root) {
+    if (isNoisyInnerNode(cur)) return true
+    cur = cur.parentElement
+  }
+  return false
+}
+
+/** Extract paragraphs when a portal formats story text with <div> blocks or <br> breaks instead of <p>. */
+function divAndBrParagraphs(root: Element): string[] {
+  const clone = root.cloneNode(true) as Element
+  clone.querySelectorAll('script, style, noscript, header, nav, footer, aside, figure, figcaption, h1, h2, h3, ul, ol, form, button, .advertisement, .related-news, .sidebar, .comment, .tabArea, .tabList, [class*="tabArea"], [class*="tabList"], [class*="paywall"], [class*="related"], [class*="share"], [class*="social"]').forEach((n) => n.remove())
+  const html = clone.innerHTML
+    .replace(/<br\s*\/?>/gi, '\n\n')
+    .replace(/<\/(?:p|div|section|article|h[1-6]|li|blockquote)>/gi, '\n\n')
+    .replace(/<[^>]+>/g, ' ')
+  const decoded = decodeEntities(html)
+  const blocks: string[] = []
+  for (const raw of decoded.split(/\n\s*\n+/)) {
+    const t = raw.replace(/\s+/g, ' ').trim()
+    if (t.length >= 25) blocks.push(t)
+  }
+  return cleanAndDedupeParagraphs(blocks)
+}
+
 function paragraphsFromRoot(root: Element): string[] {
   const raw: string[] = []
   root.querySelectorAll('p').forEach((p) => {
-    if (p.closest('header, nav, footer, aside, .advertisement, .comment, .footer, .site-footer, .author-box, .copyright, .address-box, .print-info, .sidebar, .related-news, .hidden, [hidden], [class*="hidden"], [style*="display: none"], [style*="display:none"], [class*="footer"], [class*="related"], [class*="caption"], [class*="share"], [class*="social"], [class*="byline"], [class*="author"], [class*="tag"], [class*="breadcrumb"], figcaption')) return
+    if (isExcludedWithinRoot(p, root)) return
     const text = p.textContent?.trim()
     if (text) raw.push(text)
   })
-  return cleanAndDedupeParagraphs(raw)
+  const fromP = cleanAndDedupeParagraphs(raw)
+  if (fromP.length >= 1) return fromP
+  return divAndBrParagraphs(root)
 }
 
-/** Stories that only exist in embedded app state (Next.js / Nuxt / initial-state JSON): long prose strings, in document order. */
+/** Stories that only exist in embedded app state (Next.js / Nuxt / Inertia / initial-state JSON): long prose strings, in document order. */
 export function extractPageDataParagraphs(doc: Document): string[] {
   const out: string[] = []
   const seen = new Set<string>()
   const visit = (v: unknown, depth: number) => {
-    if (depth > 12 || out.length > 80) return
+    if (depth > 14 || out.length > 80) return
     if (typeof v === 'string') {
-      const s = v.replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, '').trim()
+      const s = decodeEntities(v)
+        .replace(/<br\s*\/?>/gi, '\n\n')
+        .replace(/<\/(?:p|div)>/gi, '\n\n')
+        .replace(/<[^>]+>/g, '')
+        .trim()
       for (const part of s.split(/\n\s*\n+/)) {
-        const t = part.trim()
-        if (t.length >= 120 && (t.match(/[।.!?]/g) ?? []).length >= 2 && !/https?:\/\//.test(t) && !seen.has(t)) { seen.add(t); out.push(t) }
+        const t = part.replace(/\s+/g, ' ').trim()
+        if (
+          t.length >= 80 &&
+          (t.match(/[।.!?]/g) ?? []).length >= 1 &&
+          !/https?:\/\//.test(t) &&
+          !/[{};]{2,}|function\s*\(|\["\$",|"className"\s*:|"children"\s*:|^\s*[\da-f]+:[A-Za-z]*[\[{"]|\/_next\/|static\/chunks\/|\.js"|"\s*,\s*"/i.test(t) &&
+          !isBoilerplateParagraph(t) &&
+          !seen.has(t)
+        ) {
+          seen.add(t)
+          out.push(t)
+        }
       }
     } else if (Array.isArray(v)) v.forEach((x) => visit(x, depth + 1))
     else if (v && typeof v === 'object') Object.values(v as Record<string, unknown>).forEach((x) => visit(x, depth + 1))
@@ -590,11 +724,28 @@ export function extractPageDataParagraphs(doc: Document): string[] {
   doc.querySelectorAll('script#__NEXT_DATA__, script[type="application/json"]').forEach((sc) => {
     try { visit(JSON.parse(sc.textContent || ''), 0) } catch { /* not JSON */ }
   })
+  // Laravel Inertia.js (e.g. Sheershanews) embeds page props JSON in [data-page].
+  doc.querySelectorAll('[data-page]').forEach((el) => {
+    try { visit(JSON.parse(el.getAttribute('data-page') || ''), 0) } catch { /* not JSON */ }
+  })
   if (out.length === 0) {
     doc.querySelectorAll('script:not([src])').forEach((sc) => {
-      const m = (sc.textContent || '').match(/(?:__INITIAL_STATE__|__NUXT__|__PRELOADED_STATE__|__APOLLO_STATE__)\s*=\s*(\{[\s\S]*\})\s*;?\s*$/)
-      if (!m) return
-      try { visit(JSON.parse(m[1]), 0) } catch { /* not plain JSON */ }
+      const txt = sc.textContent || ''
+      const m = txt.match(/(?:__INITIAL_STATE__|__NUXT__|__PRELOADED_STATE__|__APOLLO_STATE__)\s*=\s*(\{[\s\S]*\})\s*;?\s*$/)
+      if (m) {
+        try { visit(JSON.parse(m[1]), 0) } catch { /* not plain JSON */ }
+      }
+      // Next.js App Router RSC payload chunks: self.__next_f.push([1, "..."])
+      if (txt.includes('__next_f.push')) {
+        for (const pm of txt.matchAll(/__next_f\.push\(\[\d+,\s*("(?:\\.|[^"\\])*")\]\)/g)) {
+          try {
+            const chunk = JSON.parse(pm[1])
+            if (typeof chunk === 'string') {
+              visit(chunk, 0)
+            }
+          } catch { /* ignore */ }
+        }
+      }
     })
   }
   return out
@@ -602,6 +753,7 @@ export function extractPageDataParagraphs(doc: Document): string[] {
 
 function stripSiteSuffix(title: string, siteName?: string): string {
   let t = title.trim()
+  t = t.replace(/\s*\|\s*(?:খবর|সংবাদ|প্রেস\s*রিলিজ|সংবাদ\s*বিজ্ঞপ্তি|প্রেস\s*বিজ্ঞপ্তি|Press\s*Release|Press\s*Releases|News|Notice|নোটিশ)\s*\|.*$/i, '').trim()
   if (siteName) {
     const esc = siteName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     t = t.replace(new RegExp(`\\s*[-|–—•:]\\s*${esc}\\s*$`, 'i'), '').trim()

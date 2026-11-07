@@ -1,4 +1,3 @@
-// Copied unchanged from ESB Studio Phone (src/mobile/watch/matcher.ts, 2026-11-06). Keep the two copies in step.
 // EnergyWatch's headline matcher, copied from EnergyWatch (Yeasin, src/matcher.js, office copy of 2026-11-05) and typed for
 // this app. The rules are unchanged; only the types and the KwKind union are new. Its own test cases (scripts/test-matcher.mjs)
 // are in matcher.test.ts and run against the keyword list bundled in ewSources.ts.
@@ -38,6 +37,7 @@ const PUNCT_START = /^[\s"'‘’“”()[\],:;.!?–—-]+/
 const FILLER_END = /(?:^|\s)(?:new|former|ex|late|then|the|outgoing|incoming|acting|deputy|নতুন|সাবেক|নবনির্বাচিত|তৎকালীন|প্রয়াত|ভারপ্রাপ্ত)$/i
 const ACRONYM_OR_NUMBER = /^(?:[A-Z]{2,}|\d[\d:.]*)$/
 const ORG_WORD = /^(?:vice|club|association|chamber|party|union|committee|federation|council|society|university|college|bank|company|league|unit|branch|district|upazila|city|bar|press|board|group|forum|foundation|chapter|wing)$/i
+const BN_ORG_END = /(?:^|[\s"'‘’“”()[\],:;.!?–—-])(?:ব্যাংক|ব্যাংকের|ক্লাব|ক্লাবের|সমিতি|সমিতির|ফেডারেশন|ফেডারেশনের|চেম্বার|চেম্বারের|অ্যাসোসিয়েশন|অ্যাসোসিয়েশনের|ইউনিয়ন|ইউনিয়নের|পরিষদ|পরিষদের|বিশ্ববিদ্যালয়|বিশ্ববিদ্যালয়ের|কলেজ|কলেজের|বোর্ড|বোর্ডের|কমিটি|কমিটির|বিশ্বব্যাংক|বিশ্বব্যাংকের|এডিবি|এডিবির|আইএমএফ|ফিফা|বিসিবি|বাফুফে|বিজিএমইএ|এফবিসিসিআই)$/i
 
 const CAPITALISED = /^[A-Z][a-z][A-Za-z.'’-]*$/
 const BD_SIDE = new RegExp(
@@ -104,25 +104,26 @@ export function buildMatcher(keywordRows: EwKeyword[]): (title: string) => Match
   const strong = byKind.strong.map(compileTerm)
   const general = byKind.general.map(compileTerm)
 
-  function ownLeader(title: string, start: number, end: number, ascii: boolean): boolean {
+  function ownLeader(title: string, start: number, end: number, ascii: boolean, diplomaticBd = false): boolean {
     let before = title.slice(0, start).replace(PUNCT_END, '')
     const filler = before.match(FILLER_END)
     if (filler) before = before.slice(0, filler.index).replace(PUNCT_END, '')
-    if (before && (foreign.atEnd(before) || person.atEnd(before))) return false
+    if (before && BN_ORG_END.test(before)) return false
     if (ascii && title.slice(start, end) === 'president') return false
     if (ascii) {
       const prev = before.split(/\s+/).pop() || ''
       if (ACRONYM_OR_NUMBER.test(prev) || ORG_WORD.test(prev)) return false
-      if (CAPITALISED.test(prev) && !OWN_PREFIX.test(prev)) return false
+      if (!diplomaticBd && CAPITALISED.test(prev) && !OWN_PREFIX.test(prev)) return false
     }
+    if (!diplomaticBd && before && (foreign.atEnd(before) || person.atEnd(before))) return false
     const after = title.slice(end).replace(/^\S*/, '').replace(PUNCT_START, '')
-    if (after && person.atStart(after)) return false
+    if (!diplomaticBd && after && person.atStart(after)) return false
     if (ascii) {
       const rest = title.slice(end)
       const of = rest.match(/^\s+of\s+(?:the\s+)?([A-Z][A-Za-z]+)/)
       if (of && !OWN_PREFIX.test(of[1])) return false
       const nm = rest.match(/^\s+([A-Z][a-z]+)\s+([A-Z][a-z]+)/)
-      if (nm && !OWN_NAME.test(nm[1]) && !isTitleCase(title)) return false
+      if (!diplomaticBd && nm && !OWN_NAME.test(nm[1]) && !isTitleCase(title)) return false
     }
     return true
   }
@@ -136,20 +137,21 @@ export function buildMatcher(keywordRows: EwKeyword[]): (title: string) => Match
     const strongHits = strong.filter((x) => x.re.test(title))
     let hits = general.filter((x) => x.re.test(title))
 
-    if (!strongHits.length) {
-      const hasBd = bd.any(title)
-      if (!hasBd) {
-        const abroad = foreign.any(title) || person.any(title)
-        hits = hits.filter((x) => {
-          if (x.category !== 'leadership') return true
-          for (const m of title.matchAll(new RegExp(x.source, x.flags + 'g'))) {
-            if (ownLeader(title, m.index!, m.index! + m[0].length, x.ascii) && (!abroad || bdSide(title))) return true
-          }
-          return false
-        })
+    const hasBd = bd.any(title)
+    const hasBdSide = bdSide(title)
+    const diplomaticBd = hasBd && hasBdSide
+    const abroad = foreign.any(title) || person.any(title)
+    // Always verify general leadership keywords ("PM", "Prime Minister", "President", "প্রধানমন্ত্রী", "রাষ্ট্রপতি")
+    // so foreign leaders or club/bank/chamber presidents are never misclassified under PM & President, even when
+    // the headline also contains an energy keyword or a Bangladesh context word like "থেকে" or "ঢাকা".
+    hits = hits.filter((x) => {
+      if (x.category !== 'leadership') return true
+      for (const m of title.matchAll(new RegExp(x.source, x.flags + 'g'))) {
+        if (ownLeader(title, m.index!, m.index! + m[0].length, x.ascii, diplomaticBd) && (!abroad || hasBdSide || hasBd)) return true
       }
-      if (!hits.length) return null
-    }
+      return false
+    })
+    if (!strongHits.length && !hits.length) return null
 
     const all = [...strongHits, ...hits]
     return {

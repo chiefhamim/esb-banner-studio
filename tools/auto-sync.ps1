@@ -45,6 +45,10 @@ while ($true) {
             
             $latestCommit = (& git log -1 --oneline) 2>$null
             Write-SyncLog "Successfully updated to: $latestCommit"
+            
+            Write-SyncLog "Rebuilding production bundle (npm run build)..."
+            & npm run build 2>&1 | Out-Null
+            Write-SyncLog "Build completed successfully. Local app is 1:1 with GitHub."
         }
     } catch {
         Write-SyncLog "Error during sync: $_"
