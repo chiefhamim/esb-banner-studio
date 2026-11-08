@@ -389,60 +389,87 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  padding: clamp(20px, 3.6vh, 32px) 20px;
-  text-align: center;
-  gap: 0;
+  padding: clamp(10px, 1.8vh, 16px) 16px;
+  text-align: left;
+  gap: clamp(8px, 1.4vh, 12px);
+  overflow: hidden;
+}
+.home-shell .empty-recents-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 .home-shell .empty-recents-badge {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 13px;
-  background: color-mix(in srgb, var(--text) 6%, transparent);
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
   border: 1px solid var(--line-2);
   color: var(--text-2);
-  margin-bottom: 12px;
+  margin: 0;
+  flex: none;
 }
 :root[data-theme=dark] .home-shell .empty-recents-badge {
-  background: rgba(255, 255, 255, .06);
-  border-color: rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .07);
+  border-color: rgba(255, 255, 255, .14);
   color: var(--text-2);
+}
+.home-shell .empty-recents-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .home-shell .empty-recents-title {
-  font-size: 14.5px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 650;
   color: var(--text);
-  margin-bottom: 4px;
+  line-height: 17px;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .home-shell .empty-recents-sub {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-2);
-  max-width: 280px;
-  margin: 0 0 16px;
+  font-size: 11.5px;
+  line-height: 15px;
+  color: var(--text-3);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .home-shell .empty-recents-actions {
   display: flex;
+  flex-direction: row;
   gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  justify-content: center;
 }
 .home-shell .empty-recents-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 13px;
+  height: 29px;
+  padding: 0 12px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   border: 1px solid var(--line-2);
   background: color-mix(in srgb, var(--card, #fff) 70%, transparent);
   color: var(--text);
   cursor: pointer;
+  white-space: nowrap;
+  flex: none;
   transition: transform .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
 :root[data-theme=dark] .home-shell .empty-recents-btn {
