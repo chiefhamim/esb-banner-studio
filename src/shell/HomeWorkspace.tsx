@@ -398,7 +398,23 @@ export function HomeWorkspace() {
               )}
             </div>
           ) : (
-            <div className="empty-notice"><Icon name="folder" size={22} /><span>Nothing opened yet</span><small>Projects you open or save appear here.</small></div>
+            <div className="empty-notice home-empty-recents">
+              <div className="empty-recents-badge" aria-hidden>
+                <Icon name="folder" size={24} />
+              </div>
+              <span className="empty-recents-title">Nothing opened yet</span>
+              <p className="empty-recents-sub">Your recent story drafts, banners, and exported graphics will appear here automatically.</p>
+              <div className="empty-recents-actions">
+                <button type="button" className="empty-recents-btn" onClick={() => handleNewProject()}>
+                  <Icon name="plus" size={13} />
+                  <span>New graphic</span>
+                </button>
+                <button type="button" className="empty-recents-btn is-alt" onClick={() => setWorkspace('editorial')}>
+                  <Icon name="power" size={13} />
+                  <span>Open Editorial</span>
+                </button>
+              </div>
+            </div>
           )}
         </section>
         </div>

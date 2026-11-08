@@ -211,7 +211,7 @@
 .home-shell .launch-tile { grid-template-columns: auto 1fr; }
 /* ---- quiet hover: the card brightens and its outline firms up. Nothing moves, nothing draws, nothing slides. ---- */
 .home-shell .launch-tile::before { display: none; }
-.home-shell .launch-tile, .home-shell .format-card, .home-shell .recent-card { transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.home-shell .launch-tile, .home-shell .format-card, .home-shell .recent-card { transition: transform .2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color .18s ease, border-color .18s ease, box-shadow .18s ease; }
 .home-shell .launch-tile:hover, .home-shell .format-card:hover, .home-shell .recent-card:hover { transform: none; background: var(--card, #fff); border-color: color-mix(in srgb, var(--text) 38%, transparent); box-shadow: var(--h-shadow); }
 :root[data-theme=dark] .home-shell .launch-tile:hover, :root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: #1d1d2a; border-color: rgba(255, 255, 255, .34); }
 .home-shell .launch-tile:active, .home-shell .format-card:active, .home-shell .recent-card:active { background: color-mix(in srgb, var(--card, #fff) 80%, var(--text) 4%); }
@@ -384,6 +384,93 @@
 .home-shell .empty-notice { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 16px; text-align: center; color: var(--text-3); border-style: dashed; }
 .home-shell .empty-notice span { font-size: 13px; font-weight: 600; color: var(--text-2); margin-top: 6px; }
 .home-shell .empty-notice small { font-size: 11.5px; line-height: 16px; }
+/* ---- elevated empty state for recents ---- */
+.home-shell .home-empty-recents {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(20px, 3.6vh, 32px) 20px;
+  text-align: center;
+  gap: 0;
+}
+.home-shell .empty-recents-badge {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border: 1px solid var(--line-2);
+  color: var(--text-2);
+  margin-bottom: 12px;
+}
+:root[data-theme=dark] .home-shell .empty-recents-badge {
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(255, 255, 255, .12);
+  color: var(--text-2);
+}
+.home-shell .empty-recents-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.home-shell .empty-recents-sub {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+  max-width: 280px;
+  margin: 0 0 16px;
+}
+.home-shell .empty-recents-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.home-shell .empty-recents-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--card, #fff) 70%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+:root[data-theme=dark] .home-shell .empty-recents-btn {
+  background: rgba(255, 255, 255, .08);
+  border-color: rgba(255, 255, 255, .15);
+  color: #fff;
+}
+.home-shell .empty-recents-btn:hover {
+  transform: translateY(-1.5px);
+  background: var(--fill-hover, rgba(0, 0, 0, .06));
+  border-color: color-mix(in srgb, var(--ink) 30%, var(--line-2));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+}
+:root[data-theme=dark] .home-shell .empty-recents-btn:hover {
+  background: rgba(255, 255, 255, .14);
+  border-color: rgba(255, 255, 255, .3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+}
+.home-shell .empty-recents-btn.is-alt {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border-color: color-mix(in srgb, var(--ink) 20%, transparent);
+  color: var(--ink);
+}
+:root[data-theme=dark] .home-shell .empty-recents-btn.is-alt {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .25);
+  color: #fff;
+}
 @media (max-width: 1100px) { .home-shell .home-split { grid-template-columns: minmax(0, 1fr); } .home-shell .formats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* "Studio" only: a slow energy-green to teal to blue sheen that drifts across the word */
 .home-shell .home-title-accent {
@@ -466,11 +553,22 @@
 }
 /* ---- subtle, soft, blurry hover: gentle frosted lift, soft diffused shadow, zero harsh dark hairlines ---- */
 .home-shell .format-card:hover, .home-shell .recent-card:hover {
+  transform: translateY(-2.5px);
   background: rgba(255, 255, 255, .78);
   border-color: rgba(255, 255, 255, .9);
   box-shadow: inset 0 1px 0 #fff, 0 8px 24px -8px rgba(30, 30, 70, .18);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
   backdrop-filter: blur(14px) saturate(1.3);
+}
+.home-shell .format-card:active, .home-shell .recent-card:active {
+  transform: translateY(0) scale(0.985);
+}
+.home-shell .format-card .format-glyph i {
+  transition: transform .22s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow .22s ease;
+}
+.home-shell .format-card:hover .format-glyph i {
+  transform: scale(1.08);
+  box-shadow: 0 4px 10px rgba(20, 20, 40, .28);
 }
 .home-shell .launch-tile:hover {
   background: rgba(255, 255, 255, .38) !important;
@@ -480,11 +578,15 @@
 }
 .home-shell .launch-tile:hover .launch-name { color: var(--ink); }
 :root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover {
+  transform: translateY(-2.5px);
   background: rgba(255, 255, 255, .10);
   border-color: rgba(255, 255, 255, .22);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .15), 0 8px 24px -8px rgba(0, 0, 0, .55);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
   backdrop-filter: blur(14px) saturate(1.3);
+}
+:root[data-theme=dark] .home-shell .format-card:active, :root[data-theme=dark] .home-shell .recent-card:active {
+  transform: translateY(0) scale(0.985);
 }
 :root[data-theme=dark] .home-shell .launch-tile:hover {
   background: rgba(255, 255, 255, .08) !important;

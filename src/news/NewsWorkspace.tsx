@@ -546,7 +546,12 @@ export function NewsWorkspace() {
                   : items.length ? 'Nothing was published in this window. Try a longer one.'
                   : `Energy & Power, PM & President, and Official Press releases from ${PORTALS.length} Bangladeshi portals and ${PRESS_OFFICES.length} government offices.`}</p>
                 {filtered && !busy && <button type="button" className="btn" onClick={clearFilters}><Icon name="x" size={14} />Clear filters</button>}
-                {(!filtered || (cat === 'press' && !items.some((x) => x.categories.includes('press')))) && !busy && !range && <button type="button" className="btn primary" onClick={refresh}><Icon name="refresh" size={15} />Check now</button>}
+                {(!filtered || (cat === 'press' && !items.some((x) => x.categories.includes('press')))) && !busy && !range && (
+                  <button type="button" className="btn primary nw-scan-btn" onClick={refresh}>
+                    <Icon name="refresh" size={15} />
+                    <span>{items.length ? 'Check now' : `Scan all ${PORTALS.length} portals & ${PRESS_OFFICES.length} press wings`}</span>
+                  </button>
+                )}
                 {!filtered && !busy && items.length > 0 && !range && prefs.maxAgeH < 24 && <button type="button" className="btn" onClick={() => setWindow(24)}><Icon name="clock" size={14} />Last 24 hours</button>}
               </div>
             )}

@@ -239,7 +239,24 @@
 .nw-empty > svg, .nw-spin { color: var(--text-3); }
 .nw-spin { display: grid; animation: nw-spin .9s linear infinite; }
 .nw-empty h3 { margin: 4px 0 0; font: 700 15px/20px var(--font-ui); color: var(--text); }
-.nw-empty p { max-width: 380px; margin: 0 0 6px; font: 500 12.5px/18px var(--font-ui); }
+.nw-empty p { max-width: 420px; margin: 0 0 10px; font: 500 12.5px/18px var(--font-ui); }
+.nw-empty .nw-scan-btn {
+  height: 36px;
+  padding: 0 20px;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  border-radius: var(--r-2);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 25%, transparent);
+  transition: transform .18s var(--ease), box-shadow .18s var(--ease), background-color .18s var(--ease);
+}
+.nw-empty .nw-scan-btn:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--ink) 35%, transparent);
+}
+.nw-empty .nw-scan-btn:active {
+  transform: translateY(0) scale(.98);
+}
 
 /* ---------------------------------------------------------------- right: cards, as Outreach's inspector */
 .nw-card { flex: none; display: flex; flex-direction: column; gap: 12px; padding: 15px; background: var(--card); border: 1px solid color-mix(in srgb, var(--card-line) 80%, transparent); border-radius: var(--r-3); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
