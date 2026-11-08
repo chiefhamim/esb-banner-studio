@@ -399,15 +399,11 @@ export function HomeWorkspace() {
             </div>
           ) : (
             <div className="empty-notice home-empty-recents">
-              <div className="empty-recents-head">
-                <div className="empty-recents-badge" aria-hidden>
-                  <Icon name="folder" size={18} />
-                </div>
-                <div className="empty-recents-text">
-                  <span className="empty-recents-title">Nothing opened yet</span>
-                  <p className="empty-recents-sub">Your recent drafts and banners appear here</p>
-                </div>
+              <div className="empty-recents-badge" aria-hidden>
+                <Icon name="folder" size={18} />
               </div>
+              <span className="empty-recents-title">Nothing opened yet</span>
+              <p className="empty-recents-sub">Your recent drafts and banners appear here</p>
               <div className="empty-recents-actions">
                 <button type="button" className="empty-recents-btn" onClick={() => handleNewProject()}>
                   <Icon name="plus" size={13} />
