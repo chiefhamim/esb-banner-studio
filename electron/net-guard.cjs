@@ -342,19 +342,6 @@ async function safeFetch(targetUrl, options = {}) {
             return
           }
         }
-        // Many Bangladesh National Portal (.gov.bd / .org.bd) servers omit the intermediate BCC CA certificate
-        // from their TLS handshake chain in Node's https client; fall back to http:// for those .bd hosts.
-        if (isHttps && /\.(gov|org)\.bd$/i.test(parsed.hostname) && err && (
-          err.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
-          err.code === 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY' ||
-          err.code === 'UNABLE_TO_GET_ISSUER_CERT' ||
-          /unable to verify the first certificate|unable to get local issuer certificate/i.test(err.message)
-        )) {
-          const next = new URL(currentUrl)
-          next.protocol = 'http:'
-          resolve({ redirect: true, nextUrl: next.href })
-          return
-        }
         resolve({ ok: false, code: 'network_error', error: err.message })
       })
 

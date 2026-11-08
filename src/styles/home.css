@@ -254,13 +254,13 @@
   border-radius: 16px !important;
   overflow: hidden !important;
   box-shadow: var(--h-shadow);
-  background: color-mix(in srgb, var(--card, #fff) 86%, transparent);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
-  backdrop-filter: blur(20px) saturate(1.6);
+  background: var(--card, #fff);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 :root[data-theme=dark] .home-shell .home-launch {
-  background: color-mix(in srgb, #161626 78%, transparent);
-  border-color: rgba(255, 255, 255, .14);
+  background: var(--card, #14141e);
+  border-color: var(--line-2);
 }
 .home-shell .launch-tile {
   display: flex !important;
@@ -294,19 +294,19 @@
   border-left-color: rgba(255, 255, 255, .12) !important;
 }
 .home-shell .launch-tile:hover {
-  background: rgba(255, 255, 255, .38) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75), 0 4px 16px -4px rgba(20, 20, 50, .08) !important;
-  -webkit-backdrop-filter: blur(12px) saturate(1.3) !important;
-  backdrop-filter: blur(12px) saturate(1.3) !important;
+  background: var(--fill, rgba(0, 0, 0, .04)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 .home-shell .launch-tile:hover .launch-name {
   color: var(--ink) !important;
 }
 :root[data-theme=dark] .home-shell .launch-tile:hover {
-  background: rgba(255, 255, 255, .08) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 6px 20px -4px rgba(0, 0, 0, .45) !important;
-  -webkit-backdrop-filter: blur(12px) saturate(1.3) !important;
-  backdrop-filter: blur(12px) saturate(1.3) !important;
+  background: var(--fill, rgba(255, 255, 255, .06)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 :root[data-theme=dark] .home-shell .launch-tile:hover .launch-name {
   color: #fff !important;

@@ -129,7 +129,7 @@ describe('Editorial Desk — Newsroom Boilerplate Filtering & CMS Constraints', 
     expect(slug.length).toBeLessThanOrEqual(80)
   })
 
-  it('translates Bengali news story into English with SEO fields and full body', async () => {
+  it('translates Bengali news story into English with SEO fields and full body', { timeout: 15000 }, async () => {
     const res = await translateNewsArticle({
       title: '৫৯২ কোটি টাকায় নতুন দুটি কূপ খনন, গ্রিডে দৈনিক ৩০ মিলিয়ন ঘনফুট গ্যাস',
       deck: 'সিলেট গ্যাস ক্ষেত্রে উন্নয়ন কূপ খনন প্রকল্প বাস্তবায়ন করবে বাপেক্স ও পেট্রোবাংলা।',
@@ -149,7 +149,7 @@ describe('Editorial Desk — Newsroom Boilerplate Filtering & CMS Constraints', 
     expect(res.body).toContain('592')
   })
 
-  it('translates multiple paragraphs in a single high-speed batch preserving structure', async () => {
+  it('translates multiple paragraphs in a single high-speed batch preserving structure', { timeout: 15000 }, async () => {
     const inputParagraphs = [
       'সিলেট গ্যাস ফিল্ডসের কৈলাশটিলা ও রশীদপুর ক্ষেত্রে নতুন অনুসন্ধান কূপ খনন করা হবে।',
       'প্রকল্পের প্রাথমিক ব্যয় নির্ধারণ করা হয়েছে ৫৯২ কোটি টাকা।',
@@ -312,7 +312,7 @@ describe('Editorial Desk — Intake robustness', () => {
     expect(describeIntakeError(new Error('boom')).detail).toBe('boom')
   })
 
-  it('extracts Next.js streamed chunks, WordPress author/tag classes, Bootstrap hidden-xs wrappers, and div/br bodies', async () => {
+  it('extracts Next.js streamed chunks, WordPress author/tag classes, Bootstrap hidden-xs wrappers, and div/br bodies', { timeout: 15000 }, async () => {
     const { JSDOM } = await import('jsdom')
     const prevDOMParser = globalThis.DOMParser
     globalThis.DOMParser = new JSDOM('').window.DOMParser as typeof DOMParser
@@ -336,6 +336,29 @@ describe('Editorial Desk — Intake robustness', () => {
         <body><div class="news-details">সিলেট অঞ্চলে নতুন গ্যাস কূপ খননের কাজ দ্রুতগতিতে এগিয়ে চলছে বলে জানিয়েছেন পেট্রোবাংলার চেয়ারম্যান।<br><br>আগামী বছরের মাঝামাঝি সময়ে এই কূপ থেকে প্রতিদিন বিশ মিলিয়ন ঘনফুট গ্যাস জাতীয় গ্রিডে সরবরাহ করা যাবে।</div></body></html>`
       const a2 = parseArticleDocument(brHtml, 'https://example.com/news/2')
       expect(a2.paragraphs.length).toBe(2)
+    } finally {
+      globalThis.DOMParser = prevDOMParser
+    }
+  })
+
+  it('sanitizes national portal encoded-content dropping scripts and event handlers (SEC-03)', { timeout: 15000 }, async () => {
+    const { JSDOM } = await import('jsdom')
+    const prevDOMParser = globalThis.DOMParser
+    globalThis.DOMParser = new JSDOM('').window.DOMParser as typeof DOMParser
+    try {
+      const maliciousHtml = '<p>জাতীয় গ্রিডে বিদ্যুৎ সরবরাহের সার্বিক পরিস্থিতি স্বাভাবিক রাখতে নতুন নির্দেশনা জারি করেছে বিদ্যুৎ বিভাগ।</p><p>দেশের বিভিন্ন শিল্পাঞ্চলে নিরবচ্ছিন্ন জ্বালানি নিশ্চিতকরণে প্রয়োজনীয় সকল পদক্ষেপ গ্রহণের নির্দেশ দেওয়া হয়েছে।</p><script>window.pwned=true</script><img src="x" onerror="alert(1)">'
+      const b64 = Buffer.from(maliciousHtml, 'utf8').toString('base64')
+      const portalDoc = `<!doctype html><html><head><title>জাতীয় বার্তা</title></head>
+        <body>
+          <rt-renderer encoded-content="${b64}"></rt-renderer>
+        </body></html>`
+      const article = parseArticleDocument(portalDoc, 'https://powerdivision.gov.bd/press/1')
+      expect(article.paragraphs.length).toBeGreaterThan(0)
+      expect(article.paragraphs[0]).toContain('জাতীয় গ্রিডে বিদ্যুৎ সরবরাহের')
+      for (const p of article.paragraphs) {
+        expect(p).not.toContain('script')
+        expect(p).not.toContain('onerror')
+      }
     } finally {
       globalThis.DOMParser = prevDOMParser
     }

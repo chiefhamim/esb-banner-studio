@@ -1,5 +1,6 @@
 // DOMParser-based offline article extractor.
 // Extracts clean article headline, deck, body paragraphs, byline, publisher, date, and media from HTML.
+import { sanitizeBodyHtml } from './richBody'
 
 export interface ExtractedImage {
   src: string
@@ -547,11 +548,14 @@ function unwrapNationalPortalEncodedContent(doc: Document): void {
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
       const decoded = new TextDecoder('utf-8').decode(bytes).trim()
       if (decoded) {
-        const wrapper = doc.createElement('article')
-        wrapper.setAttribute('itemprop', 'articleBody')
-        wrapper.className = 'article-body'
-        wrapper.innerHTML = decoded
-        el.replaceWith(wrapper)
+        const sanitized = sanitizeBodyHtml(decoded)
+        if (sanitized) {
+          const wrapper = doc.createElement('article')
+          wrapper.setAttribute('itemprop', 'articleBody')
+          wrapper.className = 'article-body'
+          wrapper.innerHTML = sanitized
+          el.replaceWith(wrapper)
+        }
       }
     } catch { /* ignore malformed base64 */ }
   })

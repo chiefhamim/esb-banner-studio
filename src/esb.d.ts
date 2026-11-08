@@ -24,6 +24,8 @@ export interface EsbOpenProjectResult {
 }
 
 export interface EsbBridge {
+  secretSet?: (key: string, value: string) => Promise<boolean>
+  secretGet?: (key: string) => Promise<string | null>
   saveImage: (name: string, bytes: Uint8Array, dir?: string) => Promise<string | null>
   pickFolder: () => Promise<string | null>
   reveal: (path: string) => Promise<void>

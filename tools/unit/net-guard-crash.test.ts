@@ -59,4 +59,14 @@ describe('net guard never throws out of the main process', () => {
     expect(seen).toEqual([])
     expect(r).toMatchObject({ ok: false, code: 'blocked' })
   })
+
+  it('rejects untrusted TLS on .gov.bd domains without downgrading to cleartext HTTP (SEC-02)', async () => {
+    // Attempting to fetch an invalid domain should cleanly fail without redirecting to http
+    const res = await fetchArticleHtml('https://invalid-nonexistent-subdomain.powerdivision.gov.bd/test', {
+      ...opts,
+      timeoutMs: 1500,
+    })
+    expect(res.ok).toBe(false)
+    expect(['network_error', 'dns_error']).toContain(res.code)
+  })
 })

@@ -16,7 +16,41 @@ export interface FacebookConfig {
   permanent?: boolean
 }
 
+let secureFbCache: FacebookConfig | null = null
+
+/** Load OS-encrypted Facebook credentials if running in Electron with safeStorage bridge, migrating legacy localStorage. */
+export async function initFacebookSecrets(): Promise<void> {
+  if (typeof window === 'undefined' || !window.esb?.secretGet) return
+  try {
+    const enc = await window.esb.secretGet('facebook')
+    if (enc) {
+      const parsed = JSON.parse(enc) as FacebookConfig
+      if (parsed && /^\d{5,}$/.test(parsed.pageId) && parsed.token) {
+        secureFbCache = parsed
+        return
+      }
+    }
+    // Migrate legacy plaintext token from localStorage if present
+    const raw = localStorage.getItem(KEY)
+    if (raw) {
+      const v = JSON.parse(raw) as FacebookConfig
+      if (v && /^\d{5,}$/.test(v.pageId) && v.token) {
+        secureFbCache = v
+        if (window.esb.secretSet) {
+          await window.esb.secretSet('facebook', JSON.stringify(v))
+          localStorage.removeItem(KEY)
+        }
+      }
+    }
+  } catch { /* storage init failed */ }
+}
+
+if (typeof window !== 'undefined' && window.esb?.secretGet) {
+  void initFacebookSecrets()
+}
+
 export function getFacebook(): FacebookConfig | null {
+  if (secureFbCache) return secureFbCache
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as FacebookConfig | null
     return v && /^\d{5,}$/.test(v.pageId) && v.token ? v : null
@@ -24,8 +58,24 @@ export function getFacebook(): FacebookConfig | null {
     return null
   }
 }
-export function saveFacebook(c: FacebookConfig) { try { localStorage.setItem(KEY, JSON.stringify(c)) } catch { /* ignore */ } }
-export function clearFacebook() { try { localStorage.removeItem(KEY) } catch { /* ignore */ } }
+
+export function saveFacebook(c: FacebookConfig) {
+  secureFbCache = c
+  if (typeof window !== 'undefined' && window.esb?.secretSet) {
+    void window.esb.secretSet('facebook', JSON.stringify(c))
+    try { localStorage.removeItem(KEY) } catch { /* ignore */ }
+  } else {
+    try { localStorage.setItem(KEY, JSON.stringify(c)) } catch { /* ignore */ }
+  }
+}
+
+export function clearFacebook() {
+  secureFbCache = null
+  if (typeof window !== 'undefined' && window.esb?.secretSet) {
+    void window.esb.secretSet('facebook', '')
+  }
+  try { localStorage.removeItem(KEY) } catch { /* ignore */ }
+}
 
 /** Graph API errors in words an editor can act on. */
 export function facebookError(status: number, body: { error?: { message?: string; code?: number } } | null): string {

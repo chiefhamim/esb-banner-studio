@@ -86,6 +86,9 @@ export const useAvatar = create<AvatarState>((set, get) => ({
   choose: async (url) => {
     const uid = get().userId
     if (!uid || get().saving) return false
+    if (url !== null && (typeof url !== 'string' || !/^https:\/\/[a-z0-9.-]+\//i.test(url.trim()))) {
+      return false
+    }
     const before = get().url
     set({ url, saving: url ?? 'none' })
     try {

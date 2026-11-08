@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 contextBridge.exposeInMainWorld('esb', {
+  secretSet: (key, value) => ipcRenderer.invoke('esb:secret-set', key, value),
+  secretGet: (key) => ipcRenderer.invoke('esb:secret-get', key),
   readClipboard: () => ipcRenderer.invoke('esb:read-clipboard'),
   saveImage: (name, bytes, dir) => ipcRenderer.invoke('esb:save-image', name, bytes, dir),
   saveVideo: (name, bytes) => ipcRenderer.invoke('esb:save-video', name, bytes),

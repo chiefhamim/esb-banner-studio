@@ -65,7 +65,21 @@ const load = <T extends object>(k: string, d: T): T => {
   }
 }
 const save = (k: string, v: unknown) => {
-  try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* storage full */ }
+  try {
+    localStorage.setItem(k, JSON.stringify(v))
+  } catch {
+    // Quota exceeded: if this is the large news items key, trim items progressively so localStorage doesn't freeze drafts
+    if (k === DATA_KEY && v && typeof v === 'object' && 'items' in v && Array.isArray((v as { items: unknown[] }).items)) {
+      const data = v as { items: unknown[] }
+      try {
+        localStorage.setItem(k, JSON.stringify({ ...data, items: data.items.slice(0, 1000) }))
+      } catch {
+        try {
+          localStorage.setItem(k, JSON.stringify({ ...data, items: data.items.slice(0, 400) }))
+        } catch { /* storage full */ }
+      }
+    }
+  }
 }
 
 /** A feed this computer reads: every one EnergyWatch has switched on, Bing News included. */

@@ -241,6 +241,15 @@ ipcMain.handle('esb:site-sign-out', async () => {
   return true
 })
 
+// OS-encrypted secret storage for API keys and tokens (DPAPI safeStorage)
+let secretStore = null
+const getSecretStore = () => (secretStore ??= require('./secret-store.cjs').createSecretStore({
+  dir: app.getPath('userData'),
+  safeStorage: require('electron').safeStorage,
+}))
+ipcMain.handle('esb:secret-set', (_e, key, val) => getSecretStore().set(key, val))
+ipcMain.handle('esb:secret-get', (_e, key) => getSecretStore().get(key))
+
 // Read text from OS clipboard safely
 ipcMain.handle('esb:read-clipboard', () => {
   try {

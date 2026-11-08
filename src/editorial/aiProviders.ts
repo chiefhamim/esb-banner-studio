@@ -183,12 +183,50 @@ const SETTINGS_KEY = 'esb-banner-studio/ai-settings'
 const emptyRecord = (v: string): Record<AiProviderId, string> => ({ gemini: v, anthropic: v, openai: v, openrouter: v })
 const isProvider = (v: unknown): v is AiProviderId => AI_PROVIDERS.some((p) => p.id === v)
 
+let secureKeysCache: Record<AiProviderId, string> | null = null
+
+/** Load OS-encrypted AI secrets if running in Electron with safeStorage bridge, migrating legacy localStorage keys. */
+export async function initAiSecrets(): Promise<void> {
+  if (typeof window === 'undefined' || !window.esb?.secretGet) return
+  try {
+    const enc = await window.esb.secretGet('ai-settings')
+    if (enc) {
+      const parsed = JSON.parse(enc)
+      if (parsed && typeof parsed === 'object') {
+        secureKeysCache = { ...emptyRecord(''), ...parsed }
+        return
+      }
+    }
+    // Migrate legacy plaintext keys from localStorage if present
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (raw) {
+      const s = JSON.parse(raw) as Partial<AiSettings>
+      if (s.keys && Object.values(s.keys).some((k) => typeof k === 'string' && k.trim().length > 0)) {
+        secureKeysCache = { ...emptyRecord(''), ...s.keys }
+        if (window.esb.secretSet) {
+          await window.esb.secretSet('ai-settings', JSON.stringify(secureKeysCache))
+          // Redact keys from localStorage now that they are encrypted in safeStorage
+          const redacted = { ...s, keys: emptyRecord('') }
+          localStorage.setItem(SETTINGS_KEY, JSON.stringify(redacted))
+        }
+      }
+    }
+  } catch { /* storage init failed */ }
+}
+
+// Automatically trigger migration/hydration on module load in browser/Electron environment
+if (typeof window !== 'undefined' && window.esb?.secretGet) {
+  void initAiSecrets()
+}
+
 export function loadAiSettings(): AiSettings {
   const base: AiSettings = { provider: 'gemini', seo: '', social: '', outreach: '', research: '', review: '', keys: emptyRecord(''), models: emptyRecord('auto'), prompt: '', paused: false }
+  const hasBridge = typeof window !== 'undefined' && !!window.esb?.secretGet
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
       const s = JSON.parse(raw) as Partial<AiSettings>
+      const keys = (hasBridge && secureKeysCache) ? { ...base.keys, ...secureKeysCache } : { ...base.keys, ...(s.keys ?? {}) }
       return {
         provider: isProvider(s.provider) ? s.provider : 'gemini',
         seo: isProvider(s.seo) ? s.seo : '',
@@ -196,7 +234,7 @@ export function loadAiSettings(): AiSettings {
         outreach: isProvider(s.outreach) ? s.outreach : '',
         research: isProvider(s.research) ? s.research : '',
         review: isProvider(s.review) ? s.review : '',
-        keys: { ...base.keys, ...(s.keys ?? {}) },
+        keys,
         models: { ...base.models, ...(s.models ?? {}) },
         prompt: typeof s.prompt === 'string' ? s.prompt : '',
         paused: s.paused === true,
@@ -204,12 +242,29 @@ export function loadAiSettings(): AiSettings {
       }
     }
   } catch { /* storage blocked: defaults */ }
+  if (hasBridge && secureKeysCache) {
+    return { ...base, keys: { ...base.keys, ...secureKeysCache } }
+  }
   return base
 }
 
 export function saveAiSettings(s: AiSettings) {
-  const clean: AiSettings = { ...s, keys: Object.fromEntries(Object.entries(s.keys).map(([k, v]) => [k, v.trim()])) as AiSettings['keys'] }
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(clean)) } catch { /* ignore */ }
+  const cleanKeys = Object.fromEntries(Object.entries(s.keys).map(([k, v]) => [k, v.trim()])) as AiSettings['keys']
+  const hasBridge = typeof window !== 'undefined' && !!window.esb?.secretSet
+
+  if (hasBridge) {
+    secureKeysCache = cleanKeys
+    // Save keys into OS-encrypted safeStorage
+    void window.esb!.secretSet!('ai-settings', JSON.stringify(cleanKeys))
+    // Save settings into localStorage with REDACTED keys to avoid plaintext leakage
+    const redacted: AiSettings = { ...s, keys: emptyRecord('') }
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(redacted)) } catch { /* ignore */ }
+  } else {
+    // Fallback for tests or non-Electron environments
+    secureKeysCache = null
+    const clean: AiSettings = { ...s, keys: cleanKeys }
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(clean)) } catch { /* ignore */ }
+  }
 }
 
 /** The provider a job uses: its own choice, or the main one. */
