@@ -6,7 +6,7 @@ import type { OutreachEvent, OutreachStats } from '../esb'
 import { displaySafe } from './activityFormat'
 
 export type ActivityRange = 'today' | '7d' | '30d' | 'all'
-export type ActivityTab = 'overview' | 'log' | 'reports'
+export type ActivityTab = 'overview' | 'log' | 'reports' | 'session'
 export type LogChip =
   | 'all'
   | 'sent'

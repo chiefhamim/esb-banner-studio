@@ -17,7 +17,6 @@ import { AutopilotDialog } from './AutopilotDialog'
 import { SegmentsDialog } from './SegmentsDialog'
 import { SubjectVersionsDialog } from './SubjectVersionsDialog'
 import { AssistantDialog } from './AssistantDialog'
-import { OutreachActivity } from './OutreachActivity'
 import { AskDialog, FollowUpDialog, FooterDialog, HeaderDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
 import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore, useDesk } from './outreachStore'
 import { ask, useOutreachUi, type LeftTab } from './outreachUi'
@@ -209,7 +208,6 @@ export function OutreachWorkspace() {
           ]}
         />
         <div className="spacer" />
-        <OutreachActivity />
         <button type="button" className={'ed-ai-chip' + (letterAi ? ' on' : '') + (ai.paused ? ' paused' : '')} data-provider={letterAi?.provider} onClick={() => ui.set({ sheet: 'ai' })} aria-label="AI keys and roles"
           data-tip={ai.paused ? 'AI is OFF — click to open the AI settings, or turn it ON in the Engine panel' : letterAi ? `Letter, Research and Review AI — ${providerMeta(letterAi.provider).name}. Click to change` : 'Connect an AI to write, research and review letters'}>
           {ai.paused ? <Icon name="power" size={14} /> : letterAi ? <ProviderMark id={letterAi.provider} size={18} /> : <Icon name="link" size={14} />}

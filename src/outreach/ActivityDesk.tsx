@@ -13,6 +13,7 @@ import { downloadText, resultsCsv } from './campaign'
 import { CampaignResults } from './CampaignResults'
 import { useCloud } from './cloudStore'
 import { DeskBoundary } from './DeskBoundary'
+import { SessionLog } from './OutreachActivity'
 
 export function ActivityDesk() {
   const store = useActivityStore()
@@ -120,6 +121,7 @@ export function ActivityDesk() {
               { value: 'overview', label: 'Overview', icon: 'chart', tip: 'Overview — KPI stats & charts' },
               { value: 'log', label: 'Log', icon: 'listBullet', tip: 'Activity log — full transaction history' },
               { value: 'reports', label: 'Reports', icon: 'edit', tip: 'Reports — day summaries & run exports' },
+              { value: 'session', label: 'Session', icon: 'activity', tip: 'This session — what the desk did since it opened: imports, sends, replies, refusals' },
             ]}
           />
 
@@ -184,11 +186,12 @@ export function ActivityDesk() {
 
       {/* Main Content Area */}
       <div className="oa-content-scroll">
-        <DeskBoundary key={store.tab} label={store.tab === 'log' ? 'The log' : store.tab === 'reports' ? 'Reports' : 'The overview'}>
+        <DeskBoundary key={store.tab} label={store.tab === 'log' ? 'The log' : store.tab === 'reports' ? 'Reports' : store.tab === 'session' ? 'This session' : 'The overview'}>
           {store.tab === 'overview' && <CampaignResults campaignId={store.campaignId || outreach.activeId} />}
           {store.tab === 'overview' && <ActivityOverview />}
           {store.tab === 'log' && <ActivityLog />}
           {store.tab === 'reports' && <ActivityReports />}
+          {store.tab === 'session' && <SessionLog />}
         </DeskBoundary>
       </div>
     </div>

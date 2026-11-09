@@ -1203,3 +1203,17 @@
 .oa-results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; margin: 8px 0; }
 .oa-result { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; font-size: 11px; color: var(--text-2); background: var(--fill); border-radius: var(--r-2); }
 .oa-result b { font: 800 18px/1 var(--font-ui); font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--st, var(--text)); }
+
+/* "This session" (the desk's own notes; it was the header pulse button's floating panel) */
+.oa-session { max-width: 760px; margin: 0 auto; background: var(--card); border: 1px solid var(--card-line); border-radius: var(--r-3); box-shadow: var(--card-shadow); overflow: hidden; }
+.oa-session .or-tp-list { max-height: none; }
+@media (max-width: 1200px) {
+  .oa-desk-tabs button { width: 80px; min-width: 80px; max-width: 80px; padding: 0 6px; }
+  .oa-desk-tabs button svg { display: none; }
+}
+@media (max-width: 1000px) {
+  .oa-campaign-select { min-width: 120px; max-width: 160px; }
+  .oa-campaign-select > svg:not(.chev) { display: none; }
+  .oa-desk-tabs button { width: 70px; min-width: 70px; max-width: 70px; padding: 0 4px; }
+  .oa-range-seg button { width: 58px; min-width: 58px; max-width: 58px; padding: 0 4px; }
+}

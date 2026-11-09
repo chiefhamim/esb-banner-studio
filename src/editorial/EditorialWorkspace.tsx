@@ -40,8 +40,6 @@ import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
 import { FileTypeIcon, FileTypePair } from './FileTypeIcon'
 import { fmtPublished } from './fmtPublished'
-import { WireInbox } from './WireInbox'
-import { useWirePoll } from './wire'
 import { useWatch } from '../news/watchStore'
 import { readDocument, readPdfWithAi, documentKind, fmtFileSize, DocumentImportError } from './importDocument'
 import { Field, Select, Check, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
@@ -213,8 +211,7 @@ export function EditorialWorkspace() {
   const bannerLeadImage = (leadSlotSrc && bannerImages.find((i) => i.id === leadSlotSrc)?.url) || null
 
   // Mode & State
-  const [launcherTab, setLauncherTab] = useState<'url' | 'paste' | 'live_feed' | 'wire'>('url')
-  useWirePoll()
+  const [launcherTab, setLauncherTab] = useState<'url' | 'paste' | 'live_feed'>('url')
   const [linkDrag, setLinkDrag] = useState(false)
   const [bodyMode, setBodyMode] = useState<'review' | 'edit'>('review')
   const [sourceEditing, setSourceEditing] = useState(false)
@@ -993,15 +990,16 @@ export function EditorialWorkspace() {
   // Intake form: the empty-desk launcher and the source column's "New link" tab are the same form.
   const intakeForm = (compact: boolean) => (
     <div className={'ed-intake' + (compact ? ' compact' : '')}>
-      <Seg<'url' | 'paste' | 'live_feed' | 'wire'>
+      <Seg<'url' | 'paste' | 'live_feed' | 'news'>
         className="block ed-intake-tabs"
         value={launcherTab}
-        onChange={(t) => { setLauncherTab(t); setErrorMsg(null); setErrorDetail(null) }}
+        // News is not a tab here: it opens the News desk, where every headline is (Start a story brings one back)
+        onChange={(t) => { if (t === 'news') { useShellStore.getState().setWorkspace('news'); return } setLauncherTab(t); setErrorMsg(null); setErrorDetail(null) }}
         options={[
           { value: 'url', icon: 'link', label: compact ? 'Link' : 'Paste Story Link' },
           { value: 'paste', icon: 'edit', label: compact ? 'Text or file' : 'Paste Text or File' },
           { value: 'live_feed', icon: 'globe', label: compact ? 'Published' : `Published${liveArticles.length ? ` (${liveArticles.length})` : ''}` },
-          { value: 'wire', icon: 'inbox', label: 'Wire', tip: 'New stories from the feeds you follow' },
+          { value: 'news', icon: 'inbox', label: compact ? 'News' : 'Start from News', tip: 'Open the News desk — pick a headline there and Start a story' },
         ]}
       />
 
@@ -1167,7 +1165,7 @@ export function EditorialWorkspace() {
         </div>
       )}
 
-      {compact && launcherTab !== 'live_feed' && launcherTab !== 'wire' && (
+      {compact && launcherTab !== 'live_feed' && (
         <ol className="ed-how" aria-label="How a story is made">
           {([['link', 'Bring the story', 'A Bengali or English news link, pasted text, or a PDF or Word file.'], ['sparkle', 'The AI writes it in English', 'Every figure kept, headline and SEO fields within the site’s limits, layout where the story needs it.'], ['check', 'Check the figures', 'Green is found in the source, amber needs your eye.'], ['upload', 'Review and publish', 'Banner, article and Facebook post go out together.']] as const).map(([icon, title, text], i) => (
             <li key={title}><span className="ed-how-n">{icon === 'sparkle' && mainAi ? <ProviderMark id={ai.provider} size={14} /> : <Icon name={icon} size={14} />}</span><div><b>{i + 1}. {title}</b><p>{text}</p></div></li>
@@ -1205,7 +1203,6 @@ export function EditorialWorkspace() {
         </div>
       )}
 
-      {launcherTab === 'wire' && <WireInbox onUse={(url) => { setUrlInput(url); setLauncherTab('url'); setErrorMsg(null); setErrorDetail(null) }} />}
 
       {errorMsg && (
         <div className="callout warn ed-intake-error" role="alert">

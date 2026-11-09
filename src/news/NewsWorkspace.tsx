@@ -342,7 +342,7 @@ export function NewsWorkspace() {
       { label: 'Mark all as read', icon: 'checkDouble', disabled: !freshCount, onClick: markAll },
       { label: hidden.length ? `Show hidden headlines again (${hidden.length})` : 'Show hidden headlines again', icon: 'eye', disabled: !hidden.length, onClick: showHidden },
       { divider: true },
-      { label: 'EnergyWatch settings…', icon: 'sliders', onClick: () => setDialog('settings') },
+      { label: 'News settings…', icon: 'sliders', onClick: () => setDialog('settings') },
     ] },
     { label: 'View', items: [
       { heading: 'Headlines from' },
@@ -382,7 +382,7 @@ export function NewsWorkspace() {
         <MenuBar menus={menus} />
         <div className="spacer" />
         <MenuButton icon="clock" label={range ? 'Dates' : windowLabel(prefs.maxAgeH)} items={timeMenu} align="end" className="nw-when" title="Which headlines to show" />
-        <IconButton icon="sliders" tip="EnergyWatch settings" onClick={() => setDialog('settings')} />
+        <IconButton icon="sliders" tip="News settings" onClick={() => setDialog('settings')} />
         <AccountButton onToast={say} />
         <button type="button" className={'btn primary nw-check' + (busy ? ' is-busy' : '')} disabled={busy} onClick={refresh} data-tip={range ? 'Search this range again' : 'Read every portal & official government press wing now'}>
           <Icon name="refresh" size={15} /><span>{busy ? (range ? 'Searching' : 'Reading') : range ? 'Search again' : 'Check now'}</span>
@@ -632,7 +632,7 @@ export function NewsWorkspace() {
           {toast.undo && <button type="button" className="nw-toast-undo" onClick={() => { toast.undo?.(); setToast(null) }}>Undo</button>}
         </div>
       )}
-      {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} onRestored={() => say('EnergyWatch settings restored')} />}
+      {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} onRestored={() => say('News settings restored')} />}
       {dialog === 'range' && <RangeDialog onClose={() => setDialog(null)} />}
       {help.dialogs}
     </div>
@@ -730,7 +730,7 @@ function SettingsDialog({ onClose, onRestored }: { onClose: () => void; onRestor
     return { tone: 'ok', text: `${src.office} · ${st.count} release${st.count === 1 ? '' : 's'}` }
   }
   return (
-    <Dialog title="EnergyWatch" kicker="News desk settings" onClose={onClose} width={720}
+    <Dialog title="News settings" kicker="EnergyWatch by Yeasin Fiyaz" onClose={onClose} width={720}
       footer={<>
         <button type="button" className="btn ghost" onClick={() => { useWatch.getState().resetPrefs(); useRange.getState().clear(); onRestored() }}><Icon name="reset" size={14} />Restore EnergyWatch's settings</button>
         <span className="nw-grow" />
@@ -827,7 +827,7 @@ function RangeDialog({ onClose }: { onClose: () => void }) {
   ]
   const go = () => { if (err) return; onClose(); void useRange.getState().search(from, to) }
   return (
-    <Dialog title="Pick dates and times" kicker="EnergyWatch" onClose={onClose} width={520}
+    <Dialog title="Pick dates and times" kicker="News" onClose={onClose} width={520}
       footer={<><span className="nw-grow" /><button type="button" className="btn ghost" onClick={onClose}>Cancel</button><button type="button" className="btn primary" disabled={!!err} onClick={go}><Icon name="search" size={14} />Find headlines</button></>}>
       <div className="nw-settings">
         <p className="nw-help">Every Energy & Power and PM & President headline the portals published between these two moments, up to {MAX_RANGE_DAYS} days.</p>
