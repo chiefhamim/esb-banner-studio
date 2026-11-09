@@ -118,13 +118,13 @@ try {
   // 3. Save the project; then an edit, autosaved
   await queue(app, 'save', projectFile)
   await vwFile(page, 'Save project')
-  await page.waitForFunction((f) => document.querySelector('.vw-sb-save')?.textContent === 'Saved', projectFile)
+  await page.waitForFunction((f) => document.querySelector('.vw-sb-save > :last-child')?.textContent === 'Saved', projectFile)
   const saved = JSON.parse(fs.readFileSync(projectJson, 'utf8'))
   const layout = ['media', 'proxies', 'cache', 'autosave', 'renders'].every((d) => fs.statSync(path.join(projectFile, d)).isDirectory())
   check('Save makes a project folder: project.json (schema v2) + media/proxies/cache/autosave/renders', layout && saved.format === 'esb-video-project' && saved.version === 2 && Array.isArray(saved.timeline?.clips), JSON.stringify({ layout, format: saved.format, version: saved.version }))
   check('Project saved with the footage’s real path, size and quick hash (no runtime URLs)', saved.media[0].path === speech && saved.media[0].storage === 'reference' && /^[0-9a-f]{32}$/.test(saved.media[0].hash || '') && !JSON.stringify(saved).includes('esb-media:'), saved.media[0].path + ' ' + saved.media[0].hash)
   await page.fill('.vw-title-input', 'Edited after save')
-  await page.waitForFunction(() => /autosaved/.test(document.querySelector('.vw-sb-save')?.textContent || ''), null, { timeout: 15000 })
+  await page.waitForFunction(() => /autosaved/.test(document.querySelector('.vw-sb-save > :last-child')?.textContent || ''), null, { timeout: 15000 })
   const snaps = fs.readdirSync(path.join(projectFile, 'autosave'))
   check('Autosave wrote a snapshot into the project folder’s autosave/ within 10 s (temp + rename, no .tmp left)', snaps.some((f) => /^snap-\d+-[0-9a-f]{12}\.json$/.test(f)) && !snaps.some((f) => f.endsWith('.tmp')), snaps.join(','))
 
@@ -147,7 +147,7 @@ try {
 
   // 5. ACCEPT: save, quit, relaunch, open → the footage plays (the restored snapshot knew its folder: no dialog)
   await inWin(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }))`)
-  await waitIn(`document.querySelector('.vw-sb-save')?.textContent === 'Saved'`)
+  await waitIn(`document.querySelector('.vw-sb-save > :last-child')?.textContent === 'Saved'`)
   await app.close()
   run = await launch()
   ;({ app, page } = run)
@@ -260,7 +260,7 @@ try {
     const folder = path.join(work, 'Proxy test.esbvideo')
     await queue(app, 'save', folder)
     await vwFile(page, 'Save project')
-    await page.waitForFunction(() => document.querySelector('.vw-sb-save')?.textContent === 'Saved')
+    await page.waitForFunction(() => document.querySelector('.vw-sb-save > :last-child')?.textContent === 'Saved')
     check('Create project folder: Save makes <name>.esbvideo/ with project.json and its subfolders', fs.existsSync(path.join(folder, 'project.json')) && ['media', 'proxies', 'cache', 'autosave', 'renders'].every((d) => fs.existsSync(path.join(folder, d))))
 
     await page.click('.vw-bin-import-mode button:has-text("Copy")')
@@ -331,7 +331,7 @@ try {
     // survives a restart: the proxy file is removed while the app is closed → reopening redoes it (cancel works,
     // Make proxy queues it again); with the proxy on disk, a reopen finds it at once without making it again
     await vwFile(page, 'Save project')
-    await page.waitForFunction(() => document.querySelector('.vw-sb-save')?.textContent === 'Saved')
+    await page.waitForFunction(() => document.querySelector('.vw-sb-save > :last-child')?.textContent === 'Saved')
     await app.close()
     fs.rmSync(proxyFile)
     run = await launch()

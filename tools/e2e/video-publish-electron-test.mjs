@@ -129,7 +129,7 @@ try {
   // ================= the real UI: queue two sizes, then post the 9:16 render as a Reel draft and a private YouTube upload
   const shots = process.env.OUT || path.join(root, 'tools', 'out', 'p7')
   fs.mkdirSync(shots, { recursive: true })
-  await page.click('.vw-hdr-publish')
+  await page.click('.vw-header .menubar .mb-item:has-text("File")'); await page.click('.menubar-pop .menu-item:has-text("Publish")') // Publish moved into File (2026-11-10)
   await page.waitForSelector('.vw-pub')
   await page.screenshot({ path: path.join(shots, 'publish-renders-empty.png') })
   await page.locator('label.vw-size:has-text("9:16")').click()
