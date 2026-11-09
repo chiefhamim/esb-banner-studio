@@ -24,6 +24,3 @@
 @font-face { font-family: 'Anek Bangla'; font-weight: 600; font-display: swap; src: url('./assets/fonts/bn/anek-bangla-bengali-600-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Baloo Da 2'; font-weight: 400; font-display: swap; src: url('./assets/fonts/bn/baloo-da-2-bengali-400-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Baloo Da 2'; font-weight: 600; font-display: swap; src: url('./assets/fonts/bn/baloo-da-2-bengali-600-normal.woff2') format('woff2'); }
-/* the display serif for headlines in the app chrome (the same Source Serif 4 files the banners draw with) */
-@font-face { font-family: 'Source Serif 4'; font-weight: 500; font-display: swap; src: url('./assets/fonts/serif-500.woff2') format('woff2'); }
-@font-face { font-family: 'Source Serif 4'; font-weight: 600 700; font-display: swap; src: url('./assets/fonts/serif-700.woff2') format('woff2'); }
