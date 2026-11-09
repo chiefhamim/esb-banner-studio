@@ -10,6 +10,8 @@ import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 import { createRequire } from 'node:module'
+// The New / Open / Save header buttons moved into Video's File menu (2026-11-10); tests drive the menu.
+const vwFile = async (page, item) => { await page.click('.vw-header .menubar .mb-item:has-text("File")'); await page.click(`.menubar-pop .menu-item:has-text("${item}")`) }
 
 const root = path.resolve(import.meta.dirname, '../..')
 const win = process.platform === 'win32'
@@ -115,7 +117,7 @@ try {
 
   // 3. Save the project; then an edit, autosaved
   await queue(app, 'save', projectFile)
-  await page.click('.vw-save')
+  await vwFile(page, 'Save project')
   await page.waitForFunction((f) => document.querySelector('.vw-sb-save')?.textContent === 'Saved', projectFile)
   const saved = JSON.parse(fs.readFileSync(projectJson, 'utf8'))
   const layout = ['media', 'proxies', 'cache', 'autosave', 'renders'].every((d) => fs.statSync(path.join(projectFile, d)).isDirectory())
@@ -144,7 +146,7 @@ try {
   check('Restore puts the edit back', back)
 
   // 5. ACCEPT: save, quit, relaunch, open → the footage plays (the restored snapshot knew its folder: no dialog)
-  await inWin(`document.querySelector('.vw-save').click()`)
+  await inWin(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }))`)
   await waitIn(`document.querySelector('.vw-sb-save')?.textContent === 'Saved'`)
   await app.close()
   run = await launch()
@@ -152,7 +154,7 @@ try {
   await openVideo(page)
   check('After a clean save and quit, no restore card is offered', (await page.locator('.vw-restore-card').count()) === 0)
   await queue(app, 'open', projectJson)
-  await page.click('.vw-open')
+  await vwFile(page, 'Open project')
   await page.waitForFunction(() => document.querySelectorAll('.vw-clip-block').length === 2)
   const plays2 = await footagePlays(page)
   check('ACCEPT save → quit → relaunch → open: the footage plays', plays2.ok && (await page.locator('.vw-missing').count()) === 0, JSON.stringify(plays2))
@@ -166,7 +168,7 @@ try {
   await openVideo(page)
   if (await page.locator('.vw-restore-discard').count()) await page.click('.vw-restore-discard')
   await queue(app, 'open', projectJson)
-  await page.click('.vw-open')
+  await vwFile(page, 'Open project')
   await page.waitForSelector('.vw-missing')
   await page.click('.vw-header-actions button:has-text("Export")')
   check('A missing file is flagged, and Export refuses until it is relinked', (await page.locator('.vx-blocked').count()) === 1)
@@ -209,7 +211,7 @@ try {
     fs.writeFileSync(crafted, JSON.stringify({ id: 'crafted', name: 'Crafted', aspect: '16:9', width: 1920, height: 1080, fps: 30, duration: 10, tracks: [['v2', 'overlay'], ['v1', 'video'], ['c1', 'caption'], ['a1', 'audio']].map(([id, kind]) => ({ id, name: id, kind, muted: false, locked: false })), clips: [], mediaAssets: [{ id: 'x1', name: 'secret.mp4', type: 'video', path: secret, size: 1, duration: 6 }, { id: 'x2', name: 'clip.mp4', type: 'video', path: '\\\\192.0.2.1\\share\\clip.mp4', size: 1, duration: 6 }] }))
     const regBefore = fs.readFileSync(path.join(profile, 'video-media.json'), 'utf8')
     await queue(app, 'open', crafted)
-    await page.click('.vw-open')
+    await vwFile(page, 'Open project')
     if (await page.locator('.vw-confirm-open').count()) await page.click('.vw-confirm-open')
     await page.waitForFunction(() => document.querySelectorAll('.vw-media-card.missing').length === 2, null, { timeout: 15000 })
     const status = await page.evaluate((id) => fetch('esb-media://m/' + id).then((r) => r.status, () => 'error'), videoMedia.mediaId(secret))
@@ -253,11 +255,11 @@ try {
       const a = vm.assets().find((x) => x.name === 'uhd-4k.mp4')
       return a ? { id: a.id, preview: vm.previewUrlFor(a.id), exp: vm.exportUrlFor(a.id), info: vm.mediaInfo(a.id), meta: vm.meta(a.id), folder: vm.folder() } : null
     })
-    if (await page.locator('.vw-new').count()) { await page.click('.vw-new'); if (await page.locator('.vw-confirm-new').count()) await page.click('.vw-confirm-new') }
+    { await vwFile(page, 'New video'); if (await page.locator('.vw-confirm-new').count()) await page.click('.vw-confirm-new') }
     await page.fill('.vw-title-input', 'Proxy test')
     const folder = path.join(work, 'Proxy test.esbvideo')
     await queue(app, 'save', folder)
-    await page.click('.vw-save')
+    await vwFile(page, 'Save project')
     await page.waitForFunction(() => document.querySelector('.vw-sb-save')?.textContent === 'Saved')
     check('Create project folder: Save makes <name>.esbvideo/ with project.json and its subfolders', fs.existsSync(path.join(folder, 'project.json')) && ['media', 'proxies', 'cache', 'autosave', 'renders'].every((d) => fs.existsSync(path.join(folder, d))))
 
@@ -328,7 +330,7 @@ try {
 
     // survives a restart: the proxy file is removed while the app is closed → reopening redoes it (cancel works,
     // Make proxy queues it again); with the proxy on disk, a reopen finds it at once without making it again
-    await page.click('.vw-save')
+    await vwFile(page, 'Save project')
     await page.waitForFunction(() => document.querySelector('.vw-sb-save')?.textContent === 'Saved')
     await app.close()
     fs.rmSync(proxyFile)
@@ -337,7 +339,7 @@ try {
     await openVideo(page)
     if (await page.locator('.vw-restore-discard').count()) await page.click('.vw-restore-discard')
     await queue(app, 'open', path.join(folder, 'project.json'))
-    await page.click('.vw-open')
+    await vwFile(page, 'Open project')
     await page.waitForSelector('.vw-bin-card[data-proxy="pending"]', { timeout: 30000 })
     await page.click('.vw-bin-card[data-proxy="pending"] .vw-bin-proxy-x').catch(() => {})
     const afterCancel = await page.waitForSelector('.vw-bin-card[data-proxy="none"] .vw-bin-proxy.make, .vw-bin-card[data-proxy="ready"]', { timeout: 30000 }).then((e) => e.evaluate((n) => n.closest('.vw-bin-card').getAttribute('data-proxy')))
@@ -353,7 +355,7 @@ try {
     if (await page.locator('.vw-restore-discard').count()) await page.click('.vw-restore-discard')
     await queue(app, 'open', path.join(folder, 'project.json'))
     const t1 = Date.now()
-    await page.click('.vw-open')
+    await vwFile(page, 'Open project')
     await page.waitForSelector('.vw-bin-card[data-proxy="ready"]', { timeout: 20000 })
     const again = await assetInfo()
     check('Restart with the proxy on disk: it is found again at once (not remade) and the copy plays from media/', !again.meta.proxyMs && Date.now() - t1 < 20000 && again.preview.includes('/proxies/') && (await page.locator('.vw-missing').count()) === 0, `${Date.now() - t1} ms`)
@@ -363,7 +365,7 @@ try {
   if (LONG) {
     const long = path.join(root, 'tools/out/video-fixtures/long-1080p.mp4')
     if (!fs.existsSync(long)) throw new Error('Run node tools/fixtures/video/make-fixtures.mjs --long first')
-    await page.click('.vw-new')
+    await vwFile(page, 'New video')
     if (await page.locator('.vw-confirm-new').count()) await page.click('.vw-confirm-new')
     await queue(app, 'open', [long])
     await page.click('.vw-start-import')

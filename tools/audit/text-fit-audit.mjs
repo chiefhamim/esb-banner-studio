@@ -17,6 +17,8 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 import { portOffset } from '../port-offset.mjs'
+// The New / Open / Save header buttons moved into Video's File menu (2026-11-10); tests drive the menu.
+const vwFile = async (page, item) => { await page.click('.vw-header .menubar .mb-item:has-text("File")'); await page.click(`.menubar-pop .menu-item:has-text("${item}")`) }
 const PORT = 5196 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
 const widths = process.env.W ? process.env.W.split(',').map(Number) : [1280, 1366, 1600, 1920]
@@ -277,7 +279,7 @@ try {
     await page.keyboard.press('Escape')
     await tryStep('video-export', async () => { await page.click('.vw-header-actions button:has-text("Export")'); await page.waitForSelector('.vx') })
     await page.keyboard.press('Escape')
-    await tryStep('video-new-confirm', async () => { await page.click('.vw-new'); await page.waitForSelector('.dialog[aria-label="Start a new video?"]') })
+    await tryStep('video-new-confirm', async () => { await vwFile(page, 'New video'); await page.waitForSelector('.dialog[aria-label="Start a new video?"]') })
     await page.keyboard.press('Escape')
     await ctx.close()
   }

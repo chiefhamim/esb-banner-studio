@@ -8,6 +8,8 @@ import path from 'node:path'
 import { launchBrowser } from '../launch-browser.mjs'
 import { portOffset } from '../port-offset.mjs'
 import { measure } from './video-playback-measure.mjs'
+// The New / Open / Save header buttons moved into Video's File menu (2026-11-10); tests drive the menu.
+const vwFile = async (page, item) => { await page.click('.vw-header .menubar .mb-item:has-text("File")'); await page.click(`.menubar-pop .menu-item:has-text("${item}")`) }
 
 const PORT = 5195 + portOffset()
 const root = path.resolve(import.meta.dirname, '../..')
@@ -315,10 +317,10 @@ try {
   check('Restore brings back the last state', (await page.evaluate(() => window.__videoStore.getState().project.name)).startsWith('Synthetic test headline'))
 
   // 10. Open and New ask first when there is unsaved work; New then empties the desk
-  await page.click('.vw-open')
+  await vwFile(page, 'Open project')
   check('Open with unsaved work asks first', (await page.locator('.dialog[aria-label="Open another video?"]').count()) === 1)
   await page.click('.dialog[aria-label="Open another video?"] button:has-text("Cancel")')
-  await page.click('.vw-new')
+  await vwFile(page, 'New video')
   await page.waitForSelector('.dialog[aria-label="Start a new video?"]')
   await page.click('.vw-confirm-new')
   check('New → confirm → an empty video', (await page.evaluate(() => window.__videoStore.getState().project.clips.length)) === 0 && (await page.locator('.vw-start-card').count()) === 1)

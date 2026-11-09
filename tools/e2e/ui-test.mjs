@@ -563,7 +563,9 @@ try {
       if (el.closest(skip)) continue
       const r = el.getBoundingClientRect(); if (!r.width || !r.height) continue
       const s = getComputedStyle(el)
-      if ([...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) { sizes.add(s.fontSize); fams.add(s.fontFamily.split(',')[0]) }
+      // Shared on every desk since 2026-11-10 (Desks rules 5 + 6): the status bar's small-caps key (.sb-k, 10 px, as on
+      // News/Editorial/Outreach) and the serif empty-state title (.empty-title, "Nothing selected"). Deliberate, not drift.
+      if (!el.matches('.sb-k, .empty-title') && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) { sizes.add(s.fontSize); fams.add(s.fontFamily.split(',')[0]) }
       if (s.borderRadius !== '0px') radii.add(s.borderRadius.split(' ')[0])
       for (const c of [s.color, s.backgroundColor, s.borderTopColor]) if (chromaOf(c) > 14) chroma.push(el.className + ':' + c)
       if (el.matches('.btn, .input:not(textarea), .select, .scrub, .colorfield')) heights[Math.round(r.height)] = (heights[Math.round(r.height)] || 0) + 1

@@ -21,6 +21,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { launchBrowser } from '../launch-browser.mjs'
 import { auditFocus, auditPage } from '../audit/page-audit.mjs'
+// The New / Open / Save header buttons moved into Video's File menu (2026-11-10); tests drive the menu.
+const vwFile = async (page, item) => { await page.click('.vw-header .menubar .mb-item:has-text("File")'); await page.click(`.menubar-pop .menu-item:has-text("${item}")`) }
 
 const root = path.resolve(import.meta.dirname, '../..')
 const PORT = Number(process.env.PORT || 5291)
@@ -618,7 +620,7 @@ const STATES = {
   },
   'new-confirm': async (page) => {
     await seedTimeline(page)
-    await page.click('.vw-new')
+    await vwFile(page, 'New video')
     await page.waitForSelector('.dialog[aria-label="Start a new video?"]')
     await waitAnimations(page)
     return { note: 'after the dialog open animation finished' }
