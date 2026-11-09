@@ -760,6 +760,8 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
    New story, resync, the AI chip, Sign in and Publish — and the pills on the left — share one height (32px), one radius (8px),
    one type size and weight, and their text sits on the box's centre line. The three labelled buttons share one width. */
 .ed-head .ed-head-group .pv-btn { height: 32px; border-radius: var(--r-2); }
+/* bare header icon buttons (Editorial's resync, News's settings) take the row's 32 px too — they were 28 */
+.ed-head .ed-head-group > .ibtn, .nw-head > .ibtn { width: 32px; height: 32px; border-radius: var(--r-2); }
 .ed-head .ed-tools { height: auto; padding: 0; gap: 8px; background: none; box-shadow: none; border-radius: 0; }
 .ed-head .ed-tools .ibtn { width: 32px; height: 32px; border-radius: var(--r-2); background: var(--fill); }
 .ed-head .ed-tools .ibtn:hover:not(:disabled) { background: var(--fill-hover); }
