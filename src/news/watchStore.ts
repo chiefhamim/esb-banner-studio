@@ -599,7 +599,8 @@ export const useWatch = create<WatchState>((set, get) => {
         timer = null
         flushAt = Date.now()
         const m = mergeFound(prev, found, started, get().hidden)
-        set({ items: m.items, feeds: { ...states }, newKeys: prev.length ? m.addedKeys : [], progress: { done, total: totalSources } })
+        set({ items: applyHeadlineCache(m.items, titleEnCache), feeds: { ...states }, newKeys: prev.length ? m.addedKeys : [], progress: { done, total: totalSources } })
+        void get().translateTitles() // English lines start while the list is still filling (one run at a time)
       }
       const soon = () => { if (!timer) timer = setTimeout(publish, Math.max(0, 250 - (Date.now() - flushAt))) }
       set({ progress: { done: 0, total: totalSources } })
@@ -654,7 +655,7 @@ export const useWatch = create<WatchState>((set, get) => {
       if (timer) clearTimeout(timer)
       const { items, addedKeys } = mergeFound(prev, found, started, get().hidden)
       const added = addedKeys.length
-      set({ items, feeds: states, lastRun: started, running: false, progress: null, seenAt: prev.length ? get().seenAt : started, newKeys: prev.length ? addedKeys : [] })
+      set({ items: applyHeadlineCache(items, titleEnCache), feeds: states, lastRun: started, running: false, progress: null, seenAt: prev.length ? get().seenAt : started, newKeys: prev.length ? addedKeys : [] })
       persist()
       void get().translateTitles()
       return { checked: totalSources, added, failed }
