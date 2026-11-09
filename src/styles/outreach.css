@@ -87,7 +87,8 @@
 .or-log-line.warn span { color: var(--warning); }
 .or-log-line.error span { color: var(--danger); }
 
-.or-body { grid-area: body; display: grid; grid-template-columns: clamp(272px, 22vw, 344px) minmax(0, 1fr) clamp(280px, 22vw, 344px); min-height: 0; }
+/* --or-lw / --or-rw are set only once the editor drags or folds a column (src/ui/SideColumn.tsx); until then the responsive widths */
+.or-body { grid-area: body; display: grid; grid-template-columns: var(--or-lw, clamp(272px, 22vw, 344px)) minmax(0, 1fr) var(--or-rw, clamp(280px, 22vw, 344px)); min-height: 0; }
 .or-status-run { color: var(--text); font-weight: 600; }
 .or-status > span { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
@@ -399,7 +400,7 @@
 /* narrow windows (down to the app's 900 px minimum): three narrower columns; stacking the sending column under the
    letter was tried and left the message box a few lines tall on a 1024 x 720 screen */
 @media (max-width: 1180px) {
-  .or-body { grid-template-columns: clamp(224px, 25vw, 272px) minmax(0, 1fr) clamp(232px, 26vw, 280px); }
+  .or-body { grid-template-columns: var(--or-lw, clamp(224px, 25vw, 272px)) minmax(0, 1fr) var(--or-rw, clamp(232px, 26vw, 280px)); }
   .or-center { padding: 10px 12px; }
   .or-line { margin: 0 12px; }
   .or-line-note { display: none; }

@@ -7,6 +7,8 @@ import { Icon } from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { Dialog, IconButton, MenuBar, MenuButton, MenuList, Popover, Seg, Select, Slider, Switch, Tabs } from '../ui/controls'
 import type { MenuDef, MenuEntry } from '../ui/controls'
+import { useSideColumn } from '../ui/sideColumnState'
+import { ColumnHandle, ColumnRail, railClass } from '../ui/SideColumn'
 import { useHelpMenu } from '../ui/HelpMenu'
 import { AiChip } from '../editorial/AiChip'
 import { AccountButton } from '../shell/AccountButton'
@@ -63,6 +65,8 @@ import '../styles/video.css'
 
 type BinTab = 'titles' | 'media' | 'captions' | 'audio' | 'story' | 'data'
 const BIN_TAB_LABEL: Record<BinTab, string> = { media: 'Media', titles: 'Titles', captions: 'Captions', audio: 'Audio', story: 'Story', data: 'Data' }
+/** The bin's tabs as icons, for the folded bin (src/ui/SideColumn.tsx). */
+const BIN_TAB_ICON: Record<BinTab, IconName> = { media: 'video', titles: 'type', captions: 'quote', audio: 'volume', story: 'newspaper', data: 'chart' }
 
 /** The picture overlays the Titles tab adds (titles themselves are TitlesPanel.tsx's kit). */
 const OVERLAY_PRESETS: { type: OverlayTemplate; tag: string; desc: string; color: string }[] = [
@@ -1010,6 +1014,11 @@ function VideoDesk() {
   // the keyframe lane under a selected animated clip adds a row: the balanced height grows by it (room allowing)
   const timelineH = Math.round(Math.max(TL_MIN, Math.min(tlMax, timelineUser ?? tlAuto + (kfClipOf(tl.clips, selectedIds) ? KF_LANE_H : 0))))
   const showTab = (t: BinTab) => { setActiveTab(t); selectClip(null) }
+  // the bin and the clip inspector: resizable, and each folds to an icon rail (shared with every desk)
+  const binCol = useSideColumn('video/left', 'left', { def: 312, min: 264, max: 480 })
+  const inspCol = useSideColumn('video/right', 'right', { def: 296, min: 264, max: 480 })
+  const vwRoot = () => document.querySelector<HTMLElement>('.video-workspace')
+  const vwWidth = (sel: string) => (px: number) => { const el = document.querySelector<HTMLElement>(sel); if (el) el.style.width = px + 'px' }
   const kfClip = kfClipOf(tl.clips, selectedIds)
   const labels = trackLabels(tl.tracks)
   const editMode = useVideoStore((s) => s.editMode)
@@ -1114,7 +1123,12 @@ function VideoDesk() {
 
       {/* 2. Bin + monitor (+ inspector) */}
       <div className={`vw-stage-row${selectedClip && wide ? ' with-inspector' : ''}`}>
-        <aside className="vw-bin-panel">
+        <aside className={'vw-bin-panel side-col-w' + railClass(binCol)} style={{ width: binCol.px }}>
+          <ColumnRail col={binCol} label="Media bin" items={[
+            ...(selectedClip && !wide ? [{ id: 'clip', icon: 'sliders' as IconName, label: 'Clip inspector', on: true, onClick: () => {} }] : []),
+            ...(Object.keys(BIN_TAB_LABEL) as BinTab[]).map((t) => ({ id: t, icon: BIN_TAB_ICON[t], label: BIN_TAB_LABEL[t], on: !(selectedClip && !wide) && activeTab === t, onClick: () => showTab(t) })),
+          ]} />
+          <ColumnHandle col={binCol} label="Resize the media bin" root={vwRoot} apply={vwWidth('.vw-bin-panel')} max={Math.max(312, Math.round(window.innerWidth * 0.34))} />
           <RecorderBar />
           {selectedClip && !wide ? (
             // narrow windows: the inspector holds the bin's place, and this bar says so (and goes back)
@@ -1228,7 +1242,13 @@ function VideoDesk() {
           </div>
         </section>
 
-        {selectedClip && wide && <aside className="vw-inspector-panel" aria-label="Clip inspector">{inspector}</aside>}
+        {selectedClip && wide && (
+          <aside className={'vw-inspector-panel side-col-w' + railClass(inspCol)} aria-label="Clip inspector" style={{ width: inspCol.px }}>
+            <ColumnHandle col={inspCol} label="Resize the clip inspector" root={vwRoot} apply={vwWidth('.vw-inspector-panel')} max={Math.max(296, Math.round(window.innerWidth * 0.34))} />
+            <ColumnRail col={inspCol} label="Clip inspector" items={[{ id: 'clip', icon: 'sliders', label: 'Clip inspector', on: true, onClick: () => {} }]} />
+            {inspector}
+          </aside>
+        )}
       </div>
 
       {/* 3. Timeline */}

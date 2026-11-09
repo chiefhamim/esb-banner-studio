@@ -5,7 +5,9 @@
 // bridge) the column says sending needs the desktop app instead of pretending to send.
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { useDesk } from './outreachStore'
+import { useDesk, useOutreachStore } from './outreachStore'
+import { useSideColumn } from '../ui/sideColumnState'
+import { ColumnHandle, ColumnRail, railClass } from '../ui/SideColumn'
 import { ask, useOutreachUi, type RightTab } from './outreachUi'
 import { cannotStart, downloadText, eligible, followUpQueue, followUpReason, inAudience, pauseBatch, resultsCsv, resumeBatch, sendTest, signatureOf, startBatch, stopBatch } from './campaign'
 import { skipReason } from './compose'
@@ -31,6 +33,8 @@ import { useEngineStore } from './engineStore'
 import { mailFailView } from './mailCheck'
 import { fmtDateTime, useClockFormat } from '../ui/time'
 
+/** The sending column's width range (shared with the desk's grid, OutreachWorkspace.tsx). */
+export const OR_RIGHT_SPEC = { def: 312, min: 232, max: 480 }  // min = the desk's narrow-window width
 const fmtWhen = (t: number) => fmtDateTime(t, { weekday: false })
 const mmss = (ms: number) => fmtCountdown(ms)
 const HOLD_TEXT: Record<string, string> = { window: 'Outside sending hours', cap: 'Daily limit reached', quota: 'Gmail asked to slow down', schedule: 'Scheduled', offline: 'Offline', domain: 'Same company just emailed' }
@@ -41,8 +45,18 @@ const pacingText = (p: { minDelaySec: number; maxDelaySec: number }) => `${fmtGa
 // memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
 export const OutreachInspector = memo(function OutreachInspector() {
   const ui = useOutreachUi()
+  const col = useSideColumn('outreach/right', 'right', OR_RIGHT_SPEC)
+  const hasCampaign = useOutreachStore((x) => !!x.campaign())
   return (
-    <aside className="or-right" aria-label="Sending and review">
+    <aside className={'or-right' + railClass(col)} aria-label="Sending and review">
+      <ColumnHandle col={col} label="Resize the sending column" root={() => document.querySelector<HTMLElement>('.outreach-workspace')} apply={(px) => document.querySelector<HTMLElement>('.or-body')?.style.setProperty('--or-rw', px + 'px')} max={Math.round(window.innerWidth * 0.34)} />
+      <ColumnRail col={col} label="Sending and review" items={[
+        { id: 'send', icon: 'send', label: 'Send', on: ui.right === 'send', onClick: () => ui.set({ right: 'send' }) },
+        { id: 'contact', icon: 'user', label: 'Contact', on: ui.right === 'contact', onClick: () => ui.set({ right: 'contact' }) },
+        { id: 'review', icon: 'checkDouble', label: 'Review', on: ui.right === 'review', onClick: () => ui.set({ right: 'review' }) },
+      ]} actions={[
+        { id: 'review-send', icon: 'send', label: 'Review & send', primary: true, disabled: !hasCampaign, onClick: () => ui.set({ sheet: 'review-send' }) },
+      ]} />
       <Tabs<RightTab> className="or-tabs" value={ui.right} onChange={(v) => ui.set({ right: v })} options={[
         { value: 'send', label: 'Send', icon: 'send' },
         { value: 'contact', label: 'Contact', icon: 'user' },

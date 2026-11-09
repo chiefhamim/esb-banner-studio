@@ -5,12 +5,15 @@
 // the editor.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { ContactsTab } from './ContactsTab'
 import { CampaignsTab, STATUS_TEXT } from './CampaignsTab'
 import { SourcesTab } from './SourcesTab'
 import { OutreachComposer } from './OutreachComposer'
-import { HeaderSend, OutreachInspector } from './OutreachInspector'
+import { HeaderSend, OR_RIGHT_SPEC, OutreachInspector } from './OutreachInspector'
+import { RAIL_W, useSideColumn } from '../ui/sideColumnState'
+import { ColumnHandle, ColumnRail, railClass } from '../ui/SideColumn'
 import { SenderDialog } from './SenderDialog'
 import { ActivityDesk } from './ActivityDesk'
 import { AutopilotDialog } from './AutopilotDialog'
@@ -121,6 +124,11 @@ export function OutreachWorkspace() {
 
   // a column tab, the campaign chip or View → Contacts from the Activity desk brings the Compose desk back with it
   const openTab = (left: LeftTab) => ui.set({ left, desk: 'compose' })
+  // side columns keep the desk's responsive widths until the editor drags or folds one (src/ui/SideColumn.tsx)
+  const leftCol = useSideColumn('outreach/left', 'left', { def: 312, min: 224, max: 480 })
+  const rightCol = useSideColumn('outreach/right', 'right', OR_RIGHT_SPEC)
+  const orCol = (c: typeof leftCol) => (c.collapsed ? `${RAIL_W}px` : c.touched ? `min(${c.w}px, 34vw)` : undefined)
+  const orCols = { ['--or-lw' as string]: orCol(leftCol), ['--or-rw' as string]: orCol(rightCol) } as CSSProperties
   const help = useHelpMenu({ shortcuts: [{ group: 'Letter', rows: [['Ctrl + B', 'Bold'], ['Ctrl + I', 'Italic'], ['Ctrl + K', 'Link']] }] })
   const menus: MenuDef[] = [
     { label: 'Campaign', items: [
@@ -225,14 +233,20 @@ export function OutreachWorkspace() {
       {ui.desk === 'activity' ? (
         <ActivityDesk />
       ) : (
-        <div className="or-body">
-          <aside className="or-left" aria-label="Contacts, campaigns and sources">
+        <div className="or-body side-cols" style={orCols}>
+          <aside className={'or-left' + railClass(leftCol)} aria-label="Contacts, campaigns and sources">
             <Tabs<LeftTab> className="or-tabs" value={ui.left} onChange={openTab} options={[
               { value: 'contacts', label: 'Contacts', icon: 'users' },
               { value: 'campaigns', label: 'Campaigns', icon: 'send' },
               { value: 'sources', label: 'Sources', icon: 'quote' },
             ]} />
             {ui.left === 'contacts' ? <ContactsTab /> : ui.left === 'campaigns' ? <CampaignsTab /> : <SourcesTab />}
+            <ColumnRail col={leftCol} label="Contacts, campaigns and sources" items={[
+              { id: 'contacts', icon: 'users', label: 'Contacts', on: ui.left === 'contacts', onClick: () => openTab('contacts') },
+              { id: 'campaigns', icon: 'send', label: 'Campaigns', on: ui.left === 'campaigns', onClick: () => openTab('campaigns') },
+              { id: 'sources', icon: 'quote', label: 'Sources', on: ui.left === 'sources', onClick: () => openTab('sources') },
+            ]} />
+            <ColumnHandle col={leftCol} label="Resize the contacts column" root={() => document.querySelector<HTMLElement>('.outreach-workspace')} apply={(px) => document.querySelector<HTMLElement>('.or-body')?.style.setProperty('--or-lw', px + 'px')} max={Math.round(window.innerWidth * 0.34)} />
           </aside>
           <OutreachComposer />
           <OutreachInspector />
