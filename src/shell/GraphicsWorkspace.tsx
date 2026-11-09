@@ -39,10 +39,11 @@ const SHORTCUTS: ShortcutGroup[] = [
 
 function PointerReadout() {
   const p = useSyncExternalStore(pointer.subscribe, pointer.get)
-  return <span className="mono">{p ? `${Math.round(p.x)}, ${Math.round(p.y)} px` : '—, — px'}</span>
+  return <span className="sb-item"><span className="sb-k">Pointer</span><span className="mono">{p ? `${Math.round(p.x)}, ${Math.round(p.y)} px` : '—, — px'}</span></span>
 }
 
-/** Left status text: modifier-key hint while dragging, otherwise what is selected. */
+/** Left status item: SELECTION and its size (the modifier-key hint replaces it while dragging). With nothing selected it
+ *  says None — the Inspector's "Nothing selected" already explains how to pick a layer. */
 function StatusInfo() {
   const h = useSyncExternalStore(hint.subscribe, hint.get)
   const doc = useStore((s) => s.doc)
@@ -51,12 +52,12 @@ function StatusInfo() {
   const scene = useStore((s) => s.scene)
   const info = useMemo(() => {
     const els = scene().elements.filter((e) => ids.includes(e.id))
-    if (!els.length) return 'Click a layer to edit · drag on empty canvas to select several · Alt+click picks the layer underneath'
+    if (!els.length) return 'None'
     if (els.length > 1) return `${els.length} layers selected`
     const e = els[0]
     return `${e.name} · ${Math.round(e.w)} × ${Math.round(e.h)} at ${Math.round(e.x)}, ${Math.round(e.y)}`
   }, [scene, doc, format, ids])
-  return h ? <span className="status-hint"><Icon name="info" size={13} />{h}</span> : <span className="status-info">{info}</span>
+  return h ? <span className="status-hint"><Icon name="info" size={13} />{h}</span> : <span className="sb-item status-info"><span className="sb-k">Selection</span><span className="sb-text">{info}</span></span>
 }
 
 function ZoomControls() {

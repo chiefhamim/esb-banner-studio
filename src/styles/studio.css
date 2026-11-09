@@ -1987,3 +1987,10 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 /* one account entry on every desk (AccountButton): signed out it is a neutral round avatar, not a "Sign in" word */
 .ed-avatar.ed-avatar-anon { color: var(--text-2); background: var(--fill); }
 .ed-account.anon:hover .ed-avatar-anon { color: var(--text); background: var(--fill-hover); box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--card-line); }
+/* status bar anatomy, every desk: left = labelled state (small-caps key + value, as News/Editorial/Outreach), right =
+   facts about the open document */
+.statusbar .sb-item { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.statusbar .sb-k { font: 700 10px/16px var(--ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }
+.statusbar .sb-item .sb-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statusbar .sb-item > :not(.sb-k) { color: var(--text); font-weight: 600; }
+.statusbar .vw-sb-save.failed > :not(.sb-k) { color: var(--warning); }

@@ -1296,17 +1296,19 @@ function VideoDesk() {
       </footer>
 
       <footer className="statusbar vw-statusbar">
-        <span>{tl.clips.length} {tl.clips.length === 1 ? 'clip' : 'clips'} · {tl.tracks.length} tracks</span>
-        {selectedClip && <><span className="sep" /><span className="vw-sb-sel">{selectedIds.length > 1 ? `${selectedIds.length} clips selected` : clipLabel(selectedClip)}</span></>}
+        <span className="sb-item"><span className="sb-k">Timeline</span><span>{tl.clips.length} {tl.clips.length === 1 ? 'clip' : 'clips'} · {tl.tracks.length} tracks</span></span>
+        <span className="sep" />
+        <span className="sb-item vw-sb-sel"><span className="sb-k">Selection</span><span className="sb-text">{!selectedClip ? 'None' : selectedIds.length > 1 ? `${selectedIds.length} clips` : clipLabel(selectedClip)}</span></span>
+        <span className="sep" />
+        <span className={`sb-item vw-sb-save${autosave?.error && dirty ? ' failed' : ''}`} data-tip={autosave?.error && dirty ? `Autosave failed: ${autosave.error}` : undefined}>
+          <span className="sb-k">Project</span>
+          <span>{dirty ? (autosave?.error ? 'Unsaved · autosave failed' : autosave?.at ? `Unsaved · autosaved ${fmtTime(autosave.at, { seconds: true })}` : 'Unsaved') : empty && !projectPath ? 'New video' : 'Saved'}</span>
+        </span>
         {note && <><span className="sep" /><span className="vw-sb-note">{note}</span></>}
         <div className="spacer" />
         <LoudnessChip onOpen={() => setMixerOpen(true)} />
         <span className="sep" />
         <span className="muted vw-sb-tool" data-tip="Tool · drop and paste mode">{TOOLS.find((x) => x.id === tool)?.label} · {editMode === 'insert' ? 'Insert' : 'Overwrite'}{project.magnetic ? ' · Magnetic' : ''}</span>
-        <span className="sep" />
-        <span className={`muted vw-sb-save${autosave?.error && dirty ? ' failed' : ''}`} data-tip={autosave?.error && dirty ? `Autosave failed: ${autosave.error}` : undefined}>
-          {dirty ? (autosave?.error ? 'Unsaved · autosave failed' : autosave?.at ? `Unsaved · autosaved ${fmtTime(autosave.at, { seconds: true })}` : 'Unsaved') : empty && !projectPath ? 'New video' : 'Saved'}
-        </span>
         <span className="sep" />
         <span className="muted">{project.width} × {project.height} · {project.fps} fps · {formatShortTime(length)}</span>
       </footer>
