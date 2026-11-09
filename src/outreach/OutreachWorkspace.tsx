@@ -10,7 +10,7 @@ import { ContactsTab } from './ContactsTab'
 import { CampaignsTab, STATUS_TEXT } from './CampaignsTab'
 import { SourcesTab } from './SourcesTab'
 import { OutreachComposer } from './OutreachComposer'
-import { OutreachInspector } from './OutreachInspector'
+import { HeaderSend, OutreachInspector } from './OutreachInspector'
 import { SenderDialog } from './SenderDialog'
 import { ActivityDesk } from './ActivityDesk'
 import { AutopilotDialog } from './AutopilotDialog'
@@ -214,6 +214,7 @@ export function OutreachWorkspace() {
           <span className="ed-ai-label">{ai.paused ? 'AI OFF' : letterAi ? providerMeta(letterAi.provider).name : 'Connect AI'}</span>
         </button>
         <AccountButton onToast={(m) => s.addLog('info', m)} />
+        <HeaderSend />
         <input ref={file} type="file" accept=".xlsx,.csv,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void s.importList(f); e.target.value = '' }} />
         <input ref={designFile} type="file" accept=".html,.htm,text/html" hidden onChange={(e) => { void applyDesignFile(e.target.files?.[0]); e.target.value = '' }} />
       </header>

@@ -509,6 +509,38 @@ function FollowUpCard() {
   )
 }
 
+/** What Send would do now — shared by the footer's Review & send and the header's Send so they never disagree. */
+function useSendSummary() {
+  const s = useDesk()
+  const c = s.campaign()
+  const set = s.mail?.settings
+  const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
+  const willSend = Math.min(queue.length, Math.max(0, (set?.dailyLimit ?? 0) - (s.mail?.sentToday ?? s.mail?.sent24h ?? 0)))
+  const lock = useCloud((x) => (c ? x.locks[c.id] : undefined))
+  return { c, queue, willSend, lock }
+}
+
+/** The desk's output button, top-right like Editorial's Publish: opens the same Review & send sheet as the footer, with
+ *  the same rule (a campaign must be open) and the footer's reason as its tooltip. While a batch runs, progress, Pause
+ *  and Stop are at the foot of the right column, so this waits. */
+export function HeaderSend() {
+  useClockFormat()
+  const s = useDesk()
+  const ui = useOutreachUi()
+  const { c, queue, willSend } = useSendSummary()
+  const running = s.run !== 'idle'
+  const why = cannotStart()
+  const tip = !c ? 'Open or create a campaign'
+    : running ? 'Sending — progress, Pause and Stop are at the foot of the right column'
+    : why ? why
+    : `${willSend} ready to go today${queue.length > willSend ? ` · ${queue.length - willSend} on later days` : ''} — check everything once more, then send now or at a time`
+  return (
+    <button type="button" className="btn primary or-head-send" onClick={() => ui.set({ sheet: 'review-send' })} disabled={!c || running} data-tip={tip}>
+      <Icon name="send" size={15} /><span>Send</span>
+    </button>
+  )
+}
+
 /** Pinned to the foot of the right column on every tab, like Editorial's Review & publish: what is ready, and the
  *  one button that sends — or, while a batch runs, its progress with Pause and Stop. */
 function SendFooter() {
@@ -522,10 +554,7 @@ function SendFooter() {
     const t = setInterval(() => tick((n) => n + 1), 1000)
     return () => clearInterval(t)
   }, [s.nextAt])
-  const set = s.mail?.settings
-  const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
-  const willSend = Math.min(queue.length, Math.max(0, (set?.dailyLimit ?? 0) - (s.mail?.sentToday ?? s.mail?.sent24h ?? 0)))
-  const lock = useCloud((x) => (c ? x.locks[c.id] : undefined))
+  const { queue, willSend, lock } = useSendSummary()
   // why the engine is holding this campaign's batch, in words: the organisation's spacing or daily limit, the gap
   // between emails, outside sending hours, the daily limit, Gmail's slow-down, a start time (activityFormat waitReason)
   const job = useEngineStore((x) => (c ? x.jobForCampaign(c.id) : undefined))
