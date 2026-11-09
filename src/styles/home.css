@@ -4,13 +4,13 @@
   --h-glass-hi: color-mix(in srgb, var(--card, #fff) 84%, transparent);
   --h-hair: color-mix(in srgb, var(--text) 9%, transparent);
   --h-shine: inset 0 1px 0 rgba(255, 255, 255, .55);
-  --h-shadow: 0 1px 2px rgba(20, 20, 40, .05), 0 8px 24px -8px rgba(20, 20, 40, .12);
-  --h-shadow-up: 0 2px 4px rgba(20, 20, 40, .06), 0 18px 40px -12px rgba(20, 20, 40, .22);
+  --h-shadow: 0 1px 2px rgba(40, 30, 20, .05), 0 8px 24px -8px rgba(40, 30, 20, .12);
+  --h-shadow-up: 0 2px 4px rgba(40, 30, 20, .06), 0 18px 40px -12px rgba(40, 30, 20, .22);
   --h-spring: cubic-bezier(.22, 1.2, .36, 1);
 }
 :root[data-theme=dark] .home-shell {
-  --h-glass: color-mix(in srgb, #14141c 46%, transparent);
-  --h-glass-hi: color-mix(in srgb, #1a1a24 66%, transparent);
+  --h-glass: color-mix(in srgb, #181614 46%, transparent);
+  --h-glass-hi: color-mix(in srgb, #1e1b18 66%, transparent);
   --h-hair: rgba(255, 255, 255, .11);
   --h-shine: inset 0 1px 0 rgba(255, 255, 255, .10);
   --h-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px -10px rgba(0, 0, 0, .55);
@@ -52,7 +52,7 @@
 .home-shell .format-card:focus-visible, .home-shell .recent-card:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 .home-shell .format-card { flex-direction: row; align-items: flex-start; gap: 14px; padding: 16px; }
 .home-shell .format-glyph { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: color-mix(in srgb, var(--text) 5%, transparent); box-shadow: inset 0 0 0 .5px var(--h-hair); }
-.home-shell .format-glyph i { display: block; border-radius: 4px; background: linear-gradient(145deg, color-mix(in srgb, var(--ink) 80%, #fff), var(--ink)); box-shadow: 0 2px 5px rgba(20, 20, 40, .25); transition: transform .45s var(--h-spring); }
+.home-shell .format-glyph i { display: block; border-radius: 4px; background: linear-gradient(145deg, color-mix(in srgb, var(--ink) 80%, #fff), var(--ink)); box-shadow: 0 2px 5px rgba(40, 30, 20, .25); transition: transform .45s var(--h-spring); }
 .home-shell .format-card:hover .format-glyph i { transform: scale(1.12) rotate(-3deg); }
 .home-shell .format-body { min-width: 0; flex: 1; }
 .home-shell .format-head { gap: 8px; }
@@ -116,7 +116,7 @@
 .home-shell .home-head-btn:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
 .home-shell .home-head-btn.quit { padding: 0 12px 0 10px; }
 /* ---- less glass, more newsroom: solid surfaces, tighter corners, ESB's own stripe. Later rules win over the glassy ones above. ---- */
-.home-shell { --h-shadow: 0 1px 2px rgba(20, 20, 40, .08); --h-shadow-up: 0 4px 12px -4px rgba(20, 20, 40, .22); --h-shine: none; }
+.home-shell { --h-shadow: 0 1px 2px rgba(40, 30, 20, .08); --h-shadow-up: 0 4px 12px -4px rgba(40, 30, 20, .22); --h-shine: none; }
 :root[data-theme=dark] .home-shell { --h-shadow: 0 1px 2px rgba(0, 0, 0, .4); --h-shadow-up: 0 6px 16px -6px rgba(0, 0, 0, .6); --h-shine: none; }
 .home-shell .home-topbar { height: 44px; padding: 0 10px 0 8px; gap: 8px; background: color-mix(in srgb, var(--bg-1) 88%, transparent); border-bottom: 1px solid var(--line-2); }
 .home-shell .home-topbar .ws-home-btn, .home-shell .home-topbar .ws-switch, .home-shell .home-head-actions { background: var(--fill); border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -136,7 +136,7 @@
   background: color-mix(in srgb, var(--card, #fff) 92%, transparent); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: var(--h-shadow);
   -webkit-backdrop-filter: none; backdrop-filter: none;
 }
-:root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice { background: color-mix(in srgb, #14141c 82%, transparent); }
+:root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice { background: color-mix(in srgb, #181614 82%, transparent); }
 .home-shell .format-card, .home-shell .recent-card { transition: border-color .15s ease, box-shadow .2s ease, transform .15s ease; }
 .home-shell .format-card:hover, .home-shell .recent-card:hover { transform: translateY(-1px); background: var(--card, #fff); border-color: var(--ink); box-shadow: var(--h-shadow-up); }
 :root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: #1b1b26; border-color: rgba(255, 255, 255, .5); }
@@ -160,7 +160,7 @@
   transition: border-color .15s ease, box-shadow .2s ease, transform .15s ease, background .15s ease;
   animation: home-rise .7s var(--h-spring) both; animation-delay: calc(.1s + .05s * var(--i, 0));
 }
-:root[data-theme=dark] .home-shell .launch-tile { background: color-mix(in srgb, #14141c 82%, transparent); }
+:root[data-theme=dark] .home-shell .launch-tile { background: color-mix(in srgb, #181614 82%, transparent); }
 .home-shell .launch-tile:hover { transform: translateY(-1px); border-color: var(--ink); box-shadow: var(--h-shadow-up); background: var(--card, #fff); }
 :root[data-theme=dark] .home-shell .launch-tile:hover { background: #1b1b26; border-color: rgba(255, 255, 255, .5); }
 .home-shell .launch-tile:active { transform: none; }
@@ -222,7 +222,7 @@
 .home-shell .home-footer > * { pointer-events: auto; }
 /* ---- launcher as one balanced strip: five equal cells in a single panel, icon above label, hairline dividers ---- */
 .home-shell .home-launch { gap: 0; border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; box-shadow: var(--h-shadow); background: color-mix(in srgb, var(--card, #fff) 92%, transparent); }
-:root[data-theme=dark] .home-shell .home-launch { background: color-mix(in srgb, #14141c 82%, transparent); border-color: rgba(255, 255, 255, .14); }
+:root[data-theme=dark] .home-shell .home-launch { background: color-mix(in srgb, #181614 82%, transparent); border-color: rgba(255, 255, 255, .14); }
 .home-shell .launch-tile {
   display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 0;
   min-height: clamp(92px, 15vh, 124px); padding: clamp(14px, 2.4vh, 20px) 20px;
@@ -597,7 +597,7 @@
 }
 .home-shell .format-card:hover .format-glyph i {
   transform: scale(1.08);
-  box-shadow: 0 4px 10px rgba(20, 20, 40, .28);
+  box-shadow: 0 4px 10px rgba(40, 30, 20, .28);
 }
 .home-shell .launch-tile:hover {
   background: rgba(255, 255, 255, .38) !important;
@@ -664,7 +664,7 @@
   border: 1px solid var(--line-2);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);
   backdrop-filter: blur(20px) saturate(1.6);
-  box-shadow: 0 2px 10px rgba(20, 20, 40, .08), inset 0 1px 0 rgba(255, 255, 255, .7);
+  box-shadow: 0 2px 10px rgba(40, 30, 20, .08), inset 0 1px 0 rgba(255, 255, 255, .7);
   transition: width .36s cubic-bezier(.22, 1, .36, 1), max-width .36s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, box-shadow .25s ease, gap .25s ease, padding .25s ease;
 }
 :root[data-theme=dark] .home-shell .home-head-actions {
@@ -685,7 +685,7 @@
   gap: 3px;
   justify-content: flex-end;
   opacity: 1;
-  box-shadow: 0 4px 20px rgba(20, 20, 40, .14), inset 0 1px 0 rgba(255, 255, 255, .8);
+  box-shadow: 0 4px 20px rgba(40, 30, 20, .14), inset 0 1px 0 rgba(255, 255, 255, .8);
 }
 :root[data-theme=dark] .home-shell .home-topbar:hover .home-head-actions,
 :root[data-theme=dark] .home-shell .home-head-actions:hover,
@@ -1127,7 +1127,7 @@
 .home-shell .format-card { grid-column: span 2; }
 .home-shell .format-card:nth-child(n + 4) { grid-column: span 3; }
 .home-shell .format-glyph { width: 40px; height: 40px; border-radius: 10px !important; }
-.home-shell .format-glyph i { position: relative; overflow: hidden; background: var(--card, #fff); border: 1px solid color-mix(in srgb, var(--text) 24%, transparent); border-radius: 4px !important; box-shadow: 0 1px 2px rgba(20, 20, 40, .14); }
+.home-shell .format-glyph i { position: relative; overflow: hidden; background: var(--card, #fff); border: 1px solid color-mix(in srgb, var(--text) 24%, transparent); border-radius: 4px !important; box-shadow: 0 1px 2px rgba(40, 30, 20, .14); }
 .home-shell .format-glyph i::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 14%; min-height: 2px; background: linear-gradient(90deg, #0aa37a 0 34%, #f4c20d 34% 67%, #e53935 67%); }
 .home-shell .format-glyph i::after { content: ''; position: absolute; left: 14%; right: 22%; bottom: 16%; height: 26%; background: linear-gradient(var(--text) 0 0) 0 0 / 100% 36% no-repeat, linear-gradient(var(--text) 0 0) 0 100% / 62% 36% no-repeat; opacity: .5; border-radius: 1px; }
 @media (max-width: 1100px) { .home-shell .formats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .home-shell .format-card, .home-shell .format-card:nth-child(n + 4) { grid-column: auto; } }
@@ -1258,7 +1258,7 @@
 .home-shell .recent-warn { display: flex; align-items: center; gap: 6px; margin-top: 2px; font: 700 11.5px/16px var(--ui); color: #d97a1c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-shell .recent-warn i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #f0953a; box-shadow: 0 0 0 3px color-mix(in srgb, #f0953a 24%, transparent); }
 :root[data-theme=dark] .home-shell .recent-warn { color: #f5a85a; }
-.home-shell .recent-actions { position: absolute; right: 10px; top: 50%; display: flex; gap: 2px; padding: 4px; border-radius: 10px; background: color-mix(in srgb, var(--card, #fff) 92%, transparent); box-shadow: 0 1px 2px rgba(20, 20, 40, .12), inset 0 0 0 1px var(--line-2); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+.home-shell .recent-actions { position: absolute; right: 10px; top: 50%; display: flex; gap: 2px; padding: 4px; border-radius: 10px; background: color-mix(in srgb, var(--card, #fff) 92%, transparent); box-shadow: 0 1px 2px rgba(40, 30, 20, .12), inset 0 0 0 1px var(--line-2); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   opacity: 0; transform: translate(18px, -50%); pointer-events: none; transition: opacity .22s ease, transform .28s var(--ease, ease); transition-delay: 0s; }
 :root[data-theme=dark] .home-shell .recent-actions { background: color-mix(in srgb, #10141c 90%, transparent); }
 .home-shell .recent-main:hover .recent-actions { opacity: 1; transform: translate(0, -50%); pointer-events: auto; transition-delay: 1s; }
