@@ -63,29 +63,29 @@
   /* ---------------------------------------------------------------- Elevation */
   --shadow-l0: none;
   --shadow-l1: none;
-  --shadow-l2: 0 12px 32px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
-  --shadow-l3: 0 16px 40px rgba(0, 0, 0, 0.22), 0 3px 8px rgba(0, 0, 0, 0.08);
+  --shadow-l2: 0 12px 32px rgba(48, 36, 24, 0.14), 0 2px 6px rgba(48, 36, 24, 0.06);
+  --shadow-l3: 0 18px 44px rgba(48, 36, 24, 0.2), 0 3px 8px rgba(48, 36, 24, 0.08);
 
   /* ================================================================ Light Theme Palette (Default) */
-  --surface-app: #e9e9eb;
-  --surface-panel: #ffffff;
-  --surface-raised: #ffffff;
-  --surface-sunken: #f6f6f7;
-  --surface-hover: #efeff1;
+  --surface-app: #ebe7df;
+  --surface-panel: #fbfaf6;
+  --surface-raised: #fffefb;
+  --surface-sunken: #f3f0e9;
+  --surface-hover: #ece8df;
 
-  --border-subtle: #ececef;
-  --border-default: #dcdce0;
-  --border-strong: #c3c3ca;
+  --border-subtle: #e7e2d7;
+  --border-default: #d8d1c3;
+  --border-strong: #bfb6a5;
 
-  --text-primary: #18181b;
-  --text-secondary: #52525b;
-  --text-tertiary: #686872;
-  --text-disabled: rgba(24, 24, 27, 0.42);
+  --text-primary: #1c1916;
+  --text-secondary: #57504a;
+  --text-tertiary: #6f675e;
+  --text-disabled: rgba(28, 25, 22, 0.42);
 
-  --accent: #18181b;
+  --accent: #1c1916;
   --on-accent: #ffffff;
-  --accent-soft: rgba(24, 24, 27, 0.06);
-  --focus-ring: rgba(24, 24, 27, 0.2);
+  --accent-soft: rgba(28, 25, 22, 0.06);
+  --focus-ring: rgba(28, 25, 22, 0.22);
 
   --danger: #b42318;
   --danger-soft: rgba(180, 35, 24, 0.08);
@@ -95,17 +95,17 @@
   --success-soft: rgba(31, 122, 69, 0.1);
 
   /* tooltips take the theme's own surface: light on light, dark on dark */
-  --tip-bg: #ffffff;
-  --tip-fg: #18181b;
-  --scrim: rgba(24, 24, 27, 0.42);
+  --tip-bg: #fffefb;
+  --tip-fg: #1c1916;
+  --scrim: rgba(28, 22, 16, 0.42);
 
   /* Chrome surfaces: grey sidebars with white controls, hairline control rings, translucent menus */
-  --side: #f4f4f6;
-  --ctl-shadow: 0 0 0 .5px rgba(0, 0, 0, 0.1), 0 1px 1.5px rgba(0, 0, 0, 0.07);
-  --ctl-shadow-hover: 0 0 0 .5px rgba(0, 0, 0, 0.22), 0 1px 2px rgba(0, 0, 0, 0.1);
-  --menu-bg: rgba(252, 252, 253, 0.82);
-  --shadow-1: 0 .5px 1px rgba(0, 0, 0, 0.08);
-  --shadow-2: 0 0 0 .5px rgba(0, 0, 0, 0.1), 0 12px 36px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
+  --side: #f3f0e9;
+  --ctl-shadow: 0 0 0 .5px rgba(48, 36, 24, 0.12), 0 1px 1.5px rgba(48, 36, 24, 0.08);
+  --ctl-shadow-hover: 0 0 0 .5px rgba(48, 36, 24, 0.24), 0 1px 2px rgba(48, 36, 24, 0.12);
+  --menu-bg: rgba(253, 252, 249, 0.86);
+  --shadow-1: 0 .5px 1px rgba(48, 36, 24, 0.08);
+  --shadow-2: 0 0 0 .5px rgba(48, 36, 24, 0.1), 0 12px 36px rgba(48, 36, 24, 0.16), 0 2px 8px rgba(48, 36, 24, 0.06);
 
   color-scheme: light;
 
@@ -124,26 +124,26 @@
   --muted: var(--text-secondary);
 
   /* ---- Studio surfaces (2026-10): cards on a quiet canvas, filled toolbar controls, spring motion ---- */
-  --card: #ffffff;
-  --card-line: rgba(0, 0, 0, 0.07);
-  --card-shadow: 0 0 0 .5px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --card-shadow-open: 0 0 0 .5px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
-  --fill: rgba(0, 0, 0, 0.045);
-  --fill-hover: rgba(0, 0, 0, 0.075);
-  --fill-active: rgba(0, 0, 0, 0.1);
-  --field: rgba(0, 0, 0, 0.04);
-  --field-hover: rgba(0, 0, 0, 0.06);
-  --raised: #ffffff;
-  --raised-shadow: 0 0 0 .5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 1px rgba(0, 0, 0, 0.04);
+  --card: #fffefb;
+  --card-line: rgba(48, 36, 24, 0.08);
+  --card-shadow: 0 0 0 .5px rgba(48, 36, 24, 0.07), 0 1px 2px rgba(48, 36, 24, 0.05), 0 2px 6px rgba(48, 36, 24, 0.03);
+  --card-shadow-open: 0 0 0 .5px rgba(48, 36, 24, 0.09), 0 2px 4px rgba(48, 36, 24, 0.05), 0 10px 28px rgba(48, 36, 24, 0.08);
+  --fill: rgba(48, 36, 24, 0.05);
+  --fill-hover: rgba(48, 36, 24, 0.08);
+  --fill-active: rgba(48, 36, 24, 0.11);
+  --field: rgba(48, 36, 24, 0.045);
+  --field-hover: rgba(48, 36, 24, 0.07);
+  --raised: #fffefb;
+  --raised-shadow: 0 0 0 .5px rgba(48, 36, 24, 0.1), 0 1px 2px rgba(48, 36, 24, 0.12), 0 1px 1px rgba(48, 36, 24, 0.04);
   --primary-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 1px 2px rgba(0, 0, 0, 0.18);
   --split-line: rgba(255, 255, 255, 0.2);
-  --header-bg: rgba(250, 250, 251, 0.92);
+  --header-bg: rgba(248, 246, 241, 0.92);
   --spring: cubic-bezier(0.16, 1, 0.3, 1);
   --bg-0: var(--surface-app);
   --bg-1: var(--surface-panel);
   --bg-2: var(--surface-sunken);
   --bg-3: var(--surface-hover);
-  --bg-4: #e3e3e6;
+  --bg-4: #e2ddd2;
   --line: var(--border-subtle);
   --line-1: var(--border-subtle);
   --line-2: var(--border-default);
@@ -152,10 +152,10 @@
   --text-2: var(--text-secondary);
   --text-3: var(--text-tertiary);
   --ink: var(--accent);
-  --ink-2: #3f3f46;
+  --ink-2: #3e3832;
   --on-ink: var(--on-accent);
   --ink-soft: var(--accent-soft);
-  --ink-ring: rgba(24, 24, 27, 0.14);
+  --ink-ring: rgba(28, 25, 22, 0.14);
   --red: var(--danger);
   --red-soft: var(--danger-soft);
   --amber: var(--warning);
@@ -175,29 +175,35 @@
   --t-3: var(--t-surface);
   --ui: "ESB Sans", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: var(--font-mono);
+  --brand-g: #1e9b4a;
+  --brand-r: #e52d2d;
+  --brand-o: #ec8e3c;
+  --brand-stripe: linear-gradient(90deg, var(--brand-g) 0 33.4%, var(--brand-r) 33.4% 66.7%, var(--brand-o) 66.7% 100%);
+  --font-display: "Source Serif 4", "Noto Serif Bengali", Georgia, serif;
+  --desk-accent: var(--accent);
 }
 
 /* ================================================================ Dark Theme Palette */
 :root[data-theme="dark"] {
-  --surface-app: #0d0d0f;
-  --surface-panel: #18181b;
-  --surface-raised: #1e1e23;
-  --surface-sunken: #1f1f23;
-  --surface-hover: #27272b;
+  --surface-app: #100f0e;
+  --surface-panel: #191816;
+  --surface-raised: #201e1b;
+  --surface-sunken: #1d1b19;
+  --surface-hover: #282522;
 
-  --border-subtle: #26262a;
-  --border-default: #36363c;
-  --border-strong: #4d4d56;
+  --border-subtle: #2a2724;
+  --border-default: #3a3631;
+  --border-strong: #524c45;
 
-  --text-primary: #f4f4f5;
-  --text-secondary: #b3b3bd;
-  --text-tertiary: #a8a8b3;
-  --text-disabled: rgba(244, 244, 245, 0.42);
+  --text-primary: #f3efe8;
+  --text-secondary: #bfb7ab;
+  --text-tertiary: #a69e92;
+  --text-disabled: rgba(243, 239, 232, 0.42);
 
-  --accent: #f4f4f5;
-  --on-accent: #18181b;
-  --accent-soft: rgba(244, 244, 245, 0.08);
-  --focus-ring: rgba(244, 244, 245, 0.28);
+  --accent: #f3efe8;
+  --on-accent: #191816;
+  --accent-soft: rgba(243, 239, 232, 0.08);
+  --focus-ring: rgba(243, 239, 232, 0.28);
 
   --danger: #f2877e;
   --danger-soft: rgba(242, 135, 126, 0.12);
@@ -206,22 +212,22 @@
   --success: #34d399;
   --success-soft: rgba(52, 211, 153, 0.12);
 
-  --tip-bg: #2c2c31;
-  --tip-fg: #f4f4f5;
+  --tip-bg: #2c2926;
+  --tip-fg: #f3efe8;
   --scrim: rgba(0, 0, 0, 0.6);
 
-  --side: #1b1b1e;
+  --side: #1a1917;
   --ctl-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.12), 0 1px 1.5px rgba(0, 0, 0, 0.4);
   --ctl-shadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 1px 3px rgba(0, 0, 0, 0.5);
-  --menu-bg: rgba(36, 36, 40, 0.78);
+  --menu-bg: rgba(38, 35, 32, 0.82);
   --shadow-1: 0 .5px 1px rgba(0, 0, 0, 0.5);
   --shadow-2: 0 0 0 .5px rgba(255, 255, 255, 0.12), 0 12px 36px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
 
   color-scheme: dark;
 
-  --bg-4: #323238;
-  --ink-2: #d4d4d8;
-  --ink-ring: rgba(244, 244, 245, 0.2);
+  --bg-4: #34302b;
+  --ink-2: #d8d1c6;
+  --ink-ring: rgba(243, 239, 232, 0.2);
 
   --surface: var(--surface-panel);
   --surface-2: var(--surface-sunken);
@@ -229,18 +235,18 @@
   --border: var(--border-default);
   --muted: var(--text-secondary);
 
-  --card: #222226;
-  --card-line: rgba(255, 255, 255, 0.07);
-  --card-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.4);
-  --card-shadow-open: 0 0 0 .5px rgba(255, 255, 255, 0.09), 0 4px 18px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.4);
-  --fill: rgba(255, 255, 255, 0.06);
-  --fill-hover: rgba(255, 255, 255, 0.09);
-  --fill-active: rgba(255, 255, 255, 0.13);
-  --field: rgba(255, 255, 255, 0.055);
-  --field-hover: rgba(255, 255, 255, 0.08);
-  --raised: #3a3a40;
+  --card: #221f1c;
+  --card-line: rgba(255, 245, 230, 0.07);
+  --card-shadow: 0 0 0 .5px rgba(255, 245, 230, 0.06), 0 1px 2px rgba(0, 0, 0, 0.45);
+  --card-shadow-open: 0 0 0 .5px rgba(255, 245, 230, 0.09), 0 4px 18px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --fill: rgba(255, 245, 230, 0.06);
+  --fill-hover: rgba(255, 245, 230, 0.09);
+  --fill-active: rgba(255, 245, 230, 0.13);
+  --field: rgba(255, 245, 230, 0.055);
+  --field-hover: rgba(255, 245, 230, 0.08);
+  --raised: #3b3732;
   --raised-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.5);
   --primary-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.5);
   --split-line: rgba(0, 0, 0, 0.16);
-  --header-bg: rgba(27, 27, 30, 0.92);
+  --header-bg: rgba(26, 24, 22, 0.92);
 }

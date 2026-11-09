@@ -1,0 +1,34 @@
+/* ==========================================================================
+   Newsroom identity (2026-11-09) — loaded LAST by App.tsx.
+   Colour, paper and depth live in tokens.css (the "Newsroom" edition values); this file holds only what tokens
+   cannot express: which text is set in the display serif, and each desk's one accent (--desk-accent).
+   Rules: no hex here except a desk accent pair; no !important; low, flat selectors.
+   ========================================================================== */
+
+/* ---- Display type: titles and headlines read like a paper, controls stay in the UI sans ---- */
+:root .dialog h2,
+:root .signin-body h2,
+:root .acct-id h2,
+:root .ed-launcher-hero h2,
+:root .ed-card-title h2,
+:root .ed-input-headline,
+:root .nw-hl:not([lang='bn']),
+:root .rb-doc h1, :root .rb-doc h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  font-feature-settings: 'lnum' 1, 'kern' 1;
+}
+:root .ed-input-headline { font-size: 22px; line-height: 1.22; }
+:root .nw-hl:not([lang='bn']) { font-size: 16px; line-height: 1.32; }
+/* Bangla headlines: the serif Bangla face, so a Bangla and an English headline share one voice */
+:root .nw-hl[lang='bn'] { font-family: 'Noto Serif Bengali', 'Hind Siliguri', var(--font-display); font-weight: 600; }
+
+/* ---- One accent per desk ---- */
+[data-workspace='outreach'], .outreach-workspace { --desk-accent: #17804a; }
+:root[data-theme='dark'][data-workspace='outreach'], :root[data-theme='dark'] .outreach-workspace { --desk-accent: #4cc982; }
+:root[data-workspace='outreach'], .outreach-workspace {
+  --or-brand: var(--desk-accent);
+  --or-brand-soft: color-mix(in srgb, var(--desk-accent) 12%, transparent);
+  --or-brand-hover: color-mix(in srgb, var(--desk-accent) 86%, var(--text));
+}
