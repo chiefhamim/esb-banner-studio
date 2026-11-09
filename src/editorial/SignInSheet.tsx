@@ -17,6 +17,7 @@ import { fmtTime, useClockFormat } from '../ui/time'
 import { AvatarPicker, UserAvatar } from './avatar'
 import { useOutreachStore } from '../outreach/outreachStore'
 import { SenderDialog } from '../outreach/SenderDialog'
+import { AutopilotDialog } from '../outreach/AutopilotDialog'
 import { mailFailView } from '../outreach/mailCheck'
 
 /** The role colours esbpowerline.com uses (lib/constants.ts ROLES), so the badge matches the site's own RoleBadge. */
@@ -29,6 +30,7 @@ function MailSenderCard() {
   const mail = useOutreachStore((s) => s.mail)
   const smtp = useOutreachStore((s) => s.smtp)
   const [open, setOpen] = useState(false)
+  const [pace, setPace] = useState(false)
   const desktop = !!window.esb?.outreachSend
   useEffect(() => {
     if (!desktop) return
@@ -50,7 +52,9 @@ function MailSenderCard() {
           <button type="button" className={'btn sm' + (set ? '' : ' primary')} disabled={!desktop} onClick={() => setOpen(true)}><Icon name="mail" size={13} /><span>{set ? 'Change sender' : 'Set up sender'}</span></button>
         </div>
       </div>
-      {open && <SenderDialog onClose={() => { setOpen(false); void useOutreachStore.getState().checkSmtp(true) }} />}
+      {open && <SenderDialog onClose={() => { setOpen(false); void useOutreachStore.getState().checkSmtp(true) }} onSendingSettings={() => setPace(true)} />}
+      {/* opened here, not via the Outreach desk's sheet, so "Change in Sending settings" works from every desk */}
+      {pace && <AutopilotDialog onClose={() => setPace(false)} />}
     </div>
   )
 }
@@ -105,7 +109,8 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const closeRef = useRef(onClose)
   useEffect(() => { closeRef.current = onClose }, [onClose])
   useEffect(() => {
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); closeRef.current() } }
+    // a dialog opened from the sheet (Sender, Sending settings, Facebook) takes Esc first; the sheet stays open under it
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.modal-bg .dialog:not(.signin)')) { e.stopPropagation(); closeRef.current() } }
     window.addEventListener('keydown', key, true)
     return () => window.removeEventListener('keydown', key, true)
   }, [])
@@ -152,7 +157,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
       <div className="dialog signin" role="dialog" aria-modal="true" aria-label={session ? 'esbpowerline.com account' : 'Sign in to esbpowerline.com'}>
         <button type="button" className="signin-close ibtn" aria-label="Close" onClick={onClose}><Icon name="x" size={15} /></button>
 
-        {!session ? (
+        {!session ? (<>
           <form className="signin-body" onSubmit={(e) => { e.preventDefault(); void submit() }}>
             <img className="signin-mark" src={siteIcon} alt="" />
             <h2>Sign in to esbpowerline.com</h2>
@@ -182,7 +187,12 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
               <a href={`${SITE_BASE_URL}/login`} target="_blank" rel="noopener noreferrer">Forgot password?</a>
             </div>
           </form>
-        ) : (
+          {/* Mail sending does not depend on the site sign-in, so the Mail sender is reachable signed out too. */}
+          <section className="acct-sec signin-mail" aria-label="Mail sender">
+            <h3>Mail sender</h3>
+            <MailSenderCard />
+          </section>
+        </>) : (
           <div className="acct">
             <header className="acct-head">
               <button type="button" className="signin-avatar av-btn" onClick={() => setPicking((v) => !v)} aria-expanded={picking} aria-label="Change profile picture" data-tip="Change profile picture">

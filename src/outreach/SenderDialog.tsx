@@ -48,7 +48,8 @@ const PRESETS: Record<EsbMailProvider, Preset> = {
 
 const SES_REGIONS = ['us-east-1', 'us-east-2', 'us-west-2', 'eu-west-1', 'eu-west-2', 'eu-central-1', 'ap-south-1', 'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1', 'ca-central-1', 'sa-east-1']
 
-export function SenderDialog({ onClose }: { onClose: () => void }) {
+/** `onSendingSettings` opens Sending settings where the dialog lives; the default is the Outreach desk's own sheet. */
+export function SenderDialog({ onClose, onSendingSettings }: { onClose: () => void; onSendingSettings?: () => void }) {
   const mail = useOutreachStore((s) => s.mail)
   const refresh = useOutreachStore((s) => s.refreshMail)
   const addLog = useOutreachStore((s) => s.addLog)
@@ -173,7 +174,7 @@ export function SenderDialog({ onClose }: { onClose: () => void }) {
         <div className="or-pace-link" data-testid="or-sender-pace">
           <Icon name="sliders" size={14} />
           <span>{pacing ? `Sending pace: ${pacing.dailyLimit} a day · ${fmtGapRange(pacing.minDelaySec, pacing.maxDelaySec)} apart · ${pacing.window?.enabled ? `${fmtWallClock(pacing.window.from)}–${fmtWallClock(pacing.window.to)}` : 'any hour'}` : 'Sending pace'}</span>
-          <button type="button" className="or-link-btn" onClick={() => { onClose(); ui.set({ sheet: 'autopilot' }) }}>Change in Sending settings</button>
+          <button type="button" className="or-link-btn" onClick={() => { onClose(); if (onSendingSettings) onSendingSettings(); else ui.set({ sheet: 'autopilot' }) }}>Change in Sending settings</button>
         </div>
         <p className="hint">Staying well under the service's limit keeps the address out of spam folders. The same address is never emailed twice within 7 days. Addresses that bounced before are never written to again; there is no "does this mailbox exist" probe (servers treat it as abuse), so check role addresses (info@, admin@) by hand.</p>
         {error && <div className="callout warn"><Icon name="info" size={14} /><span>{error}</span></div>}
