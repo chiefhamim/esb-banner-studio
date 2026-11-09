@@ -32,3 +32,10 @@
   --or-brand-soft: color-mix(in srgb, var(--desk-accent) 12%, transparent);
   --or-brand-hover: color-mix(in srgb, var(--desk-accent) 86%, var(--text));
 }
+
+/* ---- Empty states: every desk's empty-state title speaks in the display serif (41 empty-state classes, one voice) ---- */
+:root :is([class*='-empty'], [class*='empty-'], .empty-notice) :is(h2, h3) {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
