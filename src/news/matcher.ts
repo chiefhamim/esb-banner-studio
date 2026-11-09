@@ -66,6 +66,10 @@ export const FALSE_FRIENDS: RegExp[] = [
   /বিদ্যু[ৎত]\s*চমক[ঀ-৿]*/g, // a flash of lightning
   /\bsolar\s+(?:eclipses?|system|flares?|storms?|cycle|maximum|minimum|orbiter|probe|observatory)\b/gi,
   /\belectrocut\w*/gi,
+  // Titas alone is also a given name, a river and an upazila: in English only "Titas Gas" is the utility
+  /\bTitas(?![\s-]+[Gg]as)(?:'s?|’s?)?/g,
+  // তিতাস নদী (the river) and তিতাস উপজেলা (Cumilla) are places, not the gas company
+  /তিতাস\s*(?:নদী|উপজেলা)[ঀ-৿]*/g,
 ]
 const maskFalseFriends = (t: string) => FALSE_FRIENDS.reduce((s, re) => s.replace(re, (m) => ' '.repeat(m.length)), t)
 

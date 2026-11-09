@@ -104,6 +104,11 @@ describe('EnergyWatch matcher: false friends', () => {
     ['গ্যাসের দাম বাড়ানোর প্রস্তাব বিইআরসিতে', KEEP],
     ['Bangladesh opens largest solar park in Teknaf', KEEP],
     ['বিদ্যুত্‍ বিভাগের নতুন সচিব যোগ দিলেন', KEEP],
+    ["Army soldier Titas' death: Three cases filed in Teknaf", DROP],
+    ['Titas Gas to cut illegal connections in Narayanganj', KEEP],
+    ['Titas gas supply disrupted in parts of Dhaka', KEEP],
+    ['তিতাস নদীতে নৌকাডুবি, নিখোঁজ দুই', DROP],
+    ['তিতাস উপজেলায় সংঘর্ষে আহত ১০', DROP],
   ] as [string, boolean][])('%s', (title, want) => {
     expect(!!match(title)).toBe(want)
   })

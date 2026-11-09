@@ -267,7 +267,13 @@ async function safeFetch(targetUrl, options = {}) {
       return { ok: false, code: 'invalid_protocol', error: `Disallowed protocol: ${parsed.protocol} (only http/https allowed)` }
     }
 
-    const hostCheck = await resolveAndValidateHost(parsed.hostname, customResolver, allowLoopback)
+    // The DNS lookup counts against the same deadline: a dead domain's lookup can hang for minutes, and it ran before the
+    // request timer started, so one dead government site held a whole News pass at "226 of 227".
+    let dnsTimer
+    const hostCheck = await Promise.race([
+      resolveAndValidateHost(parsed.hostname, customResolver, allowLoopback),
+      new Promise((r) => { dnsTimer = setTimeout(() => r({ ok: false, code: 'timeout', error: `DNS lookup for ${parsed.hostname} timed out` }), Math.min(remainingTime, 10000)) }),
+    ]).finally(() => clearTimeout(dnsTimer))
     if (!hostCheck.ok) {
       return hostCheck
     }
