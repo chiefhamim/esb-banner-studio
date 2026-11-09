@@ -8,7 +8,7 @@ import crypto from 'node:crypto'
 const ENGINE = [
   'matcher.ts', 'matcher.test.ts', 'feedparse.ts', 'feedparse.test.ts', 'ewSources.ts', 'portalBrands.ts',
   'rangeSearch.ts', 'rangeSearch.test.ts', 'dates.ts', 'dates.test.ts', 'dedupe.ts', 'dedupe.test.ts',
-  'pressParse.ts', 'pressParse.test.ts', 'headlineEn.ts', 'headlineEn.test.ts',
+  'pressParse.ts', 'pressParse.test.ts',
 ]
 const HERE = path.resolve(__dirname)
 const textSha = (p: string) => crypto.createHash('sha256').update(fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n')).digest('hex')

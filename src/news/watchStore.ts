@@ -10,8 +10,6 @@ import { parseFeed, parseDate } from './feedparse'
 import { itemTimeMs, olderThan, sortTimeMs } from './dates'
 import { mergeFound as mergeRows, norm, normUrlKey, redirectTarget } from './dedupe'
 import { NOT_PRESS, parseGovPressTable, resolveGovOfficeName } from './pressParse'
-import { applyHeadlineCache, headlinesToTranslate, translateHeadlines, trimHeadlineCache, type HeadlineCache } from './headlineEn'
-import { raceTranslate } from '../editorial/translateNet'
 
 export { itemTimeMs, norm, normUrlKey, parseGovPressTable, resolveGovOfficeName }
 
@@ -30,8 +28,6 @@ export interface WatchItem {
   matched: string[]
   /** the feed gave no readable date: shown as "time not given", aged from when it was first found */
   timeUnknown?: boolean
-  /** English line under a Bangla headline (free machine translation, see headlineEn.ts) */
-  titleEn?: string
 }
 export interface FeedState { ok: boolean; at: number; count: number; error?: string }
 export interface WatchPrefs {
@@ -46,7 +42,6 @@ export interface WatchPrefs {
   /** minutes between automatic checks while the News desk is open; 0 = only Check now */
   autoMin: number
   /** show an English line under Bangla headlines (free translation, in the background); default on */
-  titleEn?: boolean
 }
 
 export const DEFAULT_PREFS: WatchPrefs = {
@@ -56,7 +51,6 @@ export const DEFAULT_PREFS: WatchPrefs = {
   show: { energy: true, leadership: true, press: true },
   maxAgeH: 24,
   autoMin: 10,
-  titleEn: true,
 }
 const PREFS_KEY = 'esb-banner-studio/news/prefs/v1'
 const DATA_KEY = 'esb-banner-studio/news/data/v1'
@@ -503,8 +497,6 @@ interface WatchState {
   markAllRead: () => void
   cleanPublishedStory: (url?: string | null, title?: string | null) => void
   run: () => Promise<{ checked: number; added: number; failed: number } | null>
-  /** fill English lines under Bangla headlines in the background (free translation; prefs.titleEn turns it off) */
-  translateTitles: () => Promise<void>
 }
 
 const initial = load(DATA_KEY, {
@@ -521,11 +513,6 @@ export function mergeFound(prev: WatchItem[], found: WatchItem[], started: numbe
   return mergeRows(prev, found, started, { hidden, itemCap: ITEM_CAP, pressRetentionMs: PRESS_RETENTION_MS })
 }
 
-const TITLE_EN_KEY = 'esb-banner-studio/news/title-en/v1'
-let titleEnCache: HeadlineCache = load(TITLE_EN_KEY, {} as HeadlineCache)
-let titlesRunning = false
-/** The free translation of one headline (or one batch, a headline per line); null when no service answered. */
-const freeTranslate = (text: string) => (typeof navigator !== 'undefined' && navigator.onLine === false ? Promise.resolve(null) : raceTranslate(text, 8000))
 
 export const useWatch = create<WatchState>((set, get) => {
   const persist = () => {
@@ -599,8 +586,7 @@ export const useWatch = create<WatchState>((set, get) => {
         timer = null
         flushAt = Date.now()
         const m = mergeFound(prev, found, started, get().hidden)
-        set({ items: applyHeadlineCache(m.items, titleEnCache), feeds: { ...states }, newKeys: prev.length ? m.addedKeys : [], progress: { done, total: totalSources } })
-        void get().translateTitles() // English lines start while the list is still filling (one run at a time)
+        set({ items: m.items, feeds: { ...states }, newKeys: prev.length ? m.addedKeys : [], progress: { done, total: totalSources } })
       }
       const soon = () => { if (!timer) timer = setTimeout(publish, Math.max(0, 250 - (Date.now() - flushAt))) }
       set({ progress: { done: 0, total: totalSources } })
@@ -655,26 +641,9 @@ export const useWatch = create<WatchState>((set, get) => {
       if (timer) clearTimeout(timer)
       const { items, addedKeys } = mergeFound(prev, found, started, get().hidden)
       const added = addedKeys.length
-      set({ items: applyHeadlineCache(items, titleEnCache), feeds: states, lastRun: started, running: false, progress: null, seenAt: prev.length ? get().seenAt : started, newKeys: prev.length ? addedKeys : [] })
+      set({ items, feeds: states, lastRun: started, running: false, progress: null, seenAt: prev.length ? get().seenAt : started, newKeys: prev.length ? addedKeys : [] })
       persist()
-      void get().translateTitles()
       return { checked: totalSources, added, failed }
-    },
-    translateTitles: async () => {
-      if (titlesRunning || get().prefs.titleEn === false) return
-      titlesRunning = true
-      try {
-        set({ items: applyHeadlineCache(get().items, titleEnCache) })
-        const want = headlinesToTranslate(visibleItems(get().items, get().hidden, get().prefs, '', 'all'), titleEnCache)
-        if (!want.length) return
-        const got = await translateHeadlines(want, freeTranslate, { concurrency: 2 })
-        titleEnCache = trimHeadlineCache({ ...titleEnCache, ...got }, get().items.map((x) => x.key))
-        save(TITLE_EN_KEY, titleEnCache)
-        set({ items: applyHeadlineCache(get().items, titleEnCache) })
-        persist()
-      } finally {
-        titlesRunning = false
-      }
     },
   }
 })
