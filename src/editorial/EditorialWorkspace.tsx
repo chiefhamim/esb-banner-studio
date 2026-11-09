@@ -1059,9 +1059,7 @@ export function EditorialWorkspace() {
           </div>
           <ol className="ed-pipe" aria-label="What happens next">
             <li className="parse"><span className="pipe-top"><span className="pipe-ic"><Icon name="newspaper" size={16} /></span><i>01</i></span><b>Parse</b><small>Text &amp; photos are extracted</small></li>
-            <li className="pipe-arrow" aria-hidden><svg viewBox="0 0 64 62" width="60" height="58"><path d="M-50 14C-26 5 28 3 54 10" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeDasharray="2.6 4" /><path d="M0 0L-9.5-4.4Q-6.8 0-9.5 4.4Z" transform="translate(56.7 10.7) rotate(13)" fill="currentColor" strokeLinejoin="round" /></svg></li>
             <li className="polish"><span className="pipe-top"><span className="pipe-ic"><Icon name="sparkle" size={16} /></span><i>02</i></span><b>Polish</b><small>AI refines it for the newsroom</small></li>
-            <li className="pipe-arrow s" aria-hidden><svg viewBox="0 0 64 62" width="60" height="58"><path d="M-38 10C-28 10 -16 9 -5 8.4C-2 8.2 1 8 3 8C22 5 42 9 41 24C40 42 15 44 14 31C13 22 26 18 38 15C46 13 52 9 57 9" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeDasharray="2.6 4" /><path d="M0 0L-9.5-4.4Q-6.8 0-9.5 4.4Z" transform="translate(59.6 9) rotate(-2)" fill="currentColor" strokeLinejoin="round" /></svg></li>
             <li className="publish"><span className="pipe-top"><span className="pipe-ic"><Icon name="upload" size={16} /></span><i>03</i></span><b>Publish</b><small>Review &amp; publish right away</small></li>
           </ol>
         </div>
