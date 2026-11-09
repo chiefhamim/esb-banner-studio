@@ -455,10 +455,16 @@ function validateRemoteSends(raw, now = Date.now()) {
     const at = typeof e.at === 'number' && Number.isFinite(e.at) ? Math.round(e.at) : NaN
     if (!email || email.length > 254 || !EMAIL_RE.test(email) || !kind || !SAFE_ID_RE.test(campaignId) || campaignId.length > 100
       || !(at > now - 400 * 24 * 3600 * 1000 && at < now + 10 * 60 * 1000)) { rejected++; continue }
-    const k = `${kind}|${email}|${campaignId}`
+    // optional: what the shared row says happened (a send, or a bounce / reply read on another PC), the letter's
+    // Message-ID and a short detail (the bounce reason)
+    const status = e.status === undefined || e.status === 'sent' ? 'sent' : (e.status === 'bounced' || e.status === 'replied' ? e.status : null)
+    if (!status) { rejected++; continue }
+    const messageId = typeof e.messageId === 'string' && e.messageId.length <= 300 && /^<?[\x21-\x7e]+>?$/.test(e.messageId) ? e.messageId : undefined
+    const detail = typeof e.detail === 'string' ? e.detail.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 200) : undefined
+    const k = `${kind}|${email}|${campaignId}|${status}`
     if (seen.has(k)) continue
     seen.add(k)
-    entries.push({ email, kind, campaignId, at })
+    entries.push({ email, kind, campaignId, at, ...(status !== 'sent' ? { status } : {}), ...(messageId ? { messageId } : {}), ...(detail ? { detail } : {}) })
   }
   return { ok: true, entries, rejected }
 }

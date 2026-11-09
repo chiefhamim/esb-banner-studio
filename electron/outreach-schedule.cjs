@@ -275,12 +275,17 @@ function isWebmail(domain) {
  * @param {{
  *   domainMaxPerDay?: number,
  *   domainMinGapSec?: number,
+ *   domainOverrides?: Record<string, number>,
  *   heldSet?: Set<number>
  * }} cfg
  * @returns {{ index: number, email: string, domain: string } | { waiting: 'domain', earliestAt: number, domain?: string, kind?: 'limit' | 'spacing', count?: number } | null}
  */
 function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
   const maxPerDay = cfg.domainMaxPerDay ?? 3
+  // per-organisation overrides ({ 'bpdb.gov.bd': 10 }): a known large organisation can take more than the default
+  const overrides = cfg.domainOverrides && typeof cfg.domainOverrides === 'object' ? cfg.domainOverrides : null
+  const maxFor = (dom) => (overrides && Object.prototype.hasOwnProperty.call(overrides, dom) && Number.isInteger(overrides[dom]) ? overrides[dom] : maxPerDay)
+  const heldByLimit = new Set()
   const minGapMs = (cfg.domainMinGapSec ?? (20 * 60)) * 1000
   const heldSet = cfg.heldSet || null
   const sentSet = sentIndexes instanceof Set ? sentIndexes : new Set(sentIndexes)
@@ -308,12 +313,14 @@ function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
       return { index: i, email, domain: dom }
     }
 
-    if (st.countToday >= maxPerDay) {
+    const domMax = maxFor(dom)
+    if (st.countToday >= domMax) {
       // Exceeded daily domain count - free when resetAt arrives
+      heldByLimit.add(dom)
       const resetTime = st.resetAt || (now + 24 * 3600 * 1000)
       if (resetTime < earliestDomainFreeAt) {
         earliestDomainFreeAt = resetTime
-        earliestInfo = { domain: dom, kind: 'limit', count: st.countToday }
+        earliestInfo = { domain: dom, kind: 'limit', count: st.countToday, max: domMax }
       }
       continue
     }
@@ -334,7 +341,7 @@ function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
   }
 
   if (Number.isFinite(earliestDomainFreeAt)) {
-    return { waiting: 'domain', earliestAt: earliestDomainFreeAt, ...(earliestInfo || {}) }
+    return { waiting: 'domain', earliestAt: earliestDomainFreeAt, ...(earliestInfo || {}), domainsHeld: heldByLimit.size }
   }
 
   return null

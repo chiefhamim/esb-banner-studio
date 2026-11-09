@@ -24,7 +24,7 @@ import { designPreviewHtml } from './design'
 import { NeedsYou } from './NeedsYou'
 import { domainOf, roleMailbox, disposableDomain } from './addressCheck'
 import { cloudAgo, lockBlock, useCloud } from './cloudStore'
-import { clickedText, engineSkipText, keyOf, openedText, outcomeOf } from './outcome'
+import { clickedText, engineSkipText, keyOf, MACHINE_OPEN, machineText, OPENED_HUMAN, openedText, outcomeOf } from './outcome'
 import { fmtCountdown, fmtDay, fmtGapRange, waitReason } from './activityFormat'
 import { useEngineStore } from './engineStore'
 import { mailFailView } from './mailCheck'
@@ -139,7 +139,7 @@ function SendTab() {
         {c && (sent > 0 || failed > 0) && (
           <div className="or-results">
             <span><b>{sent}</b> sent</span>
-            {engaged.opened > 0 && <span data-tip="Opened (approx.): the letter's picture was loaded. Some mail apps load it on their own, others never do"><b>{engaged.opened}</b> opened (approx.)</span>}
+            {engaged.opened > 0 && <span data-tip="Opened (human, approx.): the letter's picture was loaded by a mail app, once per letter. Scanners and proxy fetches (Gmail image proxy, Apple Mail) are not counted; apps that block pictures never show up"><b>{engaged.opened}</b> opened (human, approx.)</span>}
             {engaged.clicked > 0 && <span className="good" data-tip="Clicked a link in the letter (links to esbpowerline.com, Facebook, YouTube and WhatsApp are counted)"><b>{engaged.clicked}</b> clicked</span>}
             {Object.keys(c.replied).length > 0 && <span className="good"><b>{Object.keys(c.replied).length}</b> replied</span>}
             {Object.keys(c.bounced).length > 0 && <span className="bad"><b>{Object.keys(c.bounced).length}</b> bounced</span>}
@@ -253,7 +253,8 @@ function ContactTab() {
         {active.sheet && <><dt>From sheet</dt><dd>{active.sheet.replace(/_/g, ' ')}</dd></>}
         <dt>This campaign</dt><dd>{outside ? 'Outside the audience' : <><span className={'or-chip st-' + outcome.st}>{outcome.label}</span> {outcome.st === 'ready' ? 'Will be sent' : outcome.st === 'opened' || outcome.st === 'clicked' ? (active.sentAt ? `Sent ${fmtWhen(active.sentAt)}` : '') : outcome.detail}</>}</dd>
         {c?.sentBy?.[active.email] && <><dt>Sent from</dt><dd>{c.sentBy[active.email]}</dd></>}
-        {!outside && eng && eng.opens > 0 && <><dt>Opened (approx.)</dt><dd>{openedText(eng).slice('Opened (approx.) '.length)}<small className="or-small or-block">Counted when the letter's picture loads. Some mail apps (Apple Mail, Gmail's image proxy) load it without anyone reading; others never load it.</small></dd></>}
+        {!outside && eng && eng.opens > 0 && <><dt>{OPENED_HUMAN}</dt><dd>{openedText(eng).slice(OPENED_HUMAN.length + 1)}<small className="or-small or-block">Counted once per letter when the picture loads in a mail app. Scanners (within 2 min of sending, bots) and proxy fetches are left out; apps that block pictures never show up.</small></dd></>}
+        {!outside && eng && !eng.opens && (eng.machineOpens ?? 0) > 0 && <><dt>{MACHINE_OPEN}</dt><dd>{machineText(eng).slice(MACHINE_OPEN.length + 1)}</dd></>}
         {!outside && eng && eng.clicks > 0 && <><dt>Clicked</dt><dd>{clickedText(eng).slice('Clicked '.length)}</dd></>}
         {!outside && c && active.status === 'SENT' && !keyOf(c, active.email) && <><dt>Tracking</dt><dd>Not tracked — sent before the site's tracking was live, so opens and clicks are not known</dd></>}
         {c && c.sent[active.email] && <><dt>Follow-up</dt><dd>{c.followed[active.email] ? `Sent ${fmtWhen(c.followed[active.email])}` : followUpReason(active, c) ?? 'Due now'}</dd></>}

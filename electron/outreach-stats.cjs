@@ -82,7 +82,13 @@ function computeStats(events = [], jobs = [], options = {}) {
     replied: 0,
     optedOut: 0,
     retries: 0,
+    // unique addresses (an inbox check used to re-log the same reply/bounce every time; a retried address fails per attempt)
+    failedUnique: 0,
   }
+  const seenBounce = new Set()
+  const seenReply = new Set()
+  const seenFail = new Set()
+  const keyOfEmail = (e) => String(e || '').toLowerCase().trim()
 
   const byHour = Array.from({ length: 24 }, (_, h) => ({ h, sent: 0, failed: 0 }))
   const today = Array.from({ length: 24 }, (_, h) => ({ t: h, sent: 0, failed: 0 }))
@@ -160,6 +166,8 @@ function computeStats(events = [], jobs = [], options = {}) {
       if (lastSendAt === null || ev.t > lastSendAt) lastSendAt = ev.t
     } else if (ev.type === 'send.fail') {
       totals.failed++
+      const fk = keyOfEmail(ev.email)
+      if (!fk || !seenFail.has(fk)) { if (fk) seenFail.add(fk); totals.failedUnique++ }
       byHour[h].failed++
       dayEntry.failed++
       if (dStr === todayDateStr) {
@@ -172,11 +180,17 @@ function computeStats(events = [], jobs = [], options = {}) {
     } else if (ev.type === 'send.reject') {
       totals.rejected++
     } else if (ev.type === 'bounce') {
+      // one per address: a bounce re-read on a later inbox check is the same bounce
+      const bk = keyOfEmail(ev.email)
+      if (bk && seenBounce.has(bk)) continue
+      if (bk) seenBounce.add(bk)
       totals.bounced++
       dayEntry.bounced++
     } else if (ev.type === 'reply') {
-      // Definition: Replied = reply with auto: false (non-automated replies)
-      if (ev.auto !== true) {
+      // Definition: Replied = reply with auto: false (non-automated replies), one per address
+      const rk = keyOfEmail(ev.email)
+      if (ev.auto !== true && !(rk && seenReply.has(rk))) {
+        if (rk) seenReply.add(rk)
         totals.replied++
         dayEntry.replied++
         if (ev.email) {

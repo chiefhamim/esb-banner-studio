@@ -277,11 +277,11 @@ const csvCell = (v: string | number) => { const t = String(v); return /[",\n\r]/
 
 /**
  * One row per contact in the campaign's audience: what happened and why. Read from the campaign, the inbox and the
- * site's tracking events; nothing estimated. "Opened (approx.)" is the letter's picture being fetched — some mail apps
- * do that on their own and others never do — so the column is named that way.
+ * site's tracking events; nothing estimated. "Opened (human, approx.)" is the letter's picture fetched by a mail app
+ * (once per letter; scanners and proxies excluded); "Machine open" is a proxy fetch only (Gmail image proxy, Apple MPP).
  */
 export function resultsCsv(c: Campaign, contacts: Contact[], engagement: Record<string, Engagement> = {}): string {
-  const head = ['Email', 'Name', 'Designation', 'Organization', 'Group', 'Sheet status', 'Result', 'Detail', 'Sent at', 'Sent from', 'Opened (approx.)', 'Opens', 'First opened', 'Last opened', 'Clicked', 'Links clicked', 'Replied', 'Bounced', 'Bounce reason', 'Failed (server said)', 'Opted out', 'Followed up', 'Tracked']
+  const head = ['Email', 'Name', 'Designation', 'Organization', 'Group', 'Sheet status', 'Result', 'Detail', 'Sent at', 'Sent from', 'Opened (human, approx.)', 'First opened', 'Last opened', 'Machine open', 'Clicked', 'Links clicked', 'Replied', 'Bounced', 'Bounce reason', 'Failed (server said)', 'Opted out', 'Followed up', 'Tracked']
   const iso = (v?: number) => (v ? new Date(v).toISOString() : '')
   const rows = contacts.filter((x) => inAudience(x, c.audience)).map((x) => {
     const skip = x.status === 'QUEUED' ? skipReason(x, c.subject, c.body) : null
@@ -293,7 +293,7 @@ export function resultsCsv(c: Campaign, contacts: Contact[], engagement: Record<
     return [
       x.email, x.personName, x.designation, x.organization, x.sectorGroup, x.rawStatus,
       o.st === 'ready' ? 'Not sent yet' : o.label, detail, iso(t), c.sentBy?.[x.email] ?? (t ? 'This PC' : ''),
-      e?.opens ? 'yes' : '', e?.opens ?? '', iso(e?.firstOpen), iso(e?.lastOpen),
+      e?.opens ? 'yes' : '', iso(e?.firstOpen), iso(e?.lastOpen), e?.machineOpens && !e.opens ? 'yes' : '',
       e?.clicks ? 'yes' : '', e?.links.map((l) => `${l.link} (${l.n})`).join('; ') ?? '',
       iso(c.replied[x.email]), c.bounced[x.email] ? 'yes' : '', c.bounced[x.email] ?? '', c.failed[x.email] ?? '',
       x.status === 'OPTED_OUT' ? 'yes' : '', iso(c.followed[x.email]), t ? (keyOf(c, x.email) ? 'yes' : 'no') : '',

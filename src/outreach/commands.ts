@@ -747,16 +747,19 @@ export const COMMANDS: Record<string, CommandDef> = {
         return { ok: false, error: 'Command approveReviewed requires explicit confirmation', requiresConfirmation: true }
       }
       const outreach = useOutreachStore.getState()
-      let toApprove = args.emails
-      if (!toApprove) {
-        toApprove = outreach.contacts
-          .filter((c) => (c.mxStatus === 'SAFE_TO_SEND' || !c.mxStatus) && !outreach.optOut.includes(c.email))
-          .map((c) => c.email)
+      // only addresses whose mail server was actually checked and found (SAFE_TO_SEND): a contact with no mxStatus /
+      // UNKNOWN was never reviewed, and an opted-out or previously bounced address is never approved in bulk
+      const byEmail = new Map(outreach.contacts.map((c) => [c.email.toLowerCase(), c]))
+      const reviewed = (email: string) => {
+        const c = byEmail.get(email.toLowerCase())
+        return !!c && c.mxStatus === 'SAFE_TO_SEND' && !outreach.optOut.includes(c.email) && !outreach.bouncedAddrs?.[c.email.toLowerCase()]
       }
+      const asked = args.emails ?? outreach.contacts.map((c) => c.email)
+      const toApprove = asked.filter(reviewed)
       for (const em of toApprove) {
         outreach.approve(em, true)
       }
-      return { ok: true, result: { approvedCount: toApprove.length } }
+      return { ok: true, result: { approvedCount: toApprove.length, notReviewed: asked.length - toApprove.length } }
     },
   },
 

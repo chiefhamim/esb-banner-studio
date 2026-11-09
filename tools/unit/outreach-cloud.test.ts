@@ -1,7 +1,7 @@
 // Cross-PC sync, the pure half (src/outreach/cloudMerge.ts), and the per-contact statuses (outcome.ts, cloudStore.ts).
 // Synthetic example.com data only.
 import { describe, it, expect } from 'vitest'
-import { applySendRows, foldEvents, keyIndex, mergeCampaign, pcName, rowSig, sendId, sendRowsFor, type EventRow, type SendRow } from '../../src/outreach/cloudMerge'
+import { applySendRows, classifyEvent, foldEvents, keyIndex, keySentAt, mergeCampaign, pcName, rowSig, sendId, sendRowsFor, type EventRow, type SendRow } from '../../src/outreach/cloudMerge'
 import { outcomeOf, notAnEmail, engineSkipText, type Engagement } from '../../src/outreach/outcome'
 import { cloudText, lockBlock, type LockInfo } from '../../src/outreach/cloudStore'
 import { newCampaign } from '../../src/outreach/outreachStore'
@@ -110,14 +110,42 @@ describe('foldEvents: opens and clicks per recipient, only for letters this camp
       ev(6, 'B'.repeat(22), 'click', '2026-11-02T07:00:00Z', 'www.facebook.com/esbpowerlineofficial'),
       ev(7, 'Z'.repeat(22), 'open', '2026-11-02T07:00:00Z'),
     ], keyIndex(c))
-    expect(f['a@example.com']).toMatchObject({ opens: 3, firstOpen: Date.parse('2026-11-01T06:00:00Z'), lastOpen: Date.parse('2026-11-03T06:00:00Z'), clicks: 2, links: [{ link: 'esbpowerline.com/magazine', n: 2 }] })
+    // each LETTER counts once: the campaign letter (two opens) and the follow-up (one) = 2 letters opened; two clicks on one letter = 1
+    expect(f['a@example.com']).toMatchObject({ opens: 2, firstOpen: Date.parse('2026-11-01T06:00:00Z'), lastOpen: Date.parse('2026-11-03T06:00:00Z'), clicks: 1, links: [{ link: 'esbpowerline.com/magazine', n: 1 }] })
     // a click without an open is not turned into an open
     expect(f['b@example.com']).toMatchObject({ opens: 0, clicks: 1 })
     expect(Object.keys(f)).toEqual(['a@example.com', 'b@example.com'])
   })
-  it('folds on top of what was folded before', () => {
-    const prev: Record<string, Engagement> = { 'a@example.com': { opens: 1, firstOpen: 100, lastOpen: 100, clicks: 0, links: [] } }
-    expect(foldEvents(prev, [ev(9, 'K'.repeat(22), 'open', '2026-11-05T00:00:00Z')], keyIndex(c))['a@example.com'].opens).toBe(2)
+  it('folds on top of what was folded before, never counting one letter twice', () => {
+    const first = foldEvents({}, [ev(1, 'K'.repeat(22), 'open', '2026-11-04T00:00:00Z')], keyIndex(c))
+    const again = foldEvents(first, [ev(9, 'K'.repeat(22), 'open', '2026-11-05T00:00:00Z'), ev(10, 'F'.repeat(22), 'open', '2026-11-05T01:00:00Z')], keyIndex(c))
+    expect(again['a@example.com']).toMatchObject({ opens: 2, lastOpen: Date.parse('2026-11-05T01:00:00Z') })
+    expect(foldEvents(again, [ev(11, 'K'.repeat(22), 'open', '2026-11-06T00:00:00Z')], keyIndex(c))['a@example.com'].opens).toBe(2)
+  })
+  it('scanners, prefetches and proxies are not readers', () => {
+    const sentAt = Date.parse('2026-11-01T06:00:00Z')
+    const cs = newCampaign({ id: 'cmp-5', sent: { 'a@example.com': sentAt, 'b@example.com': sentAt, 'c@example.com': sentAt }, bounced: { 'c@example.com': '550 no such user' },
+      tracking: { 'campaign:a@example.com': 'K'.repeat(22), 'campaign:b@example.com': 'B'.repeat(22), 'campaign:c@example.com': 'C'.repeat(22) } })
+    const chrome = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
+    const gmail = 'Mozilla/5.0 (Windows NT 5.1; rv:11.0) Gecko Firefox/11.0 (via ggpht.com GoogleImageProxy)'
+    const at = (s: number) => new Date(sentAt + s * 1000).toISOString()
+    const f = foldEvents({}, [
+      { ...ev(1, 'K'.repeat(22), 'click', at(20), 'esbpowerline.com/x'), ua: chrome }, // a gateway following the link at once
+      { ...ev(2, 'K'.repeat(22), 'open', at(600)), ua: 'curl/8.4.0' },
+      { ...ev(3, 'K'.repeat(22), 'open', at(700)), ua: 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
+      { ...ev(4, 'B'.repeat(22), 'open', at(900)), ua: gmail },
+      { ...ev(5, 'B'.repeat(22), 'open', at(950)), ua: 'Mozilla/5.0' }, // Apple Mail Privacy Protection
+      { ...ev(6, 'C'.repeat(22), 'open', at(900)), ua: chrome }, // the letter bounced
+    ], keyIndex(cs), { sentAt: keySentAt(cs), bounced: cs.bounced })
+    expect(f['a@example.com']).toBeUndefined()
+    expect(f['b@example.com']).toMatchObject({ opens: 0, machineOpens: 1, clicks: 0 })
+    expect(f['c@example.com']).toBeUndefined()
+    expect(classifyEvent({ type: 'open', at: at(900), ua: chrome }, sentAt)).toBe('human')
+    expect(classifyEvent({ type: 'open', at: at(900), ua: null }, sentAt)).toBe('human')
+    // a machine open never shows as "Opened": the contact stays Sent, with the machine open in the detail
+    const o = outcomeOf(contact({ status: 'SENT', sentAt }), null, f['b@example.com'])
+    expect(o.st).toBe('sent')
+    expect(o.detail).toMatch(/Machine open/)
   })
 })
 
@@ -129,7 +157,7 @@ describe('outcomeOf: one accurate status per contact, never more than the data s
     expect(o.detail).toMatch(/not proof it was read/)
   })
   it('opened is approximate and says why; clicked names the links', () => {
-    expect(outcomeOf(contact({ status: 'SENT' }), null, eng({ opens: 2, firstOpen: 1, lastOpen: 2 }))).toMatchObject({ st: 'opened', label: 'Opened (approx.)' })
+    expect(outcomeOf(contact({ status: 'SENT' }), null, eng({ opens: 2, firstOpen: 1, lastOpen: 2 }))).toMatchObject({ st: 'opened', label: 'Opened (human, approx.)' })
     expect(outcomeOf(contact({ status: 'SENT' }), null, eng({ opens: 2 })).detail).toMatch(/some mail apps load it on their own/)
     expect(outcomeOf(contact({ status: 'SENT' }), null, eng({ clicks: 1, links: [{ link: 'wa.me/1', n: 1 }] }))).toMatchObject({ st: 'clicked', detail: 'Clicked wa.me/1' })
   })

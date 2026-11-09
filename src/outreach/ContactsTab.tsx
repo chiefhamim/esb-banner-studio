@@ -249,7 +249,7 @@ export const ContactsTab = memo(function ContactsTab() {
                 ['ready', 'Ready', counts.ready, 'The batch will send to these'],
                 ['skipped', 'Skipped', counts.skipped, counts.noemail ? `Not sent until you fix or approve them · ${counts.noemail} not an email (bad address or no mail server)` : 'Not sent until you fix or approve them'],
                 ['sent', 'Sent', counts.sent, 'Sent by this campaign'],
-                ...(counts.opened ? [['opened', 'Opened', counts.opened, `Opened (approx.) — the letter's picture was loaded${counts.clicked ? `; ${counts.clicked} also clicked a link` : ''}. Some mail apps load it on their own, others never do, so this is a lower and upper bound at once`]] : []),
+                ...(counts.opened ? [['opened', 'Opened', counts.opened, `Opened (human, approx.) — the letter's picture was loaded by a mail app, once per letter${counts.clicked ? `; ${counts.clicked} also clicked a link` : ''}. Scanners and proxy fetches (Gmail image proxy, Apple Mail) are left out; apps that block pictures never show up`]] : []),
                 ...(counts.replied ? [['replied', 'Replied', counts.replied, 'Answered — read from your inbox']] : []),
                 ...(counts.failed + counts.bounced ? [['failed', 'Failed', counts.failed + counts.bounced, 'Refused when sent, or returned later by the mail system']] : []),
               ] as [typeof s.view, string, number, string][]).map(([v, label, n, tip]) => (

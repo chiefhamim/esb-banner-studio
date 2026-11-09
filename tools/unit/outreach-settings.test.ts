@@ -38,6 +38,7 @@ describe('outreach-settings: schema defaults, validation bounds & atomic persist
       minDelaySec: 180,
       maxDelaySec: 480,
       domainMaxPerDay: 3,
+      domainOverrides: {},
       domainMinGapSec: 1200,
       contactCooldownDays: 30,
       gmailCeiling24h: 400,

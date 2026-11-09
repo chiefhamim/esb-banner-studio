@@ -231,3 +231,60 @@ describe('createMailer: password encrypted, ledger kept, List-Unsubscribe on eve
     expect(sent).toHaveLength(0)
   })
 })
+
+describe('any sending service: presets, logins, Reply-To, reply mailbox', () => {
+  let dir: string
+  const sent: Record<string, unknown>[] = []
+  const transports: Record<string, unknown>[] = []
+  const safeStorage = { isEncryptionAvailable: () => true, encryptString: (s: string) => Buffer.from('enc:' + s), decryptString: (b: Buffer) => b.toString().replace(/^enc:/, '') }
+  const nodemailer = { createTransport: (o: Record<string, unknown>) => { transports.push(o); return { verify: async () => true, sendMail: async (mm: Record<string, unknown>) => { sent.push(mm); return { messageId: '<id@example.com>' } } } } }
+  const base = { user: 'desk@esbpowerline.com', name: 'ESB Power Line', dailyLimit: 3, minDelaySec: 60, maxDelaySec: 120 }
+  const now = Date.UTC(2026, 9, 28, 12)
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'esb-mailer-prov-')); sent.length = 0; transports.length = 0 })
+
+  it('fills each preset’s server and fixed login, and refuses a server that is not the service’s', () => {
+    expect(m.validateSmtpSettings({ ...base, provider: 'resend' })).toMatchObject({ provider: 'resend', host: 'smtp.resend.com', port: 465, secure: true, login: 'resend' })
+    expect(m.validateSmtpSettings({ ...base, provider: 'sendgrid' })).toMatchObject({ host: 'smtp.sendgrid.net', login: 'apikey' })
+    expect(m.validateSmtpSettings({ ...base, provider: 'm365' })).toMatchObject({ host: 'smtp.office365.com', port: 587, secure: false })
+    expect(m.validateSmtpSettings({ ...base, provider: 'ses', host: 'email-smtp.eu-west-1.amazonaws.com', login: 'AKIAEXAMPLE' })).toMatchObject({ host: 'email-smtp.eu-west-1.amazonaws.com', login: 'AKIAEXAMPLE' })
+    expect(() => m.validateSmtpSettings({ ...base, provider: 'ses', host: 'email-smtp.eu-west-1.amazonaws.com' })).toThrow(/SMTP user name/)
+    expect(() => m.validateSmtpSettings({ ...base, provider: 'resend', host: 'smtp.evil.example' })).toThrow(/Resend sends through smtp.resend.com/)
+    expect(() => m.validateSmtpSettings({ ...base, provider: 'nope', host: 'smtp.example.com', port: 587 })).toThrow(/Unknown/)
+    expect(m.validateSmtpSettings({ ...base, provider: 'mailgun', host: 'smtp.eu.mailgun.org', login: 'postmaster@mg.esbpowerline.com' }).login).toBe('postmaster@mg.esbpowerline.com')
+    expect(m.validateSmtpSettings({ ...base, provider: 'custom', host: 'mail.example.org', port: 2525 })).toMatchObject({ provider: 'custom', port: 2525 })
+    expect(() => m.validateSmtpSettings({ ...base, provider: 'gmail', replyTo: 'not-an-address' })).toThrow(/Reply-To/)
+    // an account saved before providers: worked out from its host
+    expect(m.providerFor({ host: 'smtp.gmail.com' })).toBe('gmail')
+    expect(m.providerFor({ host: 'mail.example.org' })).toBe('custom')
+  })
+  it('a relay logs in with its own user name, sends From + Reply-To, and STARTTLS is required off 465', async () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
+    mailer.saveSettings({ ...base, provider: 'brevo', login: 'acct@brevo.example', replyTo: 'replies@esbpowerline.com' }, 'xkeysib-123')
+    const r = await mailer.send({ to: 'md@example.com', subject: 'S', body: 'Body' })
+    expect(r.ok).toBe(true)
+    expect(transports[0]).toMatchObject({ host: 'smtp-relay.brevo.com', port: 587, secure: false, requireTLS: true, auth: { user: 'acct@brevo.example', pass: 'xkeysib-123' } })
+    expect(sent[0]).toMatchObject({ from: { name: 'ESB Power Line', address: 'desk@esbpowerline.com' }, replyTo: 'replies@esbpowerline.com', list: { unsubscribe: 'mailto:replies@esbpowerline.com?subject=unsubscribe' } })
+    expect(await mailer.verify(true)).toMatchObject({ ok: true })
+    // no reply mailbox given: the inbox says where replies go instead of logging in with an API key
+    expect(mailer.status()).toMatchObject({ mailbox: false, settings: { provider: 'brevo', replyTo: 'replies@esbpowerline.com' } })
+    expect(mailer.inboxAccount()).toMatchObject({ noMailbox: expect.stringMatching(/replies go to replies@esbpowerline\.com/) })
+  })
+  it('a relay with a separate reply mailbox reads it with that mailbox’s own password', () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
+    mailer.saveSettings({ ...base, provider: 'resend', replyTo: 'replies@esbpowerline.com', imapHost: 'imap.gmail.com' }, 're_key')
+    expect(mailer.inboxAccount()).toMatchObject({ noMailbox: expect.stringMatching(/password for the reply mailbox/) })
+    const st = mailer.saveSettings({ ...base, provider: 'resend', replyTo: 'replies@esbpowerline.com', imapHost: 'imap.gmail.com' }, undefined, 'mailbox-pass')
+    expect(st).toMatchObject({ hasPassword: true, hasImapPassword: true, mailbox: true })
+    expect(JSON.stringify(st)).not.toContain('mailbox-pass')
+    expect(mailer.inboxAccount()).toEqual({ user: 'replies@esbpowerline.com', pass: 'mailbox-pass', imapHost: 'imap.gmail.com' })
+    // switching the service drops the stored secret
+    expect(mailer.saveSettings({ ...base, provider: 'sendgrid', replyTo: 'replies@esbpowerline.com', imapHost: 'imap.gmail.com' }).hasPassword).toBe(false)
+  })
+  it('Microsoft 365 / Zoho read their own mailbox with the same password', () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now })
+    mailer.saveSettings({ ...base, provider: 'm365' }, 'pw')
+    expect(mailer.inboxAccount()).toEqual({ user: 'desk@esbpowerline.com', pass: 'pw', imapHost: 'outlook.office365.com' })
+    mailer.saveSettings({ ...base, provider: 'zoho', host: 'smtp.zoho.eu' }, 'pw2')
+    expect(mailer.inboxAccount()).toMatchObject({ imapHost: 'imap.zoho.eu' })
+  })
+})

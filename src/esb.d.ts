@@ -44,7 +44,7 @@ export interface EsbBridge {
   siteRevalidate?: (cookies: { name: string; value: string }[], slugs: string[]) => Promise<{ ok: boolean; status: number; error?: string }>
   siteUploadProbe?: (cookies: { name: string; value: string }[]) => Promise<{ ok: boolean; status: number; detail: string }>
   outreachStatus?: () => Promise<EsbOutreachStatus>
-  outreachSave?: (settings: EsbSmtpSettings, password?: string) => Promise<{ ok: true; status: EsbOutreachStatus } | { ok: false; error: string }>
+  outreachSave?: (settings: EsbSmtpSettings, password?: string, imapPassword?: string) => Promise<{ ok: true; status: EsbOutreachStatus } | { ok: false; error: string }>
   outreachForgetPassword?: () => Promise<EsbOutreachStatus>
   /** `kind` says why a failed check failed: auth (wrong app password) | network (server unreachable) | tls | other. */
   outreachVerify?: (force?: boolean) => Promise<{ ok: boolean; ms?: number; error?: string; kind?: 'auth' | 'network' | 'tls' | 'other'; code?: string; at: number }>
@@ -65,7 +65,7 @@ export interface EsbBridge {
   outreachSyncOptOuts?: (emails: string[]) => Promise<{ ok: boolean; added: number }>
   outreachReplyTexts?: (emails: string[]) => Promise<{ email: string; text?: string; ownWords?: string; subject?: string; at?: number }[]>
   /** Sends another PC made (the shared ledger), entered in this PC's ledger and event log so they are never repeated. */
-  outreachMarkSent?: (sends: { email: string; kind: 'campaign' | 'followup' | 'test'; campaignId: string; at: number }[]) => Promise<{ ok: true; ledger: number; events: number; rejected: number } | { ok: false; error: string }>
+  outreachMarkSent?: (sends: { email: string; kind: 'campaign' | 'followup' | 'test'; campaignId: string; at: number; status?: 'bounced' | 'replied'; messageId?: string; detail?: string }[]) => Promise<{ ok: true; ledger: number; events: number; rejected: number } | { ok: false; error: string }>
   onOutreach?: (cb: (m: OutreachPush) => void) => () => void
 }
 
@@ -80,7 +80,25 @@ export interface EsbInboxResult {
   replies?: { email: string; at: number; subject: string; auto: boolean; unsubscribe: boolean }[]
   bounces?: { email: string; at: number; reason: string }[]
 }
-export interface EsbSmtpSettings { host: string; imapHost?: string; port: number; user: string; name: string; dailyLimit: number; minDelaySec: number; maxDelaySec: number }
+/** Sending services (electron/mailer.cjs PROVIDERS): all SMTP; relays (resend…sendgrid) have no inbox of their own. */
+export type EsbMailProvider = 'gmail' | 'm365' | 'zoho' | 'resend' | 'ses' | 'brevo' | 'mailgun' | 'sendgrid' | 'custom'
+export interface EsbSmtpSettings {
+  provider?: EsbMailProvider
+  host: string
+  imapHost?: string
+  port: number
+  /** The sending address (From). */
+  user: string
+  name: string
+  /** SMTP user name when it is not the sending address (SES / Brevo / Mailgun); fixed for Resend and SendGrid. */
+  login?: string
+  replyTo?: string
+  /** User name of the reply mailbox when it is not the sending address. */
+  imapUser?: string
+  dailyLimit: number
+  minDelaySec: number
+  maxDelaySec: number
+}
 export interface EsbOutreachStatus {
   configured: boolean
   hasPassword: boolean
@@ -94,6 +112,9 @@ export interface EsbOutreachStatus {
   sentTo: { to: string; t: number }[]
   /** Where replies are read: the saved choice or the one worked out from the SMTP server. */
   imapHost?: string
+  /** Whether replies/bounces can be read (false: a relay provider with no reply mailbox given). */
+  mailbox?: boolean
+  hasImapPassword?: boolean
   /** This computer's name, as other PCs show it ("Sending from …"). */
   pcLabel?: string
   /** Whether esbpowerline.com's open/click endpoints answered at the last check (null = not checked yet). */
@@ -153,6 +174,8 @@ export interface AutopilotSettings {
   minDelaySec: number
   maxDelaySec: number
   domainMaxPerDay: number
+  /** Per-organisation exceptions to domainMaxPerDay (domain → emails per calendar day). */
+  domainOverrides?: Record<string, number>
   domainMinGapSec: number
   contactCooldownDays: number
   traySending: boolean
@@ -202,7 +225,7 @@ export interface JobSnapshot {
   until?: number | null
   /** What exactly the wait is for (engine job.wait): the organisation and its limit/spacing, the gap range, the hours. */
   wait?: JobWait | null
-  reason?: 'user' | 'all' | 'auth' | 'circuit' | 'quit' | 'content' | null
+  reason?: 'user' | 'all' | 'auth' | 'circuit' | 'bounces' | 'quit' | 'content' | null
   dry: boolean
   total: number
   sent: number
@@ -258,6 +281,8 @@ export interface OutreachStats {
     replied: number
     optedOut: number
     retries: number
+    /** Addresses that failed at least once (failed counts attempts). Absent from older main builds. */
+    failedUnique?: number
   }
   byHour: { h: number; sent: number; failed: number }[]
   byDay: { day: string; sent: number; failed: number; bounced: number; replied: number }[]
@@ -337,6 +362,8 @@ export interface JobWait {
   kind?: 'limit' | 'spacing' | 'day' | 'ceiling' | null
   count?: number | null
   max?: number
+  /** why 'domain', kind 'limit': how many organisations are at their daily limit right now. */
+  domainsHeld?: number
   /** why 'domain': the spacing per organisation; why 'gap': the gap chosen after the last email. */
   gapSec?: number
   /** why 'gap': the pacing and the editor's range. */

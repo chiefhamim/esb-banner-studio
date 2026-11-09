@@ -868,14 +868,21 @@ ipcMain.handle('esb:outreach-mark-sent', async (_e, raw) => {
     .filter((e) => e.campaignId).map((e) => `${e.run === 'followup' ? 'followup' : 'campaign'}|${String(e.email || '').toLowerCase()}|${e.campaignId}`))
   let logged = 0
   for (const e of g.entries) {
-    if (e.kind === 'test' || have.has(`${e.kind}|${e.email}|${e.campaignId}`)) continue
-    outreachEvents.append({ type: 'send.ok', remote: true, campaignId: e.campaignId, email: e.email, run: e.kind === 'followup' ? 'followup' : 'first', t: e.at })
+    if (e.kind === 'test') continue
+    // a bounce / reply another PC read: into this PC's log too, so Activity counts the same on both (the log keeps one
+    // event per address + time, so a row pulled again is not counted twice)
+    if (e.status === 'bounced') { if (outreachEvents.append({ type: 'bounce', remote: true, campaignId: e.campaignId, email: e.email, at: e.at, t: e.at, reason: e.detail || 'Bounced (read on another PC)' })) logged++; continue }
+    if (e.status === 'replied') { if (outreachEvents.append({ type: 'reply', remote: true, campaignId: e.campaignId, email: e.email, at: e.at, t: e.at, auto: false })) logged++; continue }
+    if (have.has(`${e.kind}|${e.email}|${e.campaignId}`)) continue
+    outreachEvents.append({ type: 'send.ok', remote: true, campaignId: e.campaignId, email: e.email, run: e.kind === 'followup' ? 'followup' : 'first', t: e.at, ...(e.messageId ? { messageId: e.messageId } : {}) })
     logged++
   }
+  // a bounce read on the other PC counts toward this PC's bounce circuit breaker too
+  if (logged && outreachEngineInstance && typeof outreachEngineInstance.checkBounces === 'function') { try { outreachEngineInstance.checkBounces() } catch { /* never breaks the merge */ } }
   return { ok: true, ledger: added.length, events: logged, rejected: g.rejected }
 })
-ipcMain.handle('esb:outreach-save', (_e, settings, password) => {
-  try { return { ok: true, status: outreachMailer().saveSettings(settings, password) } } catch (e) { return { ok: false, error: e.message } }
+ipcMain.handle('esb:outreach-save', (_e, settings, password, imapPassword) => {
+  try { return { ok: true, status: outreachMailer().saveSettings(settings, password, typeof imapPassword === 'string' ? imapPassword : undefined) } } catch (e) { return { ok: false, error: e.message } }
 })
 ipcMain.handle('esb:outreach-forget-password', () => outreachMailer().forgetPassword())
 ipcMain.handle('esb:outreach-send', (_e, mail) => outreachMailer().send(mail))

@@ -23,7 +23,7 @@ import { DESK_KEYS, useOutreachStore } from './outreachStore'
 import { useEngineStore } from './engineStore'
 import { engineClient } from './engineClient'
 import { STALE_SECONDS, lockBlock, useCloud, type CloudState, type LockInfo } from './cloudStore'
-import { addressRows, applySendRows, foldEvents, keyIndex, mergeCampaign, rowSig, sendRowsFor, testSendId, type EventRow, type SendRow } from './cloudMerge'
+import { addressRows, applySendRows, foldEvents, keyIndex, keySentAt, mergeCampaign, rowSig, sendRowsFor, testSendId, type EventRow, type SendRow } from './cloudMerge'
 import { idbGet, idbSet } from './idb'
 import { ask } from './outreachUi'
 import type { Campaign, ListMeta } from './types'
@@ -40,7 +40,7 @@ const PULL_EVERY = 60_000
 /** Window in the background, nothing sending: a pull every 5 minutes is plenty (Realtime pokes the rest). */
 const PULL_IDLE = 5 * 60_000
 /** The account-wide Autopilot settings (electron/outreach-settings.cjs SHARED_KEYS — keep the two lists in step). */
-export const SHARED_SETTINGS = ['window', 'dailyLimit', 'ramp', 'pace', 'minDelaySec', 'maxDelaySec', 'domainMaxPerDay', 'domainMinGapSec', 'contactCooldownDays', 'gmailCeiling24h'] as const
+export const SHARED_SETTINGS = ['window', 'dailyLimit', 'ramp', 'pace', 'minDelaySec', 'maxDelaySec', 'domainMaxPerDay', 'domainOverrides', 'domainMinGapSec', 'contactCooldownDays', 'gmailCeiling24h'] as const
 const SETTINGS_ID = 'autopilot'
 const PUSH_DELAY = 4_000
 const HEARTBEAT_EVERY = 60_000
@@ -325,17 +325,37 @@ async function pullAssets() {
   }
 }
 
-/** Opens and clicks for the open campaign, folded on top of what was folded before (kept in IndexedDB). */
+/** Version of the folded engagement kept in IndexedDB; an older fold (raw hit counts) is thrown away and redone. */
+const ENGAGE_V = 2
+/** Unmatched events are kept this long for a re-fold (the letter's key may reach this PC later), and at most this many. */
+const PENDING_MS = 14 * 86_400_000
+const PENDING_MAX = 5000
+
+type SavedEngagement = { v?: number; lastId: number; byEmail: Record<string, Engagement>; pending?: EventRow[] }
+
+/**
+ * Opens and clicks for the open campaign, folded on top of what was folded before (kept in IndexedDB). An event whose
+ * key matches no letter this PC knows yet (the send row from the other PC has not arrived) is kept in `pending` and
+ * folded again on the next pull, instead of being skipped for good by the id cursor.
+ */
 async function pullEvents(campaignId: string) {
   const c = useOutreachStore.getState().campaigns.find((x) => x.id === campaignId)
   if (!c || !Object.keys(c.tracking ?? {}).length) return
-  const saved = (await idbGet<{ lastId: number; byEmail: Record<string, Engagement> }>(`engage:${campaignId}`)) ?? { lastId: 0, byEmail: {} }
+  let saved = (await idbGet<SavedEngagement>(`engage:${campaignId}`)) ?? { v: ENGAGE_V, lastId: 0, byEmail: {} }
+  if (saved.v !== ENGAGE_V) saved = { v: ENGAGE_V, lastId: 0, byEmail: {} }
   if (!useCloud.getState().engagement[campaignId] && Object.keys(saved.byEmail).length) useCloud.getState().set({ engagement: { ...useCloud.getState().engagement, [campaignId]: saved.byEmail } })
-  const rows = await getAll<EventRow>(`outreach_events?campaign_id=eq.${encodeURIComponent(campaignId)}&id=gt.${saved.lastId}&select=id,message_key,type,link,at&order=id.asc`)
-  if (!rows.length) return
-  const byEmail = foldEvents(saved.byEmail, rows, keyIndex(c))
-  const lastId = rows[rows.length - 1].id
-  await idbSet(`engage:${campaignId}`, { lastId, byEmail })
+  const rows = await getAll<EventRow>(`outreach_events?campaign_id=eq.${encodeURIComponent(campaignId)}&id=gt.${saved.lastId}&select=id,message_key,type,link,at,ua&order=id.asc`)
+  const keys = keyIndex(c)
+  const pendingBefore = saved.pending ?? []
+  const retry = pendingBefore.filter((r) => keys.has(r.message_key))
+  if (!rows.length && !retry.length) return
+  const all = [...retry, ...rows]
+  const byEmail = foldEvents(saved.byEmail, all.filter((r) => keys.has(r.message_key)), keys, { sentAt: keySentAt(c), bounced: c.bounced })
+  const now = Date.now()
+  const pending = [...pendingBefore.filter((r) => !keys.has(r.message_key)), ...rows.filter((r) => !keys.has(r.message_key))]
+    .filter((r) => now - Date.parse(r.at) < PENDING_MS).slice(-PENDING_MAX)
+  const lastId = rows.length ? rows[rows.length - 1].id : saved.lastId
+  await idbSet(`engage:${campaignId}`, { v: ENGAGE_V, lastId, byEmail, pending })
   useCloud.getState().set({ engagement: { ...useCloud.getState().engagement, [campaignId]: byEmail } })
 }
 

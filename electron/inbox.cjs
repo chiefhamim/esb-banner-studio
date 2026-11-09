@@ -119,6 +119,8 @@ function createInbox({ ledger, account, ImapFlow, clock = () => Date.now(), onRe
     running = (async () => {
       const acct = account()
       if (!acct) return { ok: false, error: 'No sender account saved', at: clock() }
+      // a relay provider (Resend, SES, …) with no reply mailbox given: nothing to read, said plainly
+      if (acct.noMailbox) return (last = { ok: false, noMailbox: true, error: acct.noMailbox, at: clock() })
       const sends = ledger().filter((e) => e.kind !== 'test' && clock() - e.t < LOOKBACK_DAYS * DAY)
       if (!sends.length) return (last = { ok: true, at: clock(), scanned: 0, replies: [], bounces: [], note: 'Nothing sent in the last 30 days' })
       const firstTo = new Map()
@@ -147,6 +149,8 @@ function createInbox({ ledger, account, ImapFlow, clock = () => Date.now(), onRe
               const from = addr(m.envelope?.from?.[0]?.address)
               const at = new Date(m.internalDate || m.envelope?.date || 0).getTime()
               const subject = String(m.envelope?.subject || '').slice(0, 200)
+              // the message's own id: lets the event log keep one event per message however often the inbox is re-read
+              const msgId = typeof m.envelope?.messageId === 'string' ? m.envelope.messageId.slice(0, 200) : undefined
               const headers = parseHeaders(m.headers)
               const isReport = /multipart\/report/i.test(headers['content-type'] || '')
               if (DAEMON.test(from) || isReport) {
@@ -156,7 +160,7 @@ function createInbox({ ledger, account, ImapFlow, clock = () => Date.now(), onRe
                 if (!d.content) continue
                 const b = bounceInfo(await readStream(d.content, 200_000), known)
                 if (b.temporary) continue
-                for (const a of b.addresses) if (at >= firstTo.get(a)) bounces.push({ email: a, at, reason: b.reason })
+                for (const a of b.addresses) if (at >= firstTo.get(a)) bounces.push({ email: a, at, reason: b.reason, msgId })
                 continue
               }
               const repliesToUs = !!m.envelope?.inReplyTo && ourIds.has(m.envelope.inReplyTo)
@@ -178,7 +182,7 @@ function createInbox({ ledger, account, ImapFlow, clock = () => Date.now(), onRe
                   }
                 }
               }
-              replies.push({ email: from, at, subject, auto, unsubscribe })
+              replies.push({ email: from, at, subject, auto, unsubscribe, msgId })
             }
           }
         } finally { lock.release() }

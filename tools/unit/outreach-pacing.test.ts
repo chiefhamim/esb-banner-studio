@@ -249,7 +249,9 @@ describe('C — a restart keeps the per-organisation counts and the gap', () => 
 describe('D — the wait in words', () => {
   const w = (why: any, wait: any) => waitReason({ status: 'waiting', why, wait })
   it('organisation limit and spacing', () => {
-    expect(w('domain', { domain: 'desco.gov.bd', kind: 'limit', count: 3, max: 3 })).toBe('desco.gov.bd had 3 today (limit 3 per organisation)')
+    expect(w('domain', { domain: 'desco.gov.bd', kind: 'limit', count: 3, max: 3 })).toBe('held by organisation limit: desco.gov.bd had 3 today (limit 3)')
+    expect(waitReason({ status: 'waiting', why: 'domain', until: Date.UTC(2026, 10, 9, 18, 0), wait: { domain: 'desco.gov.bd', kind: 'limit', count: 3, max: 3, domainsHeld: 4 } }, 'Asia/Dhaka'))
+      .toMatch(/^held by organisation limit: 4 domains, next at /)
     expect(w('domain', { domain: 'nesco.gov.bd', kind: 'spacing', gapSec: 1200 })).toBe('nesco.gov.bd: 20-min spacing per organisation')
   })
   it('gap, window, cap', () => {

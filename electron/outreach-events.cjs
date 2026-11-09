@@ -49,6 +49,17 @@ function createEventLog(options = {}) {
     return typeof email === 'string' ? email.trim().toLowerCase() : ''
   }
 
+  // Replies and bounces come from the inbox, which is re-read every check (the last 30 days each time): one message is
+  // one event, keyed by kind + address + the message's own date (or Message-ID). A repeat append is dropped.
+  const inboxSeen = new Set()
+  function inboxKey(ev) {
+    if (ev.type !== 'reply' && ev.type !== 'bounce') return null
+    const email = normalizeEmail(ev.email)
+    const at = typeof ev.at === 'number' && Number.isFinite(ev.at) ? ev.at : null
+    const ref = at != null ? String(at) : (typeof ev.msgId === 'string' && ev.msgId ? ev.msgId : null)
+    return email && ref ? `${ev.type}|${email}|${ref}` : null
+  }
+
   function applySuppression(ev) {
     const email = normalizeEmail(ev.email)
     if (!email) return
@@ -157,6 +168,8 @@ function createEventLog(options = {}) {
     const fileEvents = readLinesFromFile(mf.file)
     for (const ev of fileEvents) {
       applySuppression(ev)
+      const ik = inboxKey(ev)
+      if (ik) inboxSeen.add(ik)
       if (ev.t && now - ev.t <= NINETY_DAYS_MS) {
         recentEvents.push(ev)
       }
@@ -184,6 +197,11 @@ function createEventLog(options = {}) {
   }
 
   function append(rawEvent) {
+    const ik = inboxKey(rawEvent)
+    if (ik) {
+      if (inboxSeen.has(ik)) return null
+      inboxSeen.add(ik)
+    }
     const t = typeof rawEvent.t === 'number' ? rawEvent.t : clock()
     seq = (seq + 1) % 1000000
     const id = rawEvent.id || `${t.toString(36)}-${seq.toString(36)}-${rand4()}`
@@ -197,7 +215,12 @@ function createEventLog(options = {}) {
     fs.appendFileSync(filePath, line, 'utf8')
 
     applySuppression(ev)
-    recentEvents.push(ev)
+    // an inbox event carries the message's own (earlier) time: keep recentEvents in time order
+    if (recentEvents.length && (recentEvents[recentEvents.length - 1].t || 0) > t) {
+      let i = recentEvents.length
+      while (i > 0 && (recentEvents[i - 1].t || 0) > t) i--
+      recentEvents.splice(i, 0, ev)
+    } else recentEvents.push(ev)
     if (allCache) {
       // keep the cache valid for the file we just wrote (an out-of-order time re-sorts on the next full read)
       const last = allCache.events[allCache.events.length - 1]

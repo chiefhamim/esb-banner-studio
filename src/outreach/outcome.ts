@@ -8,16 +8,26 @@
 import type { Campaign, Contact } from './types'
 import { fmtDateTime } from '../ui/time'
 
-/** Opens and clicks seen for one recipient's message key(s), folded from outreach_events. */
+/**
+ * Opens and clicks seen for one recipient's message key(s), folded from outreach_events (cloudMerge.foldEvents). Each
+ * LETTER counts once: `opens` = letters a person opened (approx.), `clicks` = letters with a link clicked,
+ * `machineOpens` = letters whose picture only a mail provider's proxy fetched (Gmail image proxy, Apple MPP).
+ * Scanner hits (inside 2 min of the send, non-browser agents, bounced letters) are not counted at all.
+ */
 export interface Engagement {
   opens: number
   firstOpen?: number
   lastOpen?: number
+  /** Letters opened only by a machine (image proxy / privacy protection) — never shown as a reader. */
+  machineOpens?: number
+  firstMachine?: number
   clicks: number
   /** host + path of each link clicked, most clicked first. */
   links: { link: string; n: number }[]
   firstClick?: number
   lastClick?: number
+  /** Which letter keys were seen (o: opened by a person, m: machine open, c: clicked, l: key|link), so a re-fold never counts one twice. */
+  keys?: { o: string[]; m: string[]; c: string[]; l: string[] }
 }
 
 export type OutcomeState = 'busy' | 'out' | 'bounced' | 'replied' | 'clicked' | 'opened' | 'sent' | 'failed' | 'noemail' | 'skip' | 'ready'
@@ -40,7 +50,7 @@ export const isEmailSyntax = (s: string) => s.length <= 254 && EMAIL_SYNTAX.test
 const when = (t?: number) => (t ? fmtDateTime(t, { weekday: false }) : '')
 
 export const LABEL: Record<OutcomeState, string> = {
-  busy: 'Sending', out: 'Opted out', bounced: 'Bounced', replied: 'Replied', clicked: 'Clicked', opened: 'Opened (approx.)',
+  busy: 'Sending', out: 'Opted out', bounced: 'Bounced', replied: 'Replied', clicked: 'Clicked', opened: 'Opened (human, approx.)',
   sent: 'Sent', failed: 'Failed', noemail: 'Not an email', skip: 'Skipped', ready: 'Ready',
 }
 
@@ -51,10 +61,19 @@ export function notAnEmail(c: Pick<Contact, 'email' | 'mxStatus' | 'rawStatus'>)
   return null
 }
 
+export const OPENED_HUMAN = 'Opened (human, approx.)'
+export const MACHINE_OPEN = 'Machine open'
+
 export function openedText(e: Engagement): string {
   if (!e.opens) return ''
-  const times = e.opens === 1 ? `once, ${when(e.firstOpen)}` : `${e.opens} times · first ${when(e.firstOpen)} · last ${when(e.lastOpen)}`
-  return `Opened (approx.) ${times}`
+  const times = e.firstOpen === e.lastOpen || !e.lastOpen ? when(e.firstOpen) : `first ${when(e.firstOpen)} · last ${when(e.lastOpen)}`
+  return `${OPENED_HUMAN} ${times}`.trim()
+}
+
+/** "Machine open" line: only a proxy fetched the picture (Gmail image proxy, Apple Mail Privacy Protection). */
+export function machineText(e: Engagement): string {
+  if (!e.machineOpens) return ''
+  return `${MACHINE_OPEN} ${when(e.firstMachine)} — a mail provider fetched the picture; says nothing about a reader`.trim()
 }
 
 export function clickedText(e: Engagement): string {
@@ -72,10 +91,11 @@ export function outcomeOf(c: Contact, skip: string | null, eng?: Engagement | nu
   if (c.status === 'OPTED_OUT') return o('out', 'Asked not to be emailed')
   if (c.status === 'BOUNCED') return o('bounced', c.error || 'The mail system returned the letter')
   const engaged = eng ? [clickedText(eng), openedText(eng)].filter(Boolean).join(' · ') : ''
+  const machine = eng && !eng.opens && !eng.clicks ? machineText(eng) : ''
   if (c.status === 'REPLIED') return o('replied', [`Replied ${when(c.repliedAt)}`.trim(), engaged].filter(Boolean).join(' · '))
   if (c.status === 'SENT' && eng?.clicks) return o('clicked', engaged)
   if (c.status === 'SENT' && eng?.opens) return o('opened', `${engaged} — counted when the letter's picture loads; some mail apps load it on their own, others never do`)
-  if (c.status === 'SENT') return o('sent', c.sentAt ? `Accepted by the mail server ${when(c.sentAt)} — not proof it was read` : 'Accepted by the mail server')
+  if (c.status === 'SENT') return o('sent', [c.sentAt ? `Accepted by the mail server ${when(c.sentAt)} — not proof it was read` : 'Accepted by the mail server', machine].filter(Boolean).join(' · '))
   if (c.status === 'FAILED') return o('failed', c.error || 'The server refused it')
   const bad = notAnEmail(c)
   if (bad) return o('noemail', bad)

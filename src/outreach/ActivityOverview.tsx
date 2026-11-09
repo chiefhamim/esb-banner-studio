@@ -101,7 +101,9 @@ export function ActivityOverview() {
   const sentToday = stats.today.reduce((acc, h) => acc + h.sent, 0)
   const sentRange = totals.sent
   const replies = totals.replied
-  const bounced = totals.bounced + totals.failed
+  // unique addresses, kept apart: a bounce came back from the recipient's side; a failure was refused when sending
+  const bounced = totals.bounced
+  const failedAddrs = totals.failedUnique ?? totals.failed
   const stillToSend = activeJobs.reduce((acc, j) => acc + (j.remaining || 0), 0)
 
   let finishesAbout = '—'
@@ -155,9 +157,9 @@ export function ActivityOverview() {
         <Kpi
           icon="info"
           tone="bad"
-          label="Bounced or refused"
+          label="Bounced"
           figure={bounced.toLocaleString()}
-          sub={totals.optedOut > 0 ? `${totals.optedOut} unsubscribed` : 'undeliverable'}
+          sub={[`${failedAddrs.toLocaleString()} failed when sent`, totals.optedOut > 0 ? `${totals.optedOut} unsubscribed` : ''].filter(Boolean).join(' · ')}
         />
         <Kpi icon="clock" tone="warn" label="Still to send" figure={stillToSend.toLocaleString()} sub={`${activeJobs.length} active runs`} />
         <Kpi

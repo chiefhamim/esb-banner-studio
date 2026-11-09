@@ -9,7 +9,7 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 // The settings that belong to the sending ACCOUNT, not to one PC: both office PCs send from the same Gmail address,
 // so its hours, daily limit, gaps, per-organisation limits and cooldown must be the same on both (cloud sync carries
 // them, src/outreach/cloudSync.ts). Tray sending, the assistant's autonomy and reading replies stay per PC.
-const SHARED_KEYS = ['window', 'dailyLimit', 'ramp', 'pace', 'minDelaySec', 'maxDelaySec', 'domainMaxPerDay', 'domainMinGapSec', 'contactCooldownDays', 'gmailCeiling24h']
+const SHARED_KEYS = ['window', 'dailyLimit', 'ramp', 'pace', 'minDelaySec', 'maxDelaySec', 'domainMaxPerDay', 'domainOverrides', 'domainMinGapSec', 'contactCooldownDays', 'gmailCeiling24h']
 
 const DEFAULT_SETTINGS = {
   window: {
@@ -28,6 +28,8 @@ const DEFAULT_SETTINGS = {
   minDelaySec: 180,
   maxDelaySec: 480,
   domainMaxPerDay: 3,
+  // per-organisation exceptions to domainMaxPerDay: { 'example.gov.bd': 10 } (domain → emails per calendar day, 1–500)
+  domainOverrides: {},
   domainMinGapSec: 20 * 60,
   contactCooldownDays: 30,
   // hard safety under Gmail's real limit (500 a rolling 24 h for a consumer account): however the calendar day resets,
@@ -77,6 +79,7 @@ function validateSettings(input, currentSettings = DEFAULT_SETTINGS, opts = {}) 
     'minDelaySec',
     'maxDelaySec',
     'domainMaxPerDay',
+    'domainOverrides',
     'domainMinGapSec',
     'contactCooldownDays',
     'gmailCeiling24h',
@@ -211,6 +214,29 @@ function validateSettings(input, currentSettings = DEFAULT_SETTINGS, opts = {}) 
       return { valid: false, error: 'domainMaxPerDay must be an integer between 1 and 50', field: 'domainMaxPerDay' }
     }
     result.domainMaxPerDay = safe.domainMaxPerDay
+  }
+
+  // 6b. domainOverrides: { domain: 1..500 }, ≤200 entries, plain lower-case domains only
+  if (safe.domainOverrides !== undefined) {
+    const o = safe.domainOverrides
+    if (!o || typeof o !== 'object' || Array.isArray(o)) {
+      return { valid: false, error: 'domainOverrides must be an object of domain → emails per day', field: 'domainOverrides' }
+    }
+    const entries = Object.keys(o)
+    if (entries.length > 200) return { valid: false, error: 'domainOverrides can hold at most 200 organisations', field: 'domainOverrides' }
+    const clean = Object.create(null)
+    for (const k of entries) {
+      const dom = String(k).trim().toLowerCase()
+      if (dom === '__proto__' || dom === 'constructor' || dom === 'prototype' || dom.length > 253 || !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(dom)) {
+        return { valid: false, error: `domainOverrides: "${String(k).slice(0, 60)}" is not a domain`, field: 'domainOverrides' }
+      }
+      const v = o[k]
+      if (!Number.isInteger(v) || v < 1 || v > 500) {
+        return { valid: false, error: `domainOverrides: ${dom} must be an integer between 1 and 500`, field: 'domainOverrides' }
+      }
+      clean[dom] = v
+    }
+    result.domainOverrides = { ...clean }
   }
 
   // 7. domainMinGapSec (0..14400)

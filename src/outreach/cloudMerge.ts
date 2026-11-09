@@ -29,7 +29,7 @@ export interface SendRow {
 }
 
 /** One row of public.outreach_events (only the columns the desk reads). */
-export interface EventRow { id: number; message_key: string; type: 'open' | 'click'; link: string | null; at: string }
+export interface EventRow { id: number; message_key: string; type: 'open' | 'click'; link: string | null; at: string; ua?: string | null; ip_hash?: string | null }
 
 export const sendId = (campaignId: string, kind: 'campaign' | 'followup', email: string) => `${campaignId}:${kind}:${email}`.toLowerCase()
 export const testSendId = (t: number, email: string) => `test:${t}:${email}`.toLowerCase()
@@ -126,6 +126,12 @@ export const rowSig = (r: Pick<SendRow, 'status' | 'detail' | 'message_key'>) =>
 const isKey = (k: unknown): k is string => typeof k === 'string' && /^[A-Za-z0-9_-]{22}$/.test(k)
 
 /**
+ * What main enters in its own ledger + event log (esb:outreach-mark-sent): a send made on another PC (status absent),
+ * or a bounce / reply recorded on the shared row, so Activity on both PCs counts the same.
+ */
+export interface RemoteLedgerEntry { email: string; kind: 'campaign' | 'followup'; campaignId: string; at: number; status?: 'bounced' | 'replied'; messageId?: string; detail?: string }
+
+/**
  * Lay shared send rows onto the campaigns. Returns new campaign objects only for those that changed, plus the
  * addresses that opted out or bounced (they hold across every campaign) and the sends this PC's main process must
  * enter in its own ledger before it may send.
@@ -134,14 +140,14 @@ export function applySendRows(campaigns: Campaign[], rows: SendRow[], myPc: stri
   campaigns: Campaign[]
   optOut: string[]
   bounced: Record<string, string>
-  ledger: { email: string; kind: 'campaign' | 'followup'; campaignId: string; at: number }[]
+  ledger: RemoteLedgerEntry[]
   changed: boolean
 } {
   const byId = new Map(campaigns.map((c) => [c.id, c]))
   const touched = new Map<string, Campaign>()
   const optOut: string[] = []
   const bounced: Record<string, string> = {}
-  const ledger: { email: string; kind: 'campaign' | 'followup'; campaignId: string; at: number }[] = []
+  const ledger: RemoteLedgerEntry[] = []
   const edit = (id: string): Campaign | null => {
     const have = touched.get(id) ?? byId.get(id)
     if (!have) return null
@@ -174,7 +180,7 @@ export function applySendRows(campaigns: Campaign[], rows: SendRow[], myPc: stri
         mark(c.skipped![email] !== undefined, () => { delete c.skipped![email] })
         mark(elsewhere && !c.sentBy![email], () => { c.sentBy![email] = pcName(row.pc) })
         mark(isKey(row.message_key) && c.tracking![`campaign:${email}`] !== row.message_key, () => { c.tracking![`campaign:${email}`] = row.message_key! })
-        if (elsewhere) ledger.push({ email, kind: 'campaign', campaignId: c.id, at })
+        if (elsewhere) ledger.push({ email, kind: 'campaign', campaignId: c.id, at, ...(row.message_id ? { messageId: row.message_id } : {}) })
       } else if (row.status === 'failed') {
         mark(!c.sent[email] && c.failed[email] === undefined, () => { c.failed[email] = row.detail || 'Failed on another PC' })
       } else if (row.status === 'skipped') {
@@ -188,11 +194,16 @@ export function applySendRows(campaigns: Campaign[], rows: SendRow[], myPc: stri
         mark(!c.followed[email], () => { c.followed[email] = at })
         mark(elsewhere && !c.sentBy![`followup:${email}`], () => { c.sentBy![`followup:${email}`] = pcName(row.pc) })
         mark(isKey(row.message_key) && c.tracking![`followup:${email}`] !== row.message_key, () => { c.tracking![`followup:${email}`] = row.message_key! })
-        if (elsewhere) ledger.push({ email, kind: 'followup', campaignId: c.id, at })
+        if (elsewhere) ledger.push({ email, kind: 'followup', campaignId: c.id, at, ...(row.message_id ? { messageId: row.message_id } : {}) })
       }
     }
     if (row.status === 'opted_out') optOut.push(email)
     if (row.status === 'bounced') bounced[email] = row.detail || 'Bounced'
+    // the bounce / reply itself, into main's event log (it keeps one per address + time, so a re-pull is harmless)
+    if ((row.status === 'bounced' || row.status === 'replied') && (row.kind === 'campaign' || row.kind === 'followup')) {
+      // keyed on the row's own `at` (stable), not updated_at, which moves whenever the row is written again
+      ledger.push({ email, kind: row.kind, campaignId: c.id, at, status: row.status, ...(row.status === 'bounced' && row.detail ? { detail: row.detail } : {}) })
+    }
   }
   const out = dirty.size ? campaigns.map((c) => (dirty.has(c.id) ? touched.get(c.id)! : c)) : campaigns
   return { campaigns: out, optOut, bounced, ledger, changed: dirty.size > 0 }
@@ -205,37 +216,101 @@ export function keyIndex(c: Campaign): Map<string, string> {
   return m
 }
 
+/** When each tracked letter went out (`campaign:` → c.sent, `followup:` → c.followed), by key. */
+export function keySentAt(c: Campaign): Map<string, number> {
+  const m = new Map<string, number>()
+  for (const [slot, key] of Object.entries(c.tracking ?? {})) {
+    const kind = slot.slice(0, slot.indexOf(':'))
+    const email = slot.slice(slot.indexOf(':') + 1)
+    const t = kind === 'followup' ? c.followed?.[email] : c.sent?.[email]
+    if (typeof t === 'number' && Number.isFinite(t)) m.set(key, t)
+  }
+  return m
+}
+
 /** host + path of a clicked link, as the site stores it; anything odd is kept as written but cut short. */
 const linkLabel = (l: string | null) => String(l ?? '').replace(/^https?:\/\//i, '').replace(/\/$/, '').slice(0, 120) || 'a link'
 
+/** Events this soon after the letter went out are a mail gateway scanning it, not a reader. */
+export const SCAN_WINDOW_MS = 120_000
+
+/** User agents that are never a person reading: command-line clients, crawlers, link scanners, security gateways. */
+const NOT_A_BROWSER = /curl|wget|python|java\/|go-http|okhttp|libwww|httpclient|axios|node-fetch|undici|bot\b|bot\/|crawler|spider|scanner|bingpreview|headless|phantom|slurp|facebookexternalhit|barracuda|proofpoint|mimecast|symantec|messagelabs|forcepoint|trendmicro|fortinet|sophos|ironport|microsoft office protocol discovery|safelinks/i
+/** Image proxies that fetch the picture for the reader's mail app (Gmail) — an open by a machine, maybe on a read. */
+const IMAGE_PROXY = /googleimageproxy|ggpht\.com|yahoomailproxy|outlook-[a-z]*-?proxy/i
+
+export type EventClass = 'human' | 'machine' | 'ignore'
+
 /**
- * Fold open/click events into per-recipient engagement, on top of what was folded before (`prev`). Events for keys
- * this campaign did not send are dropped.
+ * What one tracking hit is worth. `ignore`: a scanner or prefetch (inside SCAN_WINDOW_MS of the send, on a letter that
+ * bounced, or a non-browser user agent). `machine`: an open fetched by a mail provider's proxy — Gmail's image proxy,
+ * or Apple Mail Privacy Protection (whose fetches carry the bare "Mozilla/5.0" agent) — shown apart, never as a reader.
+ * Anything else is `human` (still approximate: an open is a picture loading). A row without a user agent (older
+ * tracking endpoint) is taken as human, as before.
  */
-export function foldEvents(prev: Record<string, Engagement>, events: EventRow[], keys: Map<string, string>): Record<string, Engagement> {
+export function classifyEvent(ev: Pick<EventRow, 'type' | 'at' | 'ua'>, sentAt?: number, bounced?: boolean): EventClass {
+  if (bounced) return 'ignore'
+  const t = Date.parse(ev.at)
+  if (!Number.isFinite(t)) return 'ignore'
+  if (sentAt != null && t - sentAt < SCAN_WINDOW_MS) return 'ignore'
+  const ua = String(ev.ua ?? '').trim()
+  if (!ua) return 'human'
+  if (NOT_A_BROWSER.test(ua)) return 'ignore'
+  if (ev.type === 'open' && (IMAGE_PROXY.test(ua) || /^mozilla\/5\.0$/i.test(ua))) return 'machine'
+  return 'human'
+}
+
+export interface FoldContext {
+  /** When each key's letter was sent (keySentAt). */
+  sentAt?: Map<string, number>
+  /** Addresses whose letter bounced: nothing on them counts. */
+  bounced?: Record<string, unknown>
+}
+
+/**
+ * Fold open/click events into per-recipient engagement, on top of what was folded before (`prev`). Each LETTER counts
+ * once — opened yes/no, clicked yes/no, machine-opened yes/no — however many hits it got. Events for keys this
+ * campaign did not send are dropped; scanners and prefetches are ignored (classifyEvent).
+ */
+export function foldEvents(prev: Record<string, Engagement>, events: EventRow[], keys: Map<string, string>, ctx: FoldContext = {}): Record<string, Engagement> {
   const out: Record<string, Engagement> = { ...prev }
   for (const ev of events) {
     const email = keys.get(ev.message_key)
     if (!email) continue
+    if (ev.type !== 'open' && ev.type !== 'click') continue
+    const cls = classifyEvent(ev, ctx.sentAt?.get(ev.message_key), !!ctx.bounced?.[email])
+    if (cls === 'ignore') continue
     const t = Date.parse(ev.at)
-    if (!Number.isFinite(t)) continue
     const cur = out[email] ?? { opens: 0, clicks: 0, links: [] }
-    const e: Engagement = { ...cur, links: cur.links }
-    if (ev.type === 'open') {
-      e.opens++
+    const k = cur.keys ?? { o: [], m: [], c: [], l: [] }
+    const e: Engagement = { ...cur, links: cur.links, keys: { o: [...k.o], m: [...k.m], c: [...k.c], l: [...k.l] } }
+    const ks = e.keys!
+    const key = ev.message_key
+    if (ev.type === 'open' && cls === 'machine') {
+      if (!ks.m.includes(key)) ks.m.push(key)
+      e.firstMachine = Math.min(e.firstMachine ?? t, t)
+    } else if (ev.type === 'open') {
+      if (!ks.o.includes(key)) ks.o.push(key)
       e.firstOpen = Math.min(e.firstOpen ?? t, t)
       e.lastOpen = Math.max(e.lastOpen ?? t, t)
-    } else if (ev.type === 'click') {
-      e.clicks++
+    } else {
+      if (!ks.c.includes(key)) ks.c.push(key)
       e.firstClick = Math.min(e.firstClick ?? t, t)
       e.lastClick = Math.max(e.lastClick ?? t, t)
       const label = linkLabel(ev.link)
-      const links = e.links.map((l) => ({ ...l }))
-      const hit = links.find((l) => l.link === label)
-      if (hit) hit.n++; else links.push({ link: label, n: 1 })
-      links.sort((a, b) => b.n - a.n)
-      e.links = links
-    } else continue
+      const lk = `${key}|${label}`
+      if (!ks.l.includes(lk)) {
+        ks.l.push(lk)
+        const links = e.links.map((l) => ({ ...l }))
+        const hit = links.find((l) => l.link === label)
+        if (hit) hit.n++; else links.push({ link: label, n: 1 })
+        links.sort((a, b) => b.n - a.n)
+        e.links = links
+      }
+    }
+    e.opens = ks.o.length
+    e.clicks = ks.c.length
+    e.machineOpens = ks.m.filter((x) => !ks.o.includes(x)).length
     out[email] = e
   }
   return out

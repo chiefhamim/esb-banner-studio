@@ -67,6 +67,8 @@ function createJobStore(options = {}) {
           failed: Object.keys(job.state.failed || {}).length,
           skipped: Object.keys(job.state.skipped || {}).length,
         },
+        // bounces the editor had seen when resuming after a bounce pause (outreach-engine checkBounces)
+        ...(typeof job.state.bounceAck === 'number' ? { bounceAck: job.state.bounceAck } : {}),
         savedAt: now,
       },
     })
@@ -178,6 +180,7 @@ function createJobStore(options = {}) {
             held: data.state?.held || [],
             counters: data.state?.counters || { sent: 0, failed: 0, skipped: 0 },
             savedAt: data.state?.savedAt || data.createdAt,
+            ...(typeof data.state?.bounceAck === 'number' ? { bounceAck: data.state.bounceAck } : {}),
           },
           messages,
         }

@@ -53,6 +53,9 @@ export function project(state: ReconcileState, events: OutreachEvent[]): Reconci
   let bouncedChanged = false
 
   for (const ev of events) {
+    // a dry run (ESB_OUTREACH_DRYRUN / a test job) never reached a mail server: it must never mark anything sent,
+    // failed, replied or bounced on a real campaign
+    if (ev.dry) continue
     const email = (ev.email || ev.to || '').toLowerCase().trim()
 
     switch (ev.type) {

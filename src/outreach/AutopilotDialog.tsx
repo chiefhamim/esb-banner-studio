@@ -15,7 +15,7 @@ import { eligible } from './campaign'
 import { Dialog, Field, Switch, Seg } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import { fmtWallClock, useClockFormat } from '../ui/time'
-import { fmtGapRange, planLine, warningText } from './activityFormat'
+import { fmtGapRange, parseDomainOverrides, planLine, warningText } from './activityFormat'
 import type { AutopilotSettings, LivePlan } from '../esb'
 
 const TIMEZONES = [
@@ -79,6 +79,9 @@ function SendingForm({ initial, onClose }: { initial: AutopilotSettings; onClose
   const [warmupRamp, setWarmupRamp] = useState(initial?.ramp ?? true)
   const [domainMax, setDomainMax] = useState(initial?.domainMaxPerDay ?? 3)
   const [domainGapMin, setDomainGapMin] = useState(Math.round((initial?.domainMinGapSec ?? 1200) / 60))
+  // per-organisation exceptions, edited as "domain = N" lines
+  const [overridesText, setOverridesText] = useState(() => Object.entries(initial?.domainOverrides ?? {}).map(([d, n]) => `${d} = ${n}`).join('\n'))
+  const overrides = useMemo(() => parseDomainOverrides(overridesText), [overridesText])
   const [cooldownDays, setCooldownDays] = useState(initial?.contactCooldownDays ?? 30)
   const [traySending, setTraySending] = useState(initial?.traySending ?? true)
   const [autonomy, setAutonomy] = useState<'suggest' | 'confirm' | 'auto-safe'>(initial?.aiAutonomy ?? 'suggest')
@@ -121,13 +124,14 @@ function SendingForm({ initial, onClose }: { initial: AutopilotSettings; onClose
     dailyLimit: Math.round(Number(dailyLimit)),
     ramp: warmupRamp,
     domainMaxPerDay: Math.max(1, Math.min(50, Number(domainMax) || 3)),
+    domainOverrides: overrides.map,
     // 0 is a real choice (no spacing per organisation) — `|| 20` turned it back into 20
     domainMinGapSec: Math.max(0, Math.min(240, Number.isFinite(Number(domainGapMin)) ? Math.round(Number(domainGapMin)) : 20)) * 60,
     contactCooldownDays: Math.max(7, Math.min(365, Number(cooldownDays) || 30)),
     traySending,
     aiAutonomy: autonomy,
     aiReadsReply: readReplies,
-  }), [winEnabled, days, fromTime, toTime, effectiveTz, minMin, maxMin, dailyLimit, warmupRamp, domainMax, domainGapMin, cooldownDays, traySending, autonomy, readReplies])
+  }), [winEnabled, days, fromTime, toTime, effectiveTz, minMin, maxMin, dailyLimit, warmupRamp, domainMax, domainGapMin, overrides, cooldownDays, traySending, autonomy, readReplies])
 
   // the open campaign's queue: how many are left and in which organisations (the per-organisation limit)
   const queue = useMemo(() => (camp ? eligible(desk.contacts, camp.subject, camp.body, camp.audience) : []), [camp, desk.contacts])
@@ -340,6 +344,13 @@ function SendingForm({ initial, onClose }: { initial: AutopilotSettings; onClose
                 <p className="or-adv-why">Keeps one office from getting several emails in a row. Slows the pace when many remaining contacts share an organisation (the plan above shows how much).</p>
               </div>
               <div className="or-adv-row">
+                <label className="or-adv-ctl" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                  <span>Exceptions per organisation (one per line, <code>domain = emails a day</code>)</span>
+                  <textarea className="input" rows={3} value={overridesText} onChange={(e) => setOverridesText(e.target.value)} placeholder="bpdb.gov.bd = 10" aria-label="Per-organisation daily limits" spellCheck={false} />
+                </label>
+                <p className="or-adv-why">{overrides.bad.length ? `Not understood: ${overrides.bad.slice(0, 3).join(', ')} — write “domain = number” (1–500).` : 'A large organisation with many separate offices can take more a day than the default; a sensitive one fewer.'}</p>
+              </div>
+              <div className="or-adv-row">
                 <div className="or-adv-ctl">
                   <span>Don’t write to the same person again within</span>
                   <input type="number" className="input" min={7} max={365} value={cooldownDays} onChange={(e) => setCooldownDays(Number(e.target.value))} aria-label="Contact cooldown (days)" />
@@ -380,3 +391,4 @@ function SendingForm({ initial, onClose }: { initial: AutopilotSettings; onClose
     </Dialog>
   )
 }
+

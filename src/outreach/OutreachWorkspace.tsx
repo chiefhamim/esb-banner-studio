@@ -96,6 +96,13 @@ export function OutreachWorkspace() {
         <button type="button" className="or-banner-action" onClick={() => void resumeBatch()}>Resume</button>
       </div>
     )
+  } else if (job?.status === 'paused' && job.reason === 'bounces') {
+    banner = (
+      <div className="or-banner-row danger" role="status">
+        <span>Sending paused — {job.wait?.max ? `${job.wait.count ?? 0} of ${job.wait.max} letters bounced` : 'too many letters bounced'} (over 3%). Check the bounced addresses (Activity → Overview) before resuming; resuming re-pauses only on a new bounce.</span>
+        <button type="button" className="or-banner-action" onClick={() => void resumeBatch()}>Resume</button>
+      </div>
+    )
   } else if (job?.status === 'paused' && job.reason === 'auth') {
     banner = (
       <div className="or-banner-row danger" role="status">

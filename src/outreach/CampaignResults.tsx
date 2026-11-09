@@ -7,12 +7,12 @@ import { useDesk } from './outreachStore'
 import { useCloud } from './cloudStore'
 import { inAudience } from './campaign'
 import { skipReason } from './compose'
-import { engineSkipText, outcomeOf, type OutcomeState } from './outcome'
+import { engineSkipText, MACHINE_OPEN, outcomeOf, type OutcomeState } from './outcome'
 import { Icon } from '../ui/Icon'
 
 const ORDER: [OutcomeState, string, string][] = [
   ['sent', 'Sent', 'Accepted by the mail server, nothing seen since — not proof it was read'],
-  ['opened', 'Opened (approx.)', "The letter's picture was loaded. Some mail apps do that on their own; others never load it"],
+  ['opened', 'Opened (human, approx.)', "The letter's picture was loaded by a mail app, once per letter. Scanners (within 2 min of sending, bots, bounced letters) and proxy fetches are not counted; apps that block pictures never show up"],
   ['clicked', 'Clicked', 'Followed a link in the letter'],
   ['replied', 'Replied', 'Answered — read from your inbox'],
   ['bounced', 'Bounced', 'Returned by the mail system: the address does not exist, the mailbox is full, or the server refused it'],
@@ -30,7 +30,7 @@ export function CampaignResults({ campaignId }: { campaignId: string | null }) {
   const counts = useMemo(() => {
     const n: Partial<Record<OutcomeState, number>> = {}
     const links = new Map<string, number>()
-    if (!c) return { n, links: [] as [string, number][], whole: false }
+    if (!c) return { n, links: [] as [string, number][], whole: false, machine: 0 }
     const whole = c.id === s.activeId
     if (whole) {
       for (const x of s.contacts) {
@@ -48,8 +48,13 @@ export function CampaignResults({ campaignId }: { campaignId: string | null }) {
       for (const email of Object.keys(c.failed)) if (!c.sent[email]) n.failed = (n.failed ?? 0) + 1
       for (const email of Object.keys(c.skipped ?? {})) if (!c.sent[email]) n.skip = (n.skip ?? 0) + 1
     }
-    for (const [email, e] of Object.entries(engagement ?? {})) if (c.sent[email]) for (const l of e.links) links.set(l.link, (links.get(l.link) ?? 0) + l.n)
-    return { n, links: [...links].sort((a, b) => b[1] - a[1]).slice(0, 5), whole }
+    let machine = 0
+    for (const [email, e] of Object.entries(engagement ?? {})) {
+      if (!c.sent[email]) continue
+      for (const l of e.links) links.set(l.link, (links.get(l.link) ?? 0) + l.n)
+      if (e.machineOpens && !e.opens && !e.clicks && !c.bounced[email] && !c.replied[email]) machine++
+    }
+    return { n, links: [...links].sort((a, b) => b[1] - a[1]).slice(0, 5), whole, machine }
   }, [c, s.activeId, s.contacts, s.optOut, engagement])
   if (!c) return null
   const tracked = Object.keys(c.sent).filter((e) => c.tracking?.[`campaign:${e}`]).length
@@ -61,6 +66,7 @@ export function CampaignResults({ campaignId }: { campaignId: string | null }) {
         {ORDER.filter(([st]) => counts.whole || (st !== 'ready' && st !== 'noemail')).map(([st, label, tip]) => (
           <span key={st} className={'oa-result st-' + st} data-tip={tip}><b>{(counts.n[st] ?? 0).toLocaleString()}</b>{label}</span>
         ))}
+        {counts.machine > 0 && <span className="oa-result st-sent" data-tip="Counted under Sent: only a mail provider's proxy fetched the picture (Gmail image proxy, Apple Mail Privacy Protection) — it says nothing about a person reading"><b>{counts.machine.toLocaleString()}</b>{MACHINE_OPEN}</span>}
       </div>
       <p className="or-muted or-small">
         {sent ? `${tracked.toLocaleString()} of ${sent.toLocaleString()} sent letters carry a tracking key${tracked < sent ? ' — the rest went before the site’s tracking was live, so their opens and clicks are not known' : ''}.` : 'Nothing sent yet.'}

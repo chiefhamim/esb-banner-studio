@@ -53,15 +53,70 @@ const DESIGN_MAX_HTML = 300_000
 const oneLine = (s, max) => String(s ?? '').replace(/[\r\n\t\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, max)
 const isEmail = (s) => typeof s === 'string' && s.length <= 254 && EMAIL_RE.test(s)
 
+/**
+ * Sending services the Sender dialog offers. Every one is plain SMTP (nodemailer), so send / verify / the ledger work
+ * the same way; what differs is the server, the login and whether the account has a mailbox to read replies from.
+ *   hosts   — the servers this provider may be pointed at (null = any host: Custom SMTP)
+ *   login   — a fixed SMTP user name ('resend', 'apikey'); null = typed (defaults to the sending address)
+ *   mailbox — the account itself has an IMAP inbox (replies/bounces are read there); a relay (Resend, SES, …) has none,
+ *             so replies go to the Reply-To and are read only if a separate IMAP mailbox is given
+ */
+const PROVIDERS = {
+  gmail: { label: 'Gmail / Google Workspace', host: 'smtp.gmail.com', port: 465, hosts: /^smtp\.(gmail|googlemail)\.com$/, login: null, mailbox: true, imap: 'imap.gmail.com' },
+  m365: { label: 'Microsoft 365 / Outlook', host: 'smtp.office365.com', port: 587, hosts: /^(smtp\.office365\.com|smtp-mail\.outlook\.com)$/, login: null, mailbox: true, imap: 'outlook.office365.com' },
+  zoho: { label: 'Zoho Mail', host: 'smtp.zoho.com', port: 465, hosts: /^smtp(pro)?\.zoho\.(com|eu|in|com\.au|jp|com\.cn)$/, login: null, mailbox: true, imap: null },
+  resend: { label: 'Resend', host: 'smtp.resend.com', port: 465, hosts: /^smtp\.resend\.com$/, login: 'resend', mailbox: false },
+  ses: { label: 'Amazon SES', host: 'email-smtp.us-east-1.amazonaws.com', port: 465, hosts: /^email-smtp(-fips)?\.[a-z]{2}(-gov)?-[a-z]+-\d\.amazonaws\.com$/, login: null, mailbox: false },
+  brevo: { label: 'Brevo', host: 'smtp-relay.brevo.com', port: 587, hosts: /^smtp-relay\.(brevo|sendinblue)\.com$/, login: null, mailbox: false },
+  mailgun: { label: 'Mailgun', host: 'smtp.mailgun.org', port: 587, hosts: /^smtp\.(eu\.)?mailgun\.org$/, login: null, mailbox: false },
+  sendgrid: { label: 'SendGrid', host: 'smtp.sendgrid.net', port: 465, hosts: /^smtp\.sendgrid\.net$/, login: 'apikey', mailbox: false },
+  custom: { label: 'Custom SMTP', host: '', port: 587, hosts: null, login: null, mailbox: true, imap: null },
+}
+
+/** An account saved before providers existed: worked out from its server (Gmail unless the host says otherwise). */
+function providerFor(saved) {
+  if (saved && PROVIDERS[saved.provider]) return saved.provider
+  const h = String(saved?.host || '').toLowerCase()
+  for (const [id, p] of Object.entries(PROVIDERS)) if (p.hosts && p.hosts.test(h)) return id
+  return 'custom'
+}
+
+/** Whether the account's replies can be read over IMAP: its own mailbox, or a separate one given for the Reply-To. */
+function hasMailbox(saved) {
+  if (!saved) return false
+  if (saved.imapHost) return true
+  const p = PROVIDERS[providerFor(saved)]
+  // Custom SMTP: an imap.<domain> is guessed only from an smtp.<domain> host
+  if (providerFor(saved) === 'custom') return /^smtp\./.test(String(saved.host || ''))
+  return !!p.mailbox
+}
+
 /** The account and pacing the editor saves. Anything out of range is refused, not clamped silently. */
 function validateSmtpSettings(s) {
   const o = s && typeof s === 'object' ? s : {}
-  const host = String(o.host || '').trim().toLowerCase()
+  const provider = o.provider === undefined || o.provider === null || o.provider === '' ? providerFor({ host: o.host }) : String(o.provider)
+  const preset = PROVIDERS[provider]
+  if (!preset || !Object.prototype.hasOwnProperty.call(PROVIDERS, provider)) throw new Error('Unknown sending service')
+  const host = String(o.host || preset.host || '').trim().toLowerCase()
   if (!HOST_RE.test(host) || host === 'localhost') throw new Error('SMTP server must be a host name such as smtp.gmail.com')
-  const port = Number(o.port)
+  if (preset.hosts && !preset.hosts.test(host)) throw new Error(`${preset.label} sends through ${preset.host}${provider === 'ses' ? ' (or another region\'s email-smtp.<region>.amazonaws.com)' : ''}, not ${host}`)
+  const port = Number(o.port || preset.port)
   if (!PORTS.has(port)) throw new Error('SMTP port must be 465, 587, 25 or 2525')
   const user = String(o.user || '').trim()
   if (!isEmail(user)) throw new Error('Sender address is not a valid email address')
+  // the SMTP user name when it is not the sending address (SES SMTP credentials, Brevo / Mailgun logins); a fixed one
+  // for Resend ('resend') and SendGrid ('apikey')
+  const loginIn = oneLine(o.login, 200)
+  const login = preset.login || (loginIn && loginIn !== user ? loginIn : '')
+  if (login && !/^[\x21-\x7e]{1,200}$/.test(login)) throw new Error('SMTP user name has characters a server will not accept')
+  // SES never logs in with the sending address: its SMTP user name is an access-key id from SES → SMTP settings
+  if (provider === 'ses' && !login) throw new Error('Amazon SES needs its SMTP user name (SES → SMTP settings → Create SMTP credentials)')
+  const replyToIn = String(o.replyTo || '').trim()
+  if (replyToIn && !isEmail(replyToIn)) throw new Error('Reply-To is not a valid email address')
+  const replyTo = replyToIn && replyToIn.toLowerCase() !== user.toLowerCase() ? replyToIn : ''
+  const imapUserIn = String(o.imapUser || '').trim()
+  if (imapUserIn && (imapUserIn.length > 254 || !/^[\x21-\x7e]+$/.test(imapUserIn))) throw new Error('Inbox user name is not valid')
+  const imapUser = imapUserIn && imapUserIn !== user ? imapUserIn : ''
   const dailyLimit = Number(o.dailyLimit)
   if (!Number.isInteger(dailyLimit) || dailyLimit < 1 || dailyLimit > MAX_DAILY) throw new Error(`Daily limit must be 1–${MAX_DAILY}`)
   const minDelaySec = Number(o.minDelaySec), maxDelaySec = Number(o.maxDelaySec)
@@ -71,7 +126,8 @@ function validateSmtpSettings(s) {
   const imapHost = String(o.imapHost || '').trim().toLowerCase()
   if (imapHost && (!HOST_RE.test(imapHost) || imapHost === 'localhost')) throw new Error('Inbox (IMAP) server must be a host name such as imap.gmail.com')
   return {
-    host, port, secure: port === 465, user, imapHost,
+    provider, host, port, secure: port === 465, user, imapHost,
+    ...(login ? { login } : {}), ...(replyTo ? { replyTo } : {}), ...(imapUser ? { imapUser } : {}),
     name: oneLine(o.name, 80).replace(/["<>]/g, '') || 'ESB Power Line',
     dailyLimit, minDelaySec: Math.round(minDelaySec), maxDelaySec: Math.round(maxDelaySec),
   }
@@ -254,29 +310,42 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
       configured: !!saved,
       hasPassword: !!saved?.password,
       encryption: safeStorage.isEncryptionAvailable(),
-      settings: saved ? { host: saved.host, imapHost: saved.imapHost || '', port: saved.port, user: saved.user, name: saved.name, dailyLimit: saved.dailyLimit, minDelaySec: saved.minDelaySec, maxDelaySec: saved.maxDelaySec } : null,
+      settings: saved ? { provider: providerFor(saved), host: saved.host, imapHost: saved.imapHost || '', port: saved.port, user: saved.user, name: saved.name, login: saved.login || '', replyTo: saved.replyTo || '', imapUser: saved.imapUser || '', dailyLimit: saved.dailyLimit, minDelaySec: saved.minDelaySec, maxDelaySec: saved.maxDelaySec } : null,
+      // a separate password for the reply mailbox (relay providers: the API key cannot log in to IMAP)
+      hasImapPassword: !!saved?.imapPassword,
+      // whether replies and bounces can be read here; when not, they go to replyTo (or the sending address)
+      mailbox: hasMailbox(saved),
       sent24h: recent.length,
       // counted on the same calendar day as the engine's daily limit (what "N of 100 today" shows)
       sentToday: cap.sentToday,
-      imapHost: saved ? require('./inbox.cjs').imapHostFor(saved.host, saved.imapHost) : '',
+      imapHost: saved && hasMailbox(saved) ? require('./inbox.cjs').imapHostFor(saved.host, saved.imapHost || PROVIDERS[providerFor(saved)].imap || '') : '',
       // so the desk can mark contacts already emailed, even after its own storage is cleared
       sentTo: l.filter((e) => e.kind === 'campaign' && now - e.t < REPEAT_DAYS * DAY).map((e) => ({ to: e.to, t: e.t })),
     }
   }
 
-  function saveSettings(input, password) {
+  function saveSettings(input, password, imapPassword) {
     const s = validateSmtpSettings(input)
     const prev = read(settingsFile, null)
     // the stored password is kept only for the same account on the same servers: changing the IMAP host (or port) and
     // keeping the password would let one save point the next inbox check — and the password — at any server
     const same = prev && prev.user === s.user && prev.host === s.host && prev.port === s.port && (prev.imapHost || '') === (s.imapHost || '')
+      && providerFor(prev) === s.provider && (prev.login || '') === (s.login || '')
     let enc = same ? prev.password : null
-    if (typeof password === 'string' && password.trim()) {
+    const encrypt = (pw) => {
       if (!safeStorage.isEncryptionAvailable()) throw new Error('This computer cannot encrypt the password, so it is not saved')
-      // Google shows app passwords in groups of four; the spaces are not part of it
-      enc = safeStorage.encryptString(password.replace(/\s+/g, '')).toString('base64')
+      // Google shows app passwords in groups of four; the spaces are not part of it (nor of any API key)
+      return safeStorage.encryptString(pw.replace(/\s+/g, '')).toString('base64')
     }
-    write(settingsFile, { ...s, password: enc })
+    if (typeof password === 'string' && password.trim()) enc = encrypt(password)
+    // the reply mailbox's own password: kept only while the mailbox (server + user) is the same
+    const sameBox = prev && (prev.imapHost || '') === (s.imapHost || '') && (prev.imapUser || '') === (s.imapUser || '') && !!s.imapHost
+    let encImap = sameBox ? prev.imapPassword || null : null
+    if (typeof imapPassword === 'string' && imapPassword.trim()) {
+      if (!s.imapHost) throw new Error('Give the inbox (IMAP) server for this mailbox password')
+      encImap = encrypt(imapPassword)
+    }
+    write(settingsFile, { ...s, password: enc, ...(encImap ? { imapPassword: encImap } : {}) })
     return status()
   }
 
@@ -286,9 +355,12 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     return status()
   }
 
+  // one transport shape for every provider: TLS from the first byte on 465, STARTTLS required on 587 / 2525 / 25 (a
+  // server that does not offer it is refused rather than sent to in the clear)
   const transportFor = (saved) => nodemailer.createTransport({
     host: saved.host, port: saved.port, secure: saved.secure,
-    auth: { user: saved.user, pass: safeStorage.decryptString(Buffer.from(saved.password, 'base64')) },
+    ...(saved.secure ? {} : { requireTLS: true }),
+    auth: { user: saved.login || saved.user, pass: safeStorage.decryptString(Buffer.from(saved.password, 'base64')) },
     tls: { rejectUnauthorized: true, minVersion: 'TLSv1.2' },
   })
 
@@ -333,7 +405,8 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     if (!gate.ok) return { ok: false, error: gate.reason, nextAt: gate.nextAt, duplicate: !!gate.duplicate }
     try {
       const { renderEmail, renderDesigned } = await render()
-      const unsubscribeHref = `mailto:${saved.user}?subject=unsubscribe`
+      // to the address whose replies are read: the Reply-To when one is set (a relay provider has no inbox of its own)
+      const unsubscribeHref = `mailto:${saved.replyTo || saved.user}?subject=unsubscribe`
       let { html, text } = mail.design ? renderDesigned({
         html: mail.design.html, vars: mail.vars, lang: mail.lang, optOut: mail.optOut, unsubscribeHref,
       }) : renderEmail({
@@ -364,6 +437,7 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
         : []
       const info = await transportFor(saved).sendMail({
         from: { name: saved.name, address: saved.user },
+        ...(saved.replyTo ? { replyTo: saved.replyTo } : {}),
         to: mail.to,
         subject: mail.subject,
         text,
@@ -397,9 +471,11 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
       const added = []
       for (const e of entries) {
         if (e.kind === 'test') continue
+        if (e.status && e.status !== 'sent') continue
         if (clock() - e.at > 45 * DAY) continue
         if (l.some((x) => x.to === e.email && x.kind === e.kind && Math.abs(x.t - e.at) < 60_000)) continue
-        const entry = { t: e.at, to: e.email, kind: e.kind, id: '', remote: true, ...(e.campaignId ? { c: e.campaignId } : {}) }
+        // the other PC's Message-ID when it is known: inbox.cjs matches a reply's In-Reply-To against it
+        const entry = { t: e.at, to: e.email, kind: e.kind, id: e.messageId || '', remote: true, ...(e.campaignId ? { c: e.campaignId } : {}) }
         l.push(entry)
         added.push(e)
       }
@@ -414,10 +490,17 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
   function inboxAccount() {
     const saved = read(settingsFile, null)
     if (!saved || !saved.password) return null
-    return { user: saved.user, pass: safeStorage.decryptString(Buffer.from(saved.password, 'base64')), imapHost: require('./inbox.cjs').imapHostFor(saved.host, saved.imapHost) }
+    const provider = providerFor(saved)
+    if (!hasMailbox(saved)) return { noMailbox: `${PROVIDERS[provider].label} has no inbox to read: replies go to ${saved.replyTo || saved.user}. Add that mailbox's IMAP server in Sender to read replies and bounces here.` }
+    // a separate reply mailbox (its own user / password), else the sending account itself
+    const separate = !!saved.imapHost && (!!saved.imapPassword || !PROVIDERS[provider].mailbox)
+    if (separate && !saved.imapPassword) return { noMailbox: `Type the password for the reply mailbox ${saved.imapUser || saved.replyTo || saved.user} in Sender to read replies here.` }
+    const pass = safeStorage.decryptString(Buffer.from(separate ? saved.imapPassword : saved.password, 'base64'))
+    const user = separate ? (saved.imapUser || saved.replyTo || saved.user) : (saved.imapUser || saved.user)
+    return { user, pass, imapHost: require('./inbox.cjs').imapHostFor(saved.host, saved.imapHost || PROVIDERS[provider].imap || '') }
   }
 
   return { status, saveSettings, forgetPassword, send, verify, inboxAccount, ledger, markSent }
 }
 
-module.exports = { validateSmtpSettings, validateMail, ledgerCheck, createMailer, EMAIL_RE, MAX_DAILY, MIN_GAP_SEC, REPEAT_DAYS, FOLLOW_MIN_DAYS, FOLLOW_ONCE_DAYS, MAX_ATTACH_BYTES }
+module.exports = { PROVIDERS, providerFor, hasMailbox, validateSmtpSettings, validateMail, ledgerCheck, createMailer, EMAIL_RE, MAX_DAILY, MIN_GAP_SEC, REPEAT_DAYS, FOLLOW_MIN_DAYS, FOLLOW_ONCE_DAYS, MAX_ATTACH_BYTES }

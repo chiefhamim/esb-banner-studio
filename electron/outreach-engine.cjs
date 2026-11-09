@@ -199,6 +199,56 @@ function createEngine(deps = {}) {
     })
   }
 
+  // Bounce circuit breaker: once a campaign has sent BOUNCE_MIN_SENT letters, a bounce rate above BOUNCE_MAX_RATE
+  // (bounces are read from the inbox, so they arrive after the send) pauses its job with reason 'bounces' — a list
+  // that bounces this much damages the account's reputation for every later letter.
+  const BOUNCE_MIN_SENT = 30
+  const BOUNCE_MAX_RATE = 0.03
+  function bounceRate(job) {
+    const msgs = jobs.messages(job.id) || []
+    const failed = job.state.failed || {}
+    const skipped = job.state.skipped || {}
+    const sup = events && typeof events.suppression === 'function' ? events.suppression().all() : new Map()
+    let sent = 0, bounced = 0
+    for (const idx of job.state.sent || []) {
+      if (failed[idx] || skipped[idx]) continue
+      const m = msgs[idx]
+      const email = String((m && (m.to || m.email)) || '').trim().toLowerCase()
+      if (!email) continue
+      sent++
+      if (sup.get(email) === 'bounce') bounced++
+    }
+    return { sent, bounced, rate: sent ? bounced / sent : 0 }
+  }
+  function checkBounces() {
+    const paused = []
+    for (const job of jobs.list()) {
+      if (job.dry || !['running', 'waiting', 'queued'].includes(job.status)) continue
+      const b = bounceRate(job)
+      if (b.sent < BOUNCE_MIN_SENT || b.rate <= BOUNCE_MAX_RATE) continue
+      // the editor resumed after seeing this many bounces: only a NEW bounce trips it again
+      if (typeof job.state.bounceAck === 'number' && b.bounced <= job.state.bounceAck) continue
+      job.status = 'paused'
+      job.reason = 'bounces'
+      job.why = null
+      job.until = null
+      job.wait = { count: b.bounced, max: b.sent }
+      jobs.saveState(job, { force: true })
+      events.append({
+        type: 'job.paused',
+        jobId: job.id,
+        campaignId: job.campaignId,
+        reason: 'bounces',
+        by: 'system',
+        detail: `${b.bounced} of ${b.sent} letters bounced (${(b.rate * 100).toFixed(1)}%, limit ${BOUNCE_MAX_RATE * 100}%)`,
+        dry: dryRun,
+      })
+      pushProgress(job)
+      paused.push(job.id)
+    }
+    return paused
+  }
+
   function checkCircuitBreaker(outcome) {
     // outcome: { success: boolean, kind?: string }
     recentAttempts.push(outcome)
@@ -374,6 +424,7 @@ function createEngine(deps = {}) {
     const pick = pickNext(msgs, sentIndexes, now, domainStats, {
       domainMaxPerDay: cfg.domainMaxPerDay ?? 3,
       domainMinGapSec: effectiveDomainGapSec,
+      domainOverrides: cfg.domainOverrides || null,
       heldSet: heldIndexes,
     })
 
@@ -430,8 +481,9 @@ function createEngine(deps = {}) {
         domain: pick.domain || null,
         kind: pick.kind || null,
         count: pick.count ?? null,
-        max: cfg.domainMaxPerDay ?? 3,
+        max: pick.max ?? cfg.domainMaxPerDay ?? 3,
         gapSec: cfg.domainMinGapSec ?? 20 * 60,
+        domainsHeld: pick.domainsHeld ?? 0,
       }
       jobs.saveState(job)
       pushProgress(job)
@@ -733,23 +785,29 @@ function createEngine(deps = {}) {
           ok: true,
           dry: dryRun,
         })
+        // one event per inbox message (the log drops a repeat: same kind + address + message date), stamped with the
+        // message's own date, not the time of the check that read it
+        const realT = (at) => (typeof at === 'number' && Number.isFinite(at) && at > 0 && at <= clock() + 60_000 ? at : undefined)
         for (const rep of res.replies || []) {
-          events.append({
+          const logged = events.append({
             type: 'reply',
+            t: realT(rep.at),
             email: rep.email,
             at: rep.at,
+            msgId: rep.msgId || undefined,
             subject: rep.subject,
             auto: rep.auto,
             unsubscribe: rep.unsubscribe,
             dry: dryRun,
           })
-          if (rep.unsubscribe) {
+          if (logged !== null && rep.unsubscribe) {
             events.append({ type: 'optout', email: rep.email, on: true, by: 'reply', dry: dryRun })
           }
         }
         for (const bnc of res.bounces || []) {
-          events.append({ type: 'bounce', email: bnc.email, at: bnc.at, reason: bnc.reason, dry: dryRun })
+          events.append({ type: 'bounce', t: realT(bnc.at), email: bnc.email, at: bnc.at, msgId: bnc.msgId || undefined, reason: bnc.reason, dry: dryRun })
         }
+        checkBounces()
         // the renderer reads payload.result (engineClient.ts); spreading res made every field top-level and it was lost
         emit('inbox', { result: res })
       }
@@ -868,6 +926,7 @@ function createEngine(deps = {}) {
     }
 
     if (action === 'resume') {
+      if (job.reason === 'bounces') job.state.bounceAck = bounceRate(job).bounced
       job.status = 'queued'
       job.reason = null
       job.why = null
@@ -1064,6 +1123,7 @@ function createEngine(deps = {}) {
     plan,
     shutdown,
     tick,
+    checkBounces,
   }
 }
 

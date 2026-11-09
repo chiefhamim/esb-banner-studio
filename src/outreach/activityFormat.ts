@@ -86,13 +86,16 @@ export function fmtGapRange(lo?: number, hi?: number): string {
  * "desco.gov.bd: 20-min spacing per organisation", "desco.gov.bd had 3 today (limit 3 per organisation)",
  * "gap 1–2 min", "outside sending hours (09:00–17:00)". Null when it is not waiting.
  */
-export function waitReason(job: Pick<JobSnapshot, 'status' | 'why' | 'wait'> | null | undefined): string | null {
+export function waitReason(job: (Pick<JobSnapshot, 'status' | 'why' | 'wait'> & { until?: number | null }) | null | undefined, tz = 'Asia/Dhaka'): string | null {
   if (!job || job.status !== 'waiting' || !job.why) return null
   const w = job.wait || {}
   switch (job.why) {
     case 'domain': {
       const org = w.domain || 'Same organisation'
-      if (w.kind === 'limit') return `${org} had ${w.count ?? w.max ?? 3} today (limit ${w.max ?? 3} per organisation)`
+      if (w.kind === 'limit' && (w.domainsHeld ?? 0) > 1) {
+        return `held by organisation limit: ${w.domainsHeld} domains${job.until ? `, next at ${fmtDateTime(job.until, { tz, weekday: false })}` : ''}`
+      }
+      if (w.kind === 'limit') return `held by organisation limit: ${org} had ${w.count ?? w.max ?? 3} today (limit ${w.max ?? 3})${job.until ? `, next at ${fmtDateTime(job.until, { tz, weekday: false })}` : ''}`
       if (w.kind === 'spacing') return `${org}: ${Math.max(1, Math.round((w.gapSec ?? 1200) / 60))}-min spacing per organisation`
       return 'every remaining organisation was just emailed — checking again in a minute'
     }
@@ -244,7 +247,7 @@ export function describeRun(
       countText,
       percent,
       nextInText: job.until ? `Next in ${fmtCountdown(job.until - now)}` : undefined,
-      reason: waitReason(job) ?? undefined,
+      reason: waitReason(job, tz) ?? undefined,
     }
   }
 
@@ -259,6 +262,11 @@ export function describeRun(
         break
       case 'circuit':
         sentence = 'Paused to protect your account: 3 of the last 10 addresses were refused'
+        break
+      case 'bounces':
+        sentence = job.wait?.max
+          ? `Paused to protect your account: ${job.wait.count ?? 0} of ${job.wait.max} letters bounced (over 3%) — check the list before resuming`
+          : 'Paused to protect your account: more than 3% of the letters bounced — check the list before resuming'
         break
       case 'content':
         sentence = 'Paused — the attachment is too large'
@@ -455,3 +463,18 @@ export function warningText(w: PlanWarning): string {
   }
 }
 
+
+/** "a.gov.bd = 10" lines → { 'a.gov.bd': 10 }; lines that are not a domain and a 1–500 number are reported, not saved. */
+export function parseDomainOverrides(text: string): { map: Record<string, number>; bad: string[] } {
+  const map: Record<string, number> = {}
+  const bad: string[] = []
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line) continue
+    const m = /^@?([a-z0-9-]+(?:\.[a-z0-9-]+)+)\s*[=:,\s]\s*(\d{1,3})$/i.exec(line)
+    const n = m ? Number(m[2]) : NaN
+    if (!m || n < 1 || n > 500 || Object.keys(map).length >= 200) { bad.push(line.slice(0, 40)); continue }
+    map[m[1].toLowerCase()] = n
+  }
+  return { map, bad }
+}
