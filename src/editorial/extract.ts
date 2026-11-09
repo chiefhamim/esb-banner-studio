@@ -77,7 +77,7 @@ const BOILERPLATE_PATTERNS = [
   /\b(?:phone|email|tel|fax|pabx|hotline|mobile)\s*:\s*/i,
   /(?:বিডিবিএল|ওয়াসা|সেনা|বসুন্ধরা|যমুনা|কনকর্ড|নাভানা|শান্তা)\s*(?:ভবন|টাওয়ার|টাওয়ার|প্লাজা|সেন্টার)/i,
   /(?:কাজী\s*নজরুল\s*ইসলাম|বীর\s*উত্তম|বঙ্গবন্ধু)\s*(?:এভিনিউ|সড়ক|সরণি|রোড)/i,
-  /(?:লেভেল|তলা|ফ্লোর|level|floor)\s*\d+/i,
+  /(?:লেভেল|তলা|ফ্লোর|level|floor)[- ]?[\d০-৯]+\s*,/i,
   /(?:ঢাকা|চট্টগ্রাম|সিলেট|রাজশাহী|খুলনা|বরিশাল|রংপুর)[- ]?\d{4}/i,
   /বার্তা\s*ও\s*(?:সম্পাদকীয়|বাণিজ্যিক)\s*বিভাগ/i,
   /বিজ্ঞাপন\s*ও\s*সার্কুলেশন\s*বিভাগ/i,
@@ -125,11 +125,21 @@ const ADDRESS_HINT = /(?:ঢাকা|চট্টগ্রাম|সিলে�
 const ADDRESS_WORDS = /\b(?:house|road|plot|sector|lane|block|avenue|street|bhaban|tower)\b|(?:বাড়ি|রোড|প্লট|সেক্টর|লেন|ব্লক)\s*নং|(?:কারওয়ান|কাওরান|মতিঝিল|তেজগাঁও|গুলশান|বনানী|ধানমন্ডি|উত্তরা|পল্টন|বিজয়নগর|আগ্রাবাদ)\s*(?:বাজার)?/i
 const DATELINE_ONLY = /^(?:E-paper\s*English|শুক্রবার|শনিবার|রবিবার|সোমবার|মঙ্গলবার|বুধবার|বৃহস্পতিবার)/i
 
+/** Longest line an unanchored boilerplate hint may drop (mastheads, footers and CTAs are short). */
+const BOILERPLATE_SHORT = 160
+/** Bangla letters such as ড় and য় exist precomposed and as letter + nukta; pages use both, so patterns and text are
+ *  compared in one Unicode form (NFC) or a "read more" line typed the other way slips through. */
+const BOILERPLATE_NFC = BOILERPLATE_PATTERNS.map((p) => new RegExp(p.source.normalize('NFC'), p.flags))
+
 export function isBoilerplateParagraph(text: string): boolean {
-  const t = text.trim()
+  const t = text.trim().normalize('NFC')
   if (t.length < 20) return true
-  for (const pat of BOILERPLATE_PATTERNS) {
-    if (pat.test(t)) return true
+  // A pattern anchored at the start describes the whole line ("Read more:", a bare section name), so it can judge any
+  // paragraph. An unanchored one ("published by", "বণিক বার্তা", "copyright") is a masthead/footer HINT: real story
+  // sentences use the same words ("…বণিক বার্তাকে বলেন", "a report published by IEEFA"), so it only drops a SHORT line.
+  const short = t.length < BOILERPLATE_SHORT
+  for (const pat of BOILERPLATE_NFC) {
+    if ((short || pat.source.startsWith('^')) && pat.test(t)) return true
   }
   if (ADDRESS_WORDS.test(t) && t.length < 240 && ADDRESS_HINT.test(t)) return true
   if (DATELINE_ONLY.test(t) && t.length <= 70) return true
@@ -141,15 +151,15 @@ export function cleanParagraphLead(text: string): string {
   let t = text.trim()
   // 1. Strip reporter / agency leads:
   // e.g. "নিজস্ব প্রতিবেদক, ঢাকা:" or "অনলাইন ডেস্ক —" or "বিশেষ প্রতিনিধি, ঢাকা (২৩ অক্টোবর):"
-  t = t.replace(/^(?:(?:নিজস্ব\s*প্রতিবেদক|বিশেষ\s*প্রতিনিধি|স্টাফ\s*রিপোর্টার|অনলাইন\s*ডেস্ক|ডেস্ক\s*রিপোর্ট|জেলা\s*প্রতিনিধি|সংবাদদাতা|অর্থনৈতিক\s*প্রতিবেদক)(?:,\s*[\u0980-\u09FF\s\d,()]+)?)\s*[:—–-]\s*/i, '')
+  t = t.replace(/^(?:(?:নিজস্ব\s*প্রতিবেদক|বিশেষ\s*প্রতিনিধি|স্টাফ\s*রিপোর্টার|অনলাইন\s*ডেস্ক|ডেস্ক\s*রিপোর্ট|জেলা\s*প্রতিনিধি|সংবাদদাতা|অর্থনৈতিক\s*প্রতিবেদক)(?:,\s*[\u0980-\u09FF\s\d,()]{1,40}?)?)\s*(?::|[—–-](?=\s))\s*/i, '')
 
   // 2. Strip bracketed dateline leads:
   // e.g. "(ঢাকা, ২৩ অক্টোবর) —" or "(বাসস) —" or "(ইউএনবি) —"
-  t = t.replace(/^\([^\)]{2,40}\)\s*[:—–-]\s*/i, '')
+  t = t.replace(/^\([^\)]{2,40}\)\s*(?::|[—–-](?=\s))\s*/i, '')
 
   // 3. Strip city datelines:
   // e.g. "ঢাকা, ২৩ অক্টোবর (বাসস) :" or "ঢাকা:" or "সিলেট:"
-  t = t.replace(/^(?:ঢাকা|চট্টগ্রাম|সিলেট|রাজশাহী|খুলনা|বরিশাল|রংপুর|ময়মনসিংহ|কক্সবাজার|গাজীপুর|নারায়ণগঞ্জ)(?:,\s*[\u0980-\u09FF\s\d,()]+)?\s*[:—–-]\s*/i, '')
+  t = t.replace(/^(?:ঢাকা|চট্টগ্রাম|সিলেট|রাজশাহী|খুলনা|বরিশাল|রংপুর|ময়মনসিংহ|কক্সবাজার|গাজীপুর|নারায়ণগঞ্জ)(?:,\s*[\u0980-\u09FF\s\d,()]{1,40}?)?\s*(?::|[—–-](?=\s))\s*/i, '')
 
   // 4. Strip inline trailing boilerplate ("বিস্তারিত আসছে..." / "আরও পড়ুন...")
   t = t.replace(/\s*[-—–|•]\s*(?:আরও\s*পড়ুন|বিস্তারিত\s*আসছে|বিস্তারিত\s*জানতে|ছবি\s*:).*$/i, '')
@@ -164,7 +174,7 @@ export function extractCatchSentence(text: string, maxLen = 200): string {
   if (!clean || isBoilerplateParagraph(clean)) return ''
 
   // Split into sentences using Bengali and English sentence terminals
-  const sentenceMatch = clean.match(/^([^।!?\.]+[।!?\.])/i)
+  const sentenceMatch = clean.match(/^(.+?(?:[।!?]|\.(?=\s|$)))/)
   const firstSentence = sentenceMatch ? sentenceMatch[1].trim() : clean
 
   if (firstSentence.length <= maxLen) return firstSentence
@@ -567,7 +577,7 @@ export function splitBodyText(text: string): string[] {
   let parts = clean.split(/\n\s*\n+/).map((p) => p.trim()).filter(Boolean)
   if (parts.length === 1) parts = clean.split(/\n+/).map((p) => p.trim()).filter(Boolean)
   if (parts.length === 1 && clean.length > 700) {
-    const sentences = clean.match(/[^।!?.]+[।!?.]+["”’]?\s*/g) ?? [clean]
+    const sentences = clean.match(/.+?(?:[।!?]+|\.+(?=["”’]?(?:\s|$)))["”’]?\s*|.+$/g) ?? [clean]
     parts = []
     for (let i = 0; i < sentences.length; i += 3) parts.push(sentences.slice(i, i + 3).join('').trim())
   }

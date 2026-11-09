@@ -177,21 +177,13 @@ export function enforceDeckLength(deck: string, maxLen = 200): string {
   return lastSpace > 50 ? sub.slice(0, lastSpace) + '…' : sub + '…'
 }
 
-/** Polish article body with Bangladesh energy newsroom idioms & international terminology. */
+/**
+ * Polish article body: house spelling of sector bodies and acronyms ONLY. It never touches currencies, units,
+ * quantities or phrasing — those carry facts (an India story's rupees are not taka; "million cubic feet" is a
+ * volume, MMCFD is a daily rate). Runs on English sources as well as translations, so it must be meaning-safe.
+ */
 export function polishJournalisticBody(text: string): string {
   const t = text
-    .replace(/\bRs\.?\s?/gi, 'Tk ')
-    .replace(/\brupees?\b/gi, 'Taka')
-    .replace(/\bDigging\b/gi, 'Drilling')
-    .replace(/\bdigging\b/gi, 'drilling')
-    .replace(/\bdig\b/gi, 'drill')
-    .replace(/\bworth of\b/gi, 'at an estimated cost of')
-    .replace(/\bin the grid\b/gi, 'to the national grid')
-    .replace(/\binto the grid\b/gi, 'into the national grid')
-    .replace(/\badding to grid\b/gi, 'delivering to the national grid')
-    .replace(/\b30 million cubic feet of gas per day\b/gi, '30 MMCFD gas')
-    .replace(/\bmillion cubic feet of gas per day\b/gi, 'MMCFD gas')
-    .replace(/\bmillion cubic feet\b/gi, 'MMCFD')
     .replace(/\bBangladesh Government\b/gi, 'Government of Bangladesh')
     .replace(/\benergy secretary\b/gi, 'Energy Secretary')
     .replace(/\bpower division\b/gi, 'Power Division')
