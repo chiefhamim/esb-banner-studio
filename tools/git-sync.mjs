@@ -59,17 +59,22 @@ function sync() {
   if (isSyncing) return;
   isSyncing = true;
   try {
+    // Only follow GitHub while the checkout is on main: on a work branch (or mid-rebase) it must never pull, stash or
+    // rebuild under the person working. It used to compare HEAD with origin/main, so ANY local commit looked like
+    // "new remote changes" and it rebased + ran `npm run build` every 20 s forever (2026-11-09).
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: ROOT_DIR, encoding: 'utf8' }).trim();
+    if (branch !== 'main') return;
+
     // 1. Fetch remote silently
     execSync('git fetch origin main', { cwd: ROOT_DIR, stdio: 'pipe' });
 
-    // 2. Check local vs remote commit SHAs
-    const localSha = execSync('git rev-parse HEAD', { cwd: ROOT_DIR, encoding: 'utf8' }).trim();
-    const remoteSha = execSync('git rev-parse origin/main', { cwd: ROOT_DIR, encoding: 'utf8' }).trim();
+    // 2. Act only when this PC is BEHIND origin/main (local-only commits are left alone)
+    const behind = parseInt(execSync('git rev-list --count HEAD..origin/main', { cwd: ROOT_DIR, encoding: 'utf8' }).trim(), 10) || 0;
 
-    if (localSha !== remoteSha) {
-      log(`New remote changes detected! Local: ${localSha.slice(0, 7)} -> Remote: ${remoteSha.slice(0, 7)}`);
-      log('Pulling latest commits from origin/main...');
-      const pullOut = execSync('git pull --rebase --autostash origin main', { cwd: ROOT_DIR, encoding: 'utf8' });
+    if (behind > 0) {
+      log(`${behind} new commit(s) on origin/main.`);
+      log('Fast-forwarding to origin/main...');
+      const pullOut = execSync('git pull --ff-only origin main', { cwd: ROOT_DIR, encoding: 'utf8' });
       log(`Pull completed: ${pullOut.trim()}`);
 
       const newHead = execSync('git log -1 --oneline', { cwd: ROOT_DIR, encoding: 'utf8' }).trim();

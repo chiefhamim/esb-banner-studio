@@ -3,7 +3,7 @@
 > **Document Type:** Master Product Brief, Engineering Charter & Claude Cloud Instructions  
 > **Product:** ESB AI Studio  
 > **Organisation:** ESB Power Line / Express Broadcast and Communication Ltd. (`esbpowerline.com`)  
-> **Repository:** `chiefhamim/esb-banner-studio`  
+> **Repository:** `chiefhamim/esb-studio-pc`  
 > **Platform:** Desktop-first, Windows-compatible Electron application  
 > **Current Stack:** Electron 45, Vite 8, React 19.3, TypeScript ~6.0.3, Zustand 5, HTML Canvas 2D, Vitest and Playwright  
 > **Primary Audience:** ESB journalists, editors, graphic designers, video editors, and autonomous AI agents (Claude Code)  

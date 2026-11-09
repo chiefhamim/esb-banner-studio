@@ -25,6 +25,10 @@ Set-Location -Path $repoDir
 
 while ($true) {
     try {
+        # Follow GitHub only while on main; a work branch is never stashed, merged or rebuilt under the person working
+        $branch = (& git rev-parse --abbrev-ref HEAD) 2>$null
+        if ($branch -ne 'main') { Start-Sleep -Seconds $intervalSeconds; continue }
+
         # Fetch latest refs from remote
         & git fetch origin main --quiet 2>$null
         

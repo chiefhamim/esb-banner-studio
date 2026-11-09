@@ -4,11 +4,11 @@ repoDir = fso.GetParentFolderName(scriptDir)
 vbsPath = fso.BuildPath(scriptDir, "auto-sync.vbs")
 
 Set oWS = WScript.CreateObject("WScript.Shell")
-sLinkFile = oWS.ExpandEnvironmentStrings("%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ESB-Banner-Studio-AutoSync.lnk")
+sLinkFile = oWS.ExpandEnvironmentStrings("%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ESB-Studio-PC-AutoSync.lnk")
 Set oLink = oWS.CreateShortcut(sLinkFile)
 oLink.TargetPath = "wscript.exe"
 oLink.Arguments = """" & vbsPath & """"
 oLink.WorkingDirectory = repoDir
 oLink.WindowStyle = 7
-oLink.Description = "ESB Banner Studio Auto-Sync Daemon"
+oLink.Description = "ESB Studio PC Auto-Sync Daemon"
 oLink.Save
