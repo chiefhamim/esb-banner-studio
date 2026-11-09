@@ -145,18 +145,7 @@ button:disabled { cursor: default; }
 :root[data-theme=dark] .split .split-caret { border-left-color: rgb(0 0 0 / .22); }
 
 /* ---------------------------------------------------------------- buttons */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--h-md); padding: 0 12px; font-size: 13px; font-weight: 500; white-space: nowrap; color: var(--text); background: var(--bg-1); border: 1px solid var(--line-2); border-radius: var(--r-2); box-shadow: var(--shadow-1); transition: background var(--t-1) var(--ease), border-color var(--t-1) var(--ease), color var(--t-1) var(--ease), opacity var(--t-1) var(--ease); }
-.btn:hover:not(:disabled) { background: var(--bg-3); border-color: var(--line-3); }
-.btn:active:not(:disabled) { background: var(--bg-4); }
-.btn:disabled { opacity: .45; box-shadow: none; }
-.btn.sm { height: var(--h-sm); gap: 6px; padding: 0 8px; font-size: 12px; }
 .topbar .btn { height: var(--h-lg); padding: 0 16px; }
-.btn.ghost { color: var(--text-2); background: transparent; border-color: transparent; box-shadow: none; }
-.btn.ghost:hover:not(:disabled), .btn.ghost.open { color: var(--text); background: var(--bg-3); border-color: transparent; }
-.btn.primary { color: var(--on-ink); background: var(--ink); border-color: var(--ink); box-shadow: var(--shadow-1); }
-.btn.primary:hover:not(:disabled) { background: var(--ink-2); border-color: var(--ink-2); }
-.btn.primary:active:not(:disabled) { background: var(--ink-2); }
-.btn .chev { opacity: .7; }
 
 .ibtn { position: relative; display: inline-grid; place-items: center; flex: none; width: var(--h-sm); height: var(--h-sm); padding: 0; color: var(--text-2); background: transparent; border: 0; border-radius: var(--r-2); transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), opacity var(--t-1) var(--ease); }
 .ibtn:hover:not(:disabled) { background: var(--bg-3); color: var(--text); }
@@ -1269,12 +1258,6 @@ body { letter-spacing: -.003em; }
 /* white controls floating on grey, with a hairline ring and a whisper of lift */
 .input, input[type=text], textarea.input, .select, .scrub, .colorfield, .search, .cp-hex, .btn, .fmtpick, .pv-btn, .collage, .cat, .slot, .preset, .tcard, .fcard { border-color: transparent; box-shadow: var(--ctl-shadow); }
 .input:hover, .select:hover, .scrub:hover, .colorfield:hover, .btn:hover:not(:disabled), .fmtpick:hover, .pv-btn:hover, .cat:hover { border-color: transparent; box-shadow: var(--ctl-shadow-hover); }
-.btn { border: 1px solid color-mix(in srgb, var(--text) 14%, transparent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6); }
-.btn:hover:not(:disabled) { border-color: color-mix(in srgb, var(--text) 24%, transparent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8); }
-:root[data-theme=dark] .btn { border-color: color-mix(in srgb, var(--text) 18%, transparent); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
-:root[data-theme=dark] .btn:hover:not(:disabled) { border-color: color-mix(in srgb, var(--text) 28%, transparent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
-.btn.ghost, .btn.ghost:hover { border-color: transparent; box-shadow: none; }
-.btn.primary { border-color: transparent; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
 .pillbar, .insp-actions, .align-bar, .seg-ctl, .side-tabs { background: color-mix(in srgb, var(--ink) 7%, var(--side)); border-color: transparent; box-shadow: none; }
 .seg-ctl button.on, .side-tabs button.on { background: var(--bg-1); box-shadow: 0 .5px 1px rgb(0 0 0 / .18), 0 0 0 .5px rgb(0 0 0 / .06); }
 .side-tabs button.on { box-shadow: 0 .5px 1px rgb(0 0 0 / .18), 0 0 0 .5px rgb(0 0 0 / .06), inset 0 -2px 0 var(--ink); }

@@ -251,22 +251,6 @@
 .ed-tags input[type=text], .ed-tags input[type=text]:hover, .ed-tags input[type=text]:focus { background: transparent; border: 0 !important; box-shadow: none !important; }
 .source-reader-title-input, .source-reader-title-input:hover, .source-reader-title-input:focus { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 
-/* secondary buttons: raised chips */
-.btn:not(.primary):not(.ghost):not(.ai-btn) {
-  background: var(--raised);
-  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-.btn:not(.primary):not(.ghost):not(.ai-btn):hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--ink) 24%, transparent);
-  background: color-mix(in srgb, var(--fill) 50%, var(--raised));
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-.btn.ghost { background: transparent; border: 0; box-shadow: none; }
-.btn.ghost:hover:not(:disabled) { background: var(--fill-hover); }
-.btn { border-radius: var(--r-2); transition: background var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring), transform 120ms var(--spring); }
-.btn:active:not(:disabled) { transform: scale(.98); }
-
 /* ---------------------------------------------------------------- dialogs: sheets */
 .modal-bg { background: color-mix(in srgb, var(--scrim) 70%, transparent); backdrop-filter: blur(8px) saturate(1.2); -webkit-backdrop-filter: blur(8px) saturate(1.2); animation: fade 180ms var(--ease); }
 .dialog { background: var(--card); border: 0; border-radius: 16px; box-shadow: var(--shadow-2); animation: sheet-in 260ms var(--spring); }
@@ -286,10 +270,6 @@
   .pnl-body, .dialog, .modal-bg { animation: none; }
   .pill-slide.ready, .pnl, .pnl-icon, .pnl > header .pnl-chev { transition: none; }
 }
-
-/* a disabled primary keeps its colour and fades, instead of turning into a grey slab */
-.btn.primary:disabled, .btn.primary:disabled:hover { color: var(--on-ink); background: var(--ink); box-shadow: none; opacity: .32; }
-.btn:not(.primary):disabled { opacity: .45; }
 
 /* Story tab: the card-type switch is a segmented control, the link importer a card */
 .pane .card-type-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 4px 0 8px; padding: 2px; background: var(--fill); border-radius: var(--r-2); }
@@ -1626,102 +1606,6 @@ label.switch:active i { filter: brightness(.94); }
 ::selection {
   background-color: color-mix(in srgb, var(--accent, #3b82f6) 28%, transparent) !important;
   color: inherit !important;
-}
-
-/* 2. Global Button Perimeter Geometry, Sizing Consistency & Tactile Depth */
-.btn {
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-  height: 32px;
-  min-height: 32px;
-  line-height: 30px;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r-2);
-  transition: background var(--t-1) var(--ease),
-              border-color var(--t-1) var(--ease),
-              box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1),
-              transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-.btn:hover:not(:disabled) {
-  text-decoration: none;
-}
-.btn.xs {
-  height: 24px;
-  min-height: 24px;
-  line-height: 22px;
-  padding: 0 8px;
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: var(--r-1);
-  gap: 4px;
-}
-.btn.sm {
-  height: 28px;
-  min-height: 28px;
-  line-height: 26px;
-  padding: 0 10px;
-  font-size: 12px;
-  border-radius: 6px;
-  gap: 5px;
-}
-.btn.icon-only {
-  width: 32px;
-  min-width: 32px;
-  padding: 0;
-}
-.btn.icon-only.sm {
-  width: 28px;
-  min-width: 28px;
-  padding: 0;
-}
-.btn.icon-only.xs {
-  width: 24px;
-  min-width: 24px;
-  padding: 0;
-}
-
-/* Premium Button Tactile Depth & Bevel */
-.btn:not(.primary):not(.ghost):not(.ai-btn) {
-  background: var(--raised);
-  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 1px 2px rgba(15, 23, 42, 0.05);
-}
-:root[data-theme="dark"] .btn:not(.primary):not(.ghost):not(.ai-btn) {
-  background: color-mix(in srgb, var(--raised) 92%, #ffffff 2%);
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 3px rgba(0, 0, 0, 0.35);
-}
-.btn:not(.primary):not(.ghost):not(.ai-btn):hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--ink) 20%, transparent);
-  background: color-mix(in srgb, var(--fill) 50%, var(--raised));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 2px 4px rgba(15, 23, 42, 0.08);
-}
-:root[data-theme="dark"] .btn:not(.primary):not(.ghost):not(.ai-btn):hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.13);
-  background: color-mix(in srgb, var(--raised) 86%, #ffffff 5%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 5px rgba(0, 0, 0, 0.45);
-}
-.btn.primary {
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 3px rgba(0, 0, 0, 0.18);
-}
-:root[data-theme="dark"] .btn.primary {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 4px rgba(0, 0, 0, 0.5);
-}
-.btn.primary:hover:not(:disabled) {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 2px 6px rgba(0, 0, 0, 0.25);
-}
-:root[data-theme="dark"] .btn.primary:hover:not(:disabled) {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 2px 8px rgba(0, 0, 0, 0.6);
-}
-.btn:active:not(:disabled) {
-  transform: scale(0.982);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25) !important;
 }
 
 /* 3. Surface & Panel Hairline Cohesion (Ultra-Thin Borders in Dark Theme) */
