@@ -265,10 +265,10 @@ export const ContactsTab = memo(function ContactsTab() {
 
       <div className="or-list" role="listbox" aria-label="Contacts">
         {!s.contacts.length ? (
-          direct ? <div className="or-empty"><Icon name="mail" size={22} /><b>An ordinary email</b><p>Type one or more addresses in the To line. Each gets their own copy — nobody sees the others.</p></div> : (
+          direct ? <div className="or-empty"><Icon name="mail" size={22} /><b className="empty-title">An ordinary email</b><p>Type one or more addresses in the To line. Each gets their own copy — nobody sees the others.</p></div> : (
             <div className="or-empty">
               <Icon name="inbox" size={22} />
-              <b>Import your mailing list</b>
+              <b className="empty-title">Import your mailing list</b>
               <p>One row per contact, with an Email column. Person Name, Designation, Organization, Sector Group, Purpose and Deliverability Status are read when present. A row that is not marked safe is only sent after you approve it.</p>
               <button type="button" className="btn primary sm" onClick={pick}><Icon name="upload" size={13} /><span>Import list</span></button>
             </div>

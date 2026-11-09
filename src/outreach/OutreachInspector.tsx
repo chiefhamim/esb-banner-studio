@@ -98,7 +98,7 @@ function SendTab() {
   return (
     <>
       <section className="or-card">
-        <header><Icon name="mail" size={14} /><h3>Sender</h3></header>
+        <header><h3 className="sec-title">Sender</h3></header>
         {!desktop ? (
           <p className="or-muted">Sending needs the ESB Studio desktop app. Here you can prepare the list and the letter.</p>
         ) : set ? (
@@ -108,7 +108,7 @@ function SendTab() {
             {ready && smtpFail?.fixInSender && <button type="button" className="or-link or-sender-fix" onClick={() => ui.set({ sheet: 'sender' })}>Change in Sender</button>}
           </div>
         ) : (
-          <p className="or-muted">No sender yet. Use the account button at the top right to add the Gmail or Workspace account that sends, with a Google app password.</p>
+          <p className="or-muted">No sender yet. Add the Gmail or Workspace account that sends, with a Google app password: List → Sender account, or Mail sender in your account (the avatar, top right).</p>
         )}
         {desktop && set && (
           <>
@@ -123,7 +123,7 @@ function SendTab() {
 
       {c?.interrupted && s.run === 'idle' && (
         <section className="or-card or-interrupted">
-          <header><Icon name="info" size={14} /><h3>Sending was interrupted</h3></header>
+          <header><h3 className="sec-title">Sending was interrupted</h3></header>
           <p className="or-muted">ESB Studio closed while this campaign was sending {c.interrupted === 'followup' ? 'follow-ups' : 'its letter'}. Everyone it reached is recorded; nobody gets it twice.</p>
           <div className="or-actions">
             <button type="button" className="btn sm primary" disabled={!!cannotStart(c.interrupted)} data-tip={cannotStart(c.interrupted) ?? 'Pick up where it stopped'} onClick={() => void startBatch(c.interrupted!)}><Icon name="play" size={13} /><span>Continue sending</span></button>
@@ -133,7 +133,7 @@ function SendTab() {
       )}
 
       <section className="or-card">
-        <header><Icon name="send" size={14} /><h3>{c?.name ?? 'Campaign'}</h3>{c && <span className={'or-chip cs-' + c.status}>{STATUS_TEXT[c.status]}</span>}</header>
+        <header><h3 className="sec-title">{c?.name ?? 'Campaign'}</h3>{c && <span className={'or-chip cs-' + c.status}>{STATUS_TEXT[c.status]}</span>}</header>
         <p className="or-muted">{!c ? 'Open or create a campaign.' : queue.length ? `${queue.length} ready${desktop && set ? ` · ${willSend} can go today` : ''}` : s.contacts.length ? 'Nobody in this audience is ready — see Skipped in Contacts' : c.kind === 'direct' ? 'Type addresses in the To line' : 'Import a list to start'}</p>
         {c?.status === 'scheduled' && c.scheduledAt && s.run === 'idle' && <p className="or-sched"><Icon name="clock" size={13} /><span>Starts {fmtDateTime(c.scheduledAt)} — keep the app open</span><button type="button" className="btn xs" onClick={() => s.patch({ status: 'draft', scheduledAt: null })}>Cancel</button></p>}
         {c && (sent > 0 || failed > 0) && (
@@ -153,7 +153,7 @@ function SendTab() {
       {c && Object.keys(c.sent).length > 0 && <FollowUpCard />}
 
       <section className="or-card">
-        <header><Icon name="inbox" size={14} /><h3>Test email</h3></header>
+        <header><h3 className="sec-title">Test email</h3></header>
         <p className="or-muted">Sends the letter to you first, filled with {active ? <b>{active.personName || active.email}</b> : 'a nameless recipient'}’s details. Does not count toward today.</p>
         <div className="or-test">
           <input type="email" className="or-input" placeholder="your@address" value={testTo} onChange={(e) => setTestTo(e.target.value)} aria-label="Test address" />
@@ -413,7 +413,7 @@ function ReviewTab() {
         />
       )}
       <section className="or-card">
-        <header><Icon name="checkDouble" size={14} /><h3>Checks</h3><span className={'or-chip ' + (bad ? 'bad' : warn ? 'warn' : 'good')}>{bad ? `${bad} to fix` : warn ? `${warn} to look at` : 'All clear'}</span></header>
+        <header><h3 className="sec-title">Checks</h3><span className={'or-chip ' + (bad ? 'bad' : warn ? 'warn' : 'good')}>{bad ? `${bad} to fix` : warn ? `${warn} to look at` : 'All clear'}</span></header>
         <ul className="or-checks">
           {sorted.map((x) => (
             <li key={x.id + x.title} className={x.level}>
@@ -433,7 +433,7 @@ function ReviewTab() {
         {fixError && <p className="or-note">{fixError}</p>}
       </section>
       <section className="or-card">
-        <header><span className="or-card-mark">{ai ? <ProviderMark id={ai.provider} size={14} /> : <Icon name="sparkle" size={14} />}</span><h3>Second reader</h3></header>
+        <header><span className="or-card-mark">{ai ? <ProviderMark id={ai.provider} size={14} /> : <Icon name="sparkle" size={14} />}</span><h3 className="sec-title">Second reader</h3></header>
         <p className="or-muted">{aiName} reads the letter as a cautious senior editor would before it goes to officials: unsupported claims, tone, the ask, the subject. Its notes feed "Fix all with AI" above; nothing changes until you press that.</p>
         <button type="button" className="btn sm ai-btn or-wide" data-provider={ai?.provider} onClick={() => void run()} disabled={!ai || aiPaused() || busy || !c.body.trim()}
           data-tip={aiPaused() ? 'AI is OFF' : ai ? 'One request with the letter, its signature and your ticked talking points' : `Add a ${aiName} key for the Review job`}>
@@ -472,7 +472,7 @@ function InboxCard() {
   const optedOut = Object.keys(c.sent).filter((e) => s.optOut.includes(e)).length
   return (
     <section className="or-card">
-      <header><Icon name="inbox" size={14} /><h3>Replies &amp; bounces</h3>
+      <header><h3 className="sec-title">Replies &amp; bounces</h3>
         <button type="button" className="btn sm" disabled={!desktop || !s.mail?.hasPassword || ib.state === 'busy'} onClick={() => void s.checkInbox(true)} data-tip={desktop ? `Read ${s.mail?.imapHost || 'the inbox'} for answers to this desk's letters — read-only, nothing is marked read` : 'Needs the desktop app'}>
           <Icon name="refresh" size={13} className={ib.state === 'busy' ? 'spin' : ''} /><span>{ib.state === 'busy' ? 'Reading' : 'Check'}</span>
         </button>
@@ -496,7 +496,7 @@ function FollowUpCard() {
   const why = cannotStart('followup')
   return (
     <section className="or-card">
-      <header><Icon name="refresh" size={14} /><h3>Follow-up</h3><span className="or-chip">after {c.followUp.afterDays} days</span></header>
+      <header><h3 className="sec-title">Follow-up</h3><span className="or-chip">after {c.followUp.afterDays} days</span></header>
       <p className="or-muted">{q.due.length ? <><b>{q.due.length}</b> without a reply {q.due.length === 1 ? 'is' : 'are'} due a second letter</> : 'Nobody is due yet'}{q.later ? ` · ${q.later} later` : ''}{done ? ` · ${done} followed up` : ''}.</p>
       <div className="or-actions">
         <button type="button" className="btn sm" onClick={() => ui.set({ sheet: 'follow-up' })}><Icon name="edit" size={13} /><span>Letter</span></button>

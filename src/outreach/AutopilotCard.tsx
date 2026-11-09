@@ -34,8 +34,7 @@ export function AutopilotCard() {
     return (
       <section className="or-card or-autopilot-card" aria-label="Autopilot status">
         <header className="or-autopilot-header">
-          <Icon name="refresh" size={14} />
-          <h3>Autopilot</h3>
+          <h3 className="sec-title">Autopilot</h3>
         </header>
         <p className="or-muted">{desc.sentence}</p>
         <p className="or-muted" data-tip="Your first days send fewer emails so Gmail learns to trust the account.">
@@ -70,8 +69,7 @@ export function AutopilotCard() {
   return (
     <section className="or-card or-autopilot-card" aria-label="Autopilot status">
       <header className="or-autopilot-header">
-        <Icon name="refresh" size={14} />
-        <h3>Autopilot</h3>
+        <h3 className="sec-title">Autopilot</h3>
         <span className={`or-chip ${desc.chipClass}`}>{desc.label}</span>
       </header>
 

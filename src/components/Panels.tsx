@@ -1210,7 +1210,7 @@ export function Inspector() {
       <Panel accordion={false} title="Inspector" icon="sliders">
         <div className="empty">
           <Icon name="select" size={22} />
-          <b>Nothing selected</b>
+          <b className="empty-title">Nothing selected</b>
           <span>Click an element on the banner to edit it. Shift-click or drag a box to select several.</span>
         </div>
       </Panel>

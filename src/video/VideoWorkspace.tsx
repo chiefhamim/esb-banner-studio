@@ -1203,7 +1203,7 @@ function VideoDesk() {
                 ) : (
                   <div className="vw-start-card">
                     <div className="vw-start-icon"><Icon name="video" size={18} /></div>
-                    <b>Start a video</b>
+                    <b className="empty-title">Start a video</b>
                     <p>Bring in footage, sound and pictures, or cut a first version from the story on the Editorial desk.</p>
                     <div className="vw-start-actions">
                       <button type="button" className="btn primary vw-start-import" onClick={() => void importFromDialog()}><Icon name="upload" size={14} />Import media</button>

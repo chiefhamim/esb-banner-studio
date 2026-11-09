@@ -966,3 +966,9 @@ kbd,
 
 /* Phase 8: a small toggle keeps its look, and its hit area reaches 24 px tall (WCAG 2.2 target size) through invisible padding */
 .tgl.sm::before { content: ""; position: absolute; inset: -4px -2px; }
+
+/* ---------------------------------------------------------------- Section title (one style for static side cards)
+   News's section title (.nw-sec-h): small caps, 10.5px / 700, kicker tracking, --text-3. Used by Outreach's inspector
+   cards and Editorial's launcher queue. The class is doubled so it outranks a desk's own `.card > header h3` rule
+   (which loads later) without a copy of this rule per desk. Accordion Panels keep their own header. */
+.sec-title.sec-title { margin: 0; font: 700 10.5px/16px var(--font-ui); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); }

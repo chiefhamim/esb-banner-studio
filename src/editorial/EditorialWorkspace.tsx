@@ -1323,14 +1323,14 @@ export function EditorialWorkspace() {
         <div className={'ed-launcher-wrap' + (storyCount > 0 ? ' has-queue' : '')}>
           <div className="ed-launcher-card ed-launcher-main">
             <div className="ed-launcher-hero">
-              <h2>Editorial Story Desk</h2>
+              <h2 className="empty-title">Editorial Story Desk</h2>
               <p>Translate Bengali reporting into newsroom English, check every figure against the source, and publish to esbpowerline.com.</p>
             </div>
             {intakeForm(false)}
           </div>
           {storyCount > 0 && (
             <div className="ed-launcher-card ed-launcher-queue">
-              <div className="ed-launcher-qhead"><h3>Continue a story</h3><span>{storyCount} on the desk</span></div>
+              <div className="ed-launcher-qhead"><h3 className="sec-title">Continue a story</h3><span>{storyCount} on the desk</span></div>
               <StoryQueueList compact />
             </div>
           )}

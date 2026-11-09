@@ -99,7 +99,7 @@ export const OutreachComposer = memo(function OutreachComposer() {
         <div className="or-sheet or-start">
           <div className="or-empty">
             <Icon name="send" size={26} />
-            <b>Start a campaign</b>
+            <b className="empty-title">Start a campaign</b>
             <p>Import a mailing list to write one letter to an audience, or write an ordinary email to addresses you type.</p>
             <div className="or-actions">
               <button type="button" className="btn primary" onClick={() => void s.createCampaign()}><Icon name="plus" size={14} /><span>New campaign</span></button>
