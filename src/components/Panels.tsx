@@ -1491,6 +1491,12 @@ export function Dock({ children }: { children?: ReactNode }) {
   const st = useStore.getState
   const [tab, setTab] = useState<'elements' | 'layers'>(() => { try { return localStorage.getItem('esb-banner-studio/dock-tab') === 'layers' ? 'layers' : 'elements' } catch { return 'elements' } })
   const pick = (t: 'elements' | 'layers') => { setTab(t); try { localStorage.setItem('esb-banner-studio/dock-tab', t) } catch { /* ignore */ } }
+  // the right column's icon rail opens a tab here
+  useEffect(() => {
+    const on = (e: Event) => { const t = (e as CustomEvent).detail; if (t === 'elements' || t === 'layers') pick(t) }
+    window.addEventListener('esb:dock-tab', on)
+    return () => window.removeEventListener('esb:dock-tab', on)
+  }, [])
   const hidden = els.filter((e) => !e.visible && !e.id.startsWith('x-'))
   const hasAny = Object.keys(doc.overrides).some((k) => k.startsWith(format + ':'))
 

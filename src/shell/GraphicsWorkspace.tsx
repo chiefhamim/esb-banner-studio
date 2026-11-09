@@ -16,6 +16,8 @@ import { ContextMenu, IconButton, MenuBar, MenuButton, Select, Tabs } from '../u
 import type { MenuDef } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import { DEFAULT_LAYOUT, LIMITS, Splitter, loadLayout, saveLayout } from '../ui/layout'
+import { RAIL_W, useSideColumn } from '../ui/sideColumnState'
+import { ColumnHandle, ColumnRail, railClass } from '../ui/SideColumn'
 import type { LayoutState } from '../ui/layout'
 import { useShellStore } from './shellStore'
 import { WorkspaceSwitcher } from './WorkspaceRail'
@@ -25,7 +27,9 @@ import { AccountButton } from './AccountButton'
 
 type Tab = 'story' | 'photos'
 
-const gridCols = (lw: number, rw: number) => `46px clamp(264px, ${lw}px, 38vw) minmax(0, 1fr) clamp(264px, ${rw}px, 38vw)`
+// a side column folded to its icon rail is exactly RAIL_W wide; open, it keeps its old clamp
+const colCss = (px: number) => (px <= RAIL_W ? `${px}px` : `clamp(264px, ${px}px, 38vw)`)
+const gridCols = (lw: number, rw: number) => `46px ${colCss(lw)} minmax(0, 1fr) ${colCss(rw)}`
 
 const SHORTCUTS: ShortcutGroup[] = [
   { group: 'File', rows: [['Ctrl + N', 'New banner'], ['Ctrl + Shift + N', 'Next story — keep this layout'], ['Ctrl + O', 'Open project'], ['Ctrl + S', 'Save project'], ['Ctrl + Shift + S', 'Save project as'], ['Ctrl + I', 'Import photos'], ['Ctrl + E', 'Export'], ['Ctrl + Shift + C', 'Copy banner as image']] },
@@ -115,10 +119,14 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
     if (!app) return
     sizes.current = { ...sizes.current, [k]: v }
     if (k === 'dock') { const d = app.querySelector<HTMLElement>('.dock'); if (d) d.style.height = `min(${v}px, 46%)` }
-    else app.style.gridTemplateColumns = gridCols(sizes.current.lw, sizes.current.rw)
+    else app.style.gridTemplateColumns = gridCols(k === 'lw' ? v : leftCol.px, k === 'rw' ? v : rightCol.px)
   }
   const commitSize = (k: keyof LayoutState) => (v: number) => setLayout((l) => { const n = { ...l, [k]: v }; saveLayout(n); return n })
   const maxW = Math.min(LIMITS.lw[1], Math.round(window.innerWidth * 0.38))
+  // the two side columns: resizable, and each folds to an icon rail (shared with every desk, src/ui/SideColumn.tsx)
+  const leftCol = useSideColumn('graphics/left', 'left', { def: DEFAULT_LAYOUT.lw, min: LIMITS.lw[0], max: LIMITS.lw[1] }, () => loadLayout().lw)
+  const rightCol = useSideColumn('graphics/right', 'right', { def: DEFAULT_LAYOUT.rw, min: LIMITS.rw[0], max: LIMITS.rw[1] }, () => loadLayout().rw)
+  const showDockTab = (t: 'elements' | 'layers') => window.dispatchEvent(new CustomEvent('esb:dock-tab', { detail: t }))
   const file = useRef<HTMLInputElement>(null)
   const pasteInPlace = useRef(false)
 
@@ -434,7 +442,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   ]
 
   return (
-    <div className="app" ref={appRef} style={{ gridTemplateColumns: gridCols(layout.lw, layout.rw), ['--dock']: layout.dock + 'px', ['--cat']: catAccent, ['--cat-ink']: catInk } as CSSProperties}>
+    <div className="app side-cols" ref={appRef} style={{ gridTemplateColumns: gridCols(leftCol.px, rightCol.px), ['--dock']: layout.dock + 'px', ['--cat']: catAccent, ['--cat-ink']: catInk } as CSSProperties}>
       <header className="topbar gx-head">
         <WorkspaceSwitcher />
         <MenuBar menus={menus} />
@@ -518,10 +526,14 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
         ]} />
       )}
 
-      <aside className="left">
+      <aside className={'left' + railClass(leftCol)}>
         <Tabs value={tab} onChange={switchTab} options={[{ value: 'story', icon: 'newspaper', label: 'Story' }, { value: 'photos', icon: 'image', label: 'Photos' }]} />
         <div className="scroll rail" ref={leftScroll}><div key={tab} className="pane">{tab === 'story' ? <StoryPanel /> : <PhotosPanel addPhotos={addPhotos} />}</div></div>
-        <Splitter axis="vert" side="r" label="Resize the left panel" value={layout.lw} min={LIMITS.lw[0]} max={maxW} reset={DEFAULT_LAYOUT.lw} onLive={liveSize('lw')} onCommit={commitSize('lw')} root={() => appRef.current} />
+        <ColumnRail col={leftCol} label="Story and photos" items={[
+          { id: 'story', icon: 'newspaper', label: 'Story', on: tab === 'story', onClick: () => switchTab('story') },
+          { id: 'photos', icon: 'image', label: 'Photos', on: tab === 'photos', onClick: () => switchTab('photos') },
+        ]} actions={[{ id: 'import', icon: 'upload', label: 'Import photos (Ctrl+I)', onClick: addPhotos }]} />
+        <ColumnHandle col={leftCol} label="Resize the left panel" root={() => appRef.current} apply={liveSize('lw')} max={maxW} />
       </aside>
 
       <main className="center">
@@ -529,8 +541,13 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
         {notice && <div className="toast" onClick={() => st().setNotice(null)}><Icon name="info" size={15} />{notice}</div>}
       </main>
 
-      <aside className="right">
-        <Splitter axis="vert" side="l" label="Resize the right panel" value={layout.rw} min={LIMITS.rw[0]} max={maxW} reset={DEFAULT_LAYOUT.rw} onLive={liveSize('rw')} onCommit={commitSize('rw')} root={() => appRef.current} />
+      <aside className={'right' + railClass(rightCol)}>
+        <ColumnHandle col={rightCol} label="Resize the right panel" root={() => appRef.current} apply={liveSize('rw')} max={maxW} />
+        <ColumnRail col={rightCol} label="Inspector and layers" items={[
+          { id: 'inspector', icon: 'sliders', label: 'Inspector', onClick: () => {} },
+          { id: 'elements', icon: 'grid', label: 'Elements', onClick: () => showDockTab('elements') },
+          { id: 'layers', icon: 'layers', label: 'Layers', onClick: () => showDockTab('layers') },
+        ]} />
         <div className="scroll rail insp"><Inspector /></div>
         <Dock>
           <Splitter axis="horz" label="Resize the Elements and Layers list" value={layout.dock} min={LIMITS.dock[0]} max={LIMITS.dock[1]} reset={DEFAULT_LAYOUT.dock} onLive={liveSize('dock')} onCommit={commitSize('dock')} root={() => appRef.current} />

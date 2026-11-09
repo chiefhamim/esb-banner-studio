@@ -13,7 +13,8 @@ import { Dialog, IconButton, MenuBar, MenuButton, Seg, Toggle } from '../ui/cont
 import type { MenuDef, MenuEntry } from '../ui/controls'
 import { useHelpMenu } from '../ui/HelpMenu'
 import { AccountButton } from '../shell/AccountButton'
-import { Splitter } from '../ui/layout'
+import { useSideColumn } from '../ui/sideColumnState'
+import { ColumnHandle, ColumnRail, railClass } from '../ui/SideColumn'
 import { fmtDateTime, fmtTime, useClockFormat } from '../ui/time'
 import { relTime } from '../editorial/wire'
 import { FEED_COUNT, PORTALS, PRESS_OFFICES, isPhoneFeed, trendingTopics, useWatch, visibleItems, type WatchCat, type WatchItem } from './watchStore'
@@ -140,33 +141,13 @@ export function NewsWorkspace() {
   const wsRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
-  // Column widths, dragged like Graphics' side panels and remembered between launches.
-  const [cols, setCols] = useState<{ lw: number; rw: number }>(() => {
-    try {
-      const v = JSON.parse(localStorage.getItem(NEWS_COLS_KEY) ?? 'null')
-      if (v && typeof v.lw === 'number' && typeof v.rw === 'number') {
-        return {
-          lw: Math.min(NEWS_LIMITS.lw[1], Math.max(NEWS_LIMITS.lw[0], v.lw)),
-          rw: Math.min(NEWS_LIMITS.rw[1], Math.max(NEWS_LIMITS.rw[0], v.rw)),
-        }
-      }
-    } catch { /* ignore */ }
-    return NEWS_COLS_DEFAULT
-  })
-
-  const liveSize = (k: 'lw' | 'rw') => (v: number) => {
-    if (bodyRef.current) {
-      bodyRef.current.style.setProperty(k === 'lw' ? '--nw-lw' : '--nw-rw', `${v}px`)
-    }
-  }
-
-  const commitSize = (k: 'lw' | 'rw') => (v: number) => {
-    setCols((c) => {
-      const n = { ...c, [k]: v }
-      try { localStorage.setItem(NEWS_COLS_KEY, JSON.stringify(n)) } catch { /* ignore */ }
-      return n
-    })
-  }
+  // Column widths, dragged like Graphics' side panels and remembered between launches; each folds to an icon rail.
+  const legacyCols = (k: 'lw' | 'rw') => () => { const v = JSON.parse(localStorage.getItem(NEWS_COLS_KEY) ?? 'null'); return typeof v?.[k] === 'number' ? v[k] as number : undefined }
+  const leftCol = useSideColumn('news/left', 'left', { def: NEWS_COLS_DEFAULT.lw, min: NEWS_LIMITS.lw[0], max: NEWS_LIMITS.lw[1] }, legacyCols('lw'))
+  const rightCol = useSideColumn('news/right', 'right', { def: NEWS_COLS_DEFAULT.rw, min: NEWS_LIMITS.rw[0], max: NEWS_LIMITS.rw[1] }, legacyCols('rw'))
+  const liveSize = (k: 'lw' | 'rw') => (v: number) => { bodyRef.current?.style.setProperty(k === 'lw' ? '--nw-lw' : '--nw-rw', `${v}px`) }
+  /** Rail icon for a fold: open the column, then that fold (it stays open if it already is). */
+  const openFold = (id: keyof Folds) => { if (!folds[id]) toggleFold(id) }
 
   useAutoCheck()
   useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(null), toast.undo ? 6000 : 3500); return () => window.clearTimeout(id) }, [toast])
@@ -276,6 +257,8 @@ export function NewsWorkspace() {
   }
   const startStory = (x: WatchItem) => { useWatch.getState().markRead(x.key); useShellStore.getState().openStoryFrom(x.link) }
   const use = (x: WatchItem) => startStory(x)
+  /** The detail column's Start a story, for its folded rail. */
+  const startSelected = () => { if (selected) startStory(selected) }
   const copy = (x: WatchItem) => { void navigator.clipboard?.writeText(x.link).then(() => say('Link copied'), () => say('Could not copy the link')) }
   const hide = (x: WatchItem) => {
     const i = ordered.findIndex((o) => o.key === x.key)
@@ -389,9 +372,9 @@ export function NewsWorkspace() {
         </button>
       </header>
 
-      <div ref={bodyRef} className="nw-body" style={{ ['--nw-lw' as string]: `${cols.lw}px`, ['--nw-rw' as string]: `${cols.rw}px` } as React.CSSProperties}>
+      <div ref={bodyRef} className="nw-body side-cols" style={{ ['--nw-lw' as string]: `${leftCol.px}px`, ['--nw-rw' as string]: `${rightCol.px}px` } as React.CSSProperties}>
         {/* ---------------------------------------------------------------- left: what to show */}
-        <aside className="nw-left" aria-label="Filters">
+        <aside className={'nw-left' + railClass(leftCol)} aria-label="Filters">
           <div className="nw-brand-bar">
             <div className="nw-brand">
               <EwMark size={26} />
@@ -456,18 +439,13 @@ export function NewsWorkspace() {
               </div>
             </Fold>
           </div>
-          <Splitter
-            axis="vert"
-            side="r"
-            label="Resize the filters column"
-            value={cols.lw}
-            min={NEWS_LIMITS.lw[0]}
-            max={Math.min(NEWS_LIMITS.lw[1], Math.round(window.innerWidth * 0.38))}
-            reset={NEWS_COLS_DEFAULT.lw}
-            onLive={liveSize('lw')}
-            onCommit={commitSize('lw')}
-            root={() => wsRef.current}
-          />
+          <ColumnRail col={leftCol} label="Filters" items={[
+            ...cats.map((c) => ({ id: c, icon: (c === 'all' ? 'inbox' : c === 'energy' ? 'bolt' : c === 'leadership' ? 'users' : 'shield') as IconName, label: c === 'all' ? 'All headlines' : CAT_LABEL[c], on: cat === c, onClick: () => setCat(c) })),
+            ...(trending.length > 0 ? [{ id: 'trending', icon: 'trendingUp' as IconName, label: cat === 'press' ? 'Issuing Offices' : 'Trending Topics', onClick: () => openFold('trending') }] : []),
+            { id: 'pressWings', icon: 'quote', label: 'Official Press Wings', onClick: () => openFold('pressWings') },
+            { id: 'portals', icon: 'globe', label: 'Portals', on: !!portal && !pressOfficeRows.some((o) => o.name === portal), onClick: () => openFold('portals') },
+          ]} />
+          <ColumnHandle col={leftCol} label="Resize the filters column" root={() => wsRef.current} apply={liveSize('lw')} max={Math.round(window.innerWidth * 0.38)} />
         </aside>
 
         {/* ---------------------------------------------------------------- centre: the headlines */}
@@ -564,19 +542,13 @@ export function NewsWorkspace() {
         </main>
 
         {/* ---------------------------------------------------------------- right: the chosen headline */}
-        <aside className="nw-right" aria-label="Headline">
-          <Splitter
-            axis="vert"
-            side="l"
-            label="Resize the detail panel"
-            value={cols.rw}
-            min={NEWS_LIMITS.rw[0]}
-            max={Math.min(NEWS_LIMITS.rw[1], Math.round(window.innerWidth * 0.42))}
-            reset={NEWS_COLS_DEFAULT.rw}
-            onLive={liveSize('rw')}
-            onCommit={commitSize('rw')}
-            root={() => wsRef.current}
-          />
+        <aside className={'nw-right' + railClass(rightCol)} aria-label="Headline">
+          <ColumnHandle col={rightCol} label="Resize the detail panel" root={() => wsRef.current} apply={liveSize('rw')} max={Math.round(window.innerWidth * 0.42)} />
+          <ColumnRail col={rightCol} label="Headline" items={[
+            { id: 'detail', icon: 'newspaper', label: selected ? 'The chosen headline' : 'About EnergyWatch', onClick: () => {} },
+          ]} actions={[
+            { id: 'start', icon: 'filePlus', label: 'Start a story', primary: true, disabled: !selected, onClick: startSelected },
+          ]} />
           <div className="nw-right-scroll">
             {selected ? <Detail x={selected} isNew={isNew.has(selected.key)} now={now} range={!!range} onCopy={() => copy(selected)} onTopic={(t) => setQ(t)} onPortal={(p) => setPortal(p)} /> : (
               <div className="nw-card nw-about">
