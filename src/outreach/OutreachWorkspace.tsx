@@ -119,7 +119,8 @@ export function OutreachWorkspace() {
     )
   }
 
-  const openTab = (left: LeftTab) => ui.set({ left })
+  // a column tab, the campaign chip or View → Contacts from the Activity desk brings the Compose desk back with it
+  const openTab = (left: LeftTab) => ui.set({ left, desk: 'compose' })
   const help = useHelpMenu({ shortcuts: [{ group: 'Letter', rows: [['Ctrl + B', 'Bold'], ['Ctrl + I', 'Italic'], ['Ctrl + K', 'Link']] }] })
   const menus: MenuDef[] = [
     { label: 'Campaign', items: [
@@ -170,8 +171,8 @@ export function OutreachWorkspace() {
       { label: 'Campaigns', checked: ui.left === 'campaigns', onClick: () => openTab('campaigns') },
       { label: 'Sources', checked: ui.left === 'sources', onClick: () => openTab('sources') },
       { divider: true },
-      { label: 'Edit the letter', checked: ui.view === 'edit', onClick: () => ui.set({ view: 'edit' }) },
-      { label: 'Preview as sent', checked: ui.view === 'preview', onClick: () => ui.set({ view: 'preview' }) },
+      { label: 'Edit the letter', checked: ui.view === 'edit', onClick: () => ui.set({ view: 'edit', desk: 'compose' }) },
+      { label: 'Preview as sent', checked: ui.view === 'preview', onClick: () => ui.set({ view: 'preview', desk: 'compose' }) },
       { divider: true },
       { heading: 'Appearance' },
       { label: 'Light', icon: 'sun', checked: theme !== 'dark', onClick: () => useStore.getState().setTheme('light') },
