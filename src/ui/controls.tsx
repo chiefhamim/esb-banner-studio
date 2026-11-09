@@ -136,6 +136,7 @@ export function Tooltips() {
     let top = r.bottom + 8
     if (tip.pos === 'top') top = r.top - h - 8
     if (tip.pos === 'right') { left = r.right + 10; top = r.top + r.height / 2 - h / 2 }
+    if (tip.pos === 'left') { left = r.left - w - 10; top = r.top + r.height / 2 - h / 2 }
     if (top + h > window.innerHeight - 6) top = r.top - h - 8
     setAt({ left: clamp(left, 6, window.innerWidth - w - 6), top: clamp(top, 6, window.innerHeight - h - 6) })
   }, [tip])

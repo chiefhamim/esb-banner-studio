@@ -1,0 +1,51 @@
+/* ---------------------------------------------------------------- side columns that fold to an icon rail (src/ui/SideColumn.tsx)
+   Every desk's side column: drag its inner edge narrow and it becomes a 52 px rail of its own sections. The rail keeps
+   the column's surface; only the rail's own buttons are styled here, the expanded column is left as it was. */
+:root { --rail-w: 52px; --col-ease: cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* the grids that hold side columns ease their tracks when a column folds or opens — never while a handle is dragged */
+.side-cols { transition: grid-template-columns 200ms var(--col-ease); }
+.side-col-w { transition: width 200ms var(--col-ease); }
+.resizing .side-cols, .side-cols.resizing, .resizing .side-col-w, .resizing.side-col-w { transition: none !important; }
+@media (prefers-reduced-motion: reduce) { .side-cols, .side-col-w { transition: none !important; } }
+
+/* while railed, only the rail and the edge handle show; the content stays mounted (its state, scroll and open panels survive) */
+.is-railed > :not(.col-rail):not(.col-handle) { display: none !important; }
+.is-railed { min-width: 0; }
+
+.col-rail {
+  display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; gap: 4px;
+  width: var(--rail-w); min-height: 0; padding: 8px 0 10px;
+}
+.col-rail.right { margin-left: auto; }
+.col-rail-items { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; gap: 4px; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+.col-rail-foot { display: flex; flex: none; flex-direction: column; align-items: center; gap: 6px; padding-top: 8px; }
+.col-rail-sep { flex: none; width: 20px; height: 1px; margin: 2px 0; background: var(--line-2); }
+
+.col-rail-btn {
+  position: relative; display: grid; flex: none; place-items: center;
+  width: 36px; height: 36px; padding: 0; color: var(--text-2);
+  background: transparent; border: 0; border-radius: var(--r-2); cursor: pointer;
+  transition: background-color 120ms var(--col-ease), color 120ms var(--col-ease), transform 120ms var(--col-ease);
+}
+.col-rail-btn:hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
+.col-rail-btn:active:not(:disabled) { transform: scale(.97); }
+.col-rail-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.col-rail-btn:disabled { opacity: .45; cursor: default; }
+.col-rail-btn > svg { flex: none; }
+.col-rail-btn > .col-rail-glyph { display: grid; place-items: center; width: 18px; height: 18px; }
+/* selected = the raised chip the tabs use */
+.col-rail-btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+:root[data-theme=dark] .col-rail-btn.on { color: var(--chip-on-fg); background: var(--chip-on-bg); box-shadow: none; }
+.col-rail-btn.col-rail-open { width: 32px; height: 28px; color: var(--text-3); }
+/* the column's primary action keeps its primary look */
+.col-rail-btn.primary { color: var(--on-ink); background: var(--ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 1px 3px rgba(0, 0, 0, .18); }
+.col-rail-btn.primary:hover:not(:disabled) { color: var(--on-ink); background: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { .col-rail-btn { transition: none; } }
+
+/* desks whose columns were fixed until now: the handle sits on the edge, and nothing reacts under a drag */
+.or-left, .or-right, .vw-bin-panel, .vw-inspector-panel { position: relative; }
+.vw-bin-panel > .col-handle.r { right: 0; }
+.vw-inspector-panel > .col-handle.l { left: 0; }
+.outreach-workspace.resizing, .video-workspace.resizing { cursor: col-resize; user-select: none; }
+.outreach-workspace.resizing *, .video-workspace.resizing * { pointer-events: none; }
