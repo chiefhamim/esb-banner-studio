@@ -188,8 +188,8 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
             </div>
           </form>
           {/* Mail sending does not depend on the site sign-in, so the Mail sender is reachable signed out too. */}
-          <section className="acct-sec signin-mail" aria-label="Mail sender">
-            <h3>Mail sender</h3>
+          <section className="acct-sec signin-mail" aria-label="Connections">
+            <h3>Connections</h3>
             <MailSenderCard />
           </section>
         </>) : (
