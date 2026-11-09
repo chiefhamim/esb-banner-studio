@@ -20,7 +20,8 @@ import { CatMark } from './CatMark'
 import { EditorialSide } from './EditorialSide'
 import type { ReadyFix } from './readiness'
 import { useWidth } from '../ui/useWidth'
-import { Splitter } from '../ui/layout'
+import { useSideColumn } from '../ui/sideColumnState'
+import { ColumnHandle, ColumnRail, railClass } from '../ui/SideColumn'
 import { BN_FONTS, useBnFont } from './bnFont'
 import { useBannerImage } from './useBannerImage'
 import { useHeroMode } from './heroMode'
@@ -229,15 +230,14 @@ export function EditorialWorkspace() {
     return typeof window === 'undefined' || window.innerWidth >= 1280
   })
   const setSourceOpen = (v: boolean) => { setSourceOpenState(v); try { localStorage.setItem(SOURCE_OPEN_KEY, v ? '1' : '0') } catch { /* ignore */ } }
-  // Column widths, dragged like Graphics' side panels and remembered between launches.
-  const [cols, setCols] = useState<{ src: number; side: number }>(() => {
-    try { const v = JSON.parse(localStorage.getItem(COLS_KEY) ?? 'null'); if (v && typeof v.src === 'number' && typeof v.side === 'number') return v } catch { /* ignore */ }
-    return COLS_DEFAULT
-  })
+  // Column widths, dragged like Graphics' side panels and remembered between launches; each folds to an icon rail.
+  const legacyCol = (k: 'src' | 'side') => () => { const v = JSON.parse(localStorage.getItem(COLS_KEY) ?? 'null'); return typeof v?.[k] === 'number' ? v[k] as number : undefined }
+  const srcCol = useSideColumn('editorial/left', 'left', { def: COLS_DEFAULT.src, min: 264, max: 520 }, legacyCol('src'))
+  const sideCol = useSideColumn('editorial/right', 'right', { def: COLS_DEFAULT.side, min: 280, max: 560 }, legacyCol('side'))
   const wsRef = useRef<HTMLDivElement>(null)
   const deskRef = useRef<HTMLDivElement>(null)
   const liveCol = (k: 'src' | 'side') => (v: number) => deskRef.current?.style.setProperty(k === 'src' ? '--ed-src-px' : '--ed-side-px', v + 'px')
-  const commitCol = (k: 'src' | 'side') => (v: number) => setCols((c) => { const n = { ...c, [k]: v }; try { localStorage.setItem(COLS_KEY, JSON.stringify(n)) } catch { /* ignore */ } return n })
+  const openSidePanel = (id: string) => requestAnimationFrame(() => window.dispatchEvent(new CustomEvent('esb:open-panel', { detail: id })))
   const [heroMode, setHeroMode] = useHeroMode()
   const [previewDevice, setPreviewDevice] = useState<SiteDevice>('desktop')
   const [previewTheme, setPreviewTheme] = useState<SiteTheme>('white')
@@ -1337,9 +1337,9 @@ export function EditorialWorkspace() {
           {toastMsg && <div className="toast" onClick={() => setToastMsg(null)}><Icon name="info" size={15} />{toastMsg}</div>}
         </div>
       ) : (
-        <div ref={deskRef} className="ed-desk" style={{ ['--ed-src-px' as string]: cols.src + 'px', ['--ed-side-px' as string]: cols.side + 'px' } as CSSProperties}>
+        <div ref={deskRef} className="ed-desk side-cols" style={{ ['--ed-src-px' as string]: srcCol.px + 'px', ['--ed-side-px' as string]: sideCol.px + 'px' } as CSSProperties}>
           {/* LEFT — the original article, untouched, beside the copy made from it */}
-          <aside className="left ed-src" aria-label="Original source">
+          <aside className={'left ed-src' + railClass(srcCol)} aria-label="Original source">
             <Tabs<'source' | 'intake' | 'stories' | 'library'>
               value={leftTab}
               onChange={setLeftTab}
@@ -1441,7 +1441,13 @@ export function EditorialWorkspace() {
                 </>
               )}
             </div>
-            <Splitter axis="vert" side="r" label="Resize the source column" value={cols.src} min={264} max={520} reset={COLS_DEFAULT.src} onLive={liveCol('src')} onCommit={commitCol('src')} root={() => wsRef.current} />
+            <ColumnRail col={srcCol} label="Source column" items={[
+              { id: 'source', icon: 'newspaper', label: 'Source', on: leftTab === 'source', onClick: () => setLeftTab('source') },
+              { id: 'stories', icon: 'layers', label: storyCount > 1 ? `Stories · ${storyCount}` : 'Stories', on: leftTab === 'stories', onClick: () => setLeftTab('stories') },
+              { id: 'library', icon: 'quote', label: 'Library', on: leftTab === 'library', onClick: () => setLeftTab('library') },
+              { id: 'intake', icon: 'link', label: 'New link', on: leftTab === 'intake', onClick: () => setLeftTab('intake') },
+            ]} />
+            <ColumnHandle col={srcCol} label="Resize the source column" root={() => wsRef.current} apply={liveCol('src')} />
           </aside>
           {sourceOpen && <div className="ed-src-scrim" onClick={() => setSourceOpen(false)} aria-hidden />}
 
@@ -1629,8 +1635,16 @@ export function EditorialWorkspace() {
           </main>
 
           {/* RIGHT — the CMS sidebar: publish, featured image, organise; then the outputs Graphics shares */}
-          <aside className="right ed-side" aria-label="Publishing and image">
-            <Splitter axis="vert" side="l" label="Resize the sidebar" value={cols.side} min={280} max={560} reset={COLS_DEFAULT.side} onLive={liveCol('side')} onCommit={commitCol('side')} root={() => wsRef.current} />
+          <aside className={'right ed-side' + railClass(sideCol)} aria-label="Publishing and image">
+            <ColumnHandle col={sideCol} label="Resize the sidebar" root={() => wsRef.current} apply={liveCol('side')} />
+            <ColumnRail col={sideCol} label="Sidebar" items={[
+              { id: 'details', icon: 'folder', label: '1 Details', onClick: () => openSidePanel('ed-organize') },
+              { id: 'banner', icon: 'image', label: '2 Banner', onClick: () => openSidePanel('ed-image') },
+              { id: 'check', icon: 'check', label: '3 Before publication', onClick: () => openSidePanel('ed-side-publish') },
+              { id: 'send', icon: 'send', label: '4 Send to', onClick: () => openSidePanel('ed-side-send') },
+            ]} actions={[
+              { id: 'publish', icon: 'upload', label: linked ? 'Review & update' : 'Review & publish', primary: true, disabled: !draft.headline.trim(), onClick: openPublish },
+            ]} />
             <EditorialSide
               storyId={activeStory?.id ?? 'draft'}
               base={baseAssets}

@@ -66,8 +66,9 @@
 /* ---------------------------------------------------------------- the desk */
 .ed-desk {
   /* user-sized (drag the column edges), never more than a third of the desk */
-  --ed-src-w: clamp(264px, var(--ed-src-px, 312px), 34%);
-  --ed-side-w: clamp(280px, var(--ed-side-px, 340px), 38%);
+  /* min(…) lets a column folded to its 52 px icon rail (src/ui/SideColumn.tsx) under the usual minimum */
+  --ed-src-w: clamp(min(264px, var(--ed-src-px, 312px)), var(--ed-src-px, 312px), 34%);
+  --ed-side-w: clamp(min(280px, var(--ed-side-px, 340px)), var(--ed-side-px, 340px), 38%);
   position: relative;
   display: grid;
   flex: 1;
@@ -98,6 +99,10 @@
   .source-open .ed-src .splitter { display: none; }
   .source-open .ed-src { position: absolute; top: 0; bottom: 0; left: 0; z-index: 9; width: min(360px, 88%); box-shadow: var(--shadow-2); }
   .source-open .ed-src-scrim { position: absolute; inset: 0; z-index: 8; display: block; background: var(--scrim); }
+  /* the sliding source sheet has no rail: it opens whole */
+  .ed-src.is-railed > .side-tabs { display: flex !important; }
+  .ed-src.is-railed > .ed-src-scroll { display: block !important; }
+  .ed-src.is-railed > .col-rail { display: none; }
 }
 /* very narrow: one column — the editor, then the sidebar below it */
 @container ed (max-width: 820px) {
@@ -105,6 +110,10 @@
   .ed-center { overflow: visible; }
   .ed-side { overflow: visible; border-left: 0; border-top: 1px solid var(--line); }
   .ed-desk .splitter { display: none; }
+  /* stacked under the editor the sidebar is never a rail */
+  .ed-side.is-railed > .es-scroll { display: block !important; }
+  .ed-side.is-railed > .es-foot { display: flex !important; }
+  .ed-side.is-railed > .col-rail { display: none; }
 }
 
 /* ---------------------------------------------------------------- CMS cards (centre) */
