@@ -9,6 +9,7 @@ import { useDesk } from './outreachStore'
 import { ask, useOutreachUi, type RightTab } from './outreachUi'
 import { cannotStart, downloadText, eligible, followUpQueue, followUpReason, inAudience, pauseBatch, resultsCsv, resumeBatch, sendTest, signatureOf, startBatch, stopBatch } from './campaign'
 import { skipReason } from './compose'
+import { sendableQueue } from './jobSpec'
 import { STATUS_LABEL, purposeLabel } from './directory'
 import { letterChecks } from './checks'
 import { fixLetterWithAi, OUTREACH_BLUEPRINTS, reviewLetter, type LetterProblem, type ReviewNote } from './outreachAi'
@@ -84,7 +85,8 @@ function SendTab() {
   const limit = engineSet?.dailyLimit ?? set?.dailyLimit ?? 0
   const used = s.mail?.sentToday ?? s.mail?.sent24h ?? 0
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
-  const willSend = Math.min(queue.length, Math.max(0, limit - used))
+  // what can go today counts only letters the job will send (Needs you holds the rest), like the Send footer
+  const willSend = Math.min(c ? sendableQueue(c, s.contacts).length : 0, Math.max(0, limit - used))
   const active = s.contacts.find((x) => x.id === s.activeContact)
   const sent = c ? Object.keys(c.sent).length : 0
   const failed = c ? Object.keys(c.failed).length : 0
@@ -514,10 +516,13 @@ function useSendSummary() {
   const s = useDesk()
   const c = s.campaign()
   const set = s.mail?.settings
-  const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
-  const willSend = Math.min(queue.length, Math.max(0, (set?.dailyLimit ?? 0) - (s.mail?.sentToday ?? s.mail?.sent24h ?? 0)))
+  const engineSet = useEngineStore((x) => x.settings)
+  // the job's own list (eligible minus anyone held in Needs you) and the engine's daily limit, as the sheet and the job use
+  const queue = c ? sendableQueue(c, s.contacts) : []
+  const held = c ? eligible(s.contacts, c.subject, c.body, c.audience).length - queue.length : 0
+  const willSend = Math.min(queue.length, Math.max(0, (engineSet?.dailyLimit ?? set?.dailyLimit ?? 0) - (s.mail?.sentToday ?? s.mail?.sent24h ?? 0)))
   const lock = useCloud((x) => (c ? x.locks[c.id] : undefined))
-  return { c, queue, willSend, lock }
+  return { c, queue, held, willSend, lock }
 }
 
 /** The desk's output button, top-right like Editorial's Publish: opens the same Review & send sheet as the footer, with
@@ -554,7 +559,7 @@ function SendFooter() {
     const t = setInterval(() => tick((n) => n + 1), 1000)
     return () => clearInterval(t)
   }, [s.nextAt])
-  const { queue, willSend, lock } = useSendSummary()
+  const { queue, held, willSend, lock } = useSendSummary()
   // why the engine is holding this campaign's batch, in words: the organisation's spacing or daily limit, the gap
   // between emails, outside sending hours, the daily limit, Gmail's slow-down, a start time (activityFormat waitReason)
   const job = useEngineStore((x) => (c ? x.jobForCampaign(c.id) : undefined))
@@ -592,7 +597,7 @@ function SendFooter() {
   }
   return (
     <footer className="or-right-foot">
-      <p className="or-foot-note">{!c ? 'Open or create a campaign' : why ? why : <><b>{willSend}</b> ready to go today{queue.length > willSend ? ` · ${queue.length - willSend} on later days` : ''}{lock && !lock.mine && lock.stale ? ` · ${lock.label} was last seen ${cloudAgo(lock.heartbeatAt)}; sending will offer to take over` : ''}</>}</p>
+      <p className="or-foot-note">{!c ? 'Open or create a campaign' : why ? why : <><b>{willSend}</b> ready to go today{queue.length > willSend ? ` · ${queue.length - willSend} on later days` : ''}{held > 0 ? ` · ${held} wait in Needs you (Review)` : ''}{lock && !lock.mine && lock.stale ? ` · ${lock.label} was last seen ${cloudAgo(lock.heartbeatAt)}; sending will offer to take over` : ''}</>}</p>
       <button type="button" className="btn primary or-wide or-send-btn" onClick={() => ui.set({ sheet: 'review-send' })} disabled={!c} data-tip="Check everything once more, then send now or at a time">
         <Icon name="send" size={15} /><span>{willSend ? `Review & send to ${willSend}` : 'Review & send'}</span>
       </button>

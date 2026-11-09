@@ -18,6 +18,31 @@ export interface BuildJobSpecOptions {
   autoResume?: boolean
 }
 
+/** Drops anyone held in Needs you: a review flag on their rendered letter that was not approved in Review. */
+function notHeld(campaign: Campaign, ready: Contact[]): Contact[] {
+  const reviewedMap = campaign.reviewed || {}
+  return ready.filter((c) => {
+    const resolved = letterFor(c, campaign)
+    const opener = campaign.openers?.[c.email]?.text
+    const m = buildMessage(c, resolved.subject, resolved.body, campaign.lang, opener)
+    const flags = actionableFlags(reviewRendered(c, m))
+    if (!flags.length) return true
+    const approved = new Set(reviewedMap[c.email] || [])
+    return flags.every((f) => approved.has(f.kind))
+  })
+}
+
+let sendableMemo: { campaign: Campaign; contacts: Contact[]; out: Contact[] } | null = null
+/** Who the first letter really goes to: eligible, minus anyone held in Needs you. The header Send, the Send footer,
+ *  the campaign card and the Review & send sheet count from this, the same list the job is built from, so "Review &
+ *  send to N" never promises letters the job will hold back. Memoised on the campaign and contact objects. */
+export function sendableQueue(campaign: Campaign, contacts: Contact[]): Contact[] {
+  if (sendableMemo && sendableMemo.campaign === campaign && sendableMemo.contacts === contacts) return sendableMemo.out
+  const out = notHeld(campaign, eligible(contacts, campaign.subject, campaign.body, campaign.audience))
+  sendableMemo = { campaign, contacts, out }
+  return out
+}
+
 /**
  * Pure builder: converts the campaign, audience, and letter settings into an immutable
  * headless JobSpec for the main process engine (§2.2).
@@ -31,17 +56,7 @@ export function buildJobSpec(opts: BuildJobSpecOptions): JobSpec {
       ? eligible(contacts, campaign.subject, campaign.body, campaign.audience)
       : followUpQueue(contacts, campaign).due
 
-  const reviewedMap = campaign.reviewed || {}
-  const queue = rawQueue.filter((c) => {
-    if (mode !== 'first') return true
-    const resolved = letterFor(c, campaign)
-    const opener = campaign.openers?.[c.email]?.text
-    const m = buildMessage(c, resolved.subject, resolved.body, campaign.lang, opener)
-    const flags = actionableFlags(reviewRendered(c, m))
-    if (!flags.length) return true
-    const approved = new Set(reviewedMap[c.email] || [])
-    return flags.every((f) => approved.has(f.kind))
-  })
+  const queue = mode === 'first' ? notHeld(campaign, rawQueue) : rawQueue
 
   const fu = mode === 'followup' ? followUpLetter(campaign) : null
   // the first letter goes as the designed page when there is one (throws if it is not loaded); a follow-up is always

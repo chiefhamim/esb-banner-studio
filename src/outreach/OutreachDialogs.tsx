@@ -10,7 +10,7 @@ import { fmtShortDay } from './activityFormat'
 import { buildMessage, mentionsAttachment } from './compose'
 import { applyMark, skipReason, softBreakOnEnter } from './compose'
 import { letterChecks } from './checks'
-import { reviewRendered, actionableFlags } from './rendered'
+import { sendableQueue } from './jobSpec'
 import { OUTREACH_BLUEPRINTS, reviewLetter, rewriteLetter } from './outreachAi'
 import { aiFor, aiPaused } from '../editorial/aiProviders'
 import { DEFAULT_STRIPES, EMAIL_FONTS, logoDataUrl, renderEmail, withViewerMargin } from './emailRender'
@@ -339,17 +339,8 @@ export function ReviewSendDialog() {
   const testSent = useOutreachStore((x) => x.log.some((l) => l.text.includes('Test sent to')))
   const checksBad = checks.some((x) => x.level === 'bad')
 
-  const needsYouCount = useMemo(() => {
-    let count = 0
-    const reviewedMap = c.reviewed || {}
-    for (const x of ready) {
-      const msg = buildMessage(x, c.subject, c.body, c.lang)
-      const flags = actionableFlags(reviewRendered(x, msg))
-      const approved = new Set(reviewedMap[x.email] || [])
-      if (flags.some((f) => !approved.has(f.kind))) count++
-    }
-    return count
-  }, [ready, c.subject, c.body, c.lang, c.reviewed])
+  // the job's own rule (sector/subject versions and openers included), so this matches the footer and what is sent
+  const needsYouCount = Math.max(0, ready.length - sendableQueue(c, s.contacts).length)
   const willBeSentCount = Math.max(0, ready.length - needsYouCount)
 
   // Calculate pacing plan
