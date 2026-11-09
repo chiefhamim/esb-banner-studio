@@ -1986,6 +1986,9 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 /* under 1000 px the format keeps its picture (its name is in the status bar) and Preview lives in View (P) */
 @container topbar (max-width: 1000px) { .topbar.gx-head .fmtpick .fp-name { display: none; } .topbar.gx-head .fmtgroup .pv-btn { display: none; } .topbar.gx-head { gap: 5px; } .topbar.gx-head .drag-post-chip { padding: 0 6px; } .topbar.gx-head .menubar .mb-item { padding-left: 6px; padding-right: 6px; } }
 @container topbar (max-width: 1000px) { .topbar.ed-head .ed-ai-chip .ed-ai-label { display: none; } .topbar.ed-head .ed-ai-chip { padding: 0 9px; min-width: 0; } }
+/* with a story open at 900 px the row was 28 px too wide and Publish was cut at the window edge: the resync button
+   gives way (Site > Sync stories from esbpowerline.com does the same) */
+@container topbar (max-width: 1000px) { .topbar.ed-head .ed-head-group:has(.ed-head-host) > .ibtn { display: none; } }
 /* one account entry on every desk (AccountButton): signed out it is a neutral round avatar, not a "Sign in" word */
 .ed-avatar.ed-avatar-anon { color: var(--text-2); background: var(--fill); }
 .ed-account.anon:hover .ed-avatar-anon { color: var(--text); background: var(--fill-hover); box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--card-line); }
