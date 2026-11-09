@@ -15,11 +15,45 @@ import { getFacebook, verifyFacebook } from './facebook'
 import siteIcon from '../assets/images/site/site-icon.png'
 import { fmtTime, useClockFormat } from '../ui/time'
 import { AvatarPicker, UserAvatar } from './avatar'
+import { useOutreachStore } from '../outreach/outreachStore'
+import { SenderDialog } from '../outreach/SenderDialog'
+import { mailFailView } from '../outreach/mailCheck'
 
 /** The role colours esbpowerline.com uses (lib/constants.ts ROLES), so the badge matches the site's own RoleBadge. */
 const ROLE_COLOR: Record<string, string> = { SUPER_ADMIN: '#ff3b6f', ADMIN: '#8b5cf6', EDITOR: '#3b82f6', AUTHOR: '#10b981', CONTRIBUTOR: '#f59e0b' }
 const ROLE_LABEL: Record<string, string> = { SUPER_ADMIN: 'Super admin', ADMIN: 'Admin', EDITOR: 'Editor', AUTHOR: 'Author', CONTRIBUTOR: 'Contributor' }
 const isDesktop = () => typeof window !== 'undefined' && !!(window as unknown as { esb?: { openSiteAs?: unknown } }).esb?.openSiteAs
+
+/** Connections → Mail sender: the account Outreach sends from, with its state; opens the Sender dialog. */
+function MailSenderCard() {
+  const mail = useOutreachStore((s) => s.mail)
+  const smtp = useOutreachStore((s) => s.smtp)
+  const [open, setOpen] = useState(false)
+  const desktop = !!window.esb?.outreachSend
+  useEffect(() => {
+    if (!desktop) return
+    const st = useOutreachStore.getState()
+    void (st.mail ? Promise.resolve() : st.refreshMail()).then(() => { if (useOutreachStore.getState().mail?.hasPassword) void useOutreachStore.getState().checkSmtp() })
+  }, [desktop])
+  const set = mail?.settings
+  const fail = smtp.state === 'bad' ? mailFailView(smtp.kind, smtp.error, { host: set?.host }) : null
+  const tone = !desktop || !set ? 'none' : !mail?.hasPassword || fail ? 'bad' : smtp.state === 'busy' ? 'checking' : 'ok'
+  const word = !desktop ? 'Desktop app only' : !set ? 'Not set up' : !mail?.hasPassword ? 'No app password' : smtp.state === 'busy' ? 'Checking…' : fail ? fail.text : smtp.state === 'ok' ? 'Connected' : 'Saved'
+  return (
+    <div className={'acct-card ' + tone}>
+      <span className="acct-logo aimark" aria-hidden><Icon name="mail" size={18} /></span>
+      <div className="acct-main">
+        <div className="acct-title"><b>Mail sender</b><span className={'acct-pill ' + tone}><i />{word}</span></div>
+        <p>{set ? `Sending as ${set.name || set.user} · ${set.user}` : 'The Gmail or Workspace account Outreach sends its letters from.'}</p>
+        {fail && <p className="acct-err">{fail.tip}</p>}
+        <div className="acct-actions">
+          <button type="button" className={'btn sm' + (set ? '' : ' primary')} disabled={!desktop} onClick={() => setOpen(true)}><Icon name="mail" size={13} /><span>{set ? 'Change sender' : 'Set up sender'}</span></button>
+        </div>
+      </div>
+      {open && <SenderDialog onClose={() => { setOpen(false); void useOutreachStore.getState().checkSmtp(true) }} />}
+    </div>
+  )
+}
 
 export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast: (m: string) => void }) {
   useClockFormat() // re-render when Home → Settings → Time format changes
@@ -212,6 +246,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                   </div>
                 </div>
               </div>
+              <MailSenderCard />
             </section>
 
             <section className="acct-sec" aria-label="Connection check">

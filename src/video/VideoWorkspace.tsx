@@ -9,6 +9,7 @@ import { Dialog, IconButton, MenuBar, MenuButton, MenuList, Popover, Seg, Select
 import type { MenuDef, MenuEntry } from '../ui/controls'
 import { useHelpMenu } from '../ui/HelpMenu'
 import { AiChip } from '../editorial/AiChip'
+import { AccountButton } from '../shell/AccountButton'
 import { useStore } from '../store'
 import type { AspectRatio, Clip, MediaAsset, OverlayTemplate, Track, TrackKind, VideoProject } from './timeline'
 import { TRACK_KIND_LABEL, allClips, canPlaceOn, clipsForAsset, contentEnd, flattenCompounds, formatShortTime, formatTimecode, groupLocked, neighbours, trackForKind } from './timeline'
@@ -1104,6 +1105,7 @@ function VideoDesk() {
             <button type="button" className="btn sm vw-hdr-cancel" onClick={cancelVoiceover} data-tip="Cancel the countdown (Esc). This is the voiceover take, not the export">Cancel take</button>
           ) : null}
           <AiChip role="main" onToast={flash} />
+          <AccountButton onToast={flash} />
           <button type="button" className="btn primary sm" onClick={() => setExportModal(true)} disabled={exporting}>
             <Icon name="download" size={14} /> {exporting ? 'Exporting…' : 'Export'}
           </button>

@@ -21,6 +21,7 @@ import { useShellStore } from './shellStore'
 import { WorkspaceSwitcher } from './WorkspaceRail'
 import { ShortcutsDialog, useHelpMenu, type ShortcutGroup } from '../ui/HelpMenu'
 import { AiChip } from '../editorial/AiChip'
+import { AccountButton } from './AccountButton'
 
 type Tab = 'story' | 'photos'
 
@@ -472,6 +473,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
           </button>
         </div>
         <AiChip role="main" onToast={(m) => st().setNotice(m)} />
+        <AccountButton onToast={(m) => st().setNotice(m)} />
         <div className="split">
           <button className="btn primary" disabled={busy} onClick={() => setShowExport(true)}><Icon name="download" size={15} />{busy ? 'Exporting…' : 'Export'}</button>
           <MenuButton className="primary split-caret" align="end" title="Quick export" items={[

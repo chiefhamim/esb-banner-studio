@@ -1982,5 +1982,8 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 /* undo, redo and copy-image live in Edit/File and their shortcuts (as under 1000 px before) */
 @container topbar (max-width: 1320px) { .topbar.gx-head .menubar .mb-item { padding-left: 7px; padding-right: 7px; } .topbar.gx-head { gap: 6px; } .topbar.gx-head .pillbar > .ibtn, .topbar.gx-head .pillbar > .pill-sep { display: none; } }
 /* under 1000 px the format keeps its picture (its name is in the status bar) and Preview lives in View (P) */
-@container topbar (max-width: 1000px) { .topbar.gx-head .fmtpick .fp-name { display: none; } .topbar.gx-head .fmtgroup .pv-btn { display: none; } }
+@container topbar (max-width: 1000px) { .topbar.gx-head .fmtpick .fp-name { display: none; } .topbar.gx-head .fmtgroup .pv-btn { display: none; } .topbar.gx-head { gap: 5px; } .topbar.gx-head .drag-post-chip { padding: 0 6px; } .topbar.gx-head .menubar .mb-item { padding-left: 6px; padding-right: 6px; } }
 @container topbar (max-width: 1000px) { .topbar.ed-head .ed-ai-chip .ed-ai-label { display: none; } .topbar.ed-head .ed-ai-chip { padding: 0 9px; min-width: 0; } }
+/* one account entry on every desk (AccountButton): signed out it is a neutral round avatar, not a "Sign in" word */
+.ed-avatar.ed-avatar-anon { color: var(--text-2); background: var(--fill); }
+.ed-account.anon:hover .ed-avatar-anon { color: var(--text); background: var(--fill-hover); box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--card-line); }

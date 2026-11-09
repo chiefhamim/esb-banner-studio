@@ -47,6 +47,7 @@ import { readDocument, readPdfWithAi, documentKind, fmtFileSize, DocumentImportE
 import { Field, Select, Check, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
 import { useHelpMenu } from '../ui/HelpMenu'
+import { AccountButton } from '../shell/AccountButton'
 import { useStore } from '../store'
 import { CATEGORIES } from '../core/tokens'
 import type { Assets } from '../core/render'
@@ -91,7 +92,7 @@ import {
 } from './siteApi'
 import { parseArticleDocument } from './extract'
 import { fmtTime, useClockFormat } from '../ui/time'
-import { UserAvatar, useAvatarSync } from './avatar'
+import { useAvatarSync } from './avatar'
 
 if (typeof window !== 'undefined') {
   // Test seam: lets the Playwright extraction suite run page fixtures through the real extractor.
@@ -1314,11 +1315,7 @@ export function EditorialWorkspace() {
           {ai.paused ? <Icon name="power" size={14} /> : mainAi ? <ProviderMark id={ai.provider} size={18} /> : <Icon name="link" size={14} />}
           <span className="ed-ai-label">{ai.paused ? 'AI OFF' : mainAi ? aiName : 'Connect AI'}</span>
         </button>
-        <button type="button" className={'ed-account' + (staffSession ? ' in' : '')} onClick={() => setShowLoginModal(true)} aria-label={staffSession ? 'Staff sign-in' : 'Staff sign-in'} data-tip={staffSession ? `${staffSession.name} · ${staffSession.email} — account and connection check` : 'Sign in with your esbpowerline.com newsroom account'}>
-          {staffSession
-            ? <UserAvatar name={staffSession.name || staffSession.email} className="ed-avatar" />
-            : <><Icon name="user" size={14} /><span className="ed-account-label">Sign in</span></>}
-        </button>
+        <AccountButton onOpen={() => setShowLoginModal(true)} />
         <button type="button" className="btn primary" onClick={openPublish} disabled={!draft.headline.trim()} data-tip="Review the checklist and publish to esbpowerline.com">
           <Icon name="upload" size={15} />
           <span>Publish</span>

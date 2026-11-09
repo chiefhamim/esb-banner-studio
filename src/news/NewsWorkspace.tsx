@@ -12,6 +12,7 @@ import type { IconName } from '../ui/Icon'
 import { Dialog, IconButton, MenuBar, MenuButton, Seg, Toggle } from '../ui/controls'
 import type { MenuDef, MenuEntry } from '../ui/controls'
 import { useHelpMenu } from '../ui/HelpMenu'
+import { AccountButton } from '../shell/AccountButton'
 import { Splitter } from '../ui/layout'
 import { fmtDateTime, fmtTime, useClockFormat } from '../ui/time'
 import { relTime } from '../editorial/wire'
@@ -382,6 +383,7 @@ export function NewsWorkspace() {
         <div className="spacer" />
         <MenuButton icon="clock" label={range ? 'Dates' : windowLabel(prefs.maxAgeH)} items={timeMenu} align="end" className="nw-when" title="Which headlines to show" />
         <IconButton icon="sliders" tip="EnergyWatch settings" onClick={() => setDialog('settings')} />
+        <AccountButton onToast={say} />
         <button type="button" className={'btn primary nw-check' + (busy ? ' is-busy' : '')} disabled={busy} onClick={refresh} data-tip={range ? 'Search this range again' : 'Read every portal & official government press wing now'}>
           <Icon name="refresh" size={15} /><span>{busy ? (range ? 'Searching' : 'Reading') : range ? 'Search again' : 'Check now'}</span>
         </button>

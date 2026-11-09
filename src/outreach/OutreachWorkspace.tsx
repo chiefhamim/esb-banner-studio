@@ -36,6 +36,7 @@ import { useStore } from '../store'
 import { Icon } from '../ui/Icon'
 import { MenuBar, Tabs, Seg, type MenuDef } from '../ui/controls'
 import { useHelpMenu } from '../ui/HelpMenu'
+import { AccountButton } from '../shell/AccountButton'
 import { fmtTime, useClockFormat } from '../ui/time'
 import { mailFailView } from './mailCheck'
 
@@ -214,9 +215,7 @@ export function OutreachWorkspace() {
           {ai.paused ? <Icon name="power" size={14} /> : letterAi ? <ProviderMark id={letterAi.provider} size={18} /> : <Icon name="link" size={14} />}
           <span className="ed-ai-label">{ai.paused ? 'AI OFF' : letterAi ? providerMeta(letterAi.provider).name : 'Connect AI'}</span>
         </button>
-        <button type="button" className={'ed-account' + (set ? ' in' : '')} onClick={() => ui.set({ sheet: 'sender' })} disabled={!desktop} aria-label="Sender account" data-tip={set ? `Sending as ${set.name} · ${set.user}` : desktop ? 'Set up the account that sends' : 'Sending needs the desktop app'}>
-          {set ? <span className="ed-avatar">{(set.name || set.user).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('')}</span> : <><Icon name="mail" size={14} /><span className="ed-account-label">Sender</span></>}
-        </button>
+        <AccountButton onToast={(m) => s.addLog('info', m)} />
         <input ref={file} type="file" accept=".xlsx,.csv,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void s.importList(f); e.target.value = '' }} />
         <input ref={designFile} type="file" accept=".html,.htm,text/html" hidden onChange={(e) => { void applyDesignFile(e.target.files?.[0]); e.target.value = '' }} />
       </header>
