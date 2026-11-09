@@ -5,8 +5,11 @@ import { useShellStore } from '../shell/shellStore'
 import { DeskBoundary } from '../ui/DeskBoundary'
 import { Icon } from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
-import { Dialog, IconButton, MenuButton, MenuList, Popover, Seg, Select, Slider, Switch, Tabs } from '../ui/controls'
-import type { MenuEntry } from '../ui/controls'
+import { Dialog, IconButton, MenuBar, MenuButton, MenuList, Popover, Seg, Select, Slider, Switch, Tabs } from '../ui/controls'
+import type { MenuDef, MenuEntry } from '../ui/controls'
+import { useHelpMenu } from '../ui/HelpMenu'
+import { AiChip } from '../editorial/AiChip'
+import { useStore } from '../store'
 import type { AspectRatio, Clip, MediaAsset, OverlayTemplate, Track, TrackKind, VideoProject } from './timeline'
 import { TRACK_KIND_LABEL, allClips, canPlaceOn, clipsForAsset, contentEnd, flattenCompounds, formatShortTime, formatTimecode, groupLocked, neighbours, trackForKind } from './timeline'
 import { useVideoStore, viewOf } from './videoStore'
@@ -1026,6 +1029,41 @@ function VideoDesk() {
     />
   )
 
+  const theme = useStore((x) => x.theme)
+  const help = useHelpMenu({ onShortcuts: () => setShowKeys(true) })
+  const menus: MenuDef[] = [
+    { label: 'File', items: [
+      { label: 'New video', icon: 'filePlus', onClick: doNew },
+      { label: 'Open project…', icon: 'folder', onClick: doOpen },
+      { label: 'Save project', icon: 'download', shortcut: 'Ctrl+S', onClick: () => void doSave() },
+      { label: 'Save project as…', shortcut: 'Ctrl+Shift+S', onClick: () => void doSave(true) },
+      { divider: true },
+      { label: 'Import media…', icon: 'upload', onClick: () => void importFromDialog() },
+      voPhase === 'recording'
+        ? { label: 'Stop the voiceover take', icon: 'mic', shortcut: 'R', onClick: stopVoiceover }
+        : { label: 'Record voiceover…', icon: 'mic', shortcut: 'R', disabled: voPhase !== 'idle', hint: '3-2-1, then it records at the playhead', onClick: () => void startVoiceover() },
+      { divider: true },
+      { label: 'Export…', icon: 'download', disabled: exporting, onClick: () => setExportModal(true) },
+      { label: 'Publish…', icon: 'globe', hint: 'Render sizes, post to YouTube and Facebook', onClick: () => setPublishModal(true) },
+    ] },
+    { label: 'Edit', items: [
+      { label: 'Undo', icon: 'undo', shortcut: 'Ctrl+Z', disabled: !canUndo, onClick: undo },
+      { label: 'Redo', icon: 'redo', shortcut: 'Ctrl+Y', disabled: !canRedo, onClick: redo },
+      { divider: true },
+      { label: 'Split at the playhead', shortcut: 'S', onClick: () => getState().splitAtPlayhead() },
+      { label: 'Delete clip', shortcut: 'Del', disabled: !selectedClipId, onClick: removeSelected },
+      { label: 'Ripple delete', shortcut: 'Shift+Del', disabled: !selectedClipId, onClick: () => { if (!getState().rippleDeleteSelected()) flash('Ripple delete would move a clip on a locked track (or split a linked pair). Unlock it first.') } },
+    ] },
+    { label: 'View', items: [
+      { label: 'Audio mixer', checked: mixerOpen, shortcut: 'Ctrl+Alt+M', onClick: () => setMixerOpen((o) => !o) },
+      { divider: true },
+      { heading: 'Appearance' },
+      { label: 'Light', icon: 'sun', checked: theme !== 'dark', onClick: () => useStore.getState().setTheme('light') },
+      { label: 'Dark', icon: 'moon', checked: theme === 'dark', onClick: () => useStore.getState().setTheme('dark') },
+    ] },
+    help.menu,
+  ]
+
   return (
     <div className="video-workspace">
       <PlaybackEngine />
@@ -1036,6 +1074,7 @@ function VideoDesk() {
       {/* 1. Header */}
       <header className="vw-header">
         <WorkspaceSwitcher />
+        <MenuBar menus={menus} />
         <div className="vw-brand">
           <input type="text" className="vw-title-input" value={project.name} onChange={(e) => setProjectName(e.target.value)} aria-label="Project name" data-tip="Project name" />
         </div>
@@ -1059,17 +1098,12 @@ function VideoDesk() {
             <IconButton icon="undo" tip="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo} />
             <IconButton icon="redo" tip="Redo (Ctrl+Y)" disabled={!canRedo} onClick={redo} />
           </div>
-          <button type="button" className="btn sm subtle vw-new" onClick={doNew} data-tip="New empty video"><Icon name="filePlus" size={13} /><span className="vw-lbl">New</span></button>
-          <button type="button" className="btn sm subtle vw-open" onClick={doOpen} data-tip="Open a video project (.esbvideo)"><Icon name="folder" size={13} /><span className="vw-lbl">Open</span></button>
-          <button type="button" className="btn sm subtle vw-save" onClick={() => void doSave()} data-tip="Save the project (Ctrl+S)"><Icon name="download" size={13} /><span className="vw-lbl">Save</span></button>
           {voPhase === 'recording' ? (
             <button type="button" className="btn danger sm vw-hdr-stop" onClick={stopVoiceover} data-tip="Stop recording (R)"><span className="vw-rec-dot" aria-hidden="true" /><span className="vw-lbl">Stop take</span><span className="mono">{Math.floor(voSeconds / 60)}:{String(voSeconds % 60).padStart(2, '0')}</span></button>
           ) : voPhase !== 'idle' ? (
             <button type="button" className="btn sm vw-hdr-cancel" onClick={cancelVoiceover} data-tip="Cancel the countdown (Esc). This is the voiceover take, not the export">Cancel take</button>
-          ) : (
-            <button type="button" className="btn sm subtle vw-hdr-record" onClick={() => void startVoiceover()} data-tip="Record a voiceover (R): 3-2-1, then it records at the playhead"><Icon name="mic" size={13} /><span className="vw-lbl">Record</span></button>
-          )}
-          <button type="button" className="btn sm vw-hdr-publish" onClick={() => setPublishModal(true)} data-tip="Render sizes, post to YouTube and Facebook (you approve every post)" aria-label="Publish: render sizes and post"><Icon name="globe" size={13} /><span className="vw-lbl">Publish</span></button>
+          ) : null}
+          <AiChip role="main" onToast={flash} />
           <button type="button" className="btn primary sm" onClick={() => setExportModal(true)} disabled={exporting}>
             <Icon name="download" size={14} /> {exporting ? 'Exporting…' : 'Export'}
           </button>
@@ -1292,6 +1326,7 @@ function VideoDesk() {
       })()}
       {mixerOpen && <MixerPanel bottom={timelineH + 28 + 8} onClose={() => setMixerOpen(false)} />}
       {showKeys && <ShortcutsSheet onClose={() => setShowKeys(false)} />}
+      {help.dialogs}
       {pasteAttrs && <PasteAttributesDialog onClose={() => setPasteAttrs(false)} flash={flash} />}
       {publishModal && <PublishSheet onClose={() => setPublishModal(false)} />}
       {exportModal && <ExportSheet project={playable(project)} onClose={() => setExportModal(false)} onShowMedia={() => { setExportModal(false); showTab('media') }} />}

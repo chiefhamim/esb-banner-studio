@@ -1964,3 +1964,23 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .av-tick { position: absolute; right: -2px; bottom: -2px; display: grid; place-items: center; width: 18px; height: 18px; color: var(--sel-ink); background: var(--sel); border-radius: 50%; box-shadow: 0 0 0 2px var(--card); }
 .av-foot { display: flex; align-items: center; gap: 10px; }
 .av-credit { flex: 1; min-width: 0; font: 400 11.5px/16px var(--ui); color: var(--text-3); }
+
+/* ---- Desk consistency pass (2026-11-10): one header order on every desk ----
+   Video gets the shared menu bar (it had five icon buttons); the Editorial header carries the open story as a chip,
+   like Outreach's campaign chip. */
+.vw-header .menubar { gap: 0; margin: 0 2px; }
+.vw-header .mb-item { display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 10px; color: var(--text); background: transparent; border-radius: var(--r-2); }
+.vw-header .mb-item:hover, .vw-header .mb-item.open { background: var(--fill-hover); }
+@container vwh (max-width: 1180px) { .vw-header .ed-ai-chip .ed-ai-label { display: none; } .vw-header .ed-ai-chip { padding: 0 9px; min-width: 0; } }
+@container vwh (max-width: 1000px) { .vw-header .mb-item { padding: 0 7px; } }
+.topbar.ed-head .ed-story-chip { min-width: 0; flex: 0 1 auto; margin-right: 0; }
+.topbar.ed-head .ed-story-chip .or-camp-name { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+@container topbar (max-width: 1240px) { .topbar.ed-head .ed-story-chip .or-camp-name { max-width: 160px; } }
+@container topbar (max-width: 1100px) { .topbar.ed-head .ed-story-chip { display: none; } }
+/* Graphics carries the AI chip (Fetch & Translate) and the account avatar too: labels go before buttons */
+@container topbar (max-width: 1500px) { .topbar.gx-head .ed-ai-chip .ed-ai-label, .topbar.gx-head .drag-post-chip .dpc-label { display: none; } .topbar.gx-head .ed-ai-chip { padding: 0 9px; min-width: 0; } }
+/* undo, redo and copy-image live in Edit/File and their shortcuts (as under 1000 px before) */
+@container topbar (max-width: 1320px) { .topbar.gx-head .menubar .mb-item { padding-left: 7px; padding-right: 7px; } .topbar.gx-head { gap: 6px; } .topbar.gx-head .pillbar > .ibtn, .topbar.gx-head .pillbar > .pill-sep { display: none; } }
+/* under 1000 px the format keeps its picture (its name is in the status bar) and Preview lives in View (P) */
+@container topbar (max-width: 1000px) { .topbar.gx-head .fmtpick .fp-name { display: none; } .topbar.gx-head .fmtgroup .pv-btn { display: none; } }
+@container topbar (max-width: 1000px) { .topbar.ed-head .ed-ai-chip .ed-ai-label { display: none; } .topbar.ed-head .ed-ai-chip { padding: 0 9px; min-width: 0; } }

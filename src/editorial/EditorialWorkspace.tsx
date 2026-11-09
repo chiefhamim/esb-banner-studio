@@ -46,6 +46,7 @@ import { useWatch } from '../news/watchStore'
 import { readDocument, readPdfWithAi, documentKind, fmtFileSize, DocumentImportError } from './importDocument'
 import { Field, Select, Check, IconButton, MenuBar, Panel, Seg, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
+import { useHelpMenu } from '../ui/HelpMenu'
 import { useStore } from '../store'
 import { CATEGORIES } from '../core/tokens'
 import type { Assets } from '../core/render'
@@ -1240,6 +1241,7 @@ export function EditorialWorkspace() {
     setTagInput('')
   }
 
+  const help = useHelpMenu()
   const menus: MenuDef[] = [
     { label: 'Story', items: [
       { label: 'New story', icon: 'plus', onClick: handleNewStory },
@@ -1272,6 +1274,7 @@ export function EditorialWorkspace() {
       { heading: 'Bengali reading font' },
       ...BN_FONTS.map((f) => ({ label: f.label, hint: f.note, checked: bnFont === f.id, onClick: () => setBnFont(f.id) })),
     ] },
+    help.menu,
   ]
 
   const [deskView, setDeskView] = useState<'desk' | 'insights'>('desk')
@@ -1281,8 +1284,15 @@ export function EditorialWorkspace() {
       <header className="topbar ed-head">
         <WorkspaceSwitcher />
         <MenuBar menus={menus} />
+        {hasStory && deskView === 'desk' && (
+          <button type="button" className="pv-btn or-camp-chip ed-story-chip" onClick={() => { setSourceOpen(true); setLeftTab('stories') }} data-tip={`${draft.headline.trim() || 'Untitled story'} — click for every story on the desk`}>
+            <Icon name="newspaper" size={14} />
+            <span className="or-camp-name">{draft.headline.trim() || 'Untitled story'}</span>
+          </button>
+        )}
         <div className="spacer" />
         <Seg<'desk' | 'insights'> value={deskView} onChange={setDeskView} className="ed-desk-seg" options={[{ value: 'desk', label: 'Desk', icon: 'edit', tip: 'Story desk — source, story and publishing' }, { value: 'insights', label: 'Insights', icon: 'chart', tip: 'Insights — how published stories did on Facebook, and what AI cost' }]} />
+        <div className="spacer" />
         <div className="fmtgroup ed-head-group">
           <IconButton icon="refresh" tip={syncing ? 'Syncing…' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
           {hasStory && (
@@ -1299,7 +1309,6 @@ export function EditorialWorkspace() {
             </button>
           )}
         </div>
-        <div className="spacer" />
         <TranslateProgress status={progressStatus} />
         <button type="button" className={'ed-ai-chip' + (mainAi ? ' on' : '') + (ai.paused ? ' paused' : '')} data-provider={ai.provider} onClick={() => setShowApiKeyModal(true)} aria-label="AI keys and roles" data-tip={ai.paused ? 'AI is OFF — nothing is sent to any AI company. Click to open the AI settings, or turn it ON in the Engine panel' : mainAi ? `Story: ${aiName} · ${aiModelLabel}${seoAi ? ` — SEO: ${providerMeta(seoAi.provider).name}` : ''}${socialAi ? ` — Social: ${providerMeta(socialAi.provider).name}` : ''}. Click to change` : 'AI is off — add a Gemini, Claude, OpenAI or OpenRouter key'}>
           {ai.paused ? <Icon name="power" size={14} /> : mainAi ? <ProviderMark id={ai.provider} size={18} /> : <Icon name="link" size={14} />}
@@ -1734,6 +1743,7 @@ export function EditorialWorkspace() {
           ========================================================================= */}
 
       {/* Staff Authentication Dialog */}
+      {help.dialogs}
       {showLoginModal && <SignInSheet onClose={() => setShowLoginModal(false)} onToast={showToast} />}
 
       {showApiKeyModal && <AiSettingsDialog onClose={() => setShowApiKeyModal(false)} onToast={showToast} />}

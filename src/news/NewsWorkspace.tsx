@@ -11,6 +11,7 @@ import { Icon } from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { Dialog, IconButton, MenuBar, MenuButton, Seg, Toggle } from '../ui/controls'
 import type { MenuDef, MenuEntry } from '../ui/controls'
+import { useHelpMenu } from '../ui/HelpMenu'
 import { Splitter } from '../ui/layout'
 import { fmtDateTime, fmtTime, useClockFormat } from '../ui/time'
 import { relTime } from '../editorial/wire'
@@ -330,6 +331,7 @@ export function NewsWorkspace() {
     { label: 'Mark as read', icon: 'check', disabled: !x || !isNew.has(x.key), onClick: () => x && useWatch.getState().markRead(x.key) },
     { label: 'Hide', icon: 'eyeOff', disabled: !x, onClick: () => x && hide(x) },
   ]
+  const help = useHelpMenu({ shortcuts: [{ group: 'Headlines', rows: [['/', 'Search headlines'], ['Esc', 'Clear the search'], ['↑ / ↓', 'Previous / next headline'], ['Enter', 'Start a story from the headline']] }] })
   const menus: MenuDef[] = [
     { label: 'News', items: [
       { label: range ? 'Search this range again' : 'Check now', icon: 'refresh', disabled: busy, onClick: refresh },
@@ -359,6 +361,7 @@ export function NewsWorkspace() {
       { label: 'Dark', icon: 'moon', checked: theme === 'dark', onClick: () => useStore.getState().setTheme('dark') },
     ] },
     { label: 'Headline', items: headlineItems(selected) },
+    help.menu,
   ]
   const timeMenu: MenuEntry[] = [
     ...WINDOWS.map((h) => ({ label: windowLabel(h), checked: !range && prefs.maxAgeH === h, onClick: () => setWindow(h) })),
@@ -629,6 +632,7 @@ export function NewsWorkspace() {
       )}
       {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} onRestored={() => say('EnergyWatch settings restored')} />}
       {dialog === 'range' && <RangeDialog onClose={() => setDialog(null)} />}
+      {help.dialogs}
     </div>
   )
 }

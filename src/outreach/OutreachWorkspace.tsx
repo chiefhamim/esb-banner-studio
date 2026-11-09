@@ -35,6 +35,7 @@ import { aiFor, providerMeta } from '../editorial/aiProviders'
 import { useStore } from '../store'
 import { Icon } from '../ui/Icon'
 import { MenuBar, Tabs, Seg, type MenuDef } from '../ui/controls'
+import { useHelpMenu } from '../ui/HelpMenu'
 import { fmtTime, useClockFormat } from '../ui/time'
 import { mailFailView } from './mailCheck'
 
@@ -119,6 +120,7 @@ export function OutreachWorkspace() {
   }
 
   const openTab = (left: LeftTab) => ui.set({ left })
+  const help = useHelpMenu({ shortcuts: [{ group: 'Letter', rows: [['Ctrl + B', 'Bold'], ['Ctrl + I', 'Italic'], ['Ctrl + K', 'Link']] }] })
   const menus: MenuDef[] = [
     { label: 'Campaign', items: [
       { label: 'New campaign', icon: 'plus', disabled: !idle, onClick: () => void s.createCampaign() },
@@ -175,6 +177,7 @@ export function OutreachWorkspace() {
       { label: 'Light', icon: 'sun', checked: theme !== 'dark', onClick: () => useStore.getState().setTheme('light') },
       { label: 'Dark', icon: 'moon', checked: theme === 'dark', onClick: () => useStore.getState().setTheme('dark') },
     ] },
+    help.menu,
   ]
 
   const smtp = s.smtp
@@ -187,7 +190,6 @@ export function OutreachWorkspace() {
       <header className="topbar ed-head or-head">
         <WorkspaceSwitcher />
         <MenuBar menus={menus} />
-        <div className="spacer" />
         {c && (
           <button type="button" className="pv-btn or-camp-chip" onClick={() => openTab('campaigns')} data-tip={`${c.name} — ${STATUS_TEXT[c.status]}. Click for every campaign`}>
             <i className={'or-dot cs-' + c.status} aria-hidden />
@@ -195,6 +197,7 @@ export function OutreachWorkspace() {
             <span className="dpc-tag">{c.kind === 'direct' ? `${audience.length} to` : `${ready} ready`}</span>
           </button>
         )}
+        <div className="spacer" />
         <Seg<'compose' | 'activity'>
           value={ui.desk}
           onChange={(desk) => ui.set({ desk })}
@@ -299,6 +302,7 @@ export function OutreachWorkspace() {
       {ui.sheet === 'subject-versions' && c && <SubjectVersionsDialog onClose={() => ui.set({ sheet: null })} />}
       {ui.sheet === 'assistant' && <AssistantDialog onClose={() => ui.set({ sheet: null })} />}
       <AskDialog />
+      {help.dialogs}
     </div>
   )
 }

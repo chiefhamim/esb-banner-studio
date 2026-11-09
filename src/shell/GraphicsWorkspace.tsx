@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties } from 'react'
-import logoUrl from '../assets/images/esb-logo.png'
 import type { Assets } from '../core/render'
 import type { FormatId } from '../core/types'
 import { Stage } from '../components/Stage'
@@ -13,20 +12,21 @@ import type { ExportSettings } from '../export'
 import { openProject, openRecent, readRecent, saveProject } from '../project'
 import { hint, pointer, restoreSessionPhotos, useStore } from '../store'
 import { CATEGORIES, FORMATS, getFormat } from '../core/tokens'
-import { ContextMenu, Dialog, IconButton, MenuBar, MenuButton, Select, Tabs } from '../ui/controls'
+import { ContextMenu, IconButton, MenuBar, MenuButton, Select, Tabs } from '../ui/controls'
 import type { MenuDef } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import { DEFAULT_LAYOUT, LIMITS, Splitter, loadLayout, saveLayout } from '../ui/layout'
 import type { LayoutState } from '../ui/layout'
 import { useShellStore } from './shellStore'
 import { WorkspaceSwitcher } from './WorkspaceRail'
-import { WelcomeModal } from '../ui/WelcomeModal'
+import { ShortcutsDialog, useHelpMenu, type ShortcutGroup } from '../ui/HelpMenu'
+import { AiChip } from '../editorial/AiChip'
 
 type Tab = 'story' | 'photos'
 
 const gridCols = (lw: number, rw: number) => `46px clamp(264px, ${lw}px, 38vw) minmax(0, 1fr) clamp(264px, ${rw}px, 38vw)`
 
-const SHORTCUTS: { group: string; rows: [string, string][] }[] = [
+const SHORTCUTS: ShortcutGroup[] = [
   { group: 'File', rows: [['Ctrl + N', 'New banner'], ['Ctrl + Shift + N', 'Next story — keep this layout'], ['Ctrl + O', 'Open project'], ['Ctrl + S', 'Save project'], ['Ctrl + Shift + S', 'Save project as'], ['Ctrl + I', 'Import photos'], ['Ctrl + E', 'Export'], ['Ctrl + Shift + C', 'Copy banner as image']] },
   { group: 'Edit', rows: [['Ctrl + Z', 'Undo'], ['Ctrl + Y  /  Ctrl + Shift + Z', 'Redo'], ['Ctrl + X / C / V', 'Cut / copy / paste layers'], ['Ctrl + Shift + V', 'Paste in place'], ['Ctrl + D', 'Duplicate'], ['Del', 'Delete layer / hide template element'], ['Ctrl + A', 'Select all'], ['Esc', 'Deselect']] },
   { group: 'Tools', rows: [['P', 'Show / hide the live Facebook preview'], ['V', 'Select'], ['H  /  hold Space', 'Hand (pan)'], ['T', 'Add text'], ['R', 'Add rectangle']] },
@@ -95,8 +95,6 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   const [showKeys, setShowKeys] = useState(false)
   const [showPreview, setShowPreviewState] = useState(() => { try { return localStorage.getItem('esb-banner-studio/preview-open') === '1' } catch { return false } })
   const setShowPreview = useCallback((v: boolean | ((p: boolean) => boolean)) => setShowPreviewState((p) => { const n = typeof v === 'function' ? v(p) : v; try { localStorage.setItem('esb-banner-studio/preview-open', n ? '1' : '0') } catch { /* ignore */ } return n }), [])
-  const [showAbout, setShowAbout] = useState(false)
-  const [showWelcome, setShowWelcome] = useState(false)
   const [imgMenu, setImgMenu] = useState<{ x: number; y: number } | null>(null)
   // panel sizes: dragged live straight into CSS variables (no React render per frame), saved on release
   const catAccent = useStore((st) => CATEGORIES.find((c) => c.id === st.doc.content.categoryId)?.accent)
@@ -248,7 +246,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       const st = useStore.getState()
       const mod = e.ctrlKey || e.metaKey
       const k = e.key.toLowerCase()
-      if (e.key === 'Escape') { if (showKeys || showAbout || showWelcome) { setShowKeys(false); setShowAbout(false); setShowWelcome(false); return } if (!typing && !showExport) st.select(null); return }
+      if (e.key === 'Escape') { if (showKeys) { setShowKeys(false); return } if (!typing && !showExport) st.select(null); return }
       if (mod && k === 'e') { e.preventDefault(); setShowExport(true); return }
       if (mod && k === 's') { e.preventDefault(); void saveProject(e.shiftKey); return }
       if (mod && k === 'o') { e.preventDefault(); void openProject(); return }
@@ -309,7 +307,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [showKeys, showAbout, showExport, copyCurrent, addPhotos, setShowPreview])
+  }, [showKeys, showExport, copyCurrent, addPhotos, setShowPreview])
 
   // a click anywhere outside a text field releases focus from it, so Ctrl+Z / Delete / arrows act on the banner, not on stale text focus
   useEffect(() => {
@@ -353,6 +351,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   const st = useStore.getState
   const recent = readRecent()
   const has = selCount > 0
+  const help = useHelpMenu({ onShortcuts: () => setShowKeys(true) })
   const menus: MenuDef[] = [
     { label: 'File', items: [
       { label: 'New banner', icon: 'filePlus', shortcut: 'Ctrl+N', onClick: () => newBanner(false) },
@@ -368,7 +367,6 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       { divider: true },
       { label: 'Copy image to clipboard', icon: 'copy', shortcut: 'Ctrl+Shift+C', onClick: copyCurrent },
       { divider: true },
-      { label: 'Welcome screen', icon: 'home', onClick: () => setShowWelcome(true) },
       { label: 'Quit and start new', icon: 'reset', shortcut: 'Ctrl+Alt+Q', danger: true, onClick: cleanAndStartNew },
       ...(window.esb ? [{ label: 'Exit studio', icon: 'x' as const, danger: true, onClick: () => window.close() }] : []),
     ] },
@@ -430,17 +428,12 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       { divider: true },
       { label: 'Dark theme', checked: theme === 'dark', onClick: () => st().setTheme(theme === 'dark' ? 'light' : 'dark') },
     ] },
-    { label: 'Help', items: [
-      { label: 'Welcome screen', icon: 'home', onClick: () => setShowWelcome(true) },
-      { label: 'Keyboard shortcuts', icon: 'keyboard', shortcut: '?', onClick: () => setShowKeys(true) },
-      { divider: true },
-      { label: 'About ESB AI Studio', icon: 'info', onClick: () => setShowAbout(true) },
-    ] },
+    help.menu,
   ]
 
   return (
     <div className="app" ref={appRef} style={{ gridTemplateColumns: gridCols(layout.lw, layout.rw), ['--dock']: layout.dock + 'px', ['--cat']: catAccent, ['--cat-ink']: catInk } as CSSProperties}>
-      <header className="topbar">
+      <header className="topbar gx-head">
         <WorkspaceSwitcher />
         <MenuBar menus={menus} />
         {returnTo === 'editorial' && (
@@ -478,6 +471,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
             <span className="dpc-tag">{format === 'web' ? '16:9' : format === 'fb45' ? '4:5' : '1:1'}</span>
           </button>
         </div>
+        <AiChip role="main" onToast={(m) => st().setNotice(m)} />
         <div className="split">
           <button className="btn primary" disabled={busy} onClick={() => setShowExport(true)}><Icon name="download" size={15} />{busy ? 'Exporting…' : 'Export'}</button>
           <MenuButton className="primary split-caret" align="end" title="Quick export" items={[
@@ -554,49 +548,8 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
 
       {showExport && <ExportDialog base={base} settings={exp} setSettings={setExp} onClose={() => setShowExport(false)} />}
 
-      {showKeys && (
-        <Dialog title="Keyboard shortcuts" kicker="Reference" onClose={() => setShowKeys(false)} width={900}>
-          <div className="keys-groups">
-            {SHORTCUTS.map((g) => (
-              <section key={g.group}>
-                <h4>{g.group}</h4>
-                {g.rows.map(([k, d]) => <div key={k} className="krow"><span>{d}</span><kbd>{k}</kbd></div>)}
-              </section>
-            ))}
-          </div>
-        </Dialog>
-      )}
-
-      {showAbout && (
-        <Dialog title="About ESB AI Studio" kicker="ESB Power Line" onClose={() => setShowAbout(false)} width={480}>
-          <div className="about2">
-            <div className="about2-hero">
-              <span className="logo-wrap big"><img src={logoUrl} alt="ESB Power Line" /></span>
-              <div className="about2-stripe" aria-hidden><i /><i /><i /></div>
-              <h3>ESB AI <span>Studio</span></h3>
-              <p>Where stories are written, imagination is designed and reality is cut.</p>
-              <span className="about2-ver">Version {__APP_VERSION__}</span>
-            </div>
-            <div className="about2-desks">
-              <div><Icon name="newspaper" size={18} /><b>Editorial</b><small>Link in, English story out</small></div>
-              <div><Icon name="layers" size={18} /><b>Graphics</b><small>Banners and social cards</small></div>
-              <div><Icon name="video" size={18} /><b>Video</b><small>Timeline, titles and export</small></div>
-            </div>
-            <div className="about2-author">
-              <div className="about-avatar">HR</div>
-              <div className="about-meta">
-                <span className="kicker">Designed &amp; engineered by</span>
-                <b>Hamim Ruwayfi</b>
-                <small>Editorial &amp; Newsroom Workflow</small>
-              </div>
-              <a className="about2-link" href="https://facebook.com/chiefhamim" target="_blank" rel="noopener noreferrer"><Icon name="link" size={14} />Facebook</a>
-            </div>
-            <p className="about2-foot">Everything runs on this PC — fonts, artwork and templates are bundled. © ESB Power Line, Express Broadcast and Communication Ltd.</p>
-          </div>
-        </Dialog>
-      )}
-
-      {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} />}
+      {showKeys && <ShortcutsDialog groups={SHORTCUTS} onClose={() => setShowKeys(false)} />}
+      {help.dialogs}
 
 
       <input ref={file} type="file" accept="image/*" multiple hidden
