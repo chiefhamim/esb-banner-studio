@@ -1,6 +1,7 @@
 // DOMParser-based offline article extractor.
 // Extracts clean article headline, deck, body paragraphs, byline, publisher, date, and media from HTML.
 import { sanitizeBodyHtml } from './richBody'
+import { pinStoryBody } from './storyData'
 
 export interface ExtractedImage {
   src: string
@@ -247,7 +248,9 @@ export function cleanAndDedupeParagraphs(rawList: string[]): string[] {
   return deduped
 }
 
-export function parseArticleDocument(html: string, url?: string): ExtractedArticle {
+export function parseArticleDocument(rawHtml: string, url?: string): ExtractedArticle {
+  // Quintype sites (Prothom Alo …) ship the story as data: pin it as the body before anything else reads the page
+  const html = pinStoryBody(rawHtml)
   let doc: Document | null = null
 
   if (typeof DOMParser !== 'undefined') {

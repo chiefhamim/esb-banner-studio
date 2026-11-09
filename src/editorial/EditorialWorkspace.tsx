@@ -55,7 +55,7 @@ import { autoDesk } from './deskFlag'
 import { detectCategory, suggestHighlight } from '../core/newsroom'
 import { extractFactTable, type FactItem } from './facts'
 import { bengaliToAsciiDigits } from './bengali'
-import { alignKeywords, seoFields, translateNewsArticle } from './translator'
+import { alignKeywords, seoFields, translateNewsArticle, translationNoticeFor } from './translator'
 import { AiSettingsDialog } from './AiSettingsDialog'
 import { TranslateProgress } from './TranslateProgress'
 import { useJobLog } from './jobLog'
@@ -615,7 +615,7 @@ export function EditorialWorkspace() {
       }))
 
       setProgressStatus(null)
-      setDraftNotice(translation.translationFailed ? 'Part of the story could not be translated — the Bengali is left in place for you to translate.' : translation.coverageWarning ?? null)
+      setDraftNotice(translationNoticeFor(translation))
       showToast(
         translation.translationFailed
           ? 'No translation service reachable — draft still has untranslated Bengali, review before publishing'
@@ -712,7 +712,7 @@ export function EditorialWorkspace() {
         if (res.facebook) setSocialCaption('facebook', res.facebook)
       }
 
-      setDraftNotice(res.translationFailed ? 'Part of the story could not be translated — the Bengali is left in place for you to translate.' : res.coverageWarning ?? null)
+      setDraftNotice(translationNoticeFor(res))
       showToast(
         res.translationFailed
           ? 'No translation service reachable — draft still has untranslated Bengali, review before publishing'

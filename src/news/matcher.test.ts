@@ -1,3 +1,4 @@
+// News engine (shared, identical in ESB Studio PC src/news and ESB Studio Phone src/mobile/watch; tools/sync-pc.mjs news).
 // EnergyWatch's own matcher cases (Yeasin, scripts/test-matcher.mjs, office copy of 2026-11-05), unchanged, run against
 // the keyword list bundled in ewSources.ts (the office server's live list).
 import { describe, expect, it } from 'vitest'
@@ -87,6 +88,23 @@ cases.push(
 
 describe('EnergyWatch matcher', () => {
   it.each(cases)('%s', (title, want) => {
+    expect(!!match(title)).toBe(want)
+  })
+})
+
+// --- false friends and right boundaries (2026-11-09 audit) ---
+describe('EnergyWatch matcher: false friends', () => {
+  it.each([
+    ['গ্যাস্ট্রিকের ব্যথায় ভুগছেন? জেনে নিন সমাধান', DROP],
+    ['বিদ্যুৎস্পৃষ্ট হয়ে দুই শ্রমিকের মৃত্যু', DROP],
+    ['বিদ্যুতস্পৃষ্টে কৃষকের মৃত্যু গাজীপুরে', DROP],
+    ['Rare total solar eclipse visible from Asia next year', DROP],
+    ['Worker electrocuted at construction site in Gazipur', DROP],
+    ['বিদ্যুৎস্পৃষ্ট হয়ে পল্লী বিদ্যুতের লাইনম্যানের মৃত্যু, বিদ্যুৎ সরবরাহ বন্ধ', KEEP],
+    ['গ্যাসের দাম বাড়ানোর প্রস্তাব বিইআরসিতে', KEEP],
+    ['Bangladesh opens largest solar park in Teknaf', KEEP],
+    ['বিদ্যুত্‍ বিভাগের নতুন সচিব যোগ দিলেন', KEEP],
+  ] as [string, boolean][])('%s', (title, want) => {
     expect(!!match(title)).toBe(want)
   })
 })

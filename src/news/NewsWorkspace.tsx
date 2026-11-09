@@ -78,6 +78,7 @@ function useAutoCheck() {
       if (lastRun == null || (every > 0 && Date.now() - lastRun >= every)) void run()
     }
     tick()
+    void useWatch.getState().translateTitles() // lines for headlines kept from the last session
     const id = window.setInterval(tick, 20_000)
     document.addEventListener('visibilitychange', tick)
     return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', tick) }
@@ -366,7 +367,7 @@ export function NewsWorkspace() {
     { label: 'Pick dates and times…', icon: 'calendar', checked: !!range, onClick: () => setDialog('range') },
   ]
 
-  const when = (x: WatchItem) => (x.published ? (range || cat === 'press' ? fmtDateTime(Date.parse(x.published)) : relTime(Math.min(Date.parse(x.published), now), now)) : `found ${relTime(Math.min(x.foundAt, now), now)}`)
+  const when = (x: WatchItem) => (x.published ? (range || cat === 'press' ? fmtDateTime(Date.parse(x.published)) : relTime(Math.min(Date.parse(x.published), now), now)) : `time not given · found ${relTime(Math.min(x.foundAt, now), now)}`)
   const cats: ('all' | WatchCat)[] = ['all', ...(['energy', 'leadership', 'press'] as WatchCat[]).filter((c) => prefs.show[c] !== false)]
   const filtered = !!needle || cat !== 'all' || !!portal
   const feedTone = busy ? 'on' : down > portalsOn / 2 ? 'off' : down ? 'warn' : lastRun ? 'on' : 'idle'
@@ -523,6 +524,7 @@ export function NewsWorkspace() {
                             {x.google && <span className="nw-tag" data-tip="Via Google News — publisher page resolved automatically"><Icon name="globe" size={12} /></span>}
                           </span>
                           <span className="nw-hl" lang={lang(x.title)}>{x.title}</span>
+                          {x.titleEn && prefs.titleEn !== false && <span className="nw-title-en" lang="en">{x.titleEn}</span>}
                         </button>
                         <span className="nw-row-acts">
                           <button type="button" className="btn nw-start" onClick={() => startStory(x)} data-tip="Start a story from this link (Enter)"><Icon name="filePlus" size={14} />Start a story</button>
@@ -738,6 +740,7 @@ function SettingsDialog({ onClose, onRestored }: { onClose: () => void; onRestor
           <div className="nw-rows">
             <div className="nw-setrow"><span className="nw-setrow-ic is-energy"><Icon name="bolt" size={15} /></span><span className="nw-setrow-t"><b>Energy & Power</b><small>Electricity, gas, fuel, LNG, LPG, power plants, grid, renewable energy & sector companies</small></span><Toggle checked={prefs.show.energy !== false} label="Energy & Power" onChange={(v) => setPrefs({ show: { ...prefs.show, energy: v } })} /></div>
             <div className="nw-setrow"><span className="nw-setrow-ic is-lead"><Icon name="users" size={15} /></span><span className="nw-setrow-t"><b>PM & President</b><small>Bangladesh's Prime Minister and President (foreign leaders & non-state org presidents are excluded)</small></span><Toggle checked={prefs.show.leadership !== false} label="PM and President" onChange={(v) => setPrefs({ show: { ...prefs.show, leadership: v } })} /></div>
+            <div className="nw-setrow"><span className="nw-setrow-ic"><Icon name="globe" size={15} /></span><span className="nw-setrow-t"><b>English line under Bangla headlines</b><small>Free machine translation, filled in the background; never holds up the list</small></span><Toggle checked={prefs.titleEn !== false} label="English line under Bangla headlines" onChange={(v) => { setPrefs({ titleEn: v }); if (v) void useWatch.getState().translateTitles() }} /></div>
             <div className="nw-setrow"><span className="nw-setrow-ic is-press"><Icon name="shield" size={15} /></span><span className="nw-setrow-t"><b>Official Press Releases</b><small>Official press wings of Power Division, EMRD, BERC, SREDA, PMO, Bangabhaban, PID, BPDB, Petrobangla, BPC, BREB, PGCB & utilities</small></span><Toggle checked={prefs.show.press !== false} label="Official Press Releases" onChange={(v) => setPrefs({ show: { ...prefs.show, press: v } })} /></div>
           </div>
         </section>

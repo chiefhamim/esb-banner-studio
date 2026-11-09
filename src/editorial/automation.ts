@@ -9,7 +9,7 @@ import {
   detectCategory,
   suggestHighlight,
 } from '../core/newsroom'
-import { translateNewsArticle } from './translator'
+import { translateNewsArticle, translationNoticeFor } from './translator'
 import type { EditorialTranslationResult } from './translator'
 import { decideEscalation, listModels, loadAiSettings, modelLabel, runWithModel, strongerModel } from './aiProviders'
 import { storyCaptions } from './aiDesk'
@@ -460,9 +460,7 @@ export async function automateNewsFromUrl(
 
   bannerStore.setNotice(`Auto-generated news for: “${englishHeadline.slice(0, 36)}…”`)
 
-  const translationNote = translation.translationFailed
-    ? 'Part of the story could not be translated (no translation service answered) — the Bengali is left in place for you to translate.'
-    : translation.coverageWarning
+  const translationNote = translationNoticeFor(translation) ?? undefined
   return {
     translationNote,
     url: cleanUrl,

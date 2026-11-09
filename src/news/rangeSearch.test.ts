@@ -1,4 +1,4 @@
-// Copied unchanged from ESB Studio Phone (src/mobile/watch/rangeSearch.test.ts, 2026-11-06). Keep the two copies in step.
+// News engine (shared, identical in ESB Studio PC src/news and ESB Studio Phone src/mobile/watch; tools/sync-pc.mjs news).
 import { describe, expect, it } from 'vitest'
 import { _test, checkRange, portalSites } from './rangeSearch'
 

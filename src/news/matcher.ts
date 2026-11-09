@@ -1,3 +1,4 @@
+// News engine (shared, identical in ESB Studio PC src/news and ESB Studio Phone src/mobile/watch; tools/sync-pc.mjs news).
 // EnergyWatch's headline matcher, copied from EnergyWatch (Yeasin, src/matcher.js, office copy of 2026-11-05) and typed for
 // this app. The rules are unchanged; only the types and the KwKind union are new. Its own test cases (scripts/test-matcher.mjs)
 // are in matcher.test.ts and run against the keyword list bundled in ewSources.ts.
@@ -20,6 +21,9 @@
 // Matching:
 //   English - whole word. ALL-CAPS acronyms (PM, LNG, US) are case-sensitive. Foreign / BD words also match simple endings.
 //   Bangla  - substring, so inflections match (বিদ্যুৎ -> বিদ্যুতের; ৎ also matches ত). Foreign / BD / leader words must start a word.
+//             Right boundary: a term may not run on into a conjunct (term + hasant + letter), so গ্যাস is not গ্যাস্ট্রিক.
+//   False friends (FALSE_FRIENDS) are blanked before keywords are looked for: বিদ্যুৎস্পৃষ্ট (electrocuted) is not a power
+//   story, "solar eclipse" not a solar one. Another energy word in the same headline still keeps it.
 
 export type KwKind = 'strong' | 'general' | 'bd' | 'foreign' | 'person' | 'block'
 export interface EwKeyword { term: string; kind: KwKind | string; category?: string | null }
@@ -51,7 +55,19 @@ const isTitleCase = (s: string) => { const w = s.split(/\s+/).filter((x) => x.le
 const OWN_PREFIX = /^(?:Bangladesh|Bangladeshi|BD|Dhaka|Interim|Caretaker|Honourable|Hon|Prime|Chief|Our|Govt|Government|Cabinet|National|Today|Yesterday|Tomorrow|Live|Breaking|Watch|Exclusive|Video|Photos|Update|Updated|Report|Says|Why|How|What)$/i
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-const bnVariants = (t: string) => [...new Set([t, t.replaceAll('ৎ', 'ত')])].map(escapeRe).join('|')
+// The word must not continue as a conjunct (hasant + letter). A hasant before a ZWJ or the end is the old spelling of ৎ.
+const BN_RIGHT = '(?!\\u09CD[\\u0980-\\u09FF])'
+const bnVariants = (t: string) => `(?:${[...new Set([t, t.replaceAll('ৎ', 'ত')])].map(escapeRe).join('|')})${BN_RIGHT}`
+
+/** Phrases that contain an energy word but are not energy news. Blanked (same length) before keywords are looked for. */
+export const FALSE_FRIENDS: RegExp[] = [
+  /বিদ্যু[ৎত]\s*স্পৃষ্ট[ঀ-৿]*/g, // electrocuted
+  /বিদ্যু[ৎত]\s*গতি[ঀ-৿]*/g, // "at lightning speed"
+  /বিদ্যু[ৎত]\s*চমক[ঀ-৿]*/g, // a flash of lightning
+  /\bsolar\s+(?:eclipses?|system|flares?|storms?|cycle|maximum|minimum|orbiter|probe|observatory)\b/gi,
+  /\belectrocut\w*/gi,
+]
+const maskFalseFriends = (t: string) => FALSE_FRIENDS.reduce((s, re) => s.replace(re, (m) => ' '.repeat(m.length)), t)
 
 interface Group { any: (s: string) => boolean; atEnd: (s: string) => boolean; atStart: (s: string) => boolean }
 
@@ -131,11 +147,12 @@ export function buildMatcher(keywordRows: EwKeyword[]): (title: string) => Match
   return function match(rawTitle: string) {
     const title = (rawTitle || '').trim()
     if (!title || title.split(/\s+/).length < MIN_WORDS) return null
-    if (!anyKeyword.any(title)) return null
+    const scan = maskFalseFriends(title)
+    if (!anyKeyword.any(scan)) return null
     if (block.any(title)) return null
 
-    const strongHits = strong.filter((x) => x.re.test(title))
-    let hits = general.filter((x) => x.re.test(title))
+    const strongHits = strong.filter((x) => x.re.test(scan))
+    let hits = general.filter((x) => x.re.test(scan))
 
     const hasBd = bd.any(title)
     const hasBdSide = bdSide(title)

@@ -1,4 +1,4 @@
-// Copied unchanged from ESB Studio Phone (src/mobile/watch/portalBrands.ts, 2026-11-06). Keep the two copies in step.
+// News engine (shared, identical in ESB Studio PC src/news and ESB Studio Phone src/mobile/watch; tools/sync-pc.mjs news).
 // Each EnergyWatch portal's own favicon and brand colour, fetched 2026-11-05 (favicon through Google's public favicon
 // service, 64 px; colour measured from the favicon's pixels: its most common strong colour, kept dark enough to read as text).
 // null colour = the portal's mark is black or grey: its name is shown in ink. Regenerate with scratch tooling if a portal rebrands.

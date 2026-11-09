@@ -1,5 +1,5 @@
-// Copied from ESB Studio Phone (src/mobile/watch/rangeSearch.ts, 2026-11-06). Keep the two copies in step. Desktop difference:
-// Bing News feeds are read here too, so portalSites reads their site: query like a Google News one.
+// News engine (shared, identical in ESB Studio PC src/news and ESB Studio Phone src/mobile/watch; tools/sync-pc.mjs news).
+// Bing News feeds name their portal in a site: query too (the PC reads them; the phone leaves them out in isPhoneFeed).
 // EnergyWatch for a chosen time range ("1 Nov 9 AM to 3 Nov 4 PM"): every energy and PM & President headline the portals
 // published in between.
 //

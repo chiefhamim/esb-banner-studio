@@ -1,4 +1,4 @@
-// Copied unchanged from ESB Studio Phone (src/mobile/watch/ewSources.ts, 2026-11-06). Keep the two copies in step.
+// News engine (shared, identical in ESB Studio PC src/news and ESB Studio Phone src/mobile/watch; tools/sync-pc.mjs news).
 // EnergyWatch's news sources and keyword rules, copied from the office server's live database on 2026-11-05
 // (EnergyWatch by Yeasin, C:\Users\User\EnergyWatch on ESBPL: tables feeds and keywords, read-only; no users, sessions or
 // items were copied). 80 feeds (77 switched on there), 514 keyword rules.

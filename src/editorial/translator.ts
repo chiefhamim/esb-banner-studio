@@ -34,7 +34,36 @@ export interface EditorialTranslationResult {
   translationFailed?: boolean
   /** Set when the translation looks shorter than the source (paragraphs missing), so the desk can say so. */
   coverageWarning?: string
+  /** Set when the editor's AI failed and the free machine translation was used instead: why, for a lasting notice on the draft. */
+  translationNote?: string
 }
+
+/** The one lasting notice a draft should carry after a translation (AI fallback, untranslated Bengali, short coverage), or null. */
+export function translationNoticeFor(t: Pick<EditorialTranslationResult, 'translationFailed' | 'coverageWarning' | 'translationNote'>): string | null {
+  const parts: string[] = []
+  if (t.translationNote) parts.push(t.translationNote)
+  if (t.translationFailed) parts.push('Part of the story could not be translated — the Bengali is left in place for you to translate.')
+  if (t.coverageWarning) parts.push(t.coverageWarning)
+  return parts.length ? parts.join(' ') : null
+}
+
+/** Longest the desk waits for one AI model before moving on (the next model, then the free translation). */
+export const AI_WAIT_MS = { careful: 90_000, fast: 75_000 }
+/** Free-service requests in flight at once for one story, and how often a failed one is retried. */
+const FREE_CONCURRENCY = 3
+const FREE_RETRIES = 2
+
+/** Run fn over items with at most n at a time; results stay in item order. */
+async function mapLimited<T, R>(items: T[], n: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (next < items.length) { const i = next++; out[i] = await fn(items[i], i) }
+  }))
+  return out
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /** True when the renderer has no network path at all; skip remote translation attempts immediately instead of waiting out their timeouts. */
 function isOffline(): boolean {
@@ -298,15 +327,16 @@ async function translateParagraph(p: string): Promise<string> {
  * Google GTX roundtrip (or parallel chunks if > 3,500 characters).
  */
 export async function translateParagraphsBatch(paragraphs: string[]): Promise<string[]> {
-  const cleanList = paragraphs.map((p) => p.trim()).filter(Boolean)
-  if (cleanList.length === 0) return []
+  // results stay aligned with the input: result i is paragraph i (an empty paragraph gives '')
+  const cleanList = paragraphs.map((p) => p.trim())
+  if (!cleanList.some(Boolean)) return cleanList.map(() => '')
 
   const hasBengali = cleanList.some((p) => /[\u0980-\u09FF]/.test(p))
   if (!hasBengali) {
     return cleanList.map((p) => polishJournalisticBody(p))
   }
   if (injectedTranslator()) {
-    return Promise.all(cleanList.map((p) => translateParagraph(p)))
+    return mapLimited(cleanList, FREE_CONCURRENCY, (p) => translateParagraph(p))
   }
 
   // Group into batches GTX accepts in one GET (see GTX_MAX); a paragraph longer than that goes alone and is chunked
@@ -318,6 +348,7 @@ export async function translateParagraphsBatch(paragraphs: string[]): Promise<st
 
   for (let i = 0; i < cleanList.length; i++) {
     const p = cleanList[i]
+    if (!p) continue
     const addedLen = p.length + (curText ? 2 : 0)
     if (curText && curText.length + addedLen > GTX_MAX) {
       batches.push({ indices: curIdxs, text: curText })
@@ -334,13 +365,18 @@ export async function translateParagraphsBatch(paragraphs: string[]): Promise<st
 
   const results: string[] = new Array(cleanList.length)
 
-  await Promise.all(
-    batches.map(async (batch) => {
+  // at most FREE_CONCURRENCY requests at once (a burst of parallel GETs is what makes the free service refuse), each
+  // retried with a growing pause before its paragraphs fall back to one-by-one translation
+  await mapLimited(
+    batches,
+    FREE_CONCURRENCY,
+    async (batch) => {
       let translated = ''
-      if (!isOffline()) {
+      for (let attempt = 0; attempt <= FREE_RETRIES && !translated.trim() && !isOffline(); attempt++) {
+        if (attempt) await sleep(600 * 2 ** (attempt - 1))
         try {
           const controller = new AbortController()
-          const timer = setTimeout(() => controller.abort(), 4000)
+          const timer = setTimeout(() => controller.abort(), 6000)
           const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=bn&tl=en&dt=t&q=${encodeURIComponent(batch.text)}`
           const res = await fetch(gtxUrl, { signal: controller.signal })
           clearTimeout(timer)
@@ -363,16 +399,13 @@ export async function translateParagraphsBatch(paragraphs: string[]): Promise<st
         }
       }
 
-      // If batch count mismatched or failed, translate paragraphs of this batch concurrently
-      await Promise.all(
-        batch.indices.map(async (origIdx) => {
-          results[origIdx] = await translateParagraph(cleanList[origIdx])
-        })
-      )
-    })
+      // If batch count mismatched or failed, translate paragraphs of this batch one at a time
+      for (const origIdx of batch.indices) results[origIdx] = await translateParagraph(cleanList[origIdx])
+    },
   )
 
-  return results.filter(Boolean)
+  // never drop a slot: a paragraph without a result keeps its (digit-normalised) source, so it is flagged as Bengali
+  return cleanList.map((p, i) => results[i] ?? (p ? polishJournalisticBody(bengaliToAsciiDigits(p)) : ''))
 }
 
 // ---------------------------------------------------------------- AI translation (the editor's chosen provider)
@@ -437,7 +470,7 @@ async function translateWithAi(
     const label = ai.provider === 'gemini' ? geminiLabel(model) : `${name} · ${listed.find((m) => m.id === model)?.label ?? model}`
     onProgress?.(`Translating with ${label}…`)
     try {
-      // A full article takes a fast model 10–30 s and a careful one up to a minute or two.
+      // A full article takes a fast model 10–30 s and a careful one about a minute; past AI_WAIT_MS the desk moves on.
       const { data, model: used } = await aiJson<Record<string, string>>({
         provider: ai.provider, key: ai.key, model,
         system: `${translationPrompt()}\n\n${REPLY_RULES}`,
@@ -445,7 +478,7 @@ async function translateWithAi(
         schema: TRANSLATION_SCHEMA,
         maxTokens: 32000,
         effort: 'medium',
-        timeoutMs: /pro|opus/.test(model) ? 240_000 : 150_000,
+        timeoutMs: /pro|opus/.test(model) ? AI_WAIT_MS.careful : AI_WAIT_MS.fast,
       })
       if (!data.headline || !data.body) { lastError = `${label} returned no article`; continue }
       return {
@@ -487,6 +520,7 @@ export async function translateNewsArticle(
   onProgress?: (status: string) => void,
 ): Promise<EditorialTranslationResult> {
   const ai = aiFor('main')
+  let aiNote: string | undefined
 
   const combinedBengaliText = [
     `Title: ${input.title}`,
@@ -535,6 +569,7 @@ export async function translateNewsArticle(
       }
       console.warn(`${providerMeta(ai.provider).name} translation failed, using built-in newsroom engine:`, err)
       onProgress?.(`${providerMeta(ai.provider).name} unavailable (${(err as Error).message}), switching to machine translation…`)
+      aiNote = `${providerMeta(ai.provider).name} could not translate this story (${(err as Error).message}); this is the free machine translation — check it line by line before publishing.`
     }
   }
 
@@ -575,7 +610,7 @@ export async function translateNewsArticle(
     })(),
   ])
 
-  const body = translatedParagraphs.join('\n\n') || headline
+  const body = translatedParagraphs.filter(Boolean).join('\n\n') || headline
 
   // SEO fields, built the way the SEO panel grades them
   const focusKeywords = extractFocusKeywords(headline, body)
@@ -598,5 +633,6 @@ export async function translateNewsArticle(
     metaDescription,
     body,
     provider: usedNeural && !translationFailed ? 'neural' : 'offline',
+    translationNote: aiNote,
   }
 }

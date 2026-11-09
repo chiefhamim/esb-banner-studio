@@ -1,6 +1,7 @@
-// Copied unchanged from ESB Studio Phone (src/mobile/watch/feedparse.ts, 2026-11-06). Keep the two copies in step.
+// News engine (shared, identical in ESB Studio PC src/news and ESB Studio Phone src/mobile/watch; tools/sync-pc.mjs news).
 // EnergyWatch's RSS / Atom parser, copied from EnergyWatch (Yeasin, src/feedparse.js, office copy of 2026-11-05) and typed.
-// A regex pass, no XML library. Unchanged apart from the types.
+// A regex pass, no XML library. Dates are read by dates.ts (BST, Bangla digits and months, zone-less = Dhaka).
+import { parseFeedDate } from './dates'
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
 
@@ -52,7 +53,7 @@ export function parseFeed(xml: string): FeedEntry[] {
     let title = clean(tag(b, 'title'))
     const source = clean(tag(b, 'source'))
     if (source && title.endsWith(' - ' + source)) title = title.slice(0, -(source.length + 3)).trim()
-    title = title.replace(/\s*[|–-]\s*[^|–-]*\.(com|কম|net|tv|org)\s*$/i, '').trim()
+    title = stripTitleSuffix(title)
 
     let link = isAtom ? atomLink(b) || '' : clean(tag(b, 'link'))
     const guid = clean(tag(b, 'guid')) || clean(tag(b, 'id'))
@@ -67,8 +68,15 @@ export function parseFeed(xml: string): FeedEntry[] {
   return items
 }
 
+/**
+ * A headline without the site name portals append to it: "… | jagonews24.com", "… - bonikbarta.com.bd", "… — samakal.com",
+ * "… | ঢাকাপোস্ট.কম". Only a trailing part that looks like a domain goes, so "… - 3.5 GW" or "ঢাকা-চট্টগ্রাম" stay.
+ */
+export function stripTitleSuffix(title: string): string {
+  return title.replace(/\s*[|–—-]\s*[^|–—-]*?\.(?:com|net|org|tv|news|info|live|bd|কম)(?:\.bd)?\s*$/i, '').trim()
+}
+
+/** A feed date as ISO, or null when it cannot be read (the item is then "time unknown"). See dates.ts. */
 export function parseDate(s: string): string | null {
-  if (!s) return null
-  const t = Date.parse(s)
-  return Number.isNaN(t) ? null : new Date(t).toISOString()
+  return parseFeedDate(s)
 }
