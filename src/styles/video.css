@@ -160,7 +160,7 @@
    used to shrink to 1 px — a flex item — and every lane rose 27 px above its header). */
 .video-workspace { --vw-head-w: 192px; }
 .vw-timeline-footer { position: relative; min-height: 0; }
-.vw-tracks-scroll { overflow: auto; scrollbar-gutter: stable; align-items: flex-start; scrollbar-width: auto; scrollbar-color: color-mix(in srgb, var(--text) 32%, transparent) transparent; }
+.vw-tracks-scroll { overflow: auto; scrollbar-gutter: stable; align-items: flex-start;  }
 .vw-track-headers { width: var(--vw-head-w); align-self: stretch; min-height: 100%; height: max-content; }
 .vw-lanes-area { min-height: 100%; height: max-content; }
 .vw-ruler, .vw-lanes-container, .vw-track-head, .vw-track-lane, .vw-ruler-header { flex: none; box-sizing: border-box; }

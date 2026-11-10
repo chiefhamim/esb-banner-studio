@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import './App.css'
+import { DeskRail, useDeskNav } from './shell/WorkspaceRail'
 import { loadBaseAssets } from './core/assets'
 import type { Assets } from './core/render'
 import { HomeWorkspace } from './shell/HomeWorkspace'
@@ -119,12 +120,14 @@ export default function App() {
     }
   }, [])
 
+  const deskNav = useDeskNav()
   if (isGallery) {
     return <Suspense fallback={<DeskLoading />}><ComponentGallery /></Suspense>
   }
 
   return (
-    <div className="studio-shell">
+    <div className="studio-shell" data-desknav={deskNav}>
+      {deskNav === 'left' && workspace !== 'home' && <DeskRail />}
       <div className="workspace-main">
         {/* each desk has its own error boundary: a render error shows a recoverable message there, never a blank app */}
         {workspace === 'home' && <DeskBoundary desk="Home"><HomeWorkspace /></DeskBoundary>}

@@ -971,7 +971,7 @@ label.switch:active i { filter: brightness(.94); }
    track) is not; the selected segment/tab is a light chip with dark ink (well over 3 : 1 against the track, the WCAG
    floor for a state indicator) and a heavier weight, so it reads at a glance and without colour. Unselected stay dim,
    hover only lifts them to a soft fill. ---- */
-:root[data-theme=dark] { --chip-on-bg: #ececee; --chip-on-fg: #161618; }
+:root[data-theme=dark] { --chip-on-bg: #faf9f5; --chip-on-fg: #1f1e1d; }
 :root[data-theme=dark] .pill-slide { background: var(--chip-on-bg); box-shadow: 0 1px 2px rgba(0, 0, 0, .55), 0 0 0 .5px rgba(255, 255, 255, .5); }
 :root[data-theme=dark] .seg-ctl button.on, :root[data-theme=dark] .side-tabs button.on, :root[data-theme=dark] .ws-switch .ws-btn.on { color: var(--chip-on-fg); font-weight: 600; }
 :root[data-theme=dark] .seg-ctl button.on svg, :root[data-theme=dark] .side-tabs button.on svg, :root[data-theme=dark] .ws-switch .ws-btn.on svg { color: var(--chip-on-fg); }
@@ -2035,10 +2035,10 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .topbar.gx-head .fmtgroup .dual-toggle-btn, .topbar.gx-head .fmtgroup .pv-btn { width: 28px; min-width: 28px; padding: 0; justify-content: center; }
 .topbar.gx-head .fmtgroup .pv-btn .pv-label, .topbar.gx-head .fmtgroup .pv-btn kbd, .topbar.gx-head .fmtgroup .dual-toggle-btn span { display: none; }
 .topbar.gx-head .fmtgroup .pv-btn { display: inline-flex !important; }
-.menubar .mb-fold { display: none; width: 28px; height: 28px; }
+.menubar .mb-fold { display: none; align-items: center; gap: 4px; padding: 0 10px; }
 @container topbar (max-width: 960px) {
-  .topbar.gx-head .menubar > .mb-item { display: none; }
-  .topbar.gx-head .menubar > .mb-fold { display: inline-grid; }
+  .topbar.gx-head .menubar > .mb-item:not(.mb-fold) { display: none; }
+  .topbar.gx-head .menubar > .mb-fold { display: inline-flex; }
 }
 .topbar.gx-head .split, .topbar.gx-head .ed-avatar { flex: none; }
 
@@ -2071,21 +2071,21 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 /* ---------------------------------------------------------------- the fold button, inside its panel (pass 7)
    A plain sidebar icon in the panel's first row, on the side that faces the work area, styled exactly like the tool
    buttons (32 px, flat tint). The first row gives it room; folded, it is the top button of the rail. */
-.col-fold { position: absolute; z-index: 4; top: var(--fold-top, 12px); display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--text-2); background: transparent; border: 0; border-radius: 8px; cursor: pointer; transition: background-color 120ms var(--ease), color 120ms var(--ease); }
-.col-fold.left { right: var(--fold-inset, 12px); }
-.col-fold.right { left: var(--fold-inset, 12px); }
+.col-fold { position: absolute; z-index: 8; top: var(--fold-top, 14px); display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: var(--text-2); background: transparent; border: 0; border-radius: 8px; cursor: pointer; transition: background-color 120ms var(--ease), color 120ms var(--ease); }
+.col-fold.left { right: var(--fold-inset, 10px); }
+.col-fold.right { left: var(--fold-inset, 10px); }
 .col-fold:hover { color: var(--text); background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .col-fold:active { background: color-mix(in srgb, var(--ink) 14%, transparent); }
 .col-fold:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .col-anim > .col-fold { opacity: 0; }
-.is-railed > .col-fold { top: 10px; left: 50%; right: auto; margin-left: -16px; }
+.is-railed > .col-fold { top: 12px; left: 50%; right: auto; margin-left: -14px; }
 .is-railed > .col-rail { padding-top: 50px; }
 .resizing .col-fold { pointer-events: none; }
 
 /* room for it in each panel's first row */
-:is(.left, .or-left, .vw-bin-panel) > .side-tabs { margin-right: 52px; }
-.or-right > .side-tabs { margin-left: 52px; }
-.left.ed-src > .side-tabs, .ed-src > .side-tabs { margin-right: 52px; }
+:is(.left, .or-left, .vw-bin-panel) > .side-tabs { margin-right: 42px; }
+.or-right > .side-tabs { margin-left: 42px; }
+.left.ed-src > .side-tabs, .ed-src > .side-tabs { margin-right: 42px; }
 /* Graphics' right column opens with the Inspector card: the button sits in that card's header row */
 .app > .right { --fold-top: 18px; --fold-inset: 16px; }
 .app > .right > .scroll > .pnl:first-child > header { padding-left: 50px; }
@@ -2140,3 +2140,31 @@ img.ed-avatar { padding: 0; background: var(--fill); }
    pills give their words to their tooltips first (icon + paragraph count stay) */
 .topbar.ed-head .ed-story-chip { min-width: 180px; }
 @container topbar (max-width: 1640px) { .topbar.ed-head .ed-head-host, .topbar.ed-head .ed-retranslate-label { display: none; } .topbar.ed-head .ed-head-group .pv-btn { padding: 0 9px; } }
+
+/* ---------------------------------------------------------------- Outreach, calmer (pass 8)
+   The send column was a stack of boxed cards, each with its own border, shadow and shouted title. It is now one quiet
+   list: sections separated by hairlines, titles as small labels, the same content and every control kept. */
+.or-right-scroll { gap: 0; padding-top: 4px; }
+.or-right-scroll > .or-card { padding: 14px 6px 16px; background: transparent; box-shadow: none; border: 0; border-radius: 0; }
+.or-right-scroll > .or-card + .or-card { border-top: 1px solid var(--line); }
+.or-right-scroll > .or-card > header { min-height: 20px; }
+.or-right-scroll > .or-card > header .sec-title, .or-right-scroll > .or-card > header h3 { font: 600 11px/16px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.or-right-scroll > .or-card .or-muted { line-height: 19px; }
+
+/* ---------------------------------------------------------------- desks down the left (Help > Desks on the left, pass 8)
+   A 72 px column of desks — icon over name — instead of the switcher at the start of every header. The header then
+   starts with its menu bar. The chosen desk sits on the raised chip; the others answer the pointer with the tool tint. */
+.studio-shell[data-desknav="left"] { display: flex; }
+.studio-shell[data-desknav="left"] > .workspace-main { flex: 1 1 auto; min-width: 0; }
+.studio-shell[data-desknav="left"] .workspace-main :is(.topbar, .vw-header) .ws-wrap { display: none; }
+.desk-rail { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; width: 72px; padding: 10px 0; background: var(--side); border-right: 1px solid var(--line-2); z-index: 6; }
+.desk-rail-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 60px; height: 56px; padding: 0; color: var(--text-2); background: transparent; border: 0; border-radius: 10px; cursor: pointer; transition: background-color 140ms var(--ease), color 140ms var(--ease), box-shadow 200ms var(--spring), transform 200ms var(--spring); }
+.desk-rail-btn span { font: 500 10.5px/1 var(--ui); letter-spacing: .01em; }
+.desk-rail-btn:hover:not(.on) { color: var(--text); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.desk-rail-btn:active { transform: scale(.95); }
+.desk-rail-btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+.desk-rail-btn.on span { font-weight: 650; }
+:root[data-theme=dark] .desk-rail-btn.on { color: var(--chip-on-fg); background: var(--chip-on-bg); box-shadow: none; }
+.desk-rail-btn:first-child { margin-bottom: 6px; }
+.desk-rail-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .desk-rail-btn { transition: none; } }

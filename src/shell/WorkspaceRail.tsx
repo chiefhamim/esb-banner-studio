@@ -3,6 +3,7 @@ import type { WorkspaceId } from './shellStore'
 import { Icon } from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { useSlidingThumb } from '../ui/controls'
+import { useSyncExternalStore } from 'react'
 
 interface WorkspaceItem { id: WorkspaceId; label: string; icon: IconName; title: string }
 
@@ -70,5 +71,35 @@ export function WorkspaceSwitcher() {
         })}
       </nav>
     </div>
+  )
+}
+
+
+// ---------------------------------------------------------------- where the desks live: across the top (default) or down the left
+export type DeskNav = 'top' | 'left'
+const NAV_KEY = 'esb-banner-studio/desk-nav'
+const navSubs = new Set<() => void>()
+function readNav(): DeskNav { try { return localStorage.getItem(NAV_KEY) === 'left' ? 'left' : 'top' } catch { return 'top' } }
+export function setDeskNav(v: DeskNav) { try { localStorage.setItem(NAV_KEY, v) } catch { /* ignore */ } navSubs.forEach((f) => f()) }
+export function useDeskNav(): DeskNav {
+  return useSyncExternalStore((f) => { navSubs.add(f); return () => { navSubs.delete(f) } }, readNav)
+}
+
+/** The desks as a column down the left edge: icon over name, the chosen one on a raised chip that glides between them. */
+export function DeskRail() {
+  const current = useShellStore((s) => s.workspace)
+  const setWorkspace = useShellStore((s) => s.setWorkspace)
+  return (
+    <nav className="desk-rail" aria-label="Desks">
+      {[HOME, ...DESKS].map((w) => {
+        const on = current === w.id
+        return (
+          <button key={w.id} type="button" className={'desk-rail-btn' + (on ? ' on' : '')} data-tip={w.title} data-tip-pos="right" aria-label={w.label} aria-current={on ? 'page' : undefined} onClick={() => setWorkspace(w.id)}>
+            <Icon name={w.icon} size={19} />
+            <span>{w.label}</span>
+          </button>
+        )
+      })}
+    </nav>
   )
 }

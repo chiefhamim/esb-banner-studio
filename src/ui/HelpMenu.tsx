@@ -3,6 +3,7 @@
 // shortcut sheet (Video) passes `onShortcuts`; the others pass their groups and get the shared sheet, which always
 // ends with the shortcuts that work everywhere.
 
+import { setDeskNav, useDeskNav } from '../shell/WorkspaceRail'
 import { useCallback, useState, type ReactNode } from 'react'
 import logoUrl from '../assets/images/esb-logo.png'
 import { Dialog, type MenuDef } from './controls'
@@ -63,10 +64,13 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
 /** The shared Help menu and the dialogs it opens. Put `menu` last in the desk's MenuBar and render `dialogs`. */
 export function useHelpMenu({ shortcuts = [], onShortcuts }: { shortcuts?: ShortcutGroup[]; onShortcuts?: () => void } = {}): { menu: MenuDef; dialogs: ReactNode } {
   const [open, setOpen] = useState<null | 'welcome' | 'keys' | 'about'>(null)
+  const deskNav = useDeskNav()
   const close = useCallback(() => setOpen(null), [])
   const menu: MenuDef = { label: 'Help', items: [
     { label: 'Welcome screen', icon: 'home', onClick: () => setOpen('welcome') },
     { label: 'Keyboard shortcuts', icon: 'keyboard', shortcut: '?', onClick: () => (onShortcuts ? onShortcuts() : setOpen('keys')) },
+    { divider: true },
+    { label: 'Desks on the left', icon: 'grid', checked: deskNav === 'left', onClick: () => setDeskNav(deskNav === 'left' ? 'top' : 'left') },
     { divider: true },
     { label: 'About ESB AI Studio', icon: 'info', onClick: () => setOpen('about') },
   ] }

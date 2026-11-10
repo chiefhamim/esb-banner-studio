@@ -17,9 +17,10 @@ const page = await app.firstWindow()
 page.setDefaultTimeout(20000)
 await app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows()[0].setContentSize(w, h), [W, H])
 await page.addInitScript(() => { window.__customTranslator = async (t) => 'Petrobangla will drill two new wells at Tk 592 crore, adding 30 MMCFD of gas to the national grid. ' + t.length })
-await page.evaluate((t) => localStorage.setItem('esb-banner-studio/theme', t), theme)
+await page.evaluate(([t, nav]) => { localStorage.setItem('esb-banner-studio/theme', t); localStorage.setItem('esb-banner-studio/desk-nav', nav) }, [theme, process.env.NAV || 'top'])
 await page.reload(); await page.waitForTimeout(1200)
-const shot = async (n, clip) => { await page.screenshot({ path: path.join(out, `${n}-${theme}.png`), ...(clip ? { clip } : {}) }); console.log('shot', n) }
+const tag = process.env.NAV === 'left' ? '-left' : ''
+const shot = async (n, clip) => { await page.screenshot({ path: path.join(out, `${n}-${theme}${tag}.png`), ...(clip ? { clip } : {}) }); console.log('shot', n) }
 const go = async (label) => { await page.evaluate((l) => [...document.querySelectorAll('.ws-btn, .launch-tile, button')].find((x) => new RegExp(l).test(x.getAttribute('aria-label') || x.textContent || ''))?.click(), label); await page.waitForTimeout(900) }
 await shot('home')
 await go('Editorial')
@@ -44,4 +45,5 @@ const frames = []
 await page.evaluate(() => document.querySelector('.col-handle').dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
 for (let i = 0; i < 9; i++) { const t = Date.now(); await page.screenshot({ path: path.join(out, `fold-${theme}-${i}.png`), clip: { x: 0, y: 44, width: 460, height: 360 } }); frames.push(Date.now() - t) }
 console.log('frame costs ms', frames.join(','))
+await page.waitForTimeout(600); await shot('folded', { x: 0, y: 0, width: 420, height: 320 })
 await app.close()

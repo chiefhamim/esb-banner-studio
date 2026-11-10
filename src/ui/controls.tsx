@@ -234,7 +234,7 @@ export function MenuBar({ menus }: { menus: MenuDef[] }) {
   const all: MenuEntry[] = menus.flatMap((m, i) => [...(i ? [{ divider: true } as MenuEntry] : []), { heading: m.label } as MenuEntry, ...m.items])
   return (
     <div className="menubar" role="menubar">
-      <button ref={foldBtn} type="button" className="mb-fold ibtn" aria-label="Menu" data-tip="Menu" onClick={() => setFolded((f) => !f)}><Icon name="more" size={16} /></button>
+      <button ref={foldBtn} type="button" className={'mb-item mb-fold' + (folded ? ' open' : '')} aria-label="Menu" onClick={() => setFolded((f) => !f)}>Menu<Icon name="chevDown" size={13} className="chev" /></button>
       {folded && foldBtn.current && (
         <Popover anchor={{ el: foldBtn.current }} onClose={() => setFolded(false)} className="menu menubar-pop" minWidth={248}>
           <MenuList items={all} onDone={() => setFolded(false)} />
