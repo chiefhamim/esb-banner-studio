@@ -385,7 +385,9 @@
 .topbar { container: topbar / inline-size; }
 @container topbar (max-width: 1180px) {
   .topbar .fmtgroup .pv-btn .pv-label, .topbar .fmtgroup .pv-btn kbd { display: none; }
-  .topbar .fmtgroup .dual-toggle-btn { display: none; }
+  /* the quick switch keeps its place as an icon (its words are in the tooltip) instead of vanishing */
+  .topbar .fmtgroup .dual-toggle-btn { padding: 0; width: 28px; justify-content: center; }
+  .topbar .fmtgroup .dual-toggle-btn span { display: none; }
 }
 @container topbar (max-width: 1000px) {
   .topbar .back-to-desk .back-label { display: none; }
@@ -1970,7 +1972,7 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 @container topbar (max-width: 1500px) { .topbar.gx-head .ed-ai-chip .ed-ai-label, .topbar.gx-head .drag-post-chip .dpc-label { display: none; } .topbar.gx-head .ed-ai-chip { padding: 0 9px; min-width: 0; } }
 /* undo, redo and copy-image live in Edit/File and their shortcuts (as under 1000 px before) */
 @container topbar (max-width: 1320px) { .topbar.gx-head .menubar .mb-item { padding-left: 7px; padding-right: 7px; } .topbar.gx-head { gap: 6px; } .topbar.gx-head .pillbar > .ibtn, .topbar.gx-head .pillbar > .pill-sep { display: none; } }
-/* under 1000 px the format keeps its picture (its name is in the status bar) and Preview lives in View (P) */
+/* under 1000 px the format keeps its picture (its name is in the status bar); Preview lives in View (P) and the quick switch stays as an icon */
 @container topbar (max-width: 1000px) { .topbar.gx-head .fmtpick .fp-name { display: none; } .topbar.gx-head .fmtgroup .pv-btn { display: none; } .topbar.gx-head { gap: 5px; } .topbar.gx-head .drag-post-chip { padding: 0 6px; } .topbar.gx-head .menubar .mb-item { padding-left: 6px; padding-right: 6px; } }
 @container topbar (max-width: 1000px) { .topbar.ed-head .ed-ai-chip .ed-ai-label { display: none; } .topbar.ed-head .ed-ai-chip { padding: 0 9px; min-width: 0; } }
 /* with a story open at 900 px the row was 28 px too wide and Publish was cut at the window edge: the resync button
@@ -1987,38 +1989,6 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .statusbar .sb-item > :not(.sb-k) { color: var(--text); font-weight: 600; }
 .statusbar .vw-sb-save.failed > :not(.sb-k) { color: var(--warning); }
 
-/* ---------------------------------------------------------------- icon hover depth (2026-11-10)
-   Icon-only buttons and collapsed panel headers answered the pointer with a flat tint; they now get the
-   same quiet depth language as the tiles: the fill plus a lit top edge, a hairline ring and a soft drop —
-   colour and depth, never movement. The raised/selected chip stays as it is. */
-.ws-switch .ws-btn:not(.on):hover,
-.topbar .pillbar .ibtn:hover:not(:disabled):not(.on),
-.col-rail-btn:hover:not(:disabled):not(.on):not(.primary),
-.ws-home-btn:hover,
-.home-head-btn:hover {
-  background: var(--fill-hover);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent),
-    0 1px 2px rgba(0, 0, 0, .14);
-}
-:root[data-theme=dark] .ws-switch .ws-btn:not(.on):hover,
-:root[data-theme=dark] .topbar .pillbar .ibtn:hover:not(:disabled):not(.on),
-:root[data-theme=dark] .col-rail-btn:hover:not(:disabled):not(.on):not(.primary) {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, .07),
-    0 0 0 1px rgba(255, 255, 255, .07),
-    0 1px 3px rgba(0, 0, 0, .4);
-}
-/* collapsed accordion panels: the header lifts a little instead of only tinting */
-.pnl:not(.open) > header:hover {
-  background: color-mix(in srgb, var(--fill) 80%, var(--card));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #fff 7%, transparent),
-    0 1px 3px -1px rgba(0, 0, 0, .18);
-}
-@media (prefers-reduced-motion: reduce) { .pnl:not(.open) > header:hover { box-shadow: none; } }
-
 /* ---------------------------------------------------------------- publish countdown (2026-11-10)
    Publish arms a 5 s countdown instead of firing at once; the button becomes the cancel, with a ring
    that fills as the moment approaches. Cancel is a plain press anywhere on it. */
@@ -2029,3 +1999,58 @@ img.ed-avatar { padding: 0; background: var(--fill); }
   -webkit-mask: radial-gradient(circle at 50% 50%, transparent 54%, #000 56%); mask: radial-gradient(circle at 50% 50%, transparent 54%, #000 56%); }
 .btn.pub-arming span { font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .btn.pub-arming::before { transition: none; } }
+
+/* ---------------------------------------------------------------- one hover language (2026-11-10, pass 4)
+   The Select / Hand / Text tools answer a pointer with ONE flat tint on a 32 px, 8 px-radius square. Every other
+   icon-only control now does exactly that — folded column rails included — so nothing reads as a different widget. */
+.col-rail-btn { width: 32px; height: 32px; border-radius: 8px; }
+.col-rail-btn:hover:not(:disabled):not(.on):not(.primary) { color: var(--text); background: color-mix(in srgb, var(--ink) 8%, transparent); box-shadow: none; }
+.col-rail-btn:active:not(:disabled):not(.primary) { background: color-mix(in srgb, var(--ink) 14%, transparent); transform: none; }
+.col-rail .col-rail-btn.on, :root[data-theme=dark] .col-rail .col-rail-btn.on { color: var(--text); background: color-mix(in srgb, var(--ink) 12%, transparent); box-shadow: none; }
+.col-rail-btn.col-rail-open { width: 32px; height: 32px; }
+.col-rail-btn.primary { border-radius: 8px; }
+
+/* desk tabs (Home · News · Editorial · Graphics · Video · Outreach): no box on hover. The label brightens and a thin
+   line draws in under it; the selected tab keeps the sliding chip. */
+.ws-switch .ws-btn:not(.on):hover { background: transparent; box-shadow: none; color: var(--text); }
+.ws-switch .ws-btn { position: relative; }
+.ws-switch .ws-btn::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 3px; height: 2px; border-radius: 2px; background: color-mix(in srgb, var(--text) 38%, transparent); transform: scaleX(0); transform-origin: center; opacity: 0; transition: transform 220ms var(--spring), opacity 160ms var(--ease); pointer-events: none; }
+.ws-switch .ws-btn:not(.on):hover::after { transform: scaleX(1); opacity: 1; }
+.ws-switch .ws-btn.on::after { display: none; }
+.ws-home-btn:hover, .home-head-btn:hover { box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .ws-switch .ws-btn::after { transition: none; } }
+
+/* the other places the earlier depth rule reached go back to the flat tint */
+.topbar .pillbar .ibtn:hover:not(:disabled):not(.on) { box-shadow: none; }
+.pnl:not(.open) > header:hover { box-shadow: none; }
+
+/* Graphics header: Preview is an icon-only square wherever its label gives way, same size as its neighbours */
+.topbar .fmtgroup .pv-btn { min-width: 28px; justify-content: center; }
+@container topbar (max-width: 1180px) { .topbar .fmtgroup .pv-btn { padding: 0; width: 28px; } }
+
+/* ---------------------------------------------------------------- folding columns, smoothly (pass 4)
+   The width eases on the grid track; the content used to snap out (and reflow at every intermediate width on the way
+   back). Now it stays hidden while the width travels and fades in once it has room, and the rail fades in after the
+   column has narrowed. Opacity/transform only. */
+.side-cols { transition-duration: 280ms; }
+.side-col-w { transition-duration: 280ms; }
+:has(> .col-handle):not(.is-railed) > :not(.col-rail):not(.col-handle) { animation: col-content-in 240ms var(--col-ease) 110ms both; }
+.col-rail { animation: col-rail-in 220ms var(--col-ease) 70ms both; }
+.col-rail .col-rail-btn { animation: col-rail-btn-in 260ms var(--col-ease) both; }
+.col-rail-items .col-rail-btn:nth-child(1) { animation-delay: 90ms; }
+.col-rail-items .col-rail-btn:nth-child(2) { animation-delay: 120ms; }
+.col-rail-items .col-rail-btn:nth-child(3) { animation-delay: 150ms; }
+.col-rail-items .col-rail-btn:nth-child(4) { animation-delay: 180ms; }
+.col-rail-items .col-rail-btn:nth-child(n+5) { animation-delay: 210ms; }
+@keyframes col-content-in { from { opacity: 0; } }
+@keyframes col-rail-in { from { opacity: 0; } }
+@keyframes col-rail-btn-in { from { opacity: 0; transform: translate3d(0, 4px, 0); } }
+@media (prefers-reduced-motion: reduce) { :has(> .col-handle):not(.is-railed) > :not(.col-rail):not(.col-handle), .col-rail, .col-rail .col-rail-btn { animation: none !important; } }
+
+/* 900 px: every Graphics header control stays on screen — the row's own padding and the switcher's labels give way */
+@container topbar (max-width: 960px) {
+  .topbar.gx-head { padding-left: 8px; padding-right: 8px; gap: 4px; }
+  .topbar.gx-head .ws-switch .ws-btn { padding: 0 8px; }
+  .topbar.gx-head .menubar .mb-item { padding-left: 5px; padding-right: 5px; }
+  .topbar.gx-head .split .btn.primary { padding: 0 10px; }
+}
