@@ -2041,7 +2041,7 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 
 /* ---------------------------------------------------------------- the fold button, inside its panel (pass 10)
    One shape everywhere: a plain sidebar icon (no container) in a 36 px hit area as tall as the tab bar it sits
-   beside; only hover shows a soft tint. Each column's first row starts 10 px from
+   beside; hover only brightens and slightly grows the icon — no container. Each column's first row starts 10 px from
    the top and 12 px from the edges; the button takes the row's outer end, 6 px from the tabs. Folded, it is the rail's
    top tile, centred in the 52 px rail, and it fades in WITH the rail's icons (same curve, same delay); opening, it fades
    back in with the content. */
@@ -2053,9 +2053,12 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 }
 .col-fold.left { right: var(--fold-inset, 12px); }
 .col-fold.right { left: var(--fold-inset, 12px); }
-.col-fold:hover { color: var(--text); background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.col-fold:active { background: color-mix(in srgb, var(--ink) 14%, transparent); }
-.col-fold:active { transform: scale(.96); }
+.col-fold, .col-fold:hover, .col-fold:active { background: transparent; box-shadow: none; }
+/* no container, ever: the icon itself answers — it brightens to full ink and grows a touch, and presses in */
+.col-fold > svg { transition: transform 160ms var(--ease); }
+.col-fold:hover { color: var(--text); }
+.col-fold:hover > svg { transform: scale(1.12); }
+.col-fold:active > svg { transform: scale(.94); }
 .col-fold:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .col-fold > svg { width: 17px; height: 17px; }
 .resizing .col-fold { pointer-events: none; }
