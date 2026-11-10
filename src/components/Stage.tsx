@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { deskIs } from '../shell/shellStore'
 import { drawElement, renderScene, slotRects } from '../core/render'
 import type { Assets } from '../core/render'
 import { getFontDef } from '../core/fonts'
@@ -409,7 +410,7 @@ export function Stage({ base }: { base: Assets }) {
   // ----- space = temporary hand tool
   useEffect(() => {
     const isTyping = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
-    const down = (e: KeyboardEvent) => { if (e.code === 'Space' && !isTyping(e.target) && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); setSpace(true) } }
+    const down = (e: KeyboardEvent) => { if (!deskIs('graphics')) return; if (e.code === 'Space' && !isTyping(e.target) && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); setSpace(true) } }
     const up = (e: KeyboardEvent) => { if (e.code === 'Space') setSpace(false) }
     window.addEventListener('keydown', down)
     window.addEventListener('keyup', up)

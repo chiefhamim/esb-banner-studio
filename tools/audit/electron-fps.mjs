@@ -23,6 +23,7 @@ const report = (name, { d, lt }) => {
 const during = async (name, act, ms = 900) => { const p = page.evaluate((m) => window.__rec(m), ms); await page.waitForTimeout(30); await act(); report(name, await p); await page.waitForTimeout(300) }
 const click = (sel) => page.evaluate((s) => document.querySelector(s)?.click(), sel)
 const ws = (id) => page.evaluate((i) => { const b = document.querySelector('.ws-btn[data-ws="' + i + '"]') || [...document.querySelectorAll('.home-shell button, .launch-tile')].find((x) => (x.textContent || '').trim().toLowerCase().startsWith(i)); b?.click(); return !!b }, id)
+await page.waitForTimeout(8000) // prebuild wait: the hidden desks are built while the app idles
 report('idle home', await page.evaluate(() => window.__rec(1000)))
 await during('desk: home->graphics', () => ws('graphics'), 1200)
 report('idle graphics', await page.evaluate(() => window.__rec(1000)))
@@ -34,6 +35,11 @@ await during('desk: graphics->news', () => ws('news'), 1200)
 await during('desk: news->outreach', () => ws('outreach'), 1200)
 await during('desk: outreach->editorial', () => ws('editorial'), 1200)
 await during('scroll editorial queue', async () => { await page.mouse.move(800, 500); for (let i = 0; i < 8; i++) { await page.mouse.wheel(0, 240); await page.waitForTimeout(40) } })
+// second visits: kept-alive desks come back without being rebuilt
+await during('again: editorial->news', () => ws('news'), 900)
+await during('again: news->graphics', () => ws('graphics'), 900)
+await during('again: graphics->outreach', () => ws('outreach'), 900)
+await during('again: outreach->editorial', () => ws('editorial'), 900)
 // heavy work: processing a pasted story, then scrolling it
 await ws('editorial'); await page.waitForTimeout(900)
 await page.screenshot({ path: 'artifacts/fps-ed.png' })

@@ -70,7 +70,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
     // any move away from Graphics ends the round trip, so the back button never outlives it
     const apply = () => set((st) => ({ workspace: ws, returnTo: ws === 'graphics' ? st.returnTo : null }))
     const from = get().workspace
-    const el = document.querySelector<HTMLElement>('.workspace-main > *')
+    const el = document.querySelector<HTMLElement>('.workspace-main > .desk-slot.is-active')
     if (from === ws || !el || typeof el.animate !== 'function' || reducedMotion()) { apply(); return }
     // the desk on screen eases out toward the side it came from, then the new desk drifts in and settles (App.tsx)
     if (moving) { queued = ws; return }
@@ -129,3 +129,10 @@ export const useShellStore = create<ShellState>((set, get) => ({
 
 // dev only: lets tools/e2e/clock-format-check.mjs flip the setting while a desk is on screen (live re-render check)
 if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV && typeof window !== 'undefined') Object.assign(window, { __shell: useShellStore })
+
+/** True while `id` is the desk on screen. Desks stay mounted after their first visit (App.tsx keeps them parked, inert
+ *  and invisible), so a desk's window-level keyboard, paste and drop listeners check this before acting. */
+export const deskIs = (id: WorkspaceId) => useShellStore.getState().workspace === id
+
+/** True while a desk change is animating (the old desk easing out). Background work can wait for it to finish. */
+export const deskMoving = () => moving

@@ -5,7 +5,7 @@
 // the headlines on a sheet in the centre with a live Trending topic bar, and the chosen headline on the right with Start a story.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
-import { useShellStore } from '../shell/shellStore'
+import { deskIs, useShellStore } from '../shell/shellStore'
 import { useStore } from '../store'
 import { Icon } from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
@@ -296,7 +296,7 @@ export function NewsWorkspace() {
       } else if (e.key === 'Enter' && selected && !t?.closest('button')) { e.preventDefault(); startStory(selected) }
     }
   })
-  useEffect(() => { const h = (e: KeyboardEvent) => keyRef.current(e); window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h) }, [])
+  useEffect(() => { const h = (e: KeyboardEvent) => { if (deskIs('news')) keyRef.current(e) }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h) }, [])
   useEffect(() => {
     const el = sheetRef.current
     if (!el) return

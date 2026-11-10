@@ -19,7 +19,7 @@ import { DEFAULT_LAYOUT, LIMITS, Splitter, loadLayout, saveLayout } from '../ui/
 import { RAIL_W, useSideColumn } from '../ui/sideColumnState'
 import { ColumnHandle, ColumnRail, railClass } from '../ui/SideColumn'
 import type { LayoutState } from '../ui/layout'
-import { useShellStore } from './shellStore'
+import { deskIs, useShellStore } from './shellStore'
 import { WorkspaceSwitcher } from './WorkspaceRail'
 import { ShortcutsDialog, useHelpMenu, type ShortcutGroup } from '../ui/HelpMenu'
 import { AiChip } from '../editorial/AiChip'
@@ -251,6 +251,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   // ---------------------------------------------------------------- keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!deskIs('graphics')) return
       const t = e.target as HTMLElement
       const typing = (t instanceof HTMLInputElement && !['range', 'checkbox'].includes(t.type)) || t instanceof HTMLTextAreaElement
       const st = useStore.getState()
@@ -332,6 +333,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
   // paste (photos from the clipboard, or the copied layers) / drop image files anywhere
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
+      if (!deskIs('graphics')) return
       const t = e.target as HTMLElement
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return
       const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'))
@@ -340,8 +342,9 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       if (st.clip) { e.preventDefault(); st.pasteClip(pasteInPlace.current) }
       pasteInPlace.current = false
     }
-    const onDragOver = (e: DragEvent) => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault() }
+    const onDragOver = (e: DragEvent) => { if (deskIs('graphics') && e.dataTransfer?.types.includes('Files')) e.preventDefault() }
     const onDrop = (e: DragEvent) => {
+      if (!deskIs('graphics')) return
       const files = [...(e.dataTransfer?.files ?? [])].filter((f) => f.type.startsWith('image/'))
       if (files.length) { e.preventDefault(); setTab('photos'); void useStore.getState().addImages(files) }
     }

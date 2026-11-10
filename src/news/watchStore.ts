@@ -3,6 +3,14 @@
 // keeps headlines the matcher accepts (and all official press releases from energy/power ministries & utilities, plus
 // energy/leadership press releases from PMO, Bangabhaban & PID), and exposes category-aware canonical Trending topics
 // and relevance-scored headline sorting.
+import { deskMoving } from '../shell/shellStore'
+// the moment of the editor's last click or key: a scan publish waits half a second after it, because a click usually
+// starts something that moves (a fold, a desk change, a menu)
+let lastInputAt = -1e9
+if (typeof window !== 'undefined') for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { lastInputAt = performance.now() }, { capture: true, passive: true })
+const busyOnScreen = () => typeof document !== 'undefined' && (performance.now() - lastInputAt < 500 || !!document.querySelector('.col-anim, .is-scrolling, .resizing') || deskMoving())
+/** Resolves once nothing on screen is moving (checked every 100 ms): the scan's parsing and publishing wait for it. */
+const whenCalm = () => new Promise<void>((res) => { const check = () => (busyOnScreen() ? setTimeout(check, 100) : res()); check() })
 import { create } from 'zustand'
 import { buildMatcher, type EwKeyword } from './matcher'
 import { EW_FEEDS, EW_KEYWORDS, EW_PRESS_SOURCES, type EwPressSource } from './ewSources'
@@ -582,19 +590,25 @@ export const useWatch = create<WatchState>((set, get) => {
       let done = 0
       let flushAt = 0
       let timer: ReturnType<typeof setTimeout> | null = null
+      // Each publish re-renders the News desk (~25 ms with a full list). So results are published at most every 700 ms,
+      // and never while something on screen is moving (a column folding, a list scrolling, a desk arriving): the publish
+      // waits for the next quiet moment, so a scan in the background never costs an animation a frame.
       const publish = () => {
+        if (busyOnScreen()) { timer = setTimeout(publish, 120); return }
         timer = null
         flushAt = Date.now()
         const m = mergeFound(prev, found, started, get().hidden)
         set({ items: m.items, feeds: { ...states }, newKeys: prev.length ? m.addedKeys : [], progress: { done, total: totalSources } })
       }
-      const soon = () => { if (!timer) timer = setTimeout(publish, Math.max(0, 250 - (Date.now() - flushAt))) }
+      const soon = () => { if (!timer) timer = setTimeout(publish, Math.max(0, 700 - (Date.now() - flushAt))) }
       set({ progress: { done: 0, total: totalSources } })
 
       await Promise.all([
         pool(feeds, CONCURRENCY, async (f) => {
           try {
-            const list = parseFeed(await fetchText(f.url))
+            const text = await fetchText(f.url)
+            await whenCalm()
+            const list = parseFeed(text)
             states[f.id] = { ok: true, at: Date.now(), count: list.length }
             for (const it of list) {
               const published = parseDate(it.date)
@@ -626,6 +640,7 @@ export const useWatch = create<WatchState>((set, get) => {
         }),
         pool(pressSources, 4, async (ps) => {
           try {
+            await whenCalm()
             const pressItems = await fetchPressSource(ps, match, started)
             states[ps.id] = { ok: true, at: Date.now(), count: pressItems.length }
             found.push(...pressItems)

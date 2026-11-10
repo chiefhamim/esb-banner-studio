@@ -86,10 +86,19 @@ export function ColumnHandle({ col, label, root, apply, max }: {
   const prevCollapsed = useRef<boolean | null>(null)
   const timer = useRef(0)
   const seenW = useRef(col.w)
+  const chromeW = useRef(1)
+  const kidMargins = useRef<Map<HTMLElement, number>>(new Map())
   useEffect(() => {
     const el = ref.current?.parentElement
     if (!el) return
-    const ro = new ResizeObserver(() => { if (!col.collapsed && !el.classList.contains('col-anim')) seenW.current = el.getBoundingClientRect().width })
+    // everything the fold needs is measured here, while the column sits still, so starting a fold only WRITES styles —
+    // reading layout in the same frame as the class change forced a second full layout of the desk (a dropped frame on News)
+    const ro = new ResizeObserver(() => {
+      if (col.collapsed || el.classList.contains('col-anim')) return
+      seenW.current = el.getBoundingClientRect().width
+      chromeW.current = el.offsetWidth - el.clientWidth
+      kidMargins.current = new Map(Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement).map((k) => { const cs = getComputedStyle(k); return [k, (parseFloat(cs.marginLeft) || 0) + (parseFloat(cs.marginRight) || 0)] }))
+    })
     ro.observe(el)
     return () => ro.disconnect()
   }, [col.collapsed])
@@ -107,11 +116,9 @@ export function ColumnHandle({ col, label, root, apply, max }: {
     // the content is pinned to the width it has when open (minus its own margins and the column's border), so it is
     // clipped by the shrinking column and revealed by the growing one instead of reflowing at every width in between
     const open = Math.round(col.collapsed ? seenW.current || col.w : col.w)
-    const chrome = el.offsetWidth - el.clientWidth
     const kids = Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement && !c.classList.contains('col-rail') && !c.classList.contains('col-handle') && !c.classList.contains('col-fold'))
     for (const k of kids) {
-      const cs = getComputedStyle(k)
-      k.style.width = Math.max(0, open - chrome - (parseFloat(cs.marginLeft) || 0) - (parseFloat(cs.marginRight) || 0)) + 'px'
+      k.style.width = Math.max(0, open - chromeW.current - (kidMargins.current.get(k) ?? 0)) + 'px'
       k.style.flex = 'none'
       k.style.minWidth = '0'
     }

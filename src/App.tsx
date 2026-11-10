@@ -1,4 +1,6 @@
-import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Activity, Suspense, lazy, startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import type { WorkspaceId } from './shell/shellStore'
 import './App.css'
 import { DeskRail, useDeskNav } from './shell/WorkspaceRail'
 import { loadBaseAssets } from './core/assets'
@@ -37,6 +39,7 @@ const VideoWorkspace = lazy(() => loadVideo().then((m) => ({ default: m.VideoWor
 const OutreachWorkspace = lazy(() => loadOutreach().then((m) => ({ default: m.OutreachWorkspace })))
 const NewsWorkspace = lazy(() => loadNews().then((m) => ({ default: m.NewsWorkspace })))
 const ComponentGallery = lazy(() => import('./ui/ComponentGallery').then((m) => ({ default: m.ComponentGallery })))
+const KEEP_ALIVE: WorkspaceId[] = ['news', 'editorial', 'graphics', 'outreach']
 const toHome = () => useShellStore.getState().setWorkspace('home')
 const DeskLoading = () => <div className="loading"><div className="spinner" />Opening the desk</div>
 
@@ -63,7 +66,10 @@ export default function App() {
   useLayoutEffect(() => {
     if (lastDesk.current === workspace) return
     lastDesk.current = workspace
-    const el = document.querySelector<HTMLElement>('.workspace-main > *')
+    // a parked desk keeps the end state of its exit animation (faded, shifted, pointer-events off): clear it now, while
+    // it is hidden, so it is whole the next time it is shown
+    for (const p of document.querySelectorAll<HTMLElement>('.workspace-main > .desk-slot.is-parked')) { p.getAnimations().forEach((a) => a.cancel()); p.style.removeProperty('pointer-events') }
+    const el = document.querySelector<HTMLElement>('.workspace-main > .desk-slot.is-active')
     if (!el || typeof el.animate !== 'function' || reducedMotion()) return
     el.animate(arriveFrames(deskMotion.dir), { duration: 560, easing: 'linear' })
   }, [workspace])
@@ -123,6 +129,29 @@ export default function App() {
   }, [])
 
   const deskNav = useDeskNav()
+  const [kept, setKept] = useState<ReadonlySet<WorkspaceId>>(() => new Set(KEEP_ALIVE.includes(workspace) ? [workspace] : []))
+  useEffect(() => { if (KEEP_ALIVE.includes(workspace)) setKept((k) => (k.has(workspace) ? k : new Set([...k, workspace]))) }, [workspace])
+  // Pre-build the other desks hidden, one at a time while the app is idle: a hidden <Activity> renders at the lowest
+  // priority and runs no effects (nothing fetches, ticks or listens until the desk is opened), so the first visit to a
+  // desk is a reveal instead of a build.
+  useEffect(() => {
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 200))
+    const timers: number[] = []
+    KEEP_ALIVE.forEach((id, i) => timers.push(window.setTimeout(() => idle(() => startTransition(() => setKept((k) => (k.has(id) ? k : new Set([...k, id])))), { timeout: 4000 }), 2500 + i * 1200)))
+    return () => timers.forEach((t) => window.clearTimeout(t))
+  }, [])
+  // React's <Activity> parks a desk: hidden from layout, its effects (timers, listeners, observers) stopped, its state
+  // and DOM kept; showing it re-runs the effects only. The desk elements are memoised so an App update never re-renders
+  // a desk (with four desks kept, that re-render was ~20-40 ms per switch — tools/audit/electron-switch-trace.mjs).
+  const slot = (id: WorkspaceId, node: ReactNode) => {
+    const on = workspace === id
+    if (!on && !kept.has(id)) return null
+    return <Activity key={id} mode={on ? 'visible' : 'hidden'}><div className={'desk-slot ' + (on ? 'is-active' : 'is-parked')}>{node}</div></Activity>
+  }
+  const newsDesk = useMemo(() => <Suspense fallback={<DeskLoading />}><DeskBoundary desk="News" onLeave={toHome}><NewsWorkspace /></DeskBoundary></Suspense>, [])
+  const editorialDesk = useMemo(() => <Suspense fallback={<DeskLoading />}><DeskBoundary desk="Editorial" onLeave={toHome}><EditorialWorkspace /></DeskBoundary></Suspense>, [])
+  const outreachDesk = useMemo(() => <Suspense fallback={<DeskLoading />}><DeskBoundary desk="Outreach" onLeave={toHome}><OutreachWorkspace /></DeskBoundary></Suspense>, [])
+  const graphicsDesk = useMemo(() => base ? <DeskBoundary desk="Graphics" onLeave={toHome}><GraphicsWorkspace base={base} /></DeskBoundary> : <div className="loading"><div className="spinner" />Loading fonts and artwork…</div>, [base])
   if (isGallery) {
     return <Suspense fallback={<DeskLoading />}><ComponentGallery /></Suspense>
   }
@@ -131,19 +160,16 @@ export default function App() {
     <div className="studio-shell" data-desknav={deskNav}>
       {deskNav === 'left' && workspace !== 'home' && <DeskRail />}
       <div className="workspace-main">
-        {/* each desk has its own error boundary: a render error shows a recoverable message there, never a blank app */}
-        {workspace === 'home' && <DeskBoundary desk="Home"><HomeWorkspace /></DeskBoundary>}
-        <Suspense fallback={<DeskLoading />}>
-          {workspace === 'editorial' && <DeskBoundary desk="Editorial" onLeave={toHome}><EditorialWorkspace /></DeskBoundary>}
-          {workspace === 'video' && <DeskBoundary desk="Video" onLeave={toHome}><VideoWorkspace /></DeskBoundary>}
-          {workspace === 'outreach' && <DeskBoundary desk="Outreach" onLeave={toHome}><OutreachWorkspace /></DeskBoundary>}
-          {workspace === 'news' && <DeskBoundary desk="News" onLeave={toHome}><NewsWorkspace /></DeskBoundary>}
-        </Suspense>
-        {workspace === 'graphics' && (
-          base ? <DeskBoundary desk="Graphics" onLeave={toHome}><GraphicsWorkspace base={base} /></DeskBoundary> : (
-            <div className="loading"><div className="spinner" />Loading fonts and artwork…</div>
-          )
-        )}
+        {/* Desks stay mounted after their first visit and are parked (invisible, inert) while another is on screen, so
+            switching back is instant: no rebuild, scroll and open panels exactly as left. Home is light and Video holds
+            decoded media (and could keep playing), so those two are built only while open. A parked desk's effects are
+            stopped by <Activity>; its window listeners also check deskIs() as a second guard. */}
+        {workspace === 'home' && <div className="desk-slot is-active"><DeskBoundary desk="Home"><HomeWorkspace /></DeskBoundary></div>}
+        {slot('news', newsDesk)}
+        {slot('editorial', editorialDesk)}
+        {slot('graphics', graphicsDesk)}
+        {slot('outreach', outreachDesk)}
+        {workspace === 'video' && <div className="desk-slot is-active"><Suspense fallback={<DeskLoading />}><DeskBoundary desk="Video" onLeave={toHome}><VideoWorkspace /></DeskBoundary></Suspense></div>}
       </div>
       {/* one tooltip layer for every workspace (it lived inside Graphics, so Editorial, Video and Home had none) */}
       <Tooltips />

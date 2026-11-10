@@ -732,7 +732,7 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 /* Workspace switcher: calm, unhurried motion — the hover fade, the highlight glide and the workspace change all take their time */
 .ws-switch .pill-slide.ready { transition: transform 520ms cubic-bezier(.4, 0, .2, 1), width 520ms cubic-bezier(.4, 0, .2, 1); }
 .ws-switch .ws-btn, .ws-home-btn { transition: color 380ms cubic-bezier(.4, 0, .2, 1), background-color 380ms cubic-bezier(.4, 0, .2, 1), border-color 380ms cubic-bezier(.4, 0, .2, 1), box-shadow 380ms cubic-bezier(.4, 0, .2, 1), transform var(--t-2) var(--spring); }
-@media (prefers-reduced-motion: reduce) { .ws-switch .pill-slide.ready, .ws-switch .ws-btn, .ws-home-btn, .workspace-main > * { transition: none; animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ws-switch .pill-slide.ready, .ws-switch .ws-btn, .ws-home-btn, .workspace-main > .desk-slot { transition: none; animation: none; } }
 
 /* ---------------------------------------------------------------- AI: the company's colour on the chip and the "Write with AI" buttons
    The chip is the same 32px / 8px-radius control as Sign in and Publish; when its provider has a key it is filled with the
@@ -2091,8 +2091,11 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .app > .right > .scroll > .pnl:first-child > header { padding-left: 50px; }
 /* News: the brand bar has room on its right; the detail card and Editorial's status card have room at their top right */
 .nw-left { --fold-top: 9px; --fold-inset: 10px; }
-.nw-right > .col-fold.right, .ed-side > .col-fold.right { left: auto; right: 20px; top: 18px; }
-.is-railed.nw-right > .col-fold.right, .is-railed.ed-side > .col-fold.right { left: 50%; right: auto; top: 10px; }
+.ed-side > .col-fold.right { left: auto; right: 20px; top: 18px; }
+/* News' detail card: the fold button sits at the card's top right and the card's top row (source, New tag) stops short of it */
+.nw-right > .col-fold.right { left: auto; right: 18px; top: 22px; }
+.nw-right .nw-detail-top { padding-right: 34px; }
+.is-railed.nw-right > .col-fold.right, .is-railed.ed-side > .col-fold.right { left: 50%; right: auto; top: 12px; }
 
 /* ---------------------------------------------------------------- Going to press (PressCountdown.tsx, pass 7)
    The phone's hold-to-publish card, on the desktop: the ESB masthead stripe fills across the top, the seconds badge
@@ -2141,15 +2144,21 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .topbar.ed-head .ed-story-chip { min-width: 180px; }
 @container topbar (max-width: 1640px) { .topbar.ed-head .ed-head-host, .topbar.ed-head .ed-retranslate-label { display: none; } .topbar.ed-head .ed-head-group .pv-btn { padding: 0 9px; } }
 
-/* ---------------------------------------------------------------- Outreach, calmer (pass 8)
-   The send column was a stack of boxed cards, each with its own border, shadow and shouted title. It is now one quiet
-   list: sections separated by hairlines, titles as small labels, the same content and every control kept. */
-.or-right-scroll { gap: 0; padding-top: 4px; }
-.or-right-scroll > .or-card { padding: 14px 6px 16px; background: transparent; box-shadow: none; border: 0; border-radius: 0; }
-.or-right-scroll > .or-card + .or-card { border-top: 1px solid var(--line); }
+/* ---------------------------------------------------------------- Outreach, calmer and soft (pass 9)
+   Outreach's columns were the only ones whose content sat bare on the column with full-width rules — square slabs next
+   to every other desk's rounded containers. Now: the list's file block is a rounded card like the rows under it, and
+   the send column is ONE rounded group (an inset list: sections on hairlines inside one soft container) instead of a
+   stack of separately boxed cards. Content and controls unchanged. */
+.or-left > .or-tab > .or-left-head { margin: 2px 10px 8px; padding: 12px; background: var(--card); border: 0; border-radius: var(--r-3); box-shadow: var(--card-shadow); }
+.or-right-scroll { gap: 0; padding: 4px 12px 12px; }
+.or-right-scroll > .or-card { padding: 14px 14px 16px; background: var(--card); box-shadow: none; border: 0; border-radius: 0; }
+.or-right-scroll > .or-card:first-child { border-top-left-radius: var(--r-3); border-top-right-radius: var(--r-3); }
+.or-right-scroll > .or-card:last-child { border-bottom-left-radius: var(--r-3); border-bottom-right-radius: var(--r-3); }
+.or-right-scroll > .or-card + .or-card { box-shadow: inset 0 1px 0 var(--card-line); }
 .or-right-scroll > .or-card > header { min-height: 20px; }
 .or-right-scroll > .or-card > header .sec-title, .or-right-scroll > .or-card > header h3 { font: 600 11px/16px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
 .or-right-scroll > .or-card .or-muted { line-height: 19px; }
+.or-right-foot { margin: 0 12px 12px; padding: 12px; background: var(--card); border: 0; border-radius: var(--r-3); box-shadow: var(--card-shadow); }
 
 /* ---------------------------------------------------------------- desks down the left (Help > Desks on the left, pass 8)
    A 72 px column of desks — icon over name — instead of the switcher at the start of every header. The header then
@@ -2168,3 +2177,9 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .desk-rail-btn:first-child { margin-bottom: 6px; }
 .desk-rail-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .desk-rail-btn { transition: none; } }
+
+/* ---------------------------------------------------------------- kept-alive desks (App.tsx slot())
+   Each desk sits in its own full-size slot; React's <Activity mode="hidden"> parks the others (display: none, effects
+   stopped, state and DOM kept). */
+.workspace-main > .desk-slot { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.workspace-main > .desk-slot > * { flex: 1 1 auto; min-width: 0; min-height: 0; }

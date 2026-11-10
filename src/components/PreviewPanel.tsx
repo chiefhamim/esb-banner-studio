@@ -224,7 +224,7 @@ export function PreviewWindow({ base, onClose }: { base: Assets; onClose: () => 
   const frame = frameFor(st.zoom)
   const clampPos = (x: number, y: number, w: number) => ({ x: Math.min(window.innerWidth - 120, Math.max(120 - w, x)), y: Math.min(window.innerHeight - 56, Math.max(8, y)) })
   // first open: sit just left of the right panel, so the inspector stays reachable
-  const x0 = st.x < 0 ? Math.max(8, (document.querySelector('.right')?.getBoundingClientRect().left ?? window.innerWidth) - frame - 16) : st.x
+  const x0 = st.x < 0 ? Math.max(8, (document.querySelector('.desk-slot.is-active .app > .right')?.getBoundingClientRect().left ?? window.innerWidth) - frame - 16) : st.x
   const patch = (p: Partial<Saved>) => setSt((s) => { const n = { ...s, ...p }; try { localStorage.setItem(KEY, JSON.stringify(n)) } catch { /* ignore */ } return n })
 
   useEffect(() => {

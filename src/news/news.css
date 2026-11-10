@@ -374,3 +374,8 @@
   .nw-ribbon, .nw-fold-body, .nw-fold-chev { animation: none; transition: none; }
   .nw-check.is-busy > svg, .nw-spin, .nw-toast, .nw-row.is-arriving, .nw-detail { animation: none; }
 }
+
+/* Folding a column re-flows the headline list at every intermediate width (Bengali shaping included). Rows off screen
+   skip layout and paint until they scroll into view, so a fold only re-flows the dozen that are visible.
+   (tools/audit/electron-fold-film.mjs: DESK=news) */
+.nw-row { content-visibility: auto; contain-intrinsic-size: auto 78px; }

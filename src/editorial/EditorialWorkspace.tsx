@@ -36,7 +36,7 @@ import { suggestKeyphrases } from './seo'
 import { FeaturedImage } from './FeaturedImage'
 import { SitePreview, SITE_THEMES } from './SitePreview'
 import type { SiteDevice, SiteTheme } from './SitePreview'
-import { useShellStore } from '../shell/shellStore'
+import { deskIs, useShellStore } from '../shell/shellStore'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { Icon } from '../ui/Icon'
 import { FileTypeIcon, FileTypePair } from './FileTypeIcon'
@@ -653,7 +653,7 @@ export function EditorialWorkspace() {
   const [deskDrag, setDeskDrag] = useState(false)
   useEffect(() => {
     let depth = 0
-    const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
+    const hasFiles = (e: DragEvent) => deskIs('editorial') && !!e.dataTransfer?.types.includes('Files')
     const enter = (e: DragEvent) => { if (!hasFiles(e)) return; depth++; setDeskDrag(true) }
     const over = (e: DragEvent) => { if (hasFiles(e)) { e.preventDefault(); setDeskDrag(true); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy' } }
     const leave = (e: DragEvent) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) setDeskDrag(false) }
