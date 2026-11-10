@@ -1216,4 +1216,9 @@
   .oa-campaign-select > svg:not(.chev) { display: none; }
   .oa-desk-tabs button { width: 70px; min-width: 70px; max-width: 70px; padding: 0 4px; }
   .oa-range-seg button { width: 58px; min-width: 58px; max-width: 58px; padding: 0 4px; }
+  /* the toggle keeps its switch but drops the words — at 900 px the label ran under the Export button */
+  .oa-dry-toggle .switch > span { display: none; }
+  .oa-dry-toggle .switch { margin: 0; }
+  .oa-dry-toggle { position: relative; }
+  .oa-toolbar-left { overflow: clip; }
 }

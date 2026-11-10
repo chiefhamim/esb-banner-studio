@@ -683,6 +683,13 @@
     display: inline;
   }
 }
+/* at 900–1000 px the status bar's five pills plus the right counts collided: the small-caps keys and the
+   inbox pill's time go to their tooltips, and the audience counts keep only the numbers that matter */
+@media (max-width: 1000px) {
+  .or-status .sb-k { display: none; }
+  .or-status .or-sb-inbox .sb-text { display: none; }
+  .or-status .sb-cms { padding-left: 6px; padding-right: 6px; }
+}
 .or-tp-footer {
   padding: 8px 12px;
   border-top: 1px solid var(--card-line);

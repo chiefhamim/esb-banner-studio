@@ -150,7 +150,7 @@ export function ActivityDesk() {
           />
 
           {store.hasDryEvents && (
-            <label className="oa-dry-toggle">
+            <label className="oa-dry-toggle" data-tip="Include test runs">
               <Switch checked={store.includeDry} onChange={(v) => store.setIncludeDry(v)} label="Include test runs" />
             </label>
           )}
