@@ -418,3 +418,13 @@
 /* News settings: four tabs, one rhythm (pass 12) */
 .nw-settings .nw-set-tabs { align-self: flex-start; }
 .nw-settings { min-height: 440px; }
+
+/* pass 12: the chosen headline reads at a glance but softly — a light teal wash, a translucent 1.5 px teal ring and a
+   faint teal glow; a click answers at once (the row presses in a touch). No coloured side bar (the desk rule since 2026-10-28). */
+.nw-row.on { background: color-mix(in srgb, var(--nw-teal) 7%, var(--card)); border-color: transparent; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--nw-teal) 55%, transparent), 0 6px 20px -6px color-mix(in srgb, var(--nw-teal) 28%, transparent); }
+:root[data-theme='dark'] .nw-row.on { background: color-mix(in srgb, var(--nw-teal) 8%, var(--card)); border-color: transparent; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--nw-teal) 50%, transparent), 0 6px 22px -6px color-mix(in srgb, var(--nw-teal) 22%, transparent); }
+.nw-row.on .nw-hl { color: var(--text); }
+.nw-row { transition: background-color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow 160ms var(--ease), transform 120ms var(--ease); }
+.nw-row:has(.nw-row-main:active) { transform: scale(.995); }
+/* the ring sits outside the card: the list keeps room for it */
+.nw-list { padding-left: 2px; padding-right: 2px; }
