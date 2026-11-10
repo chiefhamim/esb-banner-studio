@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent as RPointerEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
@@ -80,7 +80,52 @@ export function ColumnHandle({ col, label, root, apply, max }: {
     col.set(resolveKey({ w: clampW(col.w, spec), collapsed: col.collapsed }, (raw * sign) as 1 | -1, e.shiftKey ? 48 : 16, spec))
   }
 
+  // ---- the fold choreography. The column keeps its content rendered (at the width it had) while the track travels, so it
+  // slides and fades like a drawer instead of snapping blank; the rail crossfades in. `col-settled` (rail, content
+  // display:none) is only set once the travel is over. All class work is on the column element, outside React's className.
+  const prevCollapsed = useRef<boolean | null>(null)
+  const timer = useRef(0)
+  const seenW = useRef(col.w)
+  useEffect(() => {
+    const el = ref.current?.parentElement
+    if (!el) return
+    const ro = new ResizeObserver(() => { if (!col.collapsed && !el.classList.contains('col-anim')) seenW.current = el.getBoundingClientRect().width })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [col.collapsed])
+  useLayoutEffect(() => {
+    const el = ref.current?.parentElement
+    if (!el) return
+    const prev = prevCollapsed.current
+    prevCollapsed.current = col.collapsed
+    if (prev === null) return
+    if (prev === col.collapsed) return
+    window.clearTimeout(timer.current)
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.classList.remove('col-anim', 'col-anim-in', 'col-anim-out')
+    if (reduce) return
+    // the content is pinned to the width it has when open (minus its own margins and the column's border), so it is
+    // clipped by the shrinking column and revealed by the growing one instead of reflowing at every width in between
+    const open = Math.round(col.collapsed ? seenW.current || col.w : col.w)
+    const chrome = el.offsetWidth - el.clientWidth
+    const kids = Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement && !c.classList.contains('col-rail') && !c.classList.contains('col-handle'))
+    for (const k of kids) {
+      const cs = getComputedStyle(k)
+      k.style.width = Math.max(0, open - chrome - (parseFloat(cs.marginLeft) || 0) - (parseFloat(cs.marginRight) || 0)) + 'px'
+      k.style.flex = 'none'
+      k.style.minWidth = '0'
+    }
+    el.classList.add('col-anim', col.collapsed ? 'col-anim-in' : 'col-anim-out')
+    timer.current = window.setTimeout(() => {
+      el.classList.remove('col-anim', 'col-anim-in', 'col-anim-out')
+      for (const k of kids) { k.style.removeProperty('width'); k.style.removeProperty('flex'); k.style.removeProperty('min-width') }
+    }, 420)
+  }, [col.collapsed, col.w])
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
   const edge = col.side === 'left' ? 'r' : 'l'
+  // the chevron points where the column goes: toward its window edge to fold, away from it to open
+  const foldIcon = (col.side === 'left') === !col.collapsed ? 'chevLeft' : 'chevRight'
   return (
     <div ref={ref} className={`splitter vert ${edge} col-handle`} role="separator" aria-orientation="vertical" aria-label={label}
       aria-valuenow={col.px} aria-valuemin={RAIL_W} aria-valuemax={spec.max} aria-expanded={!col.collapsed} tabIndex={0}
@@ -88,12 +133,10 @@ export function ColumnHandle({ col, label, root, apply, max }: {
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
       onDoubleClick={toggle} onKeyDown={key}>
       <i className="grab" />
-      {!col.collapsed && (
-        <button type="button" className="col-fold" aria-label={`Collapse ${label}`} data-tip={`Collapse ${label}`} data-tip-pos={col.side === 'left' ? 'right' : 'left'} tabIndex={-1}
-          onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); toggle() }}>
-          <Icon name={col.side === 'left' ? 'chevLeft' : 'chevRight'} size={12} strokeWidth={2.4} />
-        </button>
-      )}
+      <button type="button" className="col-fold" aria-label={col.collapsed ? `Expand ${label}` : `Collapse ${label}`} data-tip={col.collapsed ? 'Expand' : 'Collapse'} data-tip-pos={col.side === 'left' ? 'right' : 'left'} tabIndex={-1}
+        onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); toggle() }}>
+        <Icon name={foldIcon} size={12} strokeWidth={2.4} />
+      </button>
     </div>
   )
 }
@@ -111,15 +154,18 @@ export interface RailItem {
  * shows that section), then the column's own primary actions at the foot, doing exactly what their full buttons do.
  */
 export function ColumnRail({ col, label, items, actions = [] }: { col: SideColumn; label: string; items: RailItem[]; actions?: (RailItem & { primary?: boolean; disabled?: boolean })[] }) {
-  if (!col.collapsed) return null
+  // on expand the rail stays mounted a moment and fades out while the content fades in (it is absolutely placed, so it takes no room)
+  const [present, setPresent] = useState(col.collapsed)
+  useEffect(() => {
+    if (col.collapsed) { setPresent(true); return }
+    const t = window.setTimeout(() => setPresent(false), 220)
+    return () => window.clearTimeout(t)
+  }, [col.collapsed])
+  if (!col.collapsed && !present) return null
   const pos = col.side === 'left' ? 'right' : 'left'
   const icon = (i: RailItem['icon']) => (typeof i === 'string' ? <Icon name={i as IconName} size={17} /> : i)
   return (
-    <nav className={'col-rail ' + col.side} aria-label={label}>
-      <button type="button" className="col-rail-btn col-rail-open" aria-label={`Expand ${label}`} data-tip={`Expand ${label}`} data-tip-pos={pos} onClick={col.expand}>
-        <Icon name={col.side === 'left' ? 'chevRight' : 'chevLeft'} size={15} />
-      </button>
-      <span className="col-rail-sep" aria-hidden />
+    <nav className={'col-rail ' + col.side + (col.collapsed ? '' : ' leaving')} aria-label={label} aria-hidden={!col.collapsed || undefined}>
       <div className="col-rail-items">
         {items.map((it) => (
           <button key={it.id} type="button" className={'col-rail-btn' + (it.on ? ' on' : '')} aria-label={it.label} aria-current={it.on || undefined}

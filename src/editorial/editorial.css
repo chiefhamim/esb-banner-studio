@@ -749,7 +749,7 @@
 /* intake fills the rest of the card; each tab's body takes what is left and scrolls only as a last resort */
 .ed-launcher-wrap .ed-intake:not(.compact) { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; display: flex; flex-direction: column; gap: clamp(12px, 2vh, 16px); }
 .ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-tabs { flex: none; }
-.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-body { flex: 1 1 auto; min-height: 0; height: auto; max-height: none; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; overflow-x: hidden; }
 .ed-launcher-wrap .ed-intake:not(.compact) > .ed-intake-error { flex: none; }
 
 /* Link tab: label, [field | Fetch], hint; the pipeline sits at the foot of the card */

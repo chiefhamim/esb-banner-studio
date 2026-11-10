@@ -370,17 +370,6 @@
 .nw-fold:not(.open) .nw-fold-inner { opacity: 0; transition: opacity .15s; }
 .nw-fold.open .nw-fold-inner { opacity: 1; transition: opacity .25s .05s; }
 
-/* ---------------------------------------------------------------- scrollbars: no arrow buttons, a slim rounded thumb (as the Editorial
-   launcher lists), so a rounded container never cuts them */
-/* the app sets scrollbar-width: thin everywhere, and while it is set Chromium ignores every ::-webkit-scrollbar rule (so
-   Windows' thin bar with its arrow buttons showed): these scrollers opt out, as Editorial's launcher lists do */
-.news-workspace :is(.nw-sheet, .nw-left-scroll, .nw-right-scroll), .nw-portals { scrollbar-width: auto; scrollbar-color: auto; }
-.news-workspace :is(.nw-sheet, .nw-left-scroll, .nw-right-scroll)::-webkit-scrollbar, .nw-portals::-webkit-scrollbar { width: 12px; }
-.news-workspace :is(.nw-sheet, .nw-left-scroll, .nw-right-scroll)::-webkit-scrollbar-button, .nw-portals::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-.news-workspace :is(.nw-sheet, .nw-left-scroll, .nw-right-scroll)::-webkit-scrollbar-track, .nw-portals::-webkit-scrollbar-track { background: transparent; }
-.news-workspace :is(.nw-sheet, .nw-left-scroll, .nw-right-scroll)::-webkit-scrollbar-thumb, .nw-portals::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 18%, transparent); background-clip: padding-box; border: 3px solid transparent; border-radius: 8px; }
-.news-workspace :is(.nw-sheet, .nw-left-scroll, .nw-right-scroll)::-webkit-scrollbar-thumb:hover, .nw-portals::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text) 32%, transparent); background-clip: padding-box; }
-
 @media (prefers-reduced-motion: reduce) {
   .nw-ribbon, .nw-fold-body, .nw-fold-chev { animation: none; transition: none; }
   .nw-check.is-busy > svg, .nw-spin, .nw-toast, .nw-row.is-arriving, .nw-detail { animation: none; }

@@ -1,16 +1,16 @@
 /* ---------------------------------------------------------------- side columns that fold to an icon rail (src/ui/SideColumn.tsx)
    Every desk's side column: drag its inner edge narrow and it becomes a 52 px rail of its own sections. The rail keeps
    the column's surface; only the rail's own buttons are styled here, the expanded column is left as it was. */
-:root { --rail-w: 52px; --col-ease: cubic-bezier(0.16, 1, 0.3, 1); }
+:root { --rail-w: 52px; --col-ease: cubic-bezier(.32, .72, 0, 1); }
 
 /* the grids that hold side columns ease their tracks when a column folds or opens — never while a handle is dragged */
-.side-cols { transition: grid-template-columns 200ms var(--col-ease); }
-.side-col-w { transition: width 200ms var(--col-ease); }
+.side-cols { transition: grid-template-columns 360ms var(--col-ease); }
+.side-col-w { transition: width 360ms var(--col-ease); }
 .resizing .side-cols, .side-cols.resizing, .resizing .side-col-w, .resizing.side-col-w { transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .side-cols, .side-col-w { transition: none !important; } }
 
 /* while railed, only the rail and the edge handle show; the content stays mounted (its state, scroll and open panels survive) */
-.is-railed > :not(.col-rail):not(.col-handle) { display: none !important; }
+.is-railed:not(.col-anim) > :not(.col-rail):not(.col-handle) { display: none !important; }
 .is-railed { min-width: 0; }
 
 .col-rail {

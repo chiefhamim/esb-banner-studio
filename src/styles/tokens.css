@@ -185,52 +185,53 @@
 
 /* ================================================================ Dark Theme Palette */
 :root[data-theme="dark"] {
-  /* Rich dark (pass 5): cool graphite with an indigo undertone, five clear steps of depth. The canvas well is the
-     deepest, columns and the header sit one step up, cards one more, hover/raised one more. Borders carry a faint
-     blue so edges read as light catching a surface instead of grey lines on grey. */
-  --surface-app: #090a0f;
-  --surface-panel: #10121a;
-  --surface-raised: #191c27;
-  --surface-sunken: #0b0d13;
-  --surface-hover: #212533;
+  /* Obsidian (pass 6). Near-black neutral graphite with a trace of cool, so light has somewhere to land: five clear
+     luminance steps (canvas < columns < cards < raised < hover), edges drawn as translucent white hairlines (light
+     catching an edge, not grey lines on grey), text in three confident tiers. The colour in this theme comes from
+     the content — the story's sector glow, the ESB stripe, the category chips — not from the chrome. */
+  --surface-app: #060608;
+  --surface-panel: #101015;
+  --surface-raised: #1a1a21;
+  --surface-sunken: #09090c;
+  --surface-hover: #23232b;
 
-  --border-subtle: #1b1f2b;
-  --border-default: #292f3f;
-  --border-strong: #3d465b;
+  --border-subtle: rgba(255, 255, 255, 0.055);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.17);
 
-  --text-primary: #eef1f9;
-  --text-secondary: #b6bed0;
-  --text-tertiary: #919bb1;
-  --text-disabled: rgba(238, 241, 249, 0.4);
+  --text-primary: #f7f7fa;
+  --text-secondary: #adafbc;
+  --text-tertiary: #868896;
+  --text-disabled: rgba(247, 247, 250, 0.38);
 
-  --accent: #eef1f9;
-  --on-accent: #0f1118;
-  --accent-soft: rgba(238, 241, 249, 0.08);
-  --focus-ring: rgba(140, 160, 255, 0.5);
+  --accent: #f7f7fa;
+  --on-accent: #0c0c10;
+  --accent-soft: rgba(247, 247, 250, 0.08);
+  --focus-ring: rgba(150, 160, 255, 0.55);
 
-  --danger: #ff9088;
-  --danger-soft: rgba(255, 144, 136, 0.13);
-  --warning: #f3b95c;
-  --warning-soft: rgba(243, 185, 92, 0.13);
-  --success: #43dda2;
-  --success-soft: rgba(67, 221, 162, 0.13);
+  --danger: #ff8f87;
+  --danger-soft: rgba(255, 143, 135, 0.13);
+  --warning: #f4b95b;
+  --warning-soft: rgba(244, 185, 91, 0.13);
+  --success: #45dba0;
+  --success-soft: rgba(69, 219, 160, 0.13);
 
-  --tip-bg: #272c3c;
-  --tip-fg: #eef1f9;
-  --scrim: rgba(3, 4, 8, 0.66);
+  --tip-bg: #25252d;
+  --tip-fg: #f7f7fa;
+  --scrim: rgba(2, 2, 5, 0.68);
 
-  --side: #0f1119;
-  --ctl-shadow: 0 0 0 .5px rgba(150, 170, 255, 0.16), 0 1px 1.5px rgba(0, 0, 0, 0.45);
-  --ctl-shadow-hover: 0 0 0 1px rgba(150, 170, 255, 0.26), 0 1px 3px rgba(0, 0, 0, 0.55);
-  --menu-bg: rgba(25, 28, 39, 0.88);
-  --shadow-1: 0 .5px 1px rgba(0, 0, 0, 0.55);
-  --shadow-2: 0 0 0 .5px rgba(150, 170, 255, 0.16), 0 14px 40px rgba(0, 0, 0, 0.66), 0 2px 8px rgba(0, 0, 0, 0.45);
+  --side: #0f0f14;
+  --ctl-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.14), 0 1px 1.5px rgba(0, 0, 0, 0.5);
+  --ctl-shadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.24), 0 1px 3px rgba(0, 0, 0, 0.6);
+  --menu-bg: rgba(22, 22, 28, 0.86);
+  --shadow-1: 0 .5px 1px rgba(0, 0, 0, 0.6);
+  --shadow-2: 0 0 0 .5px rgba(255, 255, 255, 0.14), 0 16px 44px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.5);
 
   color-scheme: dark;
 
-  --bg-4: #2b3142;
-  --ink-2: #d3daea;
-  --ink-ring: rgba(238, 241, 249, 0.22);
+  --bg-4: #2a2a32;
+  --ink-2: #d4d5df;
+  --ink-ring: rgba(247, 247, 250, 0.22);
 
   --surface: var(--surface-panel);
   --surface-2: var(--surface-sunken);
@@ -238,18 +239,18 @@
   --border: var(--border-default);
   --muted: var(--text-secondary);
 
-  --card: #171a25;
-  --card-line: rgba(150, 170, 255, 0.1);
-  --card-shadow: 0 0 0 .5px rgba(150, 170, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.045);
-  --card-shadow-open: 0 0 0 .5px rgba(150, 170, 255, 0.12), 0 6px 22px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.055);
-  --fill: rgba(150, 170, 255, 0.065);
-  --fill-hover: rgba(150, 170, 255, 0.105);
-  --fill-active: rgba(150, 170, 255, 0.155);
-  --field: rgba(150, 170, 255, 0.06);
-  --field-hover: rgba(150, 170, 255, 0.095);
-  --raised: #313850;
-  --raised-shadow: 0 0 0 .5px rgba(160, 180, 255, 0.18), 0 1px 2px rgba(0, 0, 0, 0.55);
-  --primary-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.55);
-  --split-line: rgba(0, 0, 0, 0.2);
-  --header-bg: rgba(15, 17, 25, 0.92);
+  --card: #17171d;
+  --card-line: rgba(255, 255, 255, 0.085);
+  --card-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.55), 0 12px 28px -16px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --card-shadow-open: 0 0 0 .5px rgba(255, 255, 255, 0.09), 0 8px 26px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --fill: rgba(255, 255, 255, 0.055);
+  --fill-hover: rgba(255, 255, 255, 0.09);
+  --fill-active: rgba(255, 255, 255, 0.135);
+  --field: rgba(255, 255, 255, 0.045);
+  --field-hover: rgba(255, 255, 255, 0.075);
+  --raised: #30303a;
+  --raised-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.16), 0 1px 2px rgba(0, 0, 0, 0.6);
+  --primary-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6);
+  --split-line: rgba(0, 0, 0, 0.25);
+  --header-bg: rgba(16, 16, 21, 0.92);
 }
