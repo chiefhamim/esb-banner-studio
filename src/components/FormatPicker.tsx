@@ -29,6 +29,7 @@ export function FormatPicker({ value, onChange }: { value: FormatId; onChange: (
       <button ref={btn} type="button" className={'fmtpick' + (open ? ' open' : '')} onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-label="Banner format">
         <FormatIcon f={cur} />
         <span className="fp-name">{cur.name}</span>
+        <span className="fp-ratio">{cur.ratio}</span>
         <span className="fp-dims">{cur.ratio} · {cur.w}×{cur.h}</span>
         <Icon name="chevDown" size={14} className="chev" />
       </button>

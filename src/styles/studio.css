@@ -2054,3 +2054,39 @@ img.ed-avatar { padding: 0; background: var(--fill); }
   .topbar.gx-head .menubar .mb-item { padding-left: 5px; padding-right: 5px; }
   .topbar.gx-head .split .btn.primary { padding: 0 10px; }
 }
+
+/* ---------------------------------------------------------------- labels that give way (pass 5)
+   Seg / Tabs render a full and a short form of each label; the control measures itself and picks the short one
+   (is-short) only when the full ones would not fit. is-measuring is held for one synchronous measure, never painted. */
+.seg-label .l-short, .tab-label .l-short { display: none; }
+.is-short .seg-label .l-full, .is-short .tab-label .l-full { display: none; }
+.is-short .seg-label .l-short, .is-short .tab-label .l-short { display: inline; }
+.is-measuring { min-width: 0; }
+.is-measuring > button { flex: 0 0 auto !important; width: auto !important; min-width: 0 !important; }
+.is-measuring .seg-label, .is-measuring .tab-label { overflow: visible !important; text-overflow: clip !important; white-space: nowrap !important; }
+
+/* ---------------------------------------------------------------- Graphics header, one shape at every width (pass 5)
+   Format = its icon + ratio, quick switch = the swap icon, Preview = the eye. Words live in the tooltips. Under 960 px
+   the menu words fold into one "more" button so Export is never pushed off the window. */
+.topbar .fmtpick .fp-name, .topbar .fmtpick .fp-dims { display: none; }
+.topbar .fmtpick .fp-ratio { font: 600 12px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text-2); }
+.topbar .fmtgroup .dual-toggle-btn, .topbar .fmtgroup .pv-btn { width: 28px; min-width: 28px; padding: 0; justify-content: center; }
+.topbar .fmtgroup .pv-btn .pv-label, .topbar .fmtgroup .pv-btn kbd, .topbar .fmtgroup .dual-toggle-btn span { display: none; }
+.topbar .fmtgroup .pv-btn { display: inline-flex !important; }
+.menubar .mb-fold { display: none; width: 28px; height: 28px; }
+@container topbar (max-width: 960px) {
+  .topbar.gx-head .menubar > .mb-item { display: none; }
+  .topbar.gx-head .menubar > .mb-fold { display: inline-grid; }
+}
+.topbar.gx-head .split, .topbar.gx-head .ed-avatar { flex: none; }
+
+/* ---------------------------------------------------------------- the fold button on an open column's edge (pass 5)
+   A small round chevron sits on the column edge so folding is discoverable without knowing the double-click. Quiet at
+   rest, firm under the pointer, and the same on every desk. */
+.col-handle .col-fold { position: absolute; top: 50%; left: 50%; z-index: 2; display: grid; place-items: center; width: 22px; height: 22px; margin: -11px 0 0 -11px; padding: 0; color: var(--text-3); background: var(--card); border: 0; border-radius: 50%; cursor: pointer; opacity: .5; box-shadow: 0 0 0 1px var(--card-line), 0 1px 3px rgba(0, 0, 0, .25); transition: opacity 160ms var(--ease), color 120ms var(--ease), transform 200ms var(--spring), background-color 120ms var(--ease); }
+.col-handle:hover .col-fold, .col-handle:focus-within .col-fold, .side-cols:hover .col-handle .col-fold, .or-left:hover > .col-handle .col-fold, .or-right:hover > .col-handle .col-fold { opacity: .9; }
+.col-handle .col-fold:hover { opacity: 1; color: var(--text); background: var(--raised); transform: scale(1.08); }
+.col-handle .col-fold:active { transform: scale(.94); }
+.col-handle.drag .col-fold, .resizing .col-handle .col-fold { opacity: 0 !important; }
+@media (hover: none) { .col-handle .col-fold { opacity: .72; } }
+@media (prefers-reduced-motion: reduce) { .col-handle .col-fold { transition: none; } }

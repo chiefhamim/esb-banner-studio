@@ -996,10 +996,10 @@ export function EditorialWorkspace() {
         // News is not a tab here: it opens the News desk, where every headline is (Start a story brings one back)
         onChange={(t) => { if (t === 'news') { useShellStore.getState().setWorkspace('news'); return } setLauncherTab(t); setErrorMsg(null); setErrorDetail(null) }}
         options={[
-          { value: 'url', icon: 'link', label: compact ? 'Link' : 'Paste Story Link' },
-          { value: 'paste', icon: 'edit', label: compact ? 'Text or file' : 'Paste Text or File' },
-          { value: 'live_feed', icon: 'globe', label: compact ? 'Published' : `Published${liveArticles.length ? ` (${liveArticles.length})` : ''}` },
-          { value: 'news', icon: 'inbox', label: compact ? 'News' : 'Start from News', tip: 'Open the News desk — pick a headline there and Start a story' },
+          { value: 'url', icon: 'link', label: compact ? 'Link' : 'Paste Story Link', short: 'Link' },
+          { value: 'paste', icon: 'edit', label: compact ? 'Text or file' : 'Paste Text or File', short: 'Text or file' },
+          { value: 'live_feed', icon: 'globe', label: compact ? 'Published' : `Published${liveArticles.length ? ` (${liveArticles.length})` : ''}`, short: 'Published' },
+          { value: 'news', icon: 'inbox', label: compact ? 'News' : 'Start from News', short: 'News', tip: 'Open the News desk — pick a headline there and Start a story' },
         ]}
       />
 

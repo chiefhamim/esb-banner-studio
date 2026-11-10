@@ -88,6 +88,12 @@ export function ColumnHandle({ col, label, root, apply, max }: {
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
       onDoubleClick={toggle} onKeyDown={key}>
       <i className="grab" />
+      {!col.collapsed && (
+        <button type="button" className="col-fold" aria-label={`Collapse ${label}`} data-tip={`Collapse ${label}`} data-tip-pos={col.side === 'left' ? 'right' : 'left'} tabIndex={-1}
+          onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); toggle() }}>
+          <Icon name={col.side === 'left' ? 'chevLeft' : 'chevRight'} size={12} strokeWidth={2.4} />
+        </button>
+      )}
     </div>
   )
 }

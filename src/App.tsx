@@ -19,6 +19,7 @@ import './styles/outreach-activity.css'
 import './styles/studio.css'
 import './styles/newsroom.css'
 import './styles/side-rail.css'
+import './styles/dark-rich.css'
 
 installBannerLink()
 

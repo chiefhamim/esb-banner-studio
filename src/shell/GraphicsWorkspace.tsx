@@ -454,11 +454,10 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
         <div className="spacer" />
         <div className="fmtgroup">
           <FormatPicker value={format} onChange={setFormat} />
-          <button className="dual-toggle-btn" onClick={() => setFormat(format === 'fb45' ? 'web' : 'fb45')} title={format === 'fb45' ? 'Quick switch to Web Hero 16:9' : 'Quick switch to Facebook Feed 4:5'}>
-            <Icon name="swap" size={13} />
-            <span>{format === 'fb45' ? 'Web 16:9' : 'FB 4:5'}</span>
+          <button className="dual-toggle-btn" aria-label={format === 'fb45' ? 'Switch to Web Hero 16:9' : 'Switch to Facebook Feed 4:5'} data-tip={format === 'fb45' ? 'Switch to Web Hero 16:9' : 'Switch to Facebook Feed 4:5'} onClick={() => setFormat(format === 'fb45' ? 'web' : 'fb45')}>
+            <Icon name="swap" size={15} />
           </button>
-          <button className={'pv-btn' + (showPreview ? ' on' : '')} onClick={() => setShowPreview((v) => !v)} aria-pressed={showPreview} title="Live Facebook preview — stays open while you edit"><Icon name="eye" size={16} /><span className="pv-label">Preview</span><kbd>P</kbd></button>
+          <button className={'pv-btn' + (showPreview ? ' on' : '')} onClick={() => setShowPreview((v) => !v)} aria-pressed={showPreview} aria-label="Preview" data-tip="Preview (P) — live Facebook preview, stays open while you edit"><Icon name="eye" size={16} /></button>
         </div>
         <div className="spacer" />
         <div className="pillbar">

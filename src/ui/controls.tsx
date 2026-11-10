@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, ReactNode, RefObject } from 'react'
 import { step } from './motion'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
@@ -228,8 +228,18 @@ export function MenuBar({ menus }: { menus: MenuDef[] }) {
   const [open, setOpen] = useState<number | null>(null)
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const close = useCallback(() => setOpen(null), [])
+  const foldBtn = useRef<HTMLButtonElement>(null)
+  const [folded, setFolded] = useState(false)
+  // every menu in one list, for a header too narrow to show the words (File, Edit, ...)
+  const all: MenuEntry[] = menus.flatMap((m, i) => [...(i ? [{ divider: true } as MenuEntry] : []), { heading: m.label } as MenuEntry, ...m.items])
   return (
     <div className="menubar" role="menubar">
+      <button ref={foldBtn} type="button" className="mb-fold ibtn" aria-label="Menu" data-tip="Menu" onClick={() => setFolded((f) => !f)}><Icon name="more" size={16} /></button>
+      {folded && foldBtn.current && (
+        <Popover anchor={{ el: foldBtn.current }} onClose={() => setFolded(false)} className="menu menubar-pop" minWidth={248}>
+          <MenuList items={all} onDone={() => setFolded(false)} />
+        </Popover>
+      )}
       {menus.map((m, i) => (
         <button key={m.label} ref={(el) => { refs.current[i] = el }} type="button" role="menuitem" className={'mb-item' + (open === i ? ' open' : '')}
           onClick={() => setOpen(open === i ? null : i)} onPointerEnter={() => { if (open !== null) setOpen(i) }}>{m.label}</button>
@@ -299,8 +309,9 @@ export function useSlidingThumb(value: unknown, memoryKey?: string) {
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
+    el.addEventListener('esb-refit', measure) // a label swapped to its short form: the chip follows the new button widths
     const id = requestAnimationFrame(() => setReady(true)) // no glide on first paint
-    return () => { ro.disconnect(); cancelAnimationFrame(id) }
+    return () => { ro.disconnect(); el.removeEventListener('esb-refit', measure); cancelAnimationFrame(id) }
   }, [value])
 
   useLayoutEffect(() => {
@@ -405,18 +416,56 @@ export function useSlidingThumb(value: unknown, memoryKey?: string) {
   return { wrap, thumb }
 }
 
+/** A trailing generic word ("Card", "Banner") is what gives way first: "Quote Card" -> "Quote". */
+const GENERIC_TAIL = /\s+(Card|Banner|Desk|Tab|List|View)$/i
+const shortOf = (label: string | undefined, short?: string) => short ?? (label && GENERIC_TAIL.test(label) ? label.replace(GENERIC_TAIL, '') : undefined)
+
+/** Both forms of a label are rendered; the control picks the short ones (class `is-short`) only when the full ones do
+ *  not fit, and goes back to the full ones as soon as the width allows. Measured synchronously (all buttons at their
+ *  natural width), so no half-clipped frame is ever painted. */
+function useAutoShort(ref: RefObject<HTMLElement | null>, key: string) {
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || !el.querySelector('.l-short')) return
+    let was: boolean | null = null
+    const fit = () => {
+      el.classList.remove('is-short')
+      el.classList.add('is-measuring')
+      // the full labels must fit with a little air to spare (8 px), not merely without clipping
+      const btns = el.querySelectorAll<HTMLElement>(':scope > button')
+      const last = btns[btns.length - 1]
+      const padR = parseFloat(getComputedStyle(el).paddingRight) || 0
+      const over = el.scrollWidth > el.clientWidth + 1 || (!!last && last.offsetLeft + last.offsetWidth + padR > el.clientWidth - 8)
+      el.classList.remove('is-measuring')
+      if (over) el.classList.add('is-short')
+      if (was !== null && was !== over) el.dispatchEvent(new Event('esb-refit'))
+      was = over
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ref, key])
+}
+
+function Label({ text, short, cls }: { text: string; short?: string; cls: string }) {
+  const sh = shortOf(text, short)
+  return sh ? <span className={cls}><span className="l-full">{text}</span><span className="l-short" aria-hidden>{sh}</span></span> : <span className={cls}>{text}</span>
+}
+
 export function Seg<T extends string | number>({ value, options, onChange, className = '', label }: {
-  value: T; options: { value: T; icon?: IconName; label?: string; tip?: string }[]; onChange: (v: T) => void; className?: string
+  value: T; options: { value: T; icon?: IconName; label?: string; short?: string; tip?: string }[]; onChange: (v: T) => void; className?: string
   /** Accessible name of the group (screen readers announce it before the options). */
   label?: string
 }) {
   const { wrap, thumb } = useSlidingThumb(value)
+  useAutoShort(wrap, options.map((o) => o.label).join('|'))
   return (
     <div ref={wrap} className={'seg-ctl ' + className} role="group" aria-label={label}>
       {thumb}
       {options.map((o) => (
-        <button key={String(o.value)} type="button" className={o.value === value ? 'on' : ''} aria-pressed={o.value === value} data-tip={o.tip} onClick={() => onChange(o.value)}>
-          {o.icon && <Icon name={o.icon} size={14} />}{o.label != null && <span className="seg-label">{o.label}</span>}
+        <button key={String(o.value)} type="button" className={o.value === value ? 'on' : ''} aria-pressed={o.value === value} aria-label={o.label} data-tip={o.tip} onClick={() => onChange(o.value)}>
+          {o.icon && <Icon name={o.icon} size={14} />}{o.label != null && <Label text={o.label} short={o.short} cls="seg-label" />}
         </button>
       ))}
     </div>
@@ -425,15 +474,16 @@ export function Seg<T extends string | number>({ value, options, onChange, class
 
 /** Sidebar tabs: same glide, full-width, with proper tab semantics. */
 export function Tabs<T extends string>({ value, options, onChange, className = '' }: {
-  value: T; options: { value: T; icon?: IconName; label: string }[]; onChange: (v: T) => void; className?: string
+  value: T; options: { value: T; icon?: IconName; label: string; short?: string }[]; onChange: (v: T) => void; className?: string
 }) {
   const { wrap, thumb } = useSlidingThumb(value)
+  useAutoShort(wrap, options.map((o) => o.label).join('|'))
   return (
     <div ref={wrap} className={'side-tabs ' + className} role="tablist">
       {thumb}
       {options.map((o) => (
         <button key={o.value} type="button" role="tab" aria-selected={o.value === value} aria-label={o.label} data-tip={o.icon ? o.label : undefined} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}>
-          {o.icon && <Icon name={o.icon} size={15} />}<span className="tab-label">{o.label}</span>
+          {o.icon && <Icon name={o.icon} size={15} />}<Label text={o.label} short={o.short} cls="tab-label" />
         </button>
       ))}
     </div>
