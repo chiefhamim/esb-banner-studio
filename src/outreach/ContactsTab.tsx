@@ -39,6 +39,7 @@ const ContactRow = memo(function ContactRow({ c, out, on, onPick }: { c: Contact
 
 // a list of thousands renders a page at a time; filtering and search still run over all of it
 const PAGE = 200
+const AUD_KEY = 'esb-banner-studio/outreach/audience-open'
 
 // memo: the column has no props; it re-renders on its own store subscriptions, never because the desk around it did
 export const ContactsTab = memo(function ContactsTab() {
@@ -111,6 +112,14 @@ export const ContactsTab = memo(function ContactsTab() {
     for (const x of s.contacts) if (c?.audience.group == null || x.groupNo === c.audience.group) for (const p of x.purposes) m.set(p, (m.get(p) ?? 0) + 1)
     return [...m].sort((a, b) => b[1] - a[1])
   }, [s.contacts, c?.audience.group])
+  // the audience pickers and the address-check counts fold away; closed, the summary line still says what is chosen
+  const [audOpen, setAudOpenRaw] = useState(() => { try { return localStorage.getItem(AUD_KEY) === '1' } catch { return false } })
+  const setAudOpen = (v: boolean) => { setAudOpenRaw(v); try { localStorage.setItem(AUD_KEY, v ? '1' : '0') } catch { /* ignore */ } }
+  const audSummary = [
+    s.sheets.length > 1 && c?.sheet ? c.sheet.replace(/_/g, ' ') : null,
+    groups.length > 1 ? (c?.audience.group == null ? 'All groups' : (groups.find(([n]) => n === c.audience.group)?.[1] || `Group ${c.audience.group}`)) : null,
+    purposes.length > 1 ? (c?.audience.purposes[0] ? purposeLabel(c.audience.purposes[0]) : 'Any purpose') : null,
+  ].filter(Boolean).join(' · ') || 'Everyone on the list'
   const counts = useMemo(() => {
     const n = { ready: 0, skipped: 0, sent: 0, replied: 0, bounced: 0, failed: 0, opened: 0, clicked: 0, noemail: 0 }
     for (const r of rows) {
@@ -184,27 +193,43 @@ export const ContactsTab = memo(function ContactsTab() {
           <div className="or-file">
             <span className="or-file-icon"><Icon name="users" size={15} /></span>
             <div className="or-file-text">
-              <b title={listMeta?.fileName}>{listMeta?.fileName ?? 'No list loaded'}</b>
-              <span>{s.contacts.length ? `${inAud.length} of ${s.contacts.length} in the audience · ${counts.ready} ready` : 'Excel (.xlsx) or CSV with an Email column'}</span>
+              <b data-tip={listMeta?.fileName}>{listMeta?.fileName ? listMeta.fileName.replace(/\.(xlsx|csv|xls)$/i, '').replace(/[_]+/g, ' ') : 'No list loaded'}</b>
+              <span data-tip={s.contacts.length ? `${inAud.length.toLocaleString()} of ${s.contacts.length.toLocaleString()} contacts in the audience · ${counts.ready.toLocaleString()} ready to send` : undefined}>{s.contacts.length ? `${inAud.length.toLocaleString()} of ${s.contacts.length.toLocaleString()} · ${counts.ready.toLocaleString()} ready` : 'Excel (.xlsx) or CSV with an Email column'}</span>
             </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: '1 0 100%' }}>
+            <div className="or-file-acts">
               {s.contacts.length > 0 && (
-                <button type="button" className="btn sm" onClick={() => void s.checkAddresses()} disabled={!idle || !!s.checkingAddresses?.active} data-tip="Check mail servers and disposable domains via DNS (no email sent)">
-                  <Icon name="search" size={13} /><span>Check addresses</span>
+                <button type="button" className="btn sm or-file-act" onClick={() => void s.checkAddresses()} disabled={!idle || !!s.checkingAddresses?.active} aria-label="Check addresses" data-tip="Check addresses — mail servers and disposable domains via DNS (no email sent)">
+                  <Icon name="listChecks" size={14} />
                 </button>
               )}
-              <button type="button" className="btn sm" onClick={() => void pick()} data-tip={listMeta ? 'Load another mailing list in place of this one' : 'Load a mailing list from this computer'}>
-                <Icon name="upload" size={13} /><span className="or-btn-lbl">{listMeta ? 'Replace' : 'Import'}</span>
+              <button type="button" className="btn sm or-file-act" onClick={() => void pick()} aria-label={listMeta ? 'Replace the list' : 'Import a list'} data-tip={listMeta ? 'Replace — load another mailing list in place of this one' : 'Import — load a mailing list from this computer'}>
+                <Icon name="upload" size={14} />
               </button>
               {listMeta && (
-                <button type="button" className="btn sm or-list-remove" onClick={() => void remove()} aria-label="Remove the list" data-tip="Remove the list from this campaign">
-                  <Icon name="trash" size={13} />
+                <button type="button" className="btn sm or-file-act or-list-remove" onClick={() => void remove()} aria-label="Remove the list" data-tip="Remove the list from this campaign">
+                  <Icon name="trash" size={14} />
                 </button>
               )}
             </div>
           </div>
         )}
         <input ref={file} type="file" accept=".xlsx,.csv,.xls" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void s.importList(f); e.target.value = '' }} />
+        {s.checkingAddresses?.active && (
+          <div className="or-checking-progress" role="status">
+            <Icon name="refresh" size={13} className="spin" />
+            <span>Checking {s.checkingAddresses.total.toLocaleString()} companies</span>
+            <button type="button" className="btn xs" onClick={s.cancelCheckAddresses}>Cancel</button>
+          </div>
+        )}
+        {!direct && s.contacts.length > 0 && (
+          <details className="or-aud" open={audOpen} onToggle={(e) => setAudOpen((e.currentTarget as HTMLDetailsElement).open)}>
+            <summary>
+              <Icon name="chevRight" size={13} className="or-aud-chev" />
+              <span className="or-aud-k">Audience</span>
+              <span className="or-aud-v">{audSummary}</span>
+              {checkSummary && <span className="or-aud-badge" data-tip="Addresses checked">{checkSummary.hasMailServer.toLocaleString()} ok</span>}
+            </summary>
+            <div className="or-aud-body">
         {!direct && s.sheets.length > 1 && (
           <Select value={c?.sheet ?? ''} prefix="Sheet" onChange={(v) => s.setSheet(String(v))}
             options={(listMeta?.sheets ?? s.sheets.map((x) => ({ name: x.name, contacts: 0 }))).filter((x) => x.contacts || x.name === c?.sheet).map((x) => ({ value: x.name, label: x.name.replace(/_/g, ' '), hint: x.contacts ? String(x.contacts) : '' }))} />
@@ -221,29 +246,29 @@ export const ContactsTab = memo(function ContactsTab() {
         )}
           </div>
         )}
+        {checkSummary && (
+          /* the address check as four figures (each one filters the list); chips here looked like the status filters below */
+          <div className="or-check-grid" role="group" aria-label="Address check">
+            {([
+              ['has_server', checkSummary.hasMailServer, 'Mail server', 'The domain has a mail server (MX or A record)'],
+              ['no_server', checkSummary.noMailServer, 'No server', 'No mail server found for the domain'],
+              ['role', checkSummary.sharedMailboxes, 'Shared', 'Shared mailboxes such as info@ or contact@'],
+              ['disposable', checkSummary.disposable, 'Disposable', 'Throwaway address services'],
+            ] as [typeof s.view, number, string, string][]).map(([v, n, label, tip]) => (
+              <button key={v} type="button" className={'or-check-cell' + (s.view === v ? ' on' : '') + (n ? '' : ' is-zero')} aria-pressed={s.view === v} onClick={() => s.setView(s.view === v ? 'all' : v)} data-tip={tip}>
+                <b>{n.toLocaleString()}</b><span>{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+            </div>
+          </details>
+        )}
         {s.contacts.length > 0 && (
           <>
-                    {s.checkingAddresses?.active && (
-          <div className="or-checking-progress" role="status">
-            <Icon name="refresh" size={13} className="spin" />
-            <span>Checking {s.checkingAddresses.total.toLocaleString()} companies</span>
-            <button type="button" className="btn xs" onClick={s.cancelCheckAddresses}>Cancel</button>
-          </div>
-        )}
-        {checkSummary && (
-          <div className="or-check-summary">
-            <button type="button" className={'or-fchip' + (s.view === 'has_server' ? ' on' : '')} onClick={() => s.setView(s.view === 'has_server' ? 'all' : 'has_server')}>{checkSummary.hasMailServer.toLocaleString()} have a mail server</button>
-            <span>·</span>
-            <button type="button" className={'or-fchip' + (s.view === 'no_server' ? ' on' : '')} onClick={() => s.setView(s.view === 'no_server' ? 'all' : 'no_server')}>{checkSummary.noMailServer.toLocaleString()} none</button>
-            <span>·</span>
-            <button type="button" className={'or-fchip' + (s.view === 'role' ? ' on' : '')} onClick={() => s.setView(s.view === 'role' ? 'all' : 'role')}>{checkSummary.sharedMailboxes.toLocaleString()} shared mailboxes</button>
-            <span>·</span>
-            <button type="button" className={'or-fchip' + (s.view === 'disposable' ? ' on' : '')} onClick={() => s.setView(s.view === 'disposable' ? 'all' : 'disposable')}>{checkSummary.disposable.toLocaleString()} disposable</button>
-          </div>
-        )}
         {eligibleForBulkApprove.length > 0 && (
           <div className="or-bulk-approve-bar">
-            <button type="button" className="btn sm primary or-bulk-approve-btn" onClick={handleBulkApprove}>
+            <button type="button" className="btn sm or-bulk-approve-btn" onClick={handleBulkApprove}>
               <Icon name="check" size={13} /><span>Approve all that pass checks ({eligibleForBulkApprove.length})</span>
             </button>
             {s.lastBulkApproval && (
@@ -280,7 +305,7 @@ export const ContactsTab = memo(function ContactsTab() {
             </div>
           </>
         )}
-        {s.importNote && <p className="or-note">{s.importNote}</p>}
+        {s.importNote && <p className="or-note or-note-info"><Icon name="info" size={13} /><span>{s.importNote}</span></p>}
       </div>
 
       <div className="or-list" role="listbox" aria-label="Contacts">

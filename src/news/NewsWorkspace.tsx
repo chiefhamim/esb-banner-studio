@@ -94,10 +94,16 @@ function useNow(every = 15_000) {
 }
 
 /** The left column's sections open and close; the choice is remembered. */
-type Folds = { show: boolean; trending: boolean; pressWings: boolean; portals: boolean }
+type Folds = { show: boolean; trending: boolean; pressWings: boolean; keywords: boolean; portals: boolean }
 const FOLDS_KEY = 'esb-banner-studio/news/folds'
+/** The editor's own keywords (left column, under Official Press Wings): turning one on shows only headlines in the
+ *  chosen time range that contain it. Saved on this computer. */
+const WORDS_KEY = 'esb-banner-studio/news/keywords'
+const loadWords = (): string[] => { try { const v = JSON.parse(localStorage.getItem(WORDS_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 60) : [] } catch { return [] } }
+const norm = (t: string) => t.normalize('NFC').toLowerCase()
+const hasWord = (x: WatchItem, w: string) => norm(x.title).includes(norm(w))
 const loadFolds = (): Folds => {
-  const d: Folds = { show: true, trending: true, pressWings: false, portals: false }
+  const d: Folds = { show: true, trending: true, pressWings: false, keywords: true, portals: false }
   try { return { ...d, ...JSON.parse(localStorage.getItem(FOLDS_KEY) ?? '{}') } } catch { return d }
 }
 function Fold({ id, title, icon, aside, open, onToggle, children }: { id: keyof Folds; title: string; icon?: IconName; aside?: React.ReactNode; open: boolean; onToggle: (id: keyof Folds) => void; children: React.ReactNode }) {
@@ -131,6 +137,19 @@ export function NewsWorkspace() {
   const [q, setQ] = useState('')
   const [cat, setCat] = useState<'all' | WatchCat>('all')
   const [portal, setPortal] = useState<string | null>(null)
+  const [words, setWordsRaw] = useState<string[]>(loadWords)
+  const setWords = (next: string[]) => { setWordsRaw(next); try { localStorage.setItem(WORDS_KEY, JSON.stringify(next)) } catch { /* ignore */ } }
+  const [onWords, setOnWords] = useState<string[]>([])
+  const [wordDraft, setWordDraft] = useState('')
+  const addWord = () => {
+    const w = wordDraft.trim().replace(/\s+/g, ' ')
+    if (!w) return
+    if (!words.some((x) => norm(x) === norm(w))) setWords([...words, w])
+    setOnWords((o) => (o.some((x) => norm(x) === norm(w)) ? o : [...o, w]))
+    setWordDraft('')
+  }
+  const toggleWord = (w: string) => setOnWords((o) => (o.includes(w) ? o.filter((x) => x !== w) : [...o, w]))
+  const removeWord = (w: string) => { setWords(words.filter((x) => x !== w)); setOnWords((o) => o.filter((x) => x !== w)) }
   const [sel, setSel] = useState<string | null>(null)
   const [dialog, setDialog] = useState<null | 'settings' | 'range'>(null)
   const [toast, setToast] = useState<Toast | null>(null)
@@ -143,11 +162,9 @@ export function NewsWorkspace() {
 
   // Column widths, dragged like Graphics' side panels and remembered between launches; each folds to an icon rail.
   const legacyCols = (k: 'lw' | 'rw') => () => { const v = JSON.parse(localStorage.getItem(NEWS_COLS_KEY) ?? 'null'); return typeof v?.[k] === 'number' ? v[k] as number : undefined }
-  const leftCol = useSideColumn('news/left', 'left', { def: NEWS_COLS_DEFAULT.lw, min: NEWS_LIMITS.lw[0], max: NEWS_LIMITS.lw[1] }, legacyCols('lw'))
-  const rightCol = useSideColumn('news/right', 'right', { def: NEWS_COLS_DEFAULT.rw, min: NEWS_LIMITS.rw[0], max: NEWS_LIMITS.rw[1] }, legacyCols('rw'))
+  const leftCol = useSideColumn('news/left', 'left', { def: NEWS_COLS_DEFAULT.lw, min: NEWS_LIMITS.lw[0], max: NEWS_LIMITS.lw[1] }, legacyCols('lw'), { foldable: true })
+  const rightCol = useSideColumn('news/right', 'right', { def: NEWS_COLS_DEFAULT.rw, min: NEWS_LIMITS.rw[0], max: NEWS_LIMITS.rw[1] }, legacyCols('rw'), { foldable: true })
   const liveSize = (k: 'lw' | 'rw') => (v: number) => { bodyRef.current?.style.setProperty(k === 'lw' ? '--nw-lw' : '--nw-rw', `${v}px`) }
-  /** Rail icon for a fold: open the column, then that fold (it stays open if it already is). */
-  const openFold = (id: keyof Folds) => { if (!folds[id]) toggleFold(id) }
 
   useAutoCheck()
   useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(null), toast.undo ? 6000 : 3500); return () => window.clearTimeout(id) }, [toast])
@@ -173,8 +190,8 @@ export function NewsWorkspace() {
 
   // Shown items for active category + portal + query (sorted by relevance when query is active, then timestamp)
   const shown = useMemo(
-    () => visibleItems(effectiveItems, hidden, effectivePrefs, q, cat, isNew).filter((x) => !portal || x.source === portal),
-    [effectiveItems, hidden, effectivePrefs, q, cat, isNew, portal],
+    () => visibleItems(effectiveItems, hidden, effectivePrefs, q, cat, isNew).filter((x) => (!portal || x.source === portal) && (!onWords.length || onWords.some((w) => hasWord(x, w)))),
+    [effectiveItems, hidden, effectivePrefs, q, cat, isNew, portal, onWords],
   )
 
   // Group headlines: when a topic/search query is active, keep relevance order intact under one heading;
@@ -203,7 +220,8 @@ export function NewsWorkspace() {
   const selected = ordered.find((x) => x.key === sel) ?? ordered[0] ?? null
 
   // Category counts & canonical trending topics for the active category
-  const catCount = (c: 'all' | WatchCat) => inSearch.filter((x) => (c === 'all' || x.categories.includes(c)) && (!portal || x.source === portal)).length
+  const catCount = (c: 'all' | WatchCat) => inSearch.filter((x) => (c === 'all' || x.categories.includes(c)) && (!portal || x.source === portal) && (!onWords.length || onWords.some((w) => hasWord(x, w)))).length
+  const wordCount = (w: string) => inSearch.filter((x) => (cat === 'all' || x.categories.includes(cat)) && (!portal || x.source === portal) && hasWord(x, w)).length
   const trending = useMemo(() => trendingTopics(base, cat, 12), [base, cat])
 
   const portalsOff = prefs.portalsOff
@@ -355,9 +373,62 @@ export function NewsWorkspace() {
 
   const when = (x: WatchItem) => (x.published ? (range || cat === 'press' ? fmtDateTime(Date.parse(x.published)) : relTime(Math.min(Date.parse(x.published), now), now)) : `time not given · found ${relTime(Math.min(x.foundAt, now), now)}`)
   const cats: ('all' | WatchCat)[] = ['all', ...(['energy', 'leadership', 'press'] as WatchCat[]).filter((c) => prefs.show[c] !== false)]
-  const filtered = !!needle || cat !== 'all' || !!portal
+  const filtered = !!needle || cat !== 'all' || !!portal || onWords.length > 0
   const feedTone = busy ? 'on' : down > portalsOn / 2 ? 'off' : down ? 'warn' : lastRun ? 'on' : 'idle'
 
+  const pressList = (after?: () => void) => (
+              <div className="nw-nav">
+                {pressOfficeRows.map((o) => (
+                  <button key={o.name} type="button" className={'nw-nav-row nw-portal' + (portal === o.name ? ' on' : '') + (o.count ? '' : ' is-empty')} aria-pressed={portal === o.name}
+                    onClick={() => { after?.(); setPortal(portal === o.name ? null : o.name); if (portal !== o.name) setCat('press') }}
+                    data-tip={o.bad ? `Not answering · ${o.why}` : `${o.office} · click to filter`}>
+                    <PortalIcon name={o.name} size={14} />
+                    <span className="nw-nav-label">{o.name}</span>
+                    {o.bad && <i className="nw-bad" aria-label="Not answering" />}
+                    <span className="nw-count">{o.count || ''}</span>
+                  </button>
+                ))}
+              </div>
+  )
+  const keywordList = () => (
+    <div className="nw-kw">
+      <form className="nw-kw-add" onSubmit={(e) => { e.preventDefault(); addWord() }}>
+        <Icon name="plus" size={13} />
+        <input value={wordDraft} onChange={(e) => setWordDraft(e.target.value)} placeholder="Add a keyword" aria-label="Add a keyword" maxLength={60} />
+      </form>
+      {words.length > 0 && (
+        <div className="nw-nav">
+          {words.map((w) => {
+            const n = wordCount(w)
+            const on = onWords.includes(w)
+            return (
+              <div key={w} className={'nw-nav-row nw-kw-row' + (on ? ' on' : '') + (n ? '' : ' is-empty')}>
+                <button type="button" className="nw-kw-pick" aria-pressed={on} onClick={() => toggleWord(w)} data-tip={on ? 'Show every headline again' : `Only headlines with “${w}”`}>
+                  <span className="nw-nav-label" lang={/[\u0980-\u09ff]/.test(w) ? 'bn' : undefined}>{w}</span>
+                  <span className="nw-count">{n || ''}</span>
+                </button>
+                <button type="button" className="nw-kw-x" aria-label={`Remove ${w}`} data-tip="Remove this keyword" onClick={() => removeWord(w)}><Icon name="x" size={12} /></button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {!words.length && <p className="nw-kw-empty">Your own words, e.g. LNG, Rooppur, ভাড়া. Turn one on to see only headlines that contain it.</p>}
+    </div>
+  )
+  const portalList = (after?: () => void) => (
+              <div className="nw-nav">
+                {portalRows.map((p) => (
+                  <button key={p.name} type="button" className={'nw-nav-row nw-portal' + (portal === p.name ? ' on' : '') + (p.count ? '' : ' is-empty')} aria-pressed={portal === p.name}
+                    onClick={() => { after?.(); setPortal(portal === p.name ? null : p.name) }} data-tip={p.bad ? `Not answering · ${p.why}` : portal === p.name ? 'Show every portal' : `Only ${p.name}`}>
+                    <PortalIcon name={p.name} size={14} />
+                    <span className="nw-nav-label">{p.name}</span>
+                    {p.bad && <i className="nw-bad" aria-label="Not answering" />}
+                    <span className="nw-count">{p.count || ''}</span>
+                  </button>
+                ))}
+              </div>
+  )
   return (
     <div ref={wsRef} className="news-workspace">
       <header className="topbar ed-head nw-head">
@@ -399,39 +470,24 @@ export function NewsWorkspace() {
 
             <Fold id="pressWings" title="Official Press Wings" icon="quote" open={folds.pressWings} onToggle={toggleFold}
               aside={<>{portal && pressOfficeRows.some((o) => o.name === portal) && !folds.pressWings ? <b className="nw-fold-pick">{portal}</b> : <>{pressOfficesOn} offices</>}</>}>
-              <div className="nw-nav">
-                {pressOfficeRows.map((o) => (
-                  <button key={o.name} type="button" className={'nw-nav-row nw-portal' + (portal === o.name ? ' on' : '') + (o.count ? '' : ' is-empty')} aria-pressed={portal === o.name}
-                    onClick={() => { setPortal(portal === o.name ? null : o.name); if (portal !== o.name) setCat('press') }}
-                    data-tip={o.bad ? `Not answering · ${o.why}` : `${o.office} · click to filter`}>
-                    <PortalIcon name={o.name} size={14} />
-                    <span className="nw-nav-label">{o.name}</span>
-                    {o.bad && <i className="nw-bad" aria-label="Not answering" />}
-                    <span className="nw-count">{o.count || ''}</span>
-                  </button>
-                ))}
-              </div>
+              {pressList()}
+            </Fold>
+
+            <Fold id="keywords" title="Keywords" icon="search" open={folds.keywords} onToggle={toggleFold}
+              aside={onWords.length ? <b className="nw-fold-pick">{onWords.join(', ')}</b> : <>{words.length || 'none'}</>}>
+              {keywordList()}
             </Fold>
 
             <Fold id="portals" title="Portals" icon="globe" open={folds.portals} onToggle={toggleFold}
               aside={<>{down ? <><b className="nw-warn">{down} not answering</b> · </> : null}{portal && !folds.portals ? <b className="nw-fold-pick">{portal}</b> : <>{portalsOn} · {FEED_COUNT} feeds</>}</>}>
-              <div className="nw-nav">
-                {portalRows.map((p) => (
-                  <button key={p.name} type="button" className={'nw-nav-row nw-portal' + (portal === p.name ? ' on' : '') + (p.count ? '' : ' is-empty')} aria-pressed={portal === p.name}
-                    onClick={() => setPortal(portal === p.name ? null : p.name)} data-tip={p.bad ? `Not answering · ${p.why}` : portal === p.name ? 'Show every portal' : `Only ${p.name}`}>
-                    <PortalIcon name={p.name} size={14} />
-                    <span className="nw-nav-label">{p.name}</span>
-                    {p.bad && <i className="nw-bad" aria-label="Not answering" />}
-                    <span className="nw-count">{p.count || ''}</span>
-                  </button>
-                ))}
-              </div>
+              {portalList()}
             </Fold>
           </div>
-          <ColumnRail col={leftCol} label="Filters" items={[
-            ...cats.map((c) => ({ id: c, icon: (c === 'all' ? 'inbox' : c === 'energy' ? 'bolt' : c === 'leadership' ? 'users' : 'shield') as IconName, label: c === 'all' ? 'All headlines' : CAT_LABEL[c], on: cat === c, onClick: () => setCat(c) })),
-            { id: 'pressWings', icon: 'quote', label: 'Official Press Wings', onClick: () => openFold('pressWings') },
-            { id: 'portals', icon: 'globe', label: 'Portals', on: !!portal && !pressOfficeRows.some((o) => o.name === portal), onClick: () => openFold('portals') },
+          <ColumnRail col={leftCol} peek label="Filters" items={[
+            ...cats.map((c) => ({ id: c, icon: <span className={'nw-nav-ic nw-rail-ic is-' + c}><Icon name={(c === 'all' ? 'inbox' : c === 'energy' ? 'bolt' : c === 'leadership' ? 'users' : 'shield') as IconName} size={17} /></span>, label: c === 'all' ? 'All headlines' : CAT_LABEL[c], on: cat === c, onClick: () => setCat(c) })),
+            { id: 'pressWings', icon: 'quote', label: 'Official Press Wings', on: !!portal && pressOfficeRows.some((o) => o.name === portal), onClick: () => {}, flyout: (close) => <div className="nw-fly">{pressList(close)}</div> },
+            { id: 'keywords', icon: 'search', label: 'Keywords', on: onWords.length > 0, onClick: () => {}, flyout: () => <div className="nw-fly">{keywordList()}</div> },
+            { id: 'portals', icon: 'globe', label: 'Portals', on: !!portal && !pressOfficeRows.some((o) => o.name === portal), onClick: () => {}, flyout: (close) => <div className="nw-fly">{portalList(close)}</div> },
           ]} />
           <ColumnHandle col={leftCol} label="Resize the filters column" root={() => wsRef.current} apply={liveSize('lw')} max={Math.round(window.innerWidth * 0.38)} />
         </aside>
@@ -520,8 +576,21 @@ export function NewsWorkspace() {
         {/* ---------------------------------------------------------------- right: the chosen headline */}
         <aside className={'nw-right' + railClass(rightCol)} aria-label="Headline">
           <ColumnHandle col={rightCol} label="Resize the detail panel" root={() => wsRef.current} apply={liveSize('rw')} max={Math.round(window.innerWidth * 0.42)} />
-          <ColumnRail col={rightCol} label="Headline" items={[
-            { id: 'detail', icon: 'newspaper', label: selected ? 'The chosen headline' : 'About EnergyWatch', onClick: () => {} },
+          <ColumnRail col={rightCol} peek label="Headline" items={[
+            { id: 'detail', icon: 'newspaper', label: selected ? 'The chosen headline' : 'About EnergyWatch', onClick: () => {}, flyout: (close) => (
+              <div className="nw-fly nw-fly-detail">
+                {selected ? <Detail x={selected} isNew={isNew.has(selected.key)} now={now} range={!!range} onCopy={() => copy(selected)} onTopic={(t) => { close(); setQ(t) }} onPortal={(p) => { close(); setPortal(p) }} /> : (
+                  <p className="nw-help">EnergyWatch reads {PORTALS.length} Bangladeshi news portals and {PRESS_OFFICES.length} official government press wings. Pick a headline to see why it was chosen and start a story from it.</p>
+                )}
+                {selected && (
+                  <div className="nw-fly-acts">
+                    <button type="button" className="btn primary" onClick={() => { close(); use(selected) }}><Icon name="filePlus" size={15} />Start a story</button>
+                    <button type="button" className="btn" disabled={!isNew.has(selected.key)} onClick={() => useWatch.getState().markRead(selected.key)}><Icon name="check" size={14} />Mark as read</button>
+                    <button type="button" className="btn" onClick={() => { close(); hide(selected) }}><Icon name="eyeOff" size={14} />Hide</button>
+                  </div>
+                )}
+              </div>
+            ) },
           ]} actions={[
             { id: 'start', icon: 'filePlus', label: 'Start a story', primary: true, disabled: !selected, onClick: startSelected },
           ]} />

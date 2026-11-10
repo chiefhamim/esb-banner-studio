@@ -33,7 +33,7 @@ describe('AI settings', () => {
   it('a fresh install has no keys, so no AI job runs', () => {
     vi.stubGlobal('localStorage', memoryStorage())
     const s = loadAiSettings()
-    expect(s.keys).toEqual({ gemini: '', anthropic: '', openai: '', openrouter: '' })
+    expect(s.keys).toEqual({ gemini: '', anthropic: '', openai: '', openrouter: '', custom: '' })
     for (const role of ['main', 'seo', 'social'] as const) expect(aiFor(role, s)).toBeNull()
   })
 

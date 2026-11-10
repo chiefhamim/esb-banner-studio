@@ -1445,24 +1445,15 @@ label.switch:active i { filter: brightness(.94); }
   background: transparent !important;
 }
 
-/* Outreach composer equal button widths for EN / বাংলা and Edit / Preview */
-.or-body .or-toolbar .or-lang-seg button {
-  width: 52px !important;
-  min-width: 52px !important;
-  max-width: 52px !important;
+/* Outreach composer: EN / বাংলা and Edit / Preview split their 120 px container equally (outreach.css sizes the containers) */
+.or-body .or-toolbar .or-lang-seg button,
+.or-body .or-toolbar .or-view-seg button {
+  flex: 1 1 0 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
   height: 28px !important;
   padding: 0 4px !important;
-  justify-content: center !important;
-  text-align: center !important;
-  box-sizing: border-box !important;
-}
-
-.or-body .or-toolbar .or-view-seg button {
-  width: 72px !important;
-  min-width: 72px !important;
-  max-width: 72px !important;
-  height: 28px !important;
-  padding: 0 8px !important;
   justify-content: center !important;
   text-align: center !important;
   box-sizing: border-box !important;
@@ -2285,3 +2276,132 @@ input, textarea, select, [contenteditable], [contenteditable] *, .ProseMirror, .
 .signin-error, .or-warnings p, .or-preview-warn, .ed-input-headline, .hint.bad, [role='alert'], .selectable, .selectable * {
   -webkit-user-select: text; user-select: text;
 }
+
+/* ---------------------------------------------------------------- desks down the left, 2026-11-10: the name sits clear of
+   the pill (pill 6–36, label from 42) and the chosen desk is a raised chip (card + hairline + soft shadow), not a grey wash */
+.desk-rail { width: 68px; gap: 2px; padding: 8px 0 10px; }
+.desk-rail-btn { justify-content: flex-start; width: 60px; height: 60px; padding: 11.5px 0 0; gap: 11.5px; }
+.desk-rail-btn::before { top: 6px; width: 44px; height: 30px; margin-left: -22px; border-radius: 10px; box-sizing: border-box; border: 1px solid transparent; }
+.desk-rail-btn > span { line-height: 12px; }
+.desk-rail-btn:hover:not(.on)::before { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.desk-rail-btn.on::before, :root[data-theme=dark] .desk-rail-btn.on::before { background: var(--raised); border-color: color-mix(in srgb, var(--card-line) 90%, transparent); box-shadow: 0 1px 2px rgba(16, 18, 28, .08), 0 4px 10px -4px rgba(16, 18, 28, .18); }
+:root[data-theme=dark] .desk-rail-btn.on::before { background: color-mix(in srgb, var(--text) 13%, transparent); border-color: rgba(255, 255, 255, .1); box-shadow: 0 4px 12px -4px rgba(0, 0, 0, .6); }
+.desk-rail-btn.on > svg { color: var(--text); }
+.desk-rail-btn:not(.on) > svg { color: var(--text-2); }
+.desk-rail-btn:first-child { margin-bottom: 10px; }
+.desk-rail-btn:first-child::after { bottom: -6px; }
+/* the account sits at the foot of the rail; the desk headers drop theirs in this mode */
+.desk-rail-foot { display: grid; place-items: center; margin-top: auto; padding-top: 10px; }
+.studio-shell[data-desknav="left"] .workspace-main :is(.topbar, .vw-header) .ed-account { display: none; }
+
+/* ---------------------------------------------------------------- Graphics: format switch + preview, 2026-11-10 — one tray,
+   two true squares (30 × 30 in a 2 px tray = the 34 px header row), each with its shortcut key in the corner */
+.topbar.gx-head .gx-viewtools { display: inline-flex; align-items: center; gap: 2px; padding: 2px; background: var(--fill); border-radius: calc(var(--r-2) + 2px); }
+.topbar.gx-head .fmtgroup .gx-viewtools .gx-sq { position: relative; display: inline-grid !important; place-items: center; width: 30px; min-width: 30px; height: 30px; padding: 0; color: var(--text-2); background: transparent; border-radius: var(--r-2); box-shadow: none; }
+.topbar.gx-head .fmtgroup .gx-viewtools .gx-sq:hover { color: var(--text); background: var(--fill-hover); }
+.topbar.gx-head .fmtgroup .gx-viewtools .gx-sq.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+.topbar.gx-head .fmtgroup .gx-viewtools .gx-sq > svg { transform: translate(-2px, -2px); }
+.topbar.gx-head .fmtgroup .gx-viewtools .gx-sq kbd { display: block !important; position: absolute; right: 2px; bottom: 2px; min-width: 0; height: auto; padding: 0; font: 650 8.5px/1 var(--ui); letter-spacing: 0; color: var(--text-3); background: none; border: 0; box-shadow: none; opacity: 1; pointer-events: none; }
+.topbar.gx-head .fmtgroup .gx-viewtools .gx-sq:hover kbd, .topbar.gx-head .fmtgroup .gx-viewtools .gx-sq.on kbd { color: var(--text-2); }
+@container topbar (max-width: 1000px) { .topbar.gx-head .fmtgroup .gx-viewtools .pv-btn { display: inline-grid !important; } }
+
+/* ---------------------------------------------------------------- AI dialog, 2026-11-10: three short tabs instead of one
+   long scroll (as the account sheet and News settings). Keys = a quiet company list beside the chosen company's key. */
+.ai-settings { display: flex; flex-direction: column; gap: 16px; min-height: 420px; padding-top: 6px; }
+.ai-settings .ai-tabs { align-self: flex-start; }
+.ai-keys { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
+.ai-prov-list { display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--fill); border-radius: var(--r-3); }
+.ai-prov { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 10px; text-align: left; color: var(--text-2); background: transparent; border: 0; border-radius: var(--r-2); cursor: pointer; transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring); }
+.ai-prov:hover:not(.on) { color: var(--text); background: var(--fill-hover); }
+.ai-prov.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+:root[data-theme=dark] .ai-prov.on { background: color-mix(in srgb, var(--text) 10%, transparent); box-shadow: none; }
+.ai-prov:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.ai-prov > svg, .ai-prov > img, .ai-prov > span:first-child { flex: none; }
+.ai-prov-text { display: flex; flex: 1 1 auto; flex-direction: column; gap: 1px; min-width: 0; }
+.ai-prov-text b { font: 600 13px/17px var(--ui); color: var(--text); }
+.ai-prov-text small { font: 500 11.5px/15px var(--ui); color: var(--text-3); }
+.ai-prov-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--text) 18%, transparent); }
+.ai-prov-dot.ok { background: var(--success); }
+.ai-prov-main { flex: none; padding: 2px 7px; font: 600 10.5px/14px var(--ui); font-style: normal; letter-spacing: var(--track-chip); text-transform: uppercase; color: var(--text-2); background: var(--fill); border-radius: var(--r-pill); }
+.ai-prov.on .ai-prov-main { background: var(--fill-hover); }
+.ai-prov-detail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ai-prov-detail .sub { font-size: 12.5px; line-height: 18px; color: var(--text-2); }
+.ai-make-main { align-self: flex-start; }
+.ai-settings .ai-roles { gap: 14px 12px; }
+.ai-settings textarea.ai-prompt { min-height: 200px; max-height: 34vh; }
+@media (max-width: 760px) { .ai-keys { grid-template-columns: 1fr; } }
+
+/* ================================================================ ONE NEUTRAL ACCENT, 2026-11-10 (owner: "neutral, professional
+   colours across the application, in dark and white"). Every control that marks selection, focus or the desk's primary action
+   reads one graphite ink (light) / one soft paper white (dark). Colour is left only where it MEANS something: a story's
+   category on its own tile, mark and banner swatches; news portals' brand colours; the EnergyWatch wordmark; status
+   (success / warning / danger, sent / replied / bounced). The selectors are doubled so they win over the desk sheets that
+   load after this one (outreach.css, news.css). */
+:root:root, :root:root .app, :root:root .editorial-workspace, :root:root .outreach-workspace, :root:root .news-workspace, :root:root .video-workspace {
+  --sel: var(--ink); --sel-ink: var(--on-ink); --sel-text: var(--text); --desk-accent: var(--ink);
+}
+:root:root[data-theme=dark], :root:root[data-theme=dark] .app, :root:root[data-theme=dark] .editorial-workspace, :root:root[data-theme=dark] .outreach-workspace, :root:root[data-theme=dark] .news-workspace, :root:root[data-theme=dark] .video-workspace {
+  --sel: #e7e5df; --sel-ink: #141311; --sel-text: var(--text); --desk-accent: #d6d3cc;
+}
+/* AI chip and "Write with AI" keep their company's own colours (owner, 2026-11-10); the Custom service is graphite */
+[data-provider=custom] { --ai-fill: linear-gradient(110deg, #52525b, #3f3f46); }
+.ed-statusbar b[data-provider=custom] .sb-pdot, .sb-engine-btn b[data-provider=custom] .sb-pdot, .eng-pop b[data-provider=custom] .sb-pdot, .eng-model[data-provider=custom] .sb-pdot { background: #71717a; }
+/* News: EnergyWatch's teal leaves the controls (Check now, chips, selection, progress) — graphite there too */
+:root:root, :root:root .news-workspace { --nw-teal: #2a2724; --nw-teal-ink: #1c1916; --nw-teal-soft: rgba(28, 25, 22, .07); }
+:root:root[data-theme=dark], :root:root[data-theme=dark] .news-workspace { --nw-teal: #e7e5df; --nw-teal-ink: #f3f1ec; --nw-teal-soft: rgba(243, 240, 232, .09); }
+.nw-name > span { color: #0d9488; }
+:root[data-theme=dark] .nw-name > span { color: #2dd4bf; }
+:root[data-theme=dark] .nw-chip.on, :root[data-theme=dark] .nw-chip.on small, :root[data-theme=dark] .nw-newtag, :root[data-theme=dark] .nw-group.is-new .nw-group-h small { color: #141311; }
+.nw-chip.on { box-shadow: none; }
+:root:root .nw-progress > span, :root:root[data-theme='dark'] .nw-progress > span { background: var(--nw-teal); }
+
+/* AI dialog, round 2: each company leads with its own coloured mark; the model is written out in full under the name */
+.ai-keys { grid-template-columns: 248px minmax(0, 1fr); }
+.ai-prov { align-items: flex-start; min-height: 56px; padding: 9px 10px; }
+.ai-prov-logo { display: grid; place-items: center; flex: none; width: 32px; height: 32px; color: #fff; background: var(--ai-fill, var(--fill)); border-radius: 9px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 1px 2px rgba(0, 0, 0, .18); }
+.ai-prov-text { gap: 2px; padding-top: 1px; }
+.ai-prov-text b { display: flex; align-items: center; gap: 6px; }
+.ai-prov-model { font: 500 12px/16px var(--ui); color: var(--text-2); overflow-wrap: anywhere; }
+.ai-prov-state { display: inline-flex; align-items: center; gap: 5px; }
+.ai-prov-state > i { width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--text) 22%, transparent); }
+.ai-prov-state.ok > i { background: var(--success); }
+.ai-prov.is-add .ai-prov-logo { color: var(--text-2); background: transparent; border: 1.5px dashed color-mix(in srgb, var(--text) 28%, transparent); box-shadow: none; }
+.ai-prov.is-add b { color: var(--text-2); }
+.ai-prov-dot { display: none; }
+.ai-prov-head { display: flex; align-items: center; gap: 10px; }
+.ai-prov-head b { font: 650 15px/20px var(--ui); color: var(--text); }
+.ai-prov-head .ai-prov-main { margin-left: 2px; }
+.ai-pair { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 10px; }
+/* an open panel's icon tile is a solid ink chip: its icon stays the chip's own ink on hover too (App.css turned it to --text = black on black) */
+.pnl.open > header .pnl-icon, .pnl.open > header:hover .pnl-icon { color: var(--sel-ink); }
+
+/* ---------------------------------------------------------------- Story → Social, 2026-11-10: four network tiles (mark,
+   length against that network's limit, open checks) over one composer card (network, counter, AI, caption, actions) */
+.soc-pick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 4px; background: var(--fill); border-radius: var(--r-3); }
+.soc-tile { position: relative; display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 48px; padding: 7px 10px; text-align: left; color: var(--text-2); background: transparent; border: 0; border-radius: var(--r-2); cursor: pointer; transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-2) var(--spring); }
+.soc-tile:hover:not(.on) { color: var(--text); background: var(--fill-hover); }
+.soc-tile.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+:root[data-theme=dark] .soc-tile.on { background: color-mix(in srgb, var(--text) 10%, transparent); box-shadow: none; }
+.soc-tile:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.soc-tile-mark { display: grid; place-items: center; flex: none; width: 30px; height: 30px; color: var(--text-2); background: var(--card); border-radius: 8px; box-shadow: 0 0 0 1px var(--line-2); }
+.soc-tile.on .soc-tile-mark { color: var(--text); }
+:root[data-theme=dark] .soc-tile-mark { background: color-mix(in srgb, var(--text) 8%, transparent); box-shadow: none; }
+.soc-tile-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.soc-tile-text b { font: 600 12.5px/16px var(--ui); color: inherit; }
+.soc-tile-text small { font: 500 11px/14px var(--ui); color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.soc-tile-text small.over { color: var(--danger); }
+.soc-tile-state { position: absolute; top: 6px; right: 7px; display: grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; font: 700 10px/1 var(--ui); font-style: normal; color: var(--warning); background: var(--warning-soft); border-radius: 8px; }
+.soc-tile-state.ok { min-width: 8px; width: 8px; height: 8px; padding: 0; background: var(--success); }
+.soc-compose { display: flex; flex-direction: column; overflow: hidden; background: var(--card); border: 1px solid var(--card-line); border-radius: var(--r-3); }
+:root[data-theme=dark] .soc-compose { border-color: rgba(255, 255, 255, .08); }
+.soc-compose-head { margin: 0; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--line-2); }
+.soc-compose-name { display: inline-flex; align-items: center; gap: 7px; font: 600 12.5px/1 var(--ui); color: var(--text); }
+.soc-compose .ed-input-social { margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; padding: 12px; min-height: 150px; resize: vertical; }
+.soc-compose .ed-input-social:focus { box-shadow: none; background: transparent; }
+.soc-compose .ed-card-actions { padding: 8px; border-top: 1px solid var(--line-2); }
+@container (max-width: 520px) { .soc-pick { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* the check badge sits on the mark's corner (it overlapped "Facebook" / "Telegram" at the top right of a narrow tile) */
+.soc-tile-state { top: 4px; right: auto; left: 32px; box-shadow: 0 0 0 2px var(--fill); }
+.soc-tile.on .soc-tile-state { box-shadow: 0 0 0 2px var(--raised); }
+:root[data-theme=dark] .soc-tile.on .soc-tile-state { box-shadow: 0 0 0 2px #2a2a2e; }
+.soc-tile-state.ok { top: 6px; left: 36px; }

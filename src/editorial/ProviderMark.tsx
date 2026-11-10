@@ -33,6 +33,14 @@ export function ProviderMark({ id, size = 16 }: { id: AiProviderId; size?: numbe
       </svg>
     )
   }
+  if (id === 'custom') {
+    // the editor's own service: a plug
+    return (
+      <svg {...common} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0V7zM12 17v5" />
+      </svg>
+    )
+  }
   return (
     <svg {...common} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 8h14M13 4l4 4-4 4M21 16H7M11 12l-4 4 4 4" />

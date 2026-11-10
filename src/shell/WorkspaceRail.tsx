@@ -4,6 +4,7 @@ import { Icon } from '../ui/Icon'
 import type { IconName } from '../ui/Icon'
 import { useSlidingThumb } from '../ui/controls'
 import { useSyncExternalStore } from 'react'
+import { AccountButton } from './AccountButton'
 
 interface WorkspaceItem { id: WorkspaceId; label: string; icon: IconName; title: string }
 
@@ -101,6 +102,8 @@ export function DeskRail() {
           </button>
         )
       })}
+      {/* desks down the left: the account lives at the foot of the rail instead of in each desk's header */}
+      <div className="desk-rail-foot"><AccountButton /></div>
     </nav>
   )
 }

@@ -1221,3 +1221,163 @@
 .or-lists-t { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .or-lists-t b { font: 600 13px/18px var(--ui); color: var(--text); overflow-wrap: anywhere; }
 .or-lists-t small { font: 500 12px/16px var(--ui); color: var(--text-2); }
+
+/* ---------------------------------------------------------------- contacts head, 2026-11-10: less at once, nothing lost.
+   The list's name keeps one line (whole name in its tooltip) with its three actions as squares beside it; the audience
+   pickers and the address-check counts fold into "Audience", whose closed line still says what is chosen. */
+.or-left-head .or-file { flex-wrap: nowrap; }
+.or-left-head .or-file-text b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+.or-left-head .or-file-text span { overflow-wrap: normal; }
+.or-file-acts { display: flex; flex: none; gap: 2px; padding: 2px; background: var(--fill); border-radius: calc(var(--r-2) + 2px); }
+.or-file-acts .btn.sm.or-file-act { display: inline-grid; place-items: center; width: 28px; min-width: 28px; height: 28px; padding: 0; color: var(--text-2); background: transparent; box-shadow: none; }
+.or-file-acts .btn.sm.or-file-act:hover:not(:disabled) { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+.or-file-acts .btn.sm.or-list-remove:hover:not(:disabled) { color: var(--danger); }
+
+.or-aud { border-radius: var(--r-2); background: var(--fill); }
+.or-aud > summary { display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px 0 8px; list-style: none; cursor: pointer; border-radius: var(--r-2); font-size: 12px; color: var(--text-2); }
+.or-aud > summary::-webkit-details-marker { display: none; }
+.or-aud > summary:hover { color: var(--text); background: var(--fill-hover); }
+.or-aud > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.or-aud-chev { flex: none; color: var(--text-3); transition: transform var(--t-2) var(--spring); }
+.or-aud[open] .or-aud-chev { transform: rotate(90deg); }
+.or-aud-k { flex: none; font-weight: 600; color: var(--text); }
+.or-aud-v { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.or-aud-badge { flex: none; padding: 2px 7px; font: 600 10.5px/14px var(--ui); color: var(--text-2); background: var(--raised); border-radius: var(--r-pill, 999px); box-shadow: var(--raised-shadow); font-variant-numeric: tabular-nums; }
+.or-aud-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 8px 8px; }
+.or-aud-body .select { width: 100%; }
+/* the four check counts as a 2 × 2 of filter chips; the dots between them were only there for a wrapped line */
+.or-aud-body .or-check-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 0; }
+.or-aud-body .or-check-summary > span { display: none; }
+.or-aud-body .or-check-summary .or-fchip { justify-content: flex-start; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* "Approve all that pass checks" is the one action here: the button alone, no box around it */
+.or-left-head .or-bulk-approve-bar { margin-top: 0; padding: 0; background: none; border: 0; }
+
+/* contact cards: the chosen ring is drawn INSIDE the card, so the list's edge (no right padding beside the scrollbar) never
+   clips it; hover is a quiet wash without a ring, so it can't be mistaken for the chosen card */
+.or-row:hover { box-shadow: none; }
+.or-row.on, :root[data-theme=dark] .or-row.on { background: color-mix(in srgb, var(--desk-accent, var(--sel)) 5%, var(--card));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--desk-accent, var(--sel)) 60%, transparent), 0 8px 20px -14px rgba(16, 18, 28, .35); }
+:root[data-theme=dark] .or-row:hover:not(.on) { box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent); }
+:root .or-left-head .or-file-acts .btn.sm.or-file-act:not(.primary), :root[data-theme] .or-left-head .or-file-acts .btn.sm.or-file-act:not(.primary) { color: var(--text-2); background: transparent; border: 0; box-shadow: none; }
+:root .or-left-head .or-file-acts .btn.sm.or-file-act:not(.primary):hover:not(:disabled), :root[data-theme] .or-left-head .or-file-acts .btn.sm.or-file-act:not(.primary):hover:not(:disabled) { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
+:root[data-theme] .or-left-head .or-file-acts .btn.sm.or-list-remove:not(.primary):hover:not(:disabled) { color: var(--danger); }
+
+/* ---- contacts head, 2026-11-10 night: flat sections instead of a box inside a box inside a box ---- */
+/* list name: whole, wrapped (underscores read as spaces); never cut */
+:root .or-left-head .or-file { align-items: flex-start; }
+:root .or-left-head .or-file-text b { overflow: visible; white-space: normal; text-overflow: clip; overflow-wrap: anywhere; font-size: 13px; line-height: 17px; }
+:root .or-left-head .or-file-acts { flex: none; margin-top: -2px; }
+/* Audience: a labelled section on the panel itself — no fill, a hairline above it */
+:root .or-aud, :root[data-theme] .or-aud { background: none; border-radius: 0; border-top: 1px solid var(--line-2); padding-top: 4px; }
+:root .or-aud > summary { min-height: 30px; padding: 0 2px; border-radius: var(--r-1); }
+:root .or-aud > summary:hover { background: none; color: var(--text); }
+:root .or-aud-k { font: 700 10.5px/14px var(--ui); letter-spacing: var(--track-kicker, .09em); text-transform: uppercase; color: var(--text-3); }
+:root .or-aud-badge { background: none; box-shadow: none; padding: 0; color: var(--text-3); font-weight: 500; }
+:root .or-aud-body { gap: 6px; padding: 2px 0 8px; }
+/* sheet, group and purpose each take the full width, so no choice is cut to "Any purp" */
+:root .or-aud-body .or-pair { display: flex; flex-direction: column; gap: 6px; }
+/* address check: four figures in one well; each filters the list */
+.or-check-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px; background: var(--fill); border-radius: var(--r-2); }
+.or-check-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; padding: 6px 2px 5px; color: var(--text-2); background: none; border: 0; border-radius: 6px; cursor: pointer; transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease); }
+.or-check-cell b { font: 700 14px/18px var(--ui); color: var(--text); font-variant-numeric: tabular-nums; }
+.or-check-cell span { font: 500 10.5px/13px var(--ui); color: var(--text-3); white-space: nowrap; }
+.or-check-cell.is-zero b { color: var(--text-3); font-weight: 600; }
+.or-check-cell:hover:not(.on) { background: var(--fill-hover); }
+.or-check-cell.on { background: var(--raised); box-shadow: var(--raised-shadow); }
+.or-check-cell.on span { color: var(--text-2); }
+:root[data-theme=dark] .or-check-cell.on { background: color-mix(in srgb, var(--text) 12%, transparent); box-shadow: none; }
+.or-check-cell:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+/* bulk approve: an ordinary quiet button — it is a convenience, not the desk's main action */
+:root[data-theme] .or-left-head .or-bulk-approve-bar .btn.sm.or-bulk-approve-btn:not(.primary) { color: var(--text); background: var(--fill); border: 0; box-shadow: none; font-weight: 600; }
+:root[data-theme] .or-left-head .or-bulk-approve-bar .btn.sm.or-bulk-approve-btn:not(.primary):hover { background: var(--fill-hover); }
+/* the import note is information, not a warning */
+.or-note.or-note-info { display: flex; align-items: flex-start; gap: 6px; color: var(--text-3); }
+.or-note.or-note-info > svg { flex: none; margin-top: 1.5px; }
+
+/* letter toolbar, 2026-11-11: four equal containers on the left (language · Write · Rewrite · Edit/Preview), like the
+   right column's Send · Contact · Review; the letter select takes the rest of the row so its name shows in full */
+:root .or-body .or-toolbar { flex-wrap: nowrap; justify-content: flex-start; }
+:root .or-body .or-toolbar > .or-lang-seg, :root .or-body .or-toolbar > .ai-btn, :root .or-body .or-toolbar > .or-rewrite,
+:root .or-body .or-toolbar > .or-view-seg { flex: 0 0 120px; width: 120px; min-width: 120px; height: 36px; box-sizing: border-box; justify-content: center; }
+:root .or-body .or-toolbar > .or-lang-seg button, :root .or-body .or-toolbar > .or-view-seg button { flex: 1 1 0; width: auto; min-width: 0; max-width: none; padding: 0 4px; }
+:root .or-body .or-toolbar > .or-rewrite .chev { margin-left: 2px; }
+:root .or-body .or-toolbar > .or-letter-select { flex: 1 1 auto; min-width: 140px; max-width: none; }
+
+/* letter toolbar, final: three wells with the exact shell of the right column's Send · Contact · Review tabs
+   (measured: well 36 px, 4 px padding, 2 px gap, 8 px corners; each option 88.3 × 28 at the default column width (102.3 before the fold buttons came back), 13 px / 500, 6 px corners) —
+   [EN | বাংলা] [Write | Rewrite] [Edit | Preview]; the letter select takes what is left on the left */
+:root:root .or-body .or-toolbar { flex-wrap: wrap; }
+:root:root .or-body .or-toolbar > .or-letter-select { flex: 1 1 220px; min-width: 220px; }
+:root:root .or-body .or-toolbar > .or-lang-seg, :root:root .or-body .or-toolbar > .or-ai-well, :root:root .or-body .or-toolbar > .or-view-seg {
+  flex: 0 0 auto; width: auto; min-width: 0; height: 36px; padding: 4px; gap: 2px; border: 0; border-radius: 8px; box-sizing: border-box; display: inline-flex; align-items: center; }
+:root:root .or-body .or-toolbar > .seg-ctl > button, :root:root .or-body .or-toolbar > .or-ai-well > .btn {
+  flex: 0 0 88.3px !important; width: 88.3px !important; min-width: 0 !important; max-width: none !important; height: 28px !important; min-height: 28px !important;
+  padding: 0 6px !important; gap: 6px; font-size: 13px; font-weight: 500; line-height: 1; border-radius: 6px; justify-content: center !important; box-sizing: border-box !important; }
+:root:root .or-body .or-toolbar > .or-ai-well > .btn { border: 0; }
+:root:root .or-body .or-toolbar > .or-ai-well > .btn:not(.ai-btn) { color: var(--text-2); background: transparent; box-shadow: none; }
+:root:root .or-body .or-toolbar > .or-ai-well > .btn:not(.ai-btn):hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
+:root:root .or-body .or-toolbar > .or-ai-well > .btn .chev { margin-left: -2px; }
+:root[data-theme=dark] .or-body .or-toolbar > .seg-ctl > button.on { font-weight: 600; }
+:root:root .or-body .or-toolbar > .or-letter-select { flex: 1 1 150px; min-width: 150px; }
+/* level with the side columns' tab bars (they start 2 px higher) */
+:root:root .or-body .or-center > .or-toolbar { margin-top: -2px; }
+
+/* Write and Rewrite (each in its own well): one box and one hover language with the switch options beside them —
+   no border, no shadow, no brightness filter, nothing that changes size between rest and hover. Write keeps its AI
+   company's colour as a steady fill (a soft light layer on hover); Rewrite is a plain option (the hover fill). */
+:root:root .or-body .or-toolbar > .or-ai-well > .btn, :root:root .or-body .or-toolbar > .or-ai-well > .btn:hover {
+  border: 0 !important; box-shadow: none !important; filter: none !important; transform: none !important; outline-offset: -2px; }
+:root:root .or-body .or-toolbar > .or-ai-well > .btn:not([data-provider]) { color: var(--text-2) !important; background: transparent !important; }
+:root:root .or-body .or-toolbar > .or-ai-well > .btn:not([data-provider]):hover:not(:disabled) { color: var(--text) !important; background: var(--fill-hover) !important; }
+:root:root .or-body .or-toolbar > .or-ai-well > .btn.ai-btn[data-provider] { color: #fff !important; background: var(--ai-fill) !important; }
+:root:root .or-body .or-toolbar > .or-ai-well > .btn.ai-btn[data-provider]:hover:not(:disabled) { background: linear-gradient(rgba(255, 255, 255, .1), rgba(255, 255, 255, .1)), var(--ai-fill) !important; }
+:root:root .or-body .or-toolbar > .or-ai-well > .btn:disabled { opacity: .5; }
+:root:root .or-body .or-toolbar > .or-ai-well > .btn:active:not(:disabled) { transform: scale(.97) !important; }
+
+/* ---- letter toolbar = the right column's tab bar (2026-11-11, owner: "the right one is the standard") ----
+   useTabStandard (OutreachComposer.tsx) copies the live Send · Contact · Review widths, padding and mode onto the toolbar
+   (--mt-on / --mt-off / --mt-pad-on / --mt-pad-off / --mt-gap, data-tm = full | labels | icons). Shells as the tab bar:
+   36 px, 4 px padding, 2 px inside; 6 px between shells, as the tab bar is from its fold button. */
+:root:root .or-body .or-toolbar[data-tm] { gap: 6px; }
+:root:root .or-body .or-toolbar[data-tm] > .seg-ctl > button, :root:root .or-body .or-toolbar[data-tm] > .or-ai-well > .btn {
+  flex: 0 0 var(--mt-off) !important; width: var(--mt-off) !important; padding: 0 var(--mt-pad-off) !important; gap: var(--mt-gap) !important; }
+:root:root .or-body .or-toolbar[data-tm] > .seg-ctl > button.on, :root:root .or-body .or-toolbar[data-tm] > .or-ai-well > .btn {
+  flex: 0 0 var(--mt-on) !important; width: var(--mt-on) !important; padding: 0 var(--mt-pad-on) !important; }
+:root:root .or-body .or-toolbar[data-tm] svg:not(.chev) { width: 15px; height: 15px; flex: none; }
+/* labels only: no icons (Write keeps its company colour as the fill) */
+:root:root .or-body .or-toolbar[data-tm=labels] > * button svg:not(.chev), :root:root .or-body .or-toolbar[data-tm=labels] > .or-ai-well > .btn > :not(span):not(.chev) { display: none; }
+/* icons: the chosen option icon + label, the other its icon alone; the language switch has one icon for both, so the
+   other language shows its short name instead */
+:root:root .or-body .or-toolbar[data-tm=icons] > .seg-ctl > button:not(.on) .seg-label { display: none; }
+:root:root .or-body .or-toolbar[data-tm=icons] > .or-lang-seg > button:not(.on) .seg-label { display: inline; }
+:root:root .or-body .or-toolbar[data-tm=icons] > .or-lang-seg > button:not(.on) svg { display: none; }
+/* the same 8 px from every bar to the first thing under it (the right column's measure): left 6 → 8, middle 10 → 8 */
+:root:root .or-left > .or-tabs.side-tabs { margin-bottom: 6px; }
+:root:root .or-body .or-center > .or-toolbar { margin-bottom: -2px; }
+
+/* ---- letter toolbar, compact (2026-11-11, owner): the controls shrink so the letter select shows its whole name.
+   Every option is one 36 × 28 tile — the right column's icon tab — in the standard 36 px shell (4 px padding, 2 px
+   inside, 6 px between shells): ENG | BEN as plain text, Write · Rewrite · Edit | Preview as icons named in their
+   tooltips. The select takes all the room that is left. */
+:root:root .or-body .or-toolbar { gap: 6px; flex-wrap: nowrap; }
+:root:root .or-body .or-toolbar > .or-letter-select { flex: 1 1 auto; min-width: 0; max-width: none; }
+:root:root .or-body .or-toolbar > .seg-ctl > button, :root:root .or-body .or-toolbar > .or-ai-well > .btn,
+:root:root .or-body .or-toolbar > .seg-ctl > button.on {
+  flex: 0 0 36px !important; width: 36px !important; min-width: 36px !important; max-width: 36px !important; height: 28px !important; min-height: 28px !important;
+  padding: 0 !important; gap: 0 !important; justify-content: center !important; }
+:root:root .or-body .or-toolbar > .or-lang-seg > button { font-size: 11.5px; letter-spacing: .02em; }
+:root:root .or-body .or-toolbar > .or-view-seg .seg-label, :root:root .or-body .or-toolbar > .or-ai-well > .btn > span, :root:root .or-body .or-toolbar > .or-ai-well > .btn .chev { display: none !important; }
+:root:root .or-body .or-toolbar > .or-view-seg svg, :root:root .or-body .or-toolbar > .or-ai-well > .btn > svg { display: block !important; width: 15px; height: 15px; }
+/* the words come back: every option is one 72 × 28 labelled button (fits "Preview"), 13 px text; only Write keeps its
+   company mark. Still compact, so the letter select keeps the rest of the row for its whole name. */
+:root:root .or-body .or-toolbar > .seg-ctl > button, :root:root .or-body .or-toolbar > .or-ai-well > .btn,
+:root:root .or-body .or-toolbar > .seg-ctl > button.on {
+  flex: 0 0 72px !important; width: 72px !important; min-width: 72px !important; max-width: 72px !important; padding: 0 6px !important; gap: 5px !important; font-size: 13px; }
+:root:root .or-body .or-toolbar > .or-lang-seg > button { font-size: 13px; letter-spacing: 0; }
+:root:root .or-body .or-toolbar > .or-view-seg .seg-label, :root:root .or-body .or-toolbar > .or-ai-well > .btn > span { display: inline !important; }
+:root:root .or-body .or-toolbar > .or-view-seg svg, :root:root .or-body .or-toolbar > .or-ai-well > .or-rewrite svg { display: none !important; }
+:root:root .or-body .or-toolbar > .or-ai-well > .ai-btn > svg, :root:root .or-body .or-toolbar > .or-ai-well > .ai-btn > img { width: 13px; height: 13px; }
+/* Rewrite opens a menu, so it shows its arrow */
+:root:root .or-body .or-toolbar > .or-ai-well > .or-rewrite .chev { display: block !important; width: 12px; height: 12px; flex: none; margin: 0; opacity: .8; }
+:root:root .or-body .or-toolbar > .or-ai-well > .or-rewrite { gap: 3px !important; }

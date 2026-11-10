@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { KeyboardEvent, PointerEvent as RPointerEvent, ReactNode } from 'react'
+import type { KeyboardEvent, MouseEvent as RMouseEvent, PointerEvent as RPointerEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
 import { RAIL_W, clampW, resolveDrag, resolveKey, setColumnState } from './sideColumnState'
@@ -49,7 +49,7 @@ export function ColumnHandle({ col, label, root, apply, max, foldHost }: {
     if (!s.moved) { ref.current.classList.add('drag'); root()?.classList.add('resizing') }
     s.moved = true
     // folding keeps the width it had on screen, so pulling it open again lands exactly there
-    const next = resolveDrag(s.from + sign * dx, spec, s.fromCollapsed ? col.w : s.from, s.fromCollapsed)
+    const next = col.foldable ? resolveDrag(s.from + sign * dx, spec, s.fromCollapsed ? col.w : s.from, s.fromCollapsed) : { w: clampW(s.from + sign * dx, spec), collapsed: false }
     const flipped = next.collapsed !== s.cur.collapsed
     s.cur = next
     // crossing the line swaps content and rail at once; the saved width stays until release
@@ -78,12 +78,13 @@ export function ColumnHandle({ col, label, root, apply, max, foldHost }: {
   /** Back to the column's own default width (open), easing there like any other width change. */
   const reset = () => { apply(col.spec.def); col.set({ w: col.spec.def, collapsed: false }) }
   const key = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggle(); return }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); if (col.foldable) toggle(); return }
     if (e.key === 'Home') { e.preventDefault(); e.stopPropagation(); reset(); return }
     const raw = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
     if (!raw) return
     e.preventDefault(); e.stopPropagation() // arrows resize the column here, they must not also nudge a selected layer
-    col.set(resolveKey({ w: clampW(col.w, spec), collapsed: col.collapsed }, (raw * sign) as 1 | -1, e.shiftKey ? 48 : 16, spec))
+    const next = resolveKey({ w: clampW(col.w, spec), collapsed: col.collapsed }, (raw * sign) as 1 | -1, e.shiftKey ? 48 : 16, spec)
+    col.set(col.foldable ? next : { w: next.w, collapsed: false })
   }
 
   // ---- the fold choreography. The column keeps its content rendered (at the width it had) while the track travels, so it
@@ -150,10 +151,10 @@ export function ColumnHandle({ col, label, root, apply, max, foldHost }: {
   )
   return (
     <>
-    {host ? createPortal(foldBtn, host) : foldBtn}
+    {!col.foldable ? null : host ? createPortal(foldBtn, host) : foldBtn}
     <div ref={ref} className={`splitter vert ${edge} col-handle`} role="separator" aria-orientation="vertical" aria-label={label}
       aria-valuenow={col.px} aria-valuemin={RAIL_W} aria-valuemax={spec.max} aria-expanded={!col.collapsed} tabIndex={0}
-      data-tip={col.collapsed ? 'Drag to open · double-click for the default width' : 'Drag to resize · double-click for the default width'} data-tip-pos={col.side === 'left' ? 'right' : 'left'}
+      data-tip={!col.foldable ? 'Drag to resize · double-click for the default width' : col.collapsed ? 'Drag to open · double-click for the default width' : 'Drag to resize · double-click for the default width'} data-tip-pos={col.side === 'left' ? 'right' : 'left'}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
       onDoubleClick={reset} onKeyDown={key}>
       <i className="grab" />
@@ -168,29 +169,70 @@ export interface RailItem {
   label: string
   on?: boolean
   onClick: () => void
+  /** What the section holds, shown in a flyout beside the rail — the column stays folded. */
+  flyout?: (close: () => void) => ReactNode
 }
 
 /**
- * The column folded to icons: one button per section of the column (a click opens the column at its last width and
- * shows that section), then the column's own primary actions at the foot, doing exactly what their full buttons do.
+ * The column folded to icons: one button per section of the column, then the column's own primary actions at the foot,
+ * doing exactly what their full buttons do. A click never opens the column (that is the fold button's job): an item
+ * with a `flyout` shows that section's options beside the rail, any other item just does its thing.
  */
-export function ColumnRail({ col, label, items, actions = [] }: { col: SideColumn; label: string; items: RailItem[]; actions?: (RailItem & { primary?: boolean; disabled?: boolean })[] }) {
+/** `peek` (News only): a rail icon acts in place — it filters, or opens its options beside the rail — and never opens
+ *  the column. Without it (every other desk) a click opens the column at its last width, then runs the item. */
+export function ColumnRail({ col, label, items, actions = [], peek = false }: { col: SideColumn; label: string; items: RailItem[]; actions?: (RailItem & { primary?: boolean; disabled?: boolean })[]; peek?: boolean }) {
   // on expand the rail stays mounted a moment and fades out while the content fades in (it is absolutely placed, so it takes no room)
   const [present, setPresent] = useState(col.collapsed)
+  const [fly, setFly] = useState<{ id: string; top: number; x: number } | null>(null)
+  const flyRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (col.collapsed) { setPresent(true); return }
+    setFly(null)
     const t = window.setTimeout(() => setPresent(false), 220)
     return () => window.clearTimeout(t)
   }, [col.collapsed])
+  useEffect(() => {
+    if (!fly) return
+    const down = (e: PointerEvent) => {
+      const t = e.target as Element | null
+      if (flyRef.current?.contains(t) || t?.closest?.(`[data-rail-fly="${col.id}"]`)) return
+      setFly(null)
+    }
+    const key = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setFly(null) } }
+    window.addEventListener('pointerdown', down, true)
+    window.addEventListener('keydown', key, true)
+    return () => { window.removeEventListener('pointerdown', down, true); window.removeEventListener('keydown', key, true) }
+  }, [fly, col.id])
+  // keep the flyout inside the window once its height is known
+  useLayoutEffect(() => {
+    const el = flyRef.current
+    if (!el || !fly) return
+    const h = el.offsetHeight
+    const top = Math.max(8, Math.min(fly.top, window.innerHeight - h - 8))
+    el.style.top = top + 'px'
+  }, [fly])
+  if (!col.foldable) return null
   if (!col.collapsed && !present) return null
   const pos = col.side === 'left' ? 'right' : 'left'
   const icon = (i: RailItem['icon']) => (typeof i === 'string' ? <Icon name={i as IconName} size={17} /> : i)
+  const close = () => setFly(null)
+  const click = (it: RailItem, e: RMouseEvent<HTMLButtonElement>) => {
+    if (!peek) { setFly(null); col.expand(); it.onClick(); return }
+    it.onClick()
+    if (!it.flyout) { setFly(null); return }
+    if (fly?.id === it.id) { setFly(null); return }
+    const r = e.currentTarget.getBoundingClientRect()
+    const nav = e.currentTarget.closest('.col-rail')?.getBoundingClientRect() ?? r
+    setFly({ id: it.id, top: r.top - 8, x: col.side === 'left' ? nav.right + 6 : window.innerWidth - nav.left + 6 })
+  }
+  const open = fly && items.find((i) => i.id === fly.id)
   return (
     <nav className={'col-rail ' + col.side + (col.collapsed ? '' : ' leaving')} aria-label={label} aria-hidden={!col.collapsed || undefined}>
       <div className="col-rail-items">
         {items.map((it) => (
-          <button key={it.id} type="button" className={'col-rail-btn' + (it.on ? ' on' : '')} aria-label={it.label} aria-current={it.on || undefined}
-            data-tip={it.label} data-tip-pos={pos} onClick={() => { col.expand(); it.onClick() }}>
+          <button key={it.id} type="button" className={'col-rail-btn' + (it.on ? ' on' : '') + (fly?.id === it.id ? ' fly-open' : '')} aria-label={it.label} aria-current={it.on || undefined}
+            aria-expanded={it.flyout ? fly?.id === it.id : undefined} data-rail-fly={it.flyout ? col.id : undefined}
+            data-tip={fly?.id === it.id ? undefined : it.label} data-tip-pos={pos} onClick={(e) => click(it, e)}>
             {icon(it.icon)}
           </button>
         ))}
@@ -204,6 +246,12 @@ export function ColumnRail({ col, label, items, actions = [] }: { col: SideColum
           ))}
         </div>
       )}
+      {open && open.flyout && col.collapsed && createPortal(
+        <div ref={flyRef} className={'col-fly ' + col.side} role="dialog" aria-label={open.label}
+          style={{ top: fly!.top, [col.side === 'left' ? 'left' : 'right']: fly!.x }}>
+          <div className="col-fly-h">{icon(open.icon)}<b>{open.label}</b></div>
+          <div className="col-fly-body">{open.flyout(close)}</div>
+        </div>, document.body)}
     </nav>
   )
 }

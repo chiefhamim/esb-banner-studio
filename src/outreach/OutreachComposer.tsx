@@ -194,16 +194,20 @@ export const OutreachComposer = memo(function OutreachComposer() {
             { value: 'blank', label: 'Blank letter', hint: '' },
             { value: 'design', label: c.design ? 'Replace the designed HTML' : 'Designed HTML', hint: 'File', icon: 'upload' as const },
           ]} />
-        <Seg<OutreachLang> className="or-lang-seg" value={c.lang} onChange={s.setLang} options={[{ value: 'en', label: 'EN', tip: 'English' }, { value: 'bn', label: 'বাংলা', tip: 'Bangla' }]} />
-        <div className="spacer" />
-        <button type="button" className="btn ai-btn" data-provider={ai?.provider} disabled={aiOff || !!busy} onClick={() => void run('Draft', () => writeOutreachWithAi(ctx))}
+        <Seg<OutreachLang> className="or-lang-seg" value={c.lang} onChange={s.setLang} options={[{ value: 'en', label: 'ENG', tip: 'English' }, { value: 'bn', label: 'BEN', tip: 'Bangla' }]} />
+        {/* Write and Rewrite each in their own well, the same shell as the switches and the side columns' tabs */}
+        <div className="seg-ctl or-ai-well">
+        <button type="button" className="btn ai-btn" aria-label={busy === 'Draft' ? 'Writing' : 'Write'} data-provider={ai?.provider} disabled={aiOff || !!busy} onClick={() => void run('Draft', () => writeOutreachWithAi(ctx))}
           data-tip={aiTip || `${aiName} writes the template from the letter's offer${c.sources.some((x) => x.points.some((p) => p.use)) ? ' and your ticked talking points' : ''}, with placeholders. Replaces the subject and body (undoable)`}>
           {busy === 'Draft' ? <Icon name="refresh" size={13} className="spin" /> : ai ? <ProviderMark id={ai.provider} size={13} /> : <Icon name="sparkle" size={13} />}<span>{busy === 'Draft' ? 'Writing' : 'Write'}</span>
         </button>
-        <MenuButton label={busy && busy !== 'Draft' ? 'Rewriting' : 'Rewrite'} icon="edit" className="" align="end" title={aiTip || 'Rewrite the letter with AI'}
+        </div>
+        <div className="seg-ctl or-ai-well">
+        <MenuButton label={busy && busy !== 'Draft' ? 'Rewriting' : 'Rewrite'} className="or-rewrite" align="end" title={aiTip || 'Rewrite the letter with AI'}
           items={[...REWRITES.map((r) => ({ label: r.label, hint: r.hint, disabled: aiOff || !!busy || !c.body.trim(), onClick: () => void run(r.label, () => rewriteLetter(r.id, c, ctx)) })),
             { divider: true },
             { label: 'Your own instruction', icon: 'sparkle' as const, disabled: aiOff || !!busy || !c.body.trim(), onClick: async () => { const t = await ask({ title: 'Rewrite with your instruction', body: 'The same facts rule applies: nothing is added that the letter or your ticked talking points do not say.', input: { label: 'How should the letter change?', placeholder: 'e.g. Lead with the free digital edition; keep it under 120 words', multiline: true }, ok: 'Rewrite' }); if (typeof t === 'string' && t.trim()) void run('Rewrite', () => rewriteLetter('custom' as RewriteAction, c, ctx, t)) } }]} />
+        </div>
         <Seg<'edit' | 'preview'> className="or-view-seg" value={ui.view} onChange={(v) => ui.set({ view: v })} options={[{ value: 'edit', label: 'Edit' }, { value: 'preview', label: 'Preview', tip: active ? `As ${active.personName || active.email} will receive it` : 'As a recipient will receive it' }]} />
       </div>
 

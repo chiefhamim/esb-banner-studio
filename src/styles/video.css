@@ -790,3 +790,14 @@
 /* the clip inspector's tabs: words while they fit, icons when the column is narrow (like the bin) */
 .vw-inspector-panel .side-tabs { gap: 0; }
 .vw-inspector-panel .side-tabs button { padding: 0 4px; font-size: 12px; }
+
+/* 2026-11-10: the bin's six tabs are either all words or all icons — never one half-cut word ("Ca…") between icons.
+   The generic side-tabs narrow rules (chosen tab keeps its word, the rest shrink to 36 px) are overruled here. */
+.vw-bin-panel .side-tabs:has(> button:nth-of-type(3)) > button { flex: 1 1 auto; gap: 0; padding: 0 2px; font-size: 12px; justify-content: center; }
+.vw-bin-panel .side-tabs:has(> button:nth-of-type(3)) > button > svg { display: none; }
+.vw-bin-panel .side-tabs:has(> button:nth-of-type(3)) > button .tab-label { display: inline; overflow: visible; text-overflow: clip; }
+@container tabs (max-width: 262px) {
+  .vw-bin-panel .side-tabs:has(> button:nth-of-type(3)) > button { flex: 1 1 0; padding: 0; }
+  .vw-bin-panel .side-tabs:has(> button:nth-of-type(3)) > button > svg { display: inline-block; }
+  .vw-bin-panel .side-tabs:has(> button:nth-of-type(3)) > button .tab-label { display: none; }
+}

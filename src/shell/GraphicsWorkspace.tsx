@@ -34,7 +34,7 @@ const gridCols = (lw: number, rw: number) => `46px ${colCss(lw)} minmax(0, 1fr) 
 const SHORTCUTS: ShortcutGroup[] = [
   { group: 'File', rows: [['Ctrl + N', 'New banner'], ['Ctrl + Shift + N', 'Next story — keep this layout'], ['Ctrl + O', 'Open project'], ['Ctrl + S', 'Save project'], ['Ctrl + Shift + S', 'Save project as'], ['Ctrl + I', 'Import photos'], ['Ctrl + E', 'Export'], ['Ctrl + Shift + C', 'Copy banner as image']] },
   { group: 'Edit', rows: [['Ctrl + Z', 'Undo'], ['Ctrl + Y  /  Ctrl + Shift + Z', 'Redo'], ['Ctrl + X / C / V', 'Cut / copy / paste layers'], ['Ctrl + Shift + V', 'Paste in place'], ['Ctrl + D', 'Duplicate'], ['Del', 'Delete layer / hide template element'], ['Ctrl + A', 'Select all'], ['Esc', 'Deselect']] },
-  { group: 'Tools', rows: [['P', 'Show / hide the live Facebook preview'], ['V', 'Select'], ['H  /  hold Space', 'Hand (pan)'], ['T', 'Add text'], ['R', 'Add rectangle']] },
+  { group: 'Tools', rows: [['S', 'Switch Facebook 4:5 ⇄ Web 16:9'], ['P', 'Show / hide the live Facebook preview'], ['V', 'Select'], ['H  /  hold Space', 'Hand (pan)'], ['T', 'Add text'], ['R', 'Add rectangle']] },
   { group: 'Moving & resizing', rows: [['Arrow keys', 'Nudge 1 px (Shift = 10 px)'], ['Shift + drag', 'Lock the axis'], ['Alt + drag', 'Move without snapping'], ['Shift + resize', 'Keep proportions'], ['Alt + resize', 'Resize from the centre'], ['Shift + Alt + resize', 'Proportional, from the centre'], ['Alt + drag a photo', 'Move the whole photo block']] },
   { group: 'Selecting', rows: [['Click', 'Select'], ['Shift + click', 'Add / remove from selection'], ['Alt + click', 'Select the layer underneath'], ['Drag on empty canvas', 'Marquee select'], ['Ctrl + drag', 'Marquee anywhere, even over layers']] },
   { group: 'Arranging', rows: [['Ctrl + ] / [', 'Bring forward / send backward'], ['Ctrl + Shift + ] / [', 'Bring to front / send to back'], ['Drag a ruler', 'New guide (double-click a guide to remove)'], ['Right-click', 'Layer menu']] },
@@ -300,6 +300,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       }
       if (mod) return
       if (k === 'p') { setShowPreview((v) => !v); return }
+      if (k === 's') { e.preventDefault(); st.setFormat(st.format === 'fb45' ? 'web' : 'fb45'); return }
       if (k === 'v') { st.setTool('select'); return }
       if (k === 'h') { st.setTool('hand'); return }
       if (k === 't') { e.preventDefault(); st.addText(); return }
@@ -470,10 +471,12 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
         <div className="spacer" />
         <div className="fmtgroup">
           <FormatPicker value={format} onChange={setFormat} />
-          <button className="dual-toggle-btn" aria-label={format === 'fb45' ? 'Switch to Web Hero 16:9' : 'Switch to Facebook Feed 4:5'} data-tip={format === 'fb45' ? 'Switch to Web Hero 16:9' : 'Switch to Facebook Feed 4:5'} onClick={() => setFormat(format === 'fb45' ? 'web' : 'fb45')}>
-            <Icon name="swap" size={15} />
-          </button>
-          <button className={'pv-btn' + (showPreview ? ' on' : '')} onClick={() => setShowPreview((v) => !v)} aria-pressed={showPreview} aria-label="Preview" data-tip="Preview (P) — live Facebook preview, stays open while you edit"><Icon name="eye" size={16} /></button>
+          <div className="gx-viewtools" role="group" aria-label="Format switch and preview">
+            <button className="dual-toggle-btn gx-sq" aria-label={format === 'fb45' ? 'Switch to Web Hero 16:9 (S)' : 'Switch to Facebook Feed 4:5 (S)'} aria-keyshortcuts="S" data-tip={format === 'fb45' ? 'Switch to Web Hero 16:9 (S)' : 'Switch to Facebook Feed 4:5 (S)'} onClick={() => setFormat(format === 'fb45' ? 'web' : 'fb45')}>
+              <Icon name="swap" size={16} /><kbd aria-hidden>S</kbd>
+            </button>
+            <button className={'pv-btn gx-sq' + (showPreview ? ' on' : '')} onClick={() => setShowPreview((v) => !v)} aria-pressed={showPreview} aria-label="Preview (P)" aria-keyshortcuts="P" data-tip="Preview (P) — live Facebook preview, stays open while you edit"><Icon name="eye" size={16} /><kbd aria-hidden>P</kbd></button>
+          </div>
         </div>
         <div className="spacer" />
         <div className="pillbar">

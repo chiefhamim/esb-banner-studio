@@ -90,6 +90,8 @@ export interface SideColumn extends ColState {
   px: number
   /** False until the editor sizes or folds it: a desk may keep its own responsive width until then. */
   touched: boolean
+  /** Only News folds its columns to an icon rail; every other desk's columns just resize. */
+  foldable: boolean
   set: (s: ColState) => void
   expand: () => void
   collapse: () => void
@@ -100,14 +102,17 @@ export interface SideColumn extends ColState {
  * One side column's width and rail state. `legacyW` reads a width an older version of the desk saved, used once
  * when this column has no saved state yet.
  */
-export function useSideColumn(id: string, side: 'left' | 'right', spec: ColSpec, legacyW?: () => number | undefined): SideColumn {
+export function useSideColumn(id: string, side: 'left' | 'right', spec: ColSpec, legacyW?: () => number | undefined, opts?: { foldable?: boolean }): SideColumn {
+  const foldable = opts?.foldable !== false
   const sub = useCallback((f: () => void) => {
     let set = listeners.get(id)
     if (!set) { set = new Set(); listeners.set(id, set) }
     set.add(f)
     return () => { set.delete(f) }
   }, [id])
-  const st = useSyncExternalStore(sub, () => getState(id, spec, legacyW))
+  const saved = useSyncExternalStore(sub, () => getState(id, spec, legacyW))
+  // a desk that does not fold ignores a rail state saved by an older version
+  const st = foldable || !saved.collapsed ? saved : { w: saved.w, collapsed: false }
   const { def, min, max } = spec
   return useMemo(() => {
     const sp = { def, min, max }
@@ -116,10 +121,11 @@ export function useSideColumn(id: string, side: 'left' | 'right', spec: ColSpec,
       ...st, id, side, spec: sp,
       px: st.collapsed ? RAIL_W : st.w,
       touched: touched.has(id),
-      set,
+      foldable,
+      set: (s: ColState) => set(foldable ? s : { w: s.w, collapsed: false }),
       expand: () => set({ w: st.w, collapsed: false }),
-      collapse: () => set({ w: st.w, collapsed: true }),
-      toggle: () => set({ w: st.w, collapsed: !st.collapsed }),
+      collapse: () => { if (foldable) set({ w: st.w, collapsed: true }) },
+      toggle: () => { if (foldable) set({ w: st.w, collapsed: !st.collapsed }) },
     }
-  }, [st, id, side, def, min, max])
+  }, [st, id, side, def, min, max, foldable])
 }

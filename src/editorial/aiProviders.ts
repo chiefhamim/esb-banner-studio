@@ -126,7 +126,7 @@ export function strongerModel(provider: AiProviderId, current: string, listed: A
   return rank(best) > rank(current) ? best : null
 }
 
-export type AiProviderId = 'gemini' | 'anthropic' | 'openai' | 'openrouter'
+export type AiProviderId = 'gemini' | 'anthropic' | 'openai' | 'openrouter' | 'custom'
 
 export interface AiProviderMeta {
   id: AiProviderId
@@ -145,9 +145,25 @@ export const AI_PROVIDERS: AiProviderMeta[] = [
   { id: 'anthropic', name: 'Claude', keyUrl: 'https://console.anthropic.com/settings/keys', keyPlaceholder: 'Starts with sk-ant-', color: '#d97757', autoLabel: 'Auto — Claude Sonnet 5.5', help: 'Anthropic Console → API keys. Billed to that Console account, separate from a Claude.ai subscription.' },
   { id: 'openai', name: 'OpenAI', keyUrl: 'https://platform.openai.com/api-keys', keyPlaceholder: 'Starts with sk-', color: '#10a37f', autoLabel: 'Auto — newest GPT', help: 'OpenAI Platform → API keys. Billed to the Platform account, separate from ChatGPT Plus.' },
   { id: 'openrouter', name: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', keyPlaceholder: 'Starts with sk-or-', color: '#6467f2', autoLabel: 'Auto — OpenRouter picks', help: 'One key for many model families (Llama, Mistral, DeepSeek, Qwen and more). openrouter.ai → Keys.' },
+  { id: 'custom', name: 'Custom', keyUrl: '', keyPlaceholder: 'API key (leave empty if the service needs none)', color: '#71717a', autoLabel: 'Type the model name', help: 'Any service that speaks the OpenAI chat format — DeepSeek, Groq, Mistral, Together, xAI, a local Ollama or LM Studio. Give it a name, its API address and a model.' },
 ]
 
-export const providerMeta = (id: AiProviderId) => AI_PROVIDERS.find((p) => p.id === id)!
+/** The editor's own OpenAI-compatible service (the Custom provider): a display name and its API base address. */
+export interface CustomAi { name: string; url: string }
+let customAi: CustomAi = { name: '', url: '' }
+/** The AI dialog points checks at the address being typed (and back at the saved one when it closes). */
+export function setCustomAi(c: CustomAi | undefined) { customAi = readCustom(c) }
+/** The chat-completions address for a base URL: `…/v1` gets `/chat/completions`; a full address is used as it is. */
+export function customChatUrl(base: string): string {
+  const b = base.trim().replace(/\/+$/, '')
+  return /\/chat\/completions$/.test(b) ? b : b + '/chat/completions'
+}
+const customModelsUrl = (base: string) => customChatUrl(base).replace(/\/chat\/completions$/, '/models')
+
+export const providerMeta = (id: AiProviderId): AiProviderMeta => {
+  const m = AI_PROVIDERS.find((p) => p.id === id)!
+  return id === 'custom' && customAi.name.trim() ? { ...m, name: customAi.name.trim() } : m
+}
 
 export interface AiModelInfo { id: string; label: string; hint?: string }
 
@@ -185,11 +201,14 @@ export interface AiSettings {
   /** Opt-in per job: when the first answer's figures disagree with the source, ask again once on a stronger model
    *  (`decideEscalation`). Off unless set; only the Story job (translation) is wired today. */
   escalate?: Partial<Record<AiRole, boolean>>
+  /** The Custom provider's name and address (its key lives with the others). */
+  custom?: CustomAi
 }
 
 const SETTINGS_KEY = 'esb-banner-studio/ai-settings'
 
-const emptyRecord = (v: string): Record<AiProviderId, string> => ({ gemini: v, anthropic: v, openai: v, openrouter: v })
+const emptyRecord = (v: string): Record<AiProviderId, string> => ({ gemini: v, anthropic: v, openai: v, openrouter: v, custom: v })
+const readCustom = (v: unknown): CustomAi => { const o = (v && typeof v === 'object' ? v : {}) as Partial<CustomAi>; return { name: typeof o.name === 'string' ? o.name.slice(0, 40) : '', url: typeof o.url === 'string' && /^https?:\/\//i.test(o.url.trim()) ? o.url.trim() : '' } }
 const isProvider = (v: unknown): v is AiProviderId => AI_PROVIDERS.some((p) => p.id === v)
 
 let secureKeysCache: Record<AiProviderId, string> | null = null
@@ -263,6 +282,7 @@ export function loadAiSettings(): AiSettings {
         prompt: typeof s.prompt === 'string' ? s.prompt : '',
         paused: s.paused === true,
         ...(isEffort(s.effort) ? { effort: s.effort } : {}),
+        custom: (customAi = readCustom(s.custom)),
         ...(s.escalate && typeof s.escalate === 'object' ? { escalate: Object.fromEntries(Object.entries(s.escalate).filter(([k, v]) => ROLE_IDS.includes(k as AiRole) && typeof v === 'boolean')) as AiSettings['escalate'] } : {}),
       }
     }
@@ -274,6 +294,7 @@ export function loadAiSettings(): AiSettings {
 }
 
 export function saveAiSettings(s: AiSettings) {
+  customAi = readCustom(s.custom)
   const cleanKeys = Object.fromEntries(Object.entries(s.keys).map(([k, v]) => [k, v.trim()])) as AiSettings['keys']
   const hasBridge = typeof window !== 'undefined' && !!window.esb?.secretSet
 
@@ -321,15 +342,21 @@ export function runWithModel<T>(role: AiRole, model: string, fn: () => T): T {
 }
 
 /** The provider, key and model a job should call: the one chosen for it when it has a key, else nothing — no substitute. Nothing at all while AI is switched off. */
+/** The key a provider is called with; a Custom service with an address but no key (a local Ollama) is called keyless. */
+export const providerKey = (s: AiSettings, provider: AiProviderId): string => {
+  const k = s.keys[provider]?.trim() ?? ''
+  return k || (provider === 'custom' && s.custom?.url ? NO_KEY : '')
+}
+export const NO_KEY = 'none'
 export function aiFor(role: AiRole = 'main', s: AiSettings = loadAiSettings()): { provider: AiProviderId; key: string; model: string } | null {
   if (s.paused) return null
   if (modelOverride?.role === role) {
     const provider = roleProvider(s, role)
-    const key = s.keys[provider]?.trim()
+    const key = providerKey(s, provider)
     return key ? { provider, key, model: modelOverride.model } : null
   }
   const provider = roleProvider(s, role)
-  const key = s.keys[provider]?.trim()
+  const key = providerKey(s, provider)
   return key ? { provider, key, model: s.models[provider] || 'auto' } : null
 }
 
@@ -388,8 +415,8 @@ function claudeClient(key: string) {
 export async function listModels(provider: AiProviderId, apiKey: string, signal?: AbortSignal): Promise<AiModelInfo[]> {
   if (aiPaused()) return []
   const key = apiKey.trim()
-  if (!key) return []
-  const ck = `${provider}:${key}`
+  if (!key && provider !== 'custom') return []
+  const ck = `${provider}:${key}:${provider === 'custom' ? customAi.url : ''}`
   if (cache.has(ck)) return cache.get(ck)!
   const t = timeout(10_000, signal)
   try {
@@ -417,6 +444,17 @@ export async function listModels(provider: AiProviderId, apiKey: string, signal?
       const ids = (data.data ?? []).map((m) => m.id)
         .filter((id) => /^(gpt-\d|o\d)/.test(id) && !/(audio|realtime|tts|transcribe|image|search|embedding|instruct|moderation|codex|computer)/.test(id))
       out = ids.sort((a, b) => rankOpenAi(b) - rankOpenAi(a)).map((id) => ({ id, label: id }))
+    } else if (provider === 'custom') {
+      // an OpenAI-compatible /models list; many services have one, some do not (then the model is typed)
+      if (!customAi.url) return []
+      try {
+        const res = await fetch(customModelsUrl(customAi.url), { headers: key && key !== NO_KEY ? { Authorization: `Bearer ${key}` } : {}, signal: t.signal })
+        if (res.ok) {
+          const data = await res.json() as { data?: { id: string }[]; models?: { name?: string; model?: string }[] }
+          const ids = data.data?.map((m) => m.id) ?? data.models?.map((m) => m.model || m.name || '') ?? []
+          out = [...new Set(ids.filter(Boolean))].sort().map((id) => ({ id, label: id }))
+        }
+      } catch (e) { if (t.signal.aborted) throw e }
     } else {
       const res = await fetch('https://openrouter.ai/api/v1/models', { headers: { Authorization: `Bearer ${key}` }, signal: t.signal })
       if (!res.ok) throw new Error(await errorText(res))
@@ -444,6 +482,7 @@ export function resolveModel(provider: AiProviderId, chosen: string, listed: AiM
   if (provider === 'gemini') return ids.find((id) => /flash/.test(id) && !/lite/.test(id)) ?? 'gemini-2.5-flash'
   if (provider === 'anthropic') return CLAUDE_AUTO
   if (provider === 'openai') return ids.find((id) => /^gpt-/.test(id) && !/mini|nano/.test(id)) ?? ids[0] ?? ''
+  if (provider === 'custom') return ids[0] ?? ''
   return 'openrouter/auto'
 }
 
@@ -559,8 +598,9 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
     }
 
     // OpenAI and OpenRouter share the chat-completions shape
-    const url = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
-    const headers: Record<string, string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }
+    if (provider === 'custom' && !customAi.url) throw new Error('The custom AI has no address yet — add it in AI keys and roles')
+    const url = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' : provider === 'custom' ? customChatUrl(customAi.url) : 'https://openrouter.ai/api/v1/chat/completions'
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(key && key !== NO_KEY ? { Authorization: `Bearer ${key}` } : {}) }
     if (provider === 'openrouter') { headers['X-Title'] = 'ESB AI Studio'; headers['HTTP-Referer'] = 'https://esbpowerline.com' }
     const send = (format: Record<string, unknown> | null) => fetch(url, {
       method: 'POST',
@@ -577,7 +617,9 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
     })
     let res = await send({ type: 'json_schema', json_schema: { name: 'esb_result', strict: true, schema: strictSchema(schema) } })
     // some OpenRouter models take JSON mode but not a schema: ask again with the schema written into the prompt
-    if (res.status === 400 && provider === 'openrouter') res = await send({ type: 'json_object' })
+    if (res.status === 400 && (provider === 'openrouter' || provider === 'custom')) res = await send({ type: 'json_object' })
+    // and a few local servers take neither: the schema is in the prompt, the answer is parsed from plain text
+    if (res.status === 400 && provider === 'custom') res = await send(null)
     if (!res.ok) throw new Error(`${providerMeta(provider).name} (${model}): ${await errorText(res)}`)
     const data = await res.json() as { model?: string; choices?: { finish_reason?: string; message?: { content?: string; refusal?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } }
     const ou = data.usage
@@ -598,7 +640,8 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
 export async function testAiKey(provider: AiProviderId, apiKey: string, chosen: string): Promise<{ ok: boolean; model?: string; error?: string; models?: AiModelInfo[] }> {
   if (aiPaused()) return { ok: false, error: AI_OFF_MESSAGE }
   const key = apiKey.trim()
-  if (!key) return { ok: false, error: 'Please enter an API key.' }
+  if (provider === 'custom' && !customAi.url) return { ok: false, error: 'Add the API address first.' }
+  if (!key && provider !== 'custom') return { ok: false, error: 'Please enter an API key.' }
   for (const k of [...cache.keys()]) if (k.startsWith(provider + ':')) cache.delete(k)
   let models: AiModelInfo[] = []
   try {
@@ -607,7 +650,7 @@ export async function testAiKey(provider: AiProviderId, apiKey: string, chosen: 
     return { ok: false, error: (e as Error).message }
   }
   const model = resolveModel(provider, chosen, models)
-  if (!model) return { ok: false, error: 'This key lists no chat models.', models }
+  if (!model) return { ok: false, error: provider === 'custom' ? 'Type the model name — this service does not list its models.' : 'This key lists no chat models.', models }
   try {
     await aiJson({ provider, key, model, system: 'Answer with the requested JSON only.', user: 'Reply with ok set to "yes".', schema: { type: 'object', properties: { ok: { type: 'string', description: 'yes' } }, required: ['ok'] }, maxTokens: 2048, timeoutMs: 60_000, effort: 'low' })
     return { ok: true, model, models }

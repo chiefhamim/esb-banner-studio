@@ -72,6 +72,7 @@ import { fixSeoWithAi } from './seoFix'
 import type { SeoDraft } from './seoFix'
 import type { EditorialDraft } from './editorialStore'
 import { analyzeSocial, socialFixList } from './socialChecks'
+import { SocialMark, SocialPicker } from './SocialMark'
 import { SocialChecks } from './SocialCheckList'
 import { sanitizeFacebook } from './facebookCaption'
 import { effectiveQuality, usePublishImage } from './publishImage'
@@ -1571,12 +1572,13 @@ export function EditorialWorkspace() {
                       </button>
                     </div>
                     {!draft.slug.trim() && <p className="hint">Set the slug under SEO first — every caption links to this address.</p>}
-                    <div className="ed-body-tools">
-                      <Seg<'facebook' | 'x' | 'linkedin' | 'telegram'>
-                        value={activeSocialTab}
-                        onChange={setActiveSocialTab}
-                        options={[{ value: 'facebook', label: 'Facebook' }, { value: 'x', label: 'X' }, { value: 'linkedin', label: 'LinkedIn' }, { value: 'telegram', label: 'Telegram' }]}
-                      />
+                    <SocialPicker value={activeSocialTab} onChange={setActiveSocialTab}
+                      captions={{ facebook: draft.social.facebook || '', x: draft.social.x || '', linkedin: draft.social.linkedin || '', telegram: draft.social.telegram || '' }}
+                      checks={analyzeSocial(draft.social, draft.slug)}
+                      lengthOf={(n, t) => (n === 'x' ? xLength(t) : t.length)} />
+                    <div className="soc-compose">
+                    <div className="ed-body-tools soc-compose-head">
+                      <span className="soc-compose-name"><SocialMark net={activeSocialTab} size={15} />{activeSocialTab === 'x' ? 'Post on X' : activeSocialTab === 'facebook' ? 'Facebook post' : activeSocialTab === 'linkedin' ? 'LinkedIn post' : 'Telegram message'}</span>
                       <span className={'ed-budget-counter' + (activeSocialTab === 'x' && xLength(draft.social.x || '') > 280 ? ' over' : '')}>
                         {activeSocialTab === 'x' ? `${xLength(draft.social.x || '')} / 280` : `${(draft.social[activeSocialTab] || '').length} chars`}
                       </span>
@@ -1597,6 +1599,7 @@ export function EditorialWorkspace() {
                         <Icon name="copy" size={13} />
                         <span>Copy caption</span>
                       </button>
+                    </div>
                     </div>
                     <SocialChecks checks={analyzeSocial(draft.social, draft.slug)} active={activeSocialTab} onFix={() => void handleFixSocial()} busy={fixBusy === 'social'} onUndo={socialUndo ? () => { for (const k of ['facebook', 'x', 'linkedin', 'telegram'] as const) setSocialCaption(k, socialUndo[k]); setSocialUndo(null); showToast('Caption fix undone') } : undefined} />
                   </div>
