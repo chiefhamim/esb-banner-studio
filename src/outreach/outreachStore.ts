@@ -210,6 +210,8 @@ interface OutreachState extends Saved {
   patchById: (id: string, p: Partial<Campaign>) => void
   importList: (file: File) => Promise<void>
   useList: (listId: string) => Promise<void>
+  /** Take the list off the open campaign (the campaign, its letter and its send record stay). */
+  removeList: () => Promise<void>
   setSheet: (name: string) => void
   setRecipients: (addresses: string[]) => void
   setAudience: (a: Partial<Campaign['audience']>) => void
@@ -488,6 +490,20 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
         set({ importNote: (e as Error).message })
         get().addLog('error', `Could not read ${file.name}: ${(e as Error).message}`)
       }
+    },
+    removeList: async () => {
+      if (get().run !== 'idle') { get().addLog('warn', 'Stop the batch before removing the list'); return }
+      const c = get().campaign()
+      if (!c?.listId) return
+      const id = c.listId
+      const name = get().lists.find((l) => l.id === id)?.fileName ?? 'the list'
+      get().patch({ listId: null, sheet: '', audience: { group: null, purposes: [] } })
+      listCache.delete(id)
+      // the stored workbook goes too unless another campaign still sends to it
+      if (!get().campaigns.some((x) => x.listId === id)) { void idbDel(`list:${id}`); set({ lists: get().lists.filter((l) => l.id !== id) }) }
+      set({ contacts: [], sheets: [], activeContact: null, importNote: null })
+      await loadContacts()
+      get().addLog('info', `${name} removed from this campaign`)
     },
     useList: async (listId) => {
       if (get().run !== 'idle') return

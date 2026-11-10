@@ -7,8 +7,8 @@ import type { ColState, SideColumn } from './sideColumnState'
 
 /**
  * The drag handle on a side column's inner edge (shares `.splitter` with the other resize handles). Drag to resize;
- * past `collapseAt` it snaps to the icon rail, and a rail pulled outward opens again. Double-click or Enter toggles,
- * arrows resize (Shift = bigger steps), Home returns to the default width.
+ * past `collapseAt` it snaps to the icon rail, and a rail pulled outward opens again. Double-click (or Home) returns it to
+ * its default width — folding is the fold button's job; Enter toggles, arrows resize (Shift = bigger steps).
  *
  * While dragging it writes the width through `apply` (a CSS variable or grid template — no React render per frame) and
  * only touches the column's state when the rail flips, so the content swaps for the rail as you cross the line.
@@ -71,9 +71,11 @@ export function ColumnHandle({ col, label, root, apply, max }: {
     const onScreen = ref.current?.parentElement?.getBoundingClientRect().width
     col.set({ w: onScreen ? clampW(onScreen, spec) : col.w, collapsed: true })
   }
+  /** Back to the column's own default width (open), easing there like any other width change. */
+  const reset = () => { apply(col.spec.def); col.set({ w: col.spec.def, collapsed: false }) }
   const key = (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggle(); return }
-    if (e.key === 'Home') { e.preventDefault(); e.stopPropagation(); col.set({ w: col.spec.def, collapsed: false }); return }
+    if (e.key === 'Home') { e.preventDefault(); e.stopPropagation(); reset(); return }
     const raw = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
     if (!raw) return
     e.preventDefault(); e.stopPropagation() // arrows resize the column here, they must not also nudge a selected layer
@@ -139,9 +141,9 @@ export function ColumnHandle({ col, label, root, apply, max }: {
       </button>
     <div ref={ref} className={`splitter vert ${edge} col-handle`} role="separator" aria-orientation="vertical" aria-label={label}
       aria-valuenow={col.px} aria-valuemin={RAIL_W} aria-valuemax={spec.max} aria-expanded={!col.collapsed} tabIndex={0}
-      data-tip={col.collapsed ? 'Drag or double-click to expand' : 'Drag to resize · double-click to collapse'} data-tip-pos={col.side === 'left' ? 'right' : 'left'}
+      data-tip={col.collapsed ? 'Drag to open · double-click for the default width' : 'Drag to resize · double-click for the default width'} data-tip-pos={col.side === 'left' ? 'right' : 'left'}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
-      onDoubleClick={toggle} onKeyDown={key}>
+      onDoubleClick={reset} onKeyDown={key}>
       <i className="grab" />
     </div>
     </>

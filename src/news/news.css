@@ -379,3 +379,25 @@
    skip layout and paint until they scroll into view, so a fold only re-flows the dozen that are visible.
    (tools/audit/electron-fold-film.mjs: DESK=news) */
 .nw-row { content-visibility: auto; contain-intrinsic-size: auto 78px; }
+
+/* pass 11: trending is one row (TrendBar measures what fits; the rest is under "+N") */
+.nw-trendbar { position: relative; flex-wrap: nowrap; overflow: hidden; gap: 7px; padding: 4px 4px 8px; }
+.nw-trend-measure { position: absolute; left: 0; top: 0; display: flex; gap: 7px; visibility: hidden; pointer-events: none; white-space: nowrap; }
+.nw-trend-measure > .nw-chip { flex: none; }
+.nw-trendbar .nw-trend-more { flex: none; }
+
+/* pass 11: Check now is a soft cyan — a light tint with a fine outline in the teal of "Watch", not a solid slab;
+   it fills a touch on hover and keeps its outline while reading */
+.topbar .btn.primary.nw-check,
+:root[data-theme='dark'] .topbar .btn.primary.nw-check {
+  color: color-mix(in srgb, var(--nw-teal-ink) 92%, var(--text));
+  background: color-mix(in srgb, var(--nw-teal) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--nw-teal) 42%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25);
+  font-weight: 600;
+}
+:root[data-theme='dark'] .topbar .btn.primary.nw-check { color: color-mix(in srgb, var(--nw-teal) 82%, #fff); background: color-mix(in srgb, var(--nw-teal) 14%, transparent); border-color: color-mix(in srgb, var(--nw-teal) 38%, transparent); box-shadow: none; }
+.topbar .btn.primary.nw-check:hover:not(:disabled) { background: color-mix(in srgb, var(--nw-teal) 20%, transparent); border-color: color-mix(in srgb, var(--nw-teal) 60%, transparent); }
+:root[data-theme='dark'] .topbar .btn.primary.nw-check:hover:not(:disabled) { background: color-mix(in srgb, var(--nw-teal) 22%, transparent); }
+.topbar .btn.primary.nw-check:disabled { opacity: 1; }
+.topbar .btn.primary.nw-check > svg { color: inherit; }

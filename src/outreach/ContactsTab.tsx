@@ -7,7 +7,7 @@ import { memo, useDeferredValue, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOutreachStore } from './outreachStore'
 import { skipReason } from './compose'
-import { inAudience } from './campaign'
+import { inAudience, stopBatch } from './campaign'
 import { purposeLabel } from './directory'
 import { domainOf, roleMailbox, disposableDomain, summarizeChecks } from './addressCheck'
 import { ask } from './outreachUi'
@@ -45,7 +45,7 @@ export const ContactsTab = memo(function ContactsTab() {
   // only what this tab reads: subscribing to the whole store re-rendered every row on each log line and inbox check
   const s = useOutreachStore(useShallow((x) => ({
     campaigns: x.campaigns, activeId: x.activeId, campaign: x.campaign, activeContact: x.activeContact, contacts: x.contacts,
-    importList: x.importList, importNote: x.importNote, lists: x.lists, query: x.query, run: x.run, setActiveContact: x.setActiveContact,
+    importList: x.importList, removeList: x.removeList, importNote: x.importNote, lists: x.lists, query: x.query, run: x.run, setActiveContact: x.setActiveContact,
     setAudience: x.setAudience, setQuery: x.setQuery, setSheet: x.setSheet, setView: x.setView, sheets: x.sheets, view: x.view,
     verifiedAddrs: x.verifiedAddrs, checkingAddresses: x.checkingAddresses, checkAddresses: x.checkAddresses, cancelCheckAddresses: x.cancelCheckAddresses,
     approveMany: x.approveMany, undoApproveMany: x.undoApproveMany, lastBulkApproval: x.lastBulkApproval, approved: x.approved,
@@ -155,7 +155,22 @@ export const ContactsTab = memo(function ContactsTab() {
   if (key !== listKey) { setListKey(key); setLimit(PAGE) }
 
   const direct = c?.kind === 'direct'
-  const pick = () => file.current?.click()
+  // a paused batch holds the list; replacing or removing it ends that batch, so ask first (a running one must be stopped)
+  const freeList = async (what: string): Promise<boolean> => {
+    const run = useOutreachStore.getState().run
+    if (run === 'idle') return true
+    if (run === 'running') { await ask({ title: 'A batch is sending', body: `Pause or stop it before you ${what}.`, ok: 'OK' }); return false }
+    const ok = await ask({ title: `Stop the paused batch and ${what}?`, body: 'The letters already sent stay recorded on the campaign; the rest of this batch is cancelled.', ok: 'Stop and continue', danger: true })
+    if (!ok) return false
+    await stopBatch()
+    return useOutreachStore.getState().run === 'idle'
+  }
+  const pick = async () => { if (await freeList('load another list')) file.current?.click() }
+  const remove = async () => {
+    if (!(await freeList('remove the list'))) return
+    const ok = await ask({ title: `Remove ${listMeta?.fileName ?? 'the list'} from this campaign?`, body: 'The campaign keeps its letter and its record of who was sent to; you can import a list again at any time.', ok: 'Remove list', danger: true })
+    if (ok) await s.removeList()
+  }
 
   return (
     <div className="or-tab">
@@ -178,9 +193,14 @@ export const ContactsTab = memo(function ContactsTab() {
                   <Icon name="search" size={13} /><span>Check addresses</span>
                 </button>
               )}
-              <button type="button" className="btn sm" onClick={pick} disabled={!idle} data-tip={!idle ? 'Stop the batch to load another list' : 'Load a mailing list from this computer'}>
+              <button type="button" className="btn sm" onClick={() => void pick()} data-tip={listMeta ? 'Load another mailing list in place of this one' : 'Load a mailing list from this computer'}>
                 <Icon name="upload" size={13} /><span className="or-btn-lbl">{listMeta ? 'Replace' : 'Import'}</span>
               </button>
+              {listMeta && (
+                <button type="button" className="btn sm or-list-remove" onClick={() => void remove()} aria-label="Remove the list" data-tip="Remove the list from this campaign">
+                  <Icon name="trash" size={13} />
+                </button>
+              )}
             </div>
           </div>
         )}

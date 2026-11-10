@@ -3,12 +3,12 @@
 // shortcut sheet (Video) passes `onShortcuts`; the others pass their groups and get the shared sheet, which always
 // ends with the shortcuts that work everywhere.
 
-import { setDeskNav, useDeskNav } from '../shell/WorkspaceRail'
+import { DESKS, setDeskNav, useDeskNav } from '../shell/WorkspaceRail'
 import { useCallback, useState, type ReactNode } from 'react'
 import logoUrl from '../assets/images/esb-logo.png'
 import { Dialog, type MenuDef } from './controls'
 import { Icon } from './Icon'
-import { WelcomeModal } from './WelcomeModal'
+import { DESK_LINES, WelcomeModal } from './WelcomeModal'
 
 export interface ShortcutGroup { group: string; rows: [string, string][] }
 
@@ -32,7 +32,7 @@ export function ShortcutsDialog({ groups, onClose }: { groups: ShortcutGroup[]; 
 
 export function AboutDialog({ onClose }: { onClose: () => void }) {
   return (
-    <Dialog title="About ESB AI Studio" kicker="ESB Power Line" onClose={onClose} width={480}>
+    <Dialog title="About ESB AI Studio" kicker="ESB Power Line" onClose={onClose} width={560}>
       <div className="about2">
         <div className="about2-hero">
           <span className="logo-wrap big"><img src={logoUrl} alt="ESB Power Line" /></span>
@@ -41,11 +41,12 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           <p>Where stories are written, imagination is designed and reality is cut.</p>
           <span className="about2-ver">Version {__APP_VERSION__}</span>
         </div>
-        <div className="about2-desks">
-          <div><Icon name="newspaper" size={18} /><b>Editorial</b><small>Link in, English story out</small></div>
-          <div><Icon name="layers" size={18} /><b>Graphics</b><small>Banners and social cards</small></div>
-          <div><Icon name="video" size={18} /><b>Video</b><small>Timeline, titles and export</small></div>
-        </div>
+        <ol className="about2-desks">
+          {DESKS.map((d) => (
+            <li key={d.id}><Icon name={d.icon} size={16} /><b>{d.label}</b><small>{DESK_LINES[d.id]?.line}</small></li>
+          ))}
+        </ol>
+        <p className="about2-credit">The News desk carries EnergyWatch by Yeasin Fiyaz.</p>
         <div className="about2-author">
           <div className="about-avatar">HR</div>
           <div className="about-meta">
@@ -55,7 +56,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           </div>
           <a className="about2-link" href="https://facebook.com/chiefhamim" target="_blank" rel="noopener noreferrer"><Icon name="link" size={14} />Facebook</a>
         </div>
-        <p className="about2-foot">Everything runs on this PC — fonts, artwork and templates are bundled. © ESB Power Line, Express Broadcast and Communication Ltd.</p>
+        <p className="about2-foot">Fonts, artwork and templates are bundled; your AI keys, Facebook token and mail password are encrypted by Windows on this PC. AI, translation, mail and publishing only go out when you use them. © ESB Power Line, Express Broadcast and Communication Ltd.</p>
       </div>
     </Dialog>
   )

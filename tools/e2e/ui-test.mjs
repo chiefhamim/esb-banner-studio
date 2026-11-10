@@ -64,7 +64,7 @@ try {
     try {
       if (sessionStorage.getItem('esb-test/panels-seeded')) return
       sessionStorage.setItem('esb-test/panels-seeded', '1')
-      for (const t of ['Date', 'Quote Statement', 'Data & Stat Callout', 'Headline', 'Optimal image dimensions', 'Collage', 'Slots & framing']) sessionStorage.setItem('esb-banner-studio/panel/' + t, '1')
+      for (const t of ['Date', 'Quote Statement', 'Data & Stat Callout', 'Headline', 'Collage', 'Slots & framing']) sessionStorage.setItem('esb-banner-studio/panel/' + t, '1')
     } catch {}
   })
   await page.reload()
@@ -92,7 +92,7 @@ try {
 
   // ---- defaults: Facebook 4:5
   check('default format is Facebook 4:5 (1080 x 1350)', (await page.textContent('.statusbar')).includes('1080 × 1350'))
-  await page.setInputFiles('input[type=file]', path.join(root, 'src/assets/images/sample-photo.jpg'))
+  await page.setInputFiles('.desk-slot.is-active input[type=file]', path.join(root, 'src/assets/images/sample-photo.jpg'))
   await page.waitForTimeout(300)
   await openPanel('Category')
   await page.click('.cat:has-text("Renewables")')
@@ -129,7 +129,7 @@ try {
   await page.keyboard.press('Escape')
   const hx = toClient(sb, sc, 520, 120)
   await page.mouse.click(hx.x, hx.y)
-  check('clicking bare canvas leaves nothing selected', (await page.locator('.el-box.selected').count()) === 0 && (await page.textContent('.right .pnl h3')) === 'Inspector')
+  check('clicking bare canvas leaves nothing selected', (await page.locator('.el-box.selected').count()) === 0 && (await page.textContent('.desk-slot.is-active .right .pnl h3')) === 'Inspector')
   await layerRow('Header background').click()
   const tagBox = await page.locator('.el-box.selected .el-tag').boundingBox()
   const hdrX0 = await propVal('X')
@@ -140,11 +140,11 @@ try {
 
   // ---- custom dropdown + scrub
   await layerRow('Month + year').click()
-  await page.click('.right .grid2 .select')
+  await page.click('.desk-slot.is-active .right .grid2 .select')
   await page.click('.popover .menu-item:has-text("Medium")')
-  check('custom dropdown changes weight', (await page.textContent('.right .grid2 .select .select-label')).includes('Medium'))
+  check('custom dropdown changes weight', (await page.textContent('.desk-slot.is-active .right .grid2 .select .select-label')).includes('Medium'))
   const sz = await propVal('Size')
-  const lb = await page.locator('.right .scrub:has(.scrub-label:text-is("Size")) .scrub-label').boundingBox()
+  const lb = await page.locator('.desk-slot.is-active .right .scrub:has(.scrub-label:text-is("Size")) .scrub-label').boundingBox()
   await drag({ x: lb.x + 8, y: lb.y + 8 }, { x: lb.x + 28, y: lb.y + 8 })
   check('dragging a label scrubs the value', (await propVal('Size')) > sz, `${sz} -> ${await propVal('Size')}`)
   await page.keyboard.press('Control+z'); await page.keyboard.press('Control+z')
@@ -198,7 +198,7 @@ try {
   await page.waitForSelector('textarea.inline-edit')
   await page.keyboard.press('Control+a'); await page.keyboard.type('Breaking'); await page.keyboard.press('Enter')
   await page.waitForTimeout(150)
-  check('double-click edits text in place', (await page.inputValue('.right textarea.input')) === 'Breaking')
+  check('double-click edits text in place', (await page.inputValue('.desk-slot.is-active .right textarea.input')) === 'Breaking')
   await page.keyboard.press('Control+c')
   await page.keyboard.press('Control+v')
   await page.waitForTimeout(200)
@@ -221,16 +221,16 @@ try {
   const m0 = toClient(sb, sc, 520, 20), m1 = toClient(sb, sc, 1075, 210)
   await drag(m0, m1, ['Control'])
   await page.waitForTimeout(150)
-  const title = (await page.textContent('.right .pnl h3')) ?? ''
+  const title = (await page.textContent('.desk-slot.is-active .right .pnl h3')) ?? ''
   check('Ctrl+drag marquee selects several layers', /\d+ layers/.test(title) && parseInt(title) >= 3, title)
   await page.click('[aria-label="Align right edges"]')
   await page.waitForTimeout(100)
   await page.keyboard.press('Escape')
   const dateSpot = toClient(sb, sc, 800, 100)
   await page.mouse.click(dateSpot.x, dateSpot.y)
-  const first = (await page.textContent('.right .pnl h3')) ?? ''
+  const first = (await page.textContent('.desk-slot.is-active .right .pnl h3')) ?? ''
   await page.keyboard.down('Alt'); await page.mouse.click(dateSpot.x, dateSpot.y); await page.keyboard.up('Alt')
-  const second = (await page.textContent('.right .pnl h3')) ?? ''
+  const second = (await page.textContent('.desk-slot.is-active .right .pnl h3')) ?? ''
   check('Alt+click selects the layer underneath', first !== second && second.length > 0, `${first} -> ${second}`)
 
   // ---- guides from rulers
@@ -259,7 +259,7 @@ try {
   await page.waitForTimeout(200)
   const zoomOut = parseFloat((await page.textContent('.frame-controls .field:first-child label')).split('·')[1])
   check('a photo can zoom out below 1x', zoomOut < 0.6, 'zoom ' + zoomOut)
-  await page.setInputFiles('input[type=file]', path.join(root, 'src/assets/images/sample-photo.jpg'))
+  await page.setInputFiles('.desk-slot.is-active input[type=file]', path.join(root, 'src/assets/images/sample-photo.jpg'))
   await page.waitForTimeout(300)
   await openPanel('Slots & framing')
   check('2nd photo switches to a 2-slot collage', (await page.locator('.slot').count()) >= 2)
@@ -311,7 +311,7 @@ try {
   await page.click('.fmtpick'); await page.click('.fm-item:has-text("Facebook Feed")'); await page.waitForTimeout(200)
   await layerRow('Headline').click()
   const hSize = await propVal('Size')
-  const sizeInput = page.locator('.right .scrub:has(.scrub-label:text-is("Size")) input')
+  const sizeInput = page.locator('.desk-slot.is-active .right .scrub:has(.scrub-label:text-is("Size")) input')
   await sizeInput.fill('90'); await sizeInput.press('Enter')
   check('layer size changed', (await propVal('Size')) === 90)
   await layerRow('Headline').hover()
@@ -361,24 +361,24 @@ try {
 
   // ---- headline icon: own box, blur, size
   await layerRow('Headline icon').click()
-  check('the headline icon has its own Icon panel', (await page.locator('.right .pnl h3', { hasText: 'Icon' }).count()) >= 1)
+  check('the headline icon has its own Icon panel', (await page.locator('.desk-slot.is-active .right .pnl h3', { hasText: 'Icon' }).count()) >= 1)
   const iconSize0 = await propVal('Size')
   const se2 = page.locator('.el-box.selected .handle').nth(2)
   const seb = await se2.boundingBox()
   await drag({ x: seb.x + 5, y: seb.y + 5 }, { x: seb.x + 5 + 50, y: seb.y + 5 + 50 })
   check('dragging an icon corner resizes the icon', (await propVal('Size')) > iconSize0, `${iconSize0} -> ${await propVal('Size')}`)
-  const blurSlider = page.locator('.right .field:has(label:text("Blur")) input[type=range]')
+  const blurSlider = page.locator('.desk-slot.is-active .right .field:has(label:text("Blur")) input[type=range]')
   await blurSlider.focus()
   const blur0 = await blurSlider.inputValue()
   for (let i = 0; i < 10; i++) await page.keyboard.press('ArrowRight')
   check('blur slider changes the icon blur', parseFloat(await blurSlider.inputValue()) > parseFloat(blur0), `${blur0} -> ${await blurSlider.inputValue()}`)
-  await page.click('.right button:has-text("Reset icon")')
+  await page.click('.desk-slot.is-active .right button:has-text("Reset icon")')
 
   // ---- fonts + credit styling
   await layerRow('Headline').click()
-  await page.click('.right .field:has(label:text-is("Font")) .select')
+  await page.click('.desk-slot.is-active .right .field:has(label:text-is("Font")) .select')
   await page.click('.popover .menu-item:has-text("Space Grotesk")')
-  check('font family can be changed per text layer', (await page.textContent('.right .field:has(label:text-is("Font")) .select-label')).includes('Space Grotesk'))
+  check('font family can be changed per text layer', (await page.textContent('.desk-slot.is-active .right .field:has(label:text-is("Font")) .select-label')).includes('Space Grotesk'))
   await page.keyboard.press('Control+z')
   await openPanel('Photo credit')
   await page.fill('input[placeholder="e.g. Photo: PID"]', 'Photo: PID')
@@ -402,7 +402,7 @@ try {
   sb = await stageBox(); sc = sb.w / W
   const bare = toClient(sb, sc, 60, 975)
   await page.mouse.click(bare.x, bare.y)
-  check('clicking empty canvas inside the band clears the selection', (await page.locator('.el-box.selected').count()) === 0 && (await page.textContent('.right .pnl h3')) === 'Inspector')
+  check('clicking empty canvas inside the band clears the selection', (await page.locator('.el-box.selected').count()) === 0 && (await page.textContent('.desk-slot.is-active .right .pnl h3')) === 'Inspector')
   await layerRow('Headline icon').click()
   const itag = await page.locator('.el-box.selected .el-tag').boundingBox()
   const dxBefore = await propVal('X')
@@ -418,12 +418,12 @@ try {
   check('Breaking pill adds shape, icon and text layers', (await layerRow('Label pill').count()) === 1 && (await layerRow('Label icon').count()) === 1 && (await layerRow('Label text').count()) === 1)
   await page.click('.lp:has-text("FEATURED")')
   await layerRow('Label text').click()
-  check('Featured pill uses the website label text', (await page.inputValue('.right textarea.input')) === 'FEATURED')
+  check('Featured pill uses the website label text', (await page.inputValue('.desk-slot.is-active .right textarea.input')) === 'FEATURED')
   await openPanel('Label pill')
   await page.fill('input[placeholder="FEATURED"]', 'Exclusive')
   await page.waitForTimeout(150)
   await layerRow('Label text').click()
-  check('pill text can be customised (uppercased)', (await page.inputValue('.right textarea.input')) === 'EXCLUSIVE')
+  check('pill text can be customised (uppercased)', (await page.inputValue('.desk-slot.is-active .right textarea.input')) === 'EXCLUSIVE')
   await page.click('.lp-none')
   check('None removes the pill', (await layerRow('Label pill').count()) === 0)
 
@@ -670,7 +670,7 @@ try {
   check('arrow keys nudge a focused handle by 16 px', (await w('.left')) === 344, `${await w('.left')}`)
   await page.keyboard.press('Home')
   const rw0 = await w('.right')
-  sp = await mid('.right > .splitter')
+  sp = await mid('.desk-slot.is-active .right > .splitter')
   await drag(sp, { x: sp.x - 48, y: sp.y })
   check('dragging the right handle left widens the right panel', (await w('.right')) === rw0 + 48, `${rw0} -> ${await w('.right')}`)
   const dk0 = await h('.dock')
@@ -681,7 +681,7 @@ try {
   check('sizes are remembered between launches', saved.rw === rw0 + 48 && saved.lw === 312, JSON.stringify(saved))
   await page.reload(); await enterGraphics(); await page.waitForTimeout(400)
   check('and applied again after a reload', (await w('.right')) === rw0 + 48)
-  await page.locator('.right > .splitter').dblclick()
+  await page.locator('.desk-slot.is-active .right > .splitter').dblclick()
   await page.locator('.dock > .splitter').dblclick()
   check('every handle resets by double-click', (await w('.right')) === 312)
 
@@ -849,12 +849,8 @@ try {
   check('article studio tray displays original headline', origHeadline.includes('৫৯২ কোটি টাকায়'), origHeadline)
   check('article studio tray provides suggested sector photos', (await page.locator('.asp-thumb.suggested').count()) > 0)
 
-  // ---- Body Section Optimal Dimensions for each template
-  await page.click('.side-tabs button:has-text("Photos")')
-  await openPanel('Optimal image dimensions')
-  await page.waitForSelector('.opt-space-card')
-  const optPhotosText = await page.textContent('.opt-space-card')
-  check('photos panel displays optimal body image space (1080 × 719 px for Facebook)', optPhotosText.includes('1080 × 719 px') && optPhotosText.includes('3:2'), optPhotosText)
+  // the Photos panel's 'Optimal image dimensions' card was removed (2026-11-10): the empty slot on the canvas says it
+  await page.click('.side-tabs button:has-text("Photos"):visible')
 
   // Empty slot canvas card on a fresh banner
   await page.evaluate(() => { window.__store.getState().setCollage('single'); window.__store.getState().assignImage(0, null); window.__store.getState().assignImage(1, null) })

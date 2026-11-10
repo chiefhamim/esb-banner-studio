@@ -1228,3 +1228,12 @@
 .oa-results-grid { grid-template-columns: repeat(var(--c2, 5), minmax(0, 1fr)); }
 @container oa-results (max-width: 700px) { .oa-results-grid { grid-template-columns: repeat(var(--c3, 4), minmax(0, 1fr)); } }
 @container oa-results (max-width: 520px) { .oa-results-grid { grid-template-columns: repeat(var(--c4, 3), minmax(0, 1fr)); } }
+
+/* pass 11: one rhythm (tokens.css --pane-pad / --pane-gap / --tile-gap). The results card added its own 12 px margin to
+   the column's 12 px gap (24 px above the tiles, 12 everywhere else); every card had its own inset (12/14/13 px). */
+.oa-content-scroll { padding: var(--pane-pad) calc(var(--pane-pad) - 12px) var(--pane-pad) var(--pane-pad); gap: var(--pane-gap); }
+.oa-results { margin-bottom: 0; padding: var(--pane-pad); }
+.oa-results-grid { gap: var(--tile-gap); margin: var(--pane-gap) 0; }
+.oa-overview, .oa-kpi-strip, .oa-grid-row-2 { gap: var(--pane-gap); }
+.oa-panel, .oa-kpi-tile { padding: var(--pane-pad); }
+.oa-result { padding: 10px 12px; }

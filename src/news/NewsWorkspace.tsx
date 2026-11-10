@@ -3,7 +3,7 @@
 // header (workspace switcher, menu bar, the checker's state, Check now), a left column of filters
 // (categories: All headlines, Energy & Power, PM & President, Official Press; canonical trending topics; official press wings; portals),
 // the headlines on a sheet in the centre with a live Trending topic bar, and the chosen headline on the right with Start a story.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
 import { deskIs, useShellStore } from '../shell/shellStore'
 import { useStore } from '../store'
@@ -397,17 +397,6 @@ export function NewsWorkspace() {
               </div>
             </Fold>
 
-            {trending.length > 0 && (
-              <Fold id="trending" title={cat === 'press' ? 'Issuing Offices' : 'Trending Topics'} open={folds.trending} onToggle={toggleFold} aside={folds.trending ? null : needle ? q.trim() : `${trending.length} topics`}>
-                <div className="nw-trend">
-                  {trending.map(([t, n]) => {
-                    const on = needle === t.toLowerCase()
-                    return <button key={t} type="button" lang={lang(t)} className={'nw-chip' + (on ? ' on' : '')} aria-pressed={on} onClick={() => setQ(on ? '' : t)} data-tip={`${n} ${n === 1 ? 'headline mentions' : 'headlines mention'} ${t}`}><span>{t}</span><small>{n}</small></button>
-                  })}
-                </div>
-              </Fold>
-            )}
-
             <Fold id="pressWings" title="Official Press Wings" open={folds.pressWings} onToggle={toggleFold}
               aside={<>{portal && pressOfficeRows.some((o) => o.name === portal) && !folds.pressWings ? <b className="nw-fold-pick">{portal}</b> : <>{pressOfficesOn} offices</>}</>}>
               <div className="nw-nav">
@@ -441,7 +430,6 @@ export function NewsWorkspace() {
           </div>
           <ColumnRail col={leftCol} label="Filters" items={[
             ...cats.map((c) => ({ id: c, icon: (c === 'all' ? 'inbox' : c === 'energy' ? 'bolt' : c === 'leadership' ? 'users' : 'shield') as IconName, label: c === 'all' ? 'All headlines' : CAT_LABEL[c], on: cat === c, onClick: () => setCat(c) })),
-            ...(trending.length > 0 ? [{ id: 'trending', icon: 'trendingUp' as IconName, label: cat === 'press' ? 'Issuing Offices' : 'Trending Topics', onClick: () => openFold('trending') }] : []),
             { id: 'pressWings', icon: 'quote', label: 'Official Press Wings', onClick: () => openFold('pressWings') },
             { id: 'portals', icon: 'globe', label: 'Portals', on: !!portal && !pressOfficeRows.some((o) => o.name === portal), onClick: () => openFold('portals') },
           ]} />
@@ -462,19 +450,7 @@ export function NewsWorkspace() {
             {busy && !range && <span className="nw-progress" role="progressbar" aria-label="Reading the feeds" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span style={{ '--p': `${pct}%` } as React.CSSProperties} /></span>}
           </div>
 
-          {trending.length > 0 && (
-            <div className="nw-trendbar" role="group" aria-label="Trending topics">
-              <span className="nw-trendbar-h"><Icon name="trendingUp" size={13} />{cat === 'press' ? 'Offices' : 'Trending'}</span>
-              {trending.map(([t, n]) => {
-                const on = needle === t.toLowerCase()
-                return (
-                  <button key={t} type="button" lang={lang(t)} className={'nw-chip' + (on ? ' on' : '')} aria-pressed={on} onClick={() => setQ(on ? '' : t)} data-tip={`Filter & sort by relevance for ${t} (${n})`}>
-                    <span>{t}</span><small>{n}</small>
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          {trending.length > 0 && <TrendBar trending={trending} press={cat === 'press'} needle={needle} onPick={(t) => setQ(needle === t.toLowerCase() ? '' : t)} />}
 
           {range && (
             <div className="nw-range">
@@ -813,5 +789,53 @@ function RangeDialog({ onClose }: { onClose: () => void }) {
         <p className="nw-help">Older headlines are searched on Google News, portal by portal, and can start a story directly.</p>
       </div>
     </Dialog>
+  )
+}
+
+/** Trending topics: ONE row above the headlines (it was also a fold in the left column, and wrapped to three rows).
+ * As many chips as fit are shown; the rest are under "+N", so the bar never grows and nothing is cut. */
+function TrendBar({ trending, press, needle, onPick }: { trending: [string, number][]; press: boolean; needle: string; onPick: (t: string) => void }) {
+  const row = useRef<HTMLDivElement>(null)
+  const [fit, setFit] = useState(trending.length)
+  useLayoutEffect(() => {
+    const el = row.current
+    if (!el) return
+    const measure = () => {
+      const chips = [...el.querySelectorAll<HTMLElement>('.nw-trend-measure > .nw-chip')]
+      const head = el.querySelector<HTMLElement>('.nw-trendbar-h')
+      const room = el.clientWidth - (head?.offsetWidth ?? 0) - 8
+      const more = 64 // the "+N" button and its gap
+      let used = 0, n = 0
+      for (let i = 0; i < chips.length; i++) {
+        const w = chips[i].offsetWidth + 7
+        const left = chips.length - i - 1
+        if (used + w > room - (left > 0 ? more : 0)) break
+        used += w; n++
+      }
+      setFit((f) => (f === n ? f : n))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [trending])
+  const chip = (t: string, n: number) => {
+    const on = needle === t.toLowerCase()
+    return (
+      <button key={t} type="button" lang={lang(t)} className={'nw-chip' + (on ? ' on' : '')} aria-pressed={on} onClick={() => onPick(t)} data-tip={`Filter & sort by relevance for ${t} (${n})`}>
+        <span>{t}</span><small>{n}</small>
+      </button>
+    )
+  }
+  const rest = trending.slice(fit)
+  return (
+    <div ref={row} className="nw-trendbar" role="group" aria-label="Trending topics">
+      <span className="nw-trendbar-h"><Icon name="trendingUp" size={13} />{press ? 'Offices' : 'Trending'}</span>
+      {trending.slice(0, fit).map(([t, n]) => chip(t, n))}
+      {rest.length > 0 && <MenuButton label={`+${rest.length}`} className="nw-chip nw-trend-more" align="end" title="More trending topics"
+        items={rest.map(([t, n]) => ({ label: t, hint: String(n), checked: needle === t.toLowerCase(), onClick: () => onPick(t) }))} />}
+      {/* every chip at its natural width, out of sight, so the row knows what fits */}
+      <div className="nw-trend-measure" aria-hidden>{trending.map(([t, n]) => <span key={t} className="nw-chip"><span>{t}</span><small>{n}</small></span>)}</div>
+    </div>
   )
 }

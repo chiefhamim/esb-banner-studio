@@ -9,7 +9,7 @@ interface WorkspaceItem { id: WorkspaceId; label: string; icon: IconName; title:
 
 // Home stands on its own; the three working desks sit together in one segmented control
 const HOME: WorkspaceItem = { id: 'home', label: 'Home', icon: 'home', title: 'Home — projects and recent work' }
-const DESKS: WorkspaceItem[] = [
+export const DESKS: WorkspaceItem[] = [
   { id: 'news', label: 'News', icon: 'inbox', title: 'News — EnergyWatch headlines from the portals' },
   { id: 'editorial', label: 'Editorial', icon: 'newspaper', title: 'Editorial — source, translation, CMS' },
   { id: 'graphics', label: 'Graphics', icon: 'layers', title: 'Graphics — banners and social images' },
@@ -25,7 +25,8 @@ const DESKS: WorkspaceItem[] = [
 export function WorkspaceSwitcher() {
   const current = useShellStore((s) => s.workspace)
   const setWorkspace = useShellStore((s) => s.setWorkspace)
-  const { wrap, thumb } = useSlidingThumb(current, 'workspace-switch')
+  // live = this header shows the desk that is really open (a parked desk's header can trail by a commit when revealed)
+  const { wrap, thumb } = useSlidingThumb(current, 'workspace-switch', () => current === useShellStore.getState().workspace)
   return (
     <div className="ws-wrap">
       {/* the Home icon's hover sheen — same moving gradient and colours as the "Studio" word on the Home screen */}

@@ -4,6 +4,12 @@
    ========================================================================== */
 
 :root {
+  /* one rhythm for every desk (pass 11): the inset of a pane's content, the gap between its cards, the gap between
+     tiles inside a card. Side columns sit 12 px from their edges; work areas and cards breathe at 16. */
+  --pane-pad: 16px;
+  --pane-gap: 12px;
+  --tile-gap: 8px;
+
   /* ESB type guideline (Figma "ESB News Banners — Guidelines"): Inter only. 800 headlines / numbers, 700 labels, 500 body & footer.
      Tracking by role: caps chips +.05em (1.2px at 24px), spaced caps +.09em (month), wide caps +.18em (weekday), big numerals -.02em, headlines 0. Headline leading 118%. */
   --w-headline: 800; --w-label: 700; --w-body: 500;

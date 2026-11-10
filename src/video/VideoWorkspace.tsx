@@ -1146,7 +1146,7 @@ function VideoDesk() {
             <Tabs<BinTab>
               value={activeTab}
               onChange={showTab}
-              options={(Object.keys(BIN_TAB_LABEL) as BinTab[]).map((value) => ({ value, label: BIN_TAB_LABEL[value] }))}
+              options={(Object.keys(BIN_TAB_LABEL) as BinTab[]).map((value) => ({ value, label: BIN_TAB_LABEL[value], icon: BIN_TAB_ICON[value] }))}
             />
           )}
 

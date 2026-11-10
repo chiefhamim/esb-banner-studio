@@ -2077,20 +2077,26 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .or-right > .side-tabs { margin: 10px 12px 4px 54px; }
 .is-railed > .side-tabs { margin: 0; }
 /* Graphics' right column opens with the Inspector card: the button sits in that card's header row */
-.app > .right { --fold-top: 12px; --fold-inset: 14px; }
-.app > .right > .scroll > .pnl:first-child > header { padding-left: 54px; }
+.app > .right { --fold-top: 13px; --fold-inset: 18px; }
+/* the button is the Inspector header's first tile: 6 px inside the card, centred on the 44 px header row, 8 px before the title tile */
+.app > .right > .scroll > .pnl:first-child > header { padding-left: 50px; }
 /* Video's clip inspector: its title row makes room */
 .vw-inspector-panel { --fold-top: 6px; }
-.vw-inspector-panel .vw-inspector-head { min-height: 52px; padding-left: 44px; }
+.vw-inspector-panel .vw-inspector-head { min-height: 52px; padding-left: 54px; }
 .vw-inspector-panel .vw-inspector { padding: 0 0 16px 12px; }
 /* News: the brand bar's own height, the brand's own inset */
 .nw-left { --fold-top: 6px; --fold-inset: 14px; }
 /* News' detail card and Editorial's status card: the button is the card's top-right tile, centred on the card's first
    row, as far from the card's top as from its right edge (8 px); the first row stops short of it */
-.nw-right > .col-fold.right { left: 20px; right: auto; top: 20px; }
+.nw-right > .col-fold.right { left: 20px; right: auto; top: 21px; }
 /* the button leads the card's first row, its icon on the card's text edge; the source name follows it */
 .nw-right .nw-detail-top { min-height: 36px; margin-top: -7px; padding-left: 32px; }
 .ed-side > .col-fold.right { left: auto; right: 20px; top: 14px; }
+/* Editorial's status card grows with its text: the button is centred on the card itself (anchor positioning), whatever
+   its height, and the card's text stops short of it */
+.ed-side .es-status { anchor-name: --es-status; padding-right: 50px; }
+.ed-side:not(.is-railed) > .col-fold.right { top: anchor(--es-status center, 14px); translate: 0 -50%; }
+.ed-side.is-railed > .col-fold.right { translate: none; }
 .is-railed.nw-right > .col-fold.right, .is-railed.ed-side > .col-fold.right { left: auto; right: calc((var(--rail-w) - 36px) / 2); top: 10px; }
 
 /* ---------------------------------------------------------------- Going to press (PressCountdown.tsx, pass 7)
@@ -2197,3 +2203,39 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .workspace-main > .desk-slot.is-parked { display: none; }
 /* Graphics' one invisible warm-up draw (App.tsx): laid out and painted under the desk on screen, never seen or reached */
 .workspace-main > .desk-slot.is-warming { opacity: .001; pointer-events: none; z-index: -1; contain: strict; }
+.ws-switch .pill-slide.ready { transition: none; } /* the desk switcher glides by its own two-spring animation only (a CSS transition replayed stale positions) */
+
+/* pass 11: one order at the right of every header — tools and settings, the AI chip, the desk's own action (Check now,
+   Publish, Export, Send), and the account avatar last, in the corner, as in most professional apps (it sat between the
+   settings and the action, which read as if the avatar belonged to the action) */
+:is(.topbar, .vw-header, .vw-header-actions) > .ed-account { order: 99; margin-left: 2px; }
+
+/* ---------------------------------------------------------------- Welcome + About (pass 11): the five desks, in the
+   order a story travels; titles in the display serif like every sheet head */
+.wl2 { display: flex; flex-direction: column; gap: var(--pane-pad); }
+.wl2-hero { display: flex; align-items: center; gap: 16px; padding: 4px 2px; }
+.wl2-hero .logo-wrap { flex: none; }
+.wl2-hero h3 { margin: 0 0 4px; font: 700 20px/1.25 var(--font-display); letter-spacing: -.005em; color: var(--text); }
+.wl2-hero p { margin: 0; font: 500 13px/19px var(--ui); color: var(--text-2); }
+.wl2-desks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.wl2-desk { display: grid; grid-template-columns: 22px 36px 120px minmax(0, 1fr) 16px; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; text-align: left; color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-3); cursor: pointer; transition: background-color var(--t-1) var(--ease), transform var(--t-2) var(--spring); }
+.wl2-desk:hover { background: var(--fill-hover); }
+.wl2-desk:active { transform: scale(.99); }
+.wl2-desk:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.wl2-n { font: 700 12px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text-3); text-align: center; }
+.wl2-ic { display: grid; place-items: center; width: 36px; height: 36px; color: var(--text); background: var(--card); border-radius: var(--r-2); box-shadow: var(--card-shadow); }
+.wl2-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wl2-t b { font: 700 15px/1.2 var(--font-display); color: var(--text); }
+.wl2-t small { font: 600 10.5px/1 var(--ui); letter-spacing: var(--track-kicker, .09em); text-transform: uppercase; color: var(--text-3); }
+.wl2-line { font: 500 12.5px/18px var(--ui); color: var(--text-2); }
+.wl2-go { color: var(--text-3); transition: transform var(--t-2) var(--spring), color var(--t-1) var(--ease); }
+.wl2-desk:hover .wl2-go { color: var(--text); transform: translateX(2px); }
+.wl2-foot { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; border-top: 1px solid var(--card-line); padding-top: 12px; }
+.wl2-recent span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.about2-desks { display: flex; flex-direction: column; gap: 4px; list-style: none; margin: 0; padding: 0; grid-template-columns: none; }
+.about2-desks > li { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 12px; background: var(--fill); border-radius: var(--r-2); }
+.about2-desks > li .icon, .about2-desks > li svg { color: var(--text-2); margin: 0; }
+.about2-desks > li b { font: 700 14px/1.2 var(--font-display); color: var(--text); }
+.about2-desks > li small { font: 500 12px/17px var(--ui); color: var(--text-2); }
+.about2-credit { margin: -8px 0 0; font: 500 12px/16px var(--ui); text-align: center; color: var(--text-3); }

@@ -282,7 +282,10 @@ export function IconButton({ icon, tip, onClick, active, disabled, size = 15, ti
 
 /** Measures the active button so a single "thumb" can glide between options instead of the highlight jumping. */
 /** Where a chip last sat, by name: a switcher that is re-created in another desk starts its glide from there. */
-const pillMemory = new Map<string, { x: number; w: number }>()
+// It remembers WHICH option was chosen (its index), not where it sat: the desk switcher is a different element in every
+// desk's header, and there the old desk's button is an icon at another place and width (the chosen one carries its
+// label). The glide starts from that option's button as it is in THIS switcher, so it travels between the real icons.
+const pillMemory = new Map<string, { x: number; w: number; i: number }>()
 
 /**
  * The chip behind the selected tab. When the choice changes it stretches toward the new option (the leading edge arrives
@@ -290,7 +293,7 @@ const pillMemory = new Map<string, { x: number; w: number }>()
  * it follows the pointer, the option it would land on lights up, and on release it slides on from where it was dropped
  * (or springs back). Skipped under reduced motion.
  */
-export function useSlidingThumb(value: unknown, memoryKey?: string) {
+export function useSlidingThumb(value: unknown, memoryKey?: string, isLive?: () => boolean) {
   const wrap = useRef<HTMLDivElement>(null)
   const pill = useRef<HTMLElement | null>(null)
   const last = useRef<{ x: number; w: number } | null>(null)
@@ -305,7 +308,9 @@ export function useSlidingThumb(value: unknown, memoryKey?: string) {
     moved.current = true // this run follows a change of choice (a resize alone must not replay the motion)
     const measure = () => {
       const b = el.querySelector<HTMLElement>('button.on')
-      const next = b ? { x: b.offsetLeft, w: b.offsetWidth } : null
+      // sub-pixel: offsetLeft/Width round, which left the chip a pixel wider or shifted beside the button
+      const wr = el.getBoundingClientRect(), br = b?.getBoundingClientRect()
+      const next = b && br ? { x: Math.round((br.left - wr.left - el.clientLeft) * 100) / 100, w: Math.round(br.width * 100) / 100 } : null
       setPos((cur) => (cur && next && cur.x === next.x && cur.w === next.w ? cur : next))  // same place: no new state, so nothing re-runs
     }
     measure()
@@ -317,9 +322,20 @@ export function useSlidingThumb(value: unknown, memoryKey?: string) {
   }, [value])
 
   useLayoutEffect(() => {
-    const from = last.current ?? (memoryKey ? pillMemory.get(memoryKey) ?? null : null)
+    // a kept desk's header can show a stale choice for one commit as it is revealed: only the live one counts
+    if (isLive && !isLive()) return
+    const btns = wrap.current ? [...wrap.current.querySelectorAll<HTMLElement>('button')] : []
+    const iNow = btns.findIndex((b) => b.classList.contains('on'))
+    if (!pos || iNow < 0) return
+    // the state can trail the DOM by a commit: wait for the measurement of the button that is on now
+    const wr0 = wrap.current!.getBoundingClientRect()
+    const rx = (b: HTMLElement) => { const r = b.getBoundingClientRect(); return { x: r.left - wr0.left - wrap.current!.clientLeft, w: r.width } }
+    if (Math.abs(rx(btns[iNow]).x - pos.x) > 1) return
+    const mem = memoryKey ? pillMemory.get(memoryKey) : undefined
+    // start from the previously chosen option's button as laid out NOW (a remembered x/w from another header is wrong)
+    const from = memoryKey && mem && mem.i !== iNow && btns[mem.i] ? rx(btns[mem.i]) : last.current
     last.current = pos
-    if (memoryKey) { if (pos) pillMemory.set(memoryKey, pos); else pillMemory.delete(memoryKey) }
+    if (memoryKey) pillMemory.set(memoryKey, { ...pos, i: iNow })
     const el = pill.current
     if (!pos || !from || !el || !moved.current || !ready) return
     moved.current = false

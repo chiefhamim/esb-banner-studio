@@ -743,3 +743,45 @@
 .vw-start-tips { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 4px; }
 .vw-start-tips ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; text-align: left; font: 500 12px/17px var(--ui); color: var(--text-2); }
 .vw-start-tips b { color: var(--text); font-weight: 700; }
+
+/* ---------------------------------------------------------------- pass 11: the monitor follows the appearance
+   It stayed near-black in light too. Now in light the monitor sits on the same dotted work surface as the Graphics
+   artboard, the transport and the start card take the light tokens, and an empty timeline shows no black frame — only
+   the start card. The picture itself is unchanged: a frame with footage is the frame (black where nothing is drawn,
+   exactly as it exports). */
+:root:not([data-theme=dark]) .vw-monitor-panel {
+  background-color: var(--bg-0);
+  background-image: radial-gradient(color-mix(in srgb, var(--line-3) 80%, transparent) .9px, transparent 1.1px);
+  background-size: 12px 12px;
+}
+:root:not([data-theme=dark]) .vw-canvas { box-shadow: 0 0 0 1px rgba(40, 30, 20, .08), 0 14px 36px rgba(40, 30, 20, .18); }
+:root:not([data-theme=dark]) .vw-transport {
+  --text: var(--text-primary); --text-2: var(--text-secondary); --text-3: var(--text-tertiary);
+  --fill-hover: rgba(48, 36, 24, .08); --fill-active: rgba(48, 36, 24, .11);
+}
+:root:not([data-theme=dark]) .vw-transport .play-btn, :root:not([data-theme=dark]) .vw-transport .play-btn:hover { color: var(--on-ink); background: var(--ink); }
+:root:not([data-theme=dark]) .vw-transport-sep { background: var(--line-2); }
+:root:not([data-theme=dark]) .vw-start-card {
+  --text: var(--text-primary); --text-2: var(--text-secondary); --text-3: var(--text-tertiary);
+  --fill: rgba(48, 36, 24, .06); --fill-hover: rgba(48, 36, 24, .1);
+  background: var(--card); box-shadow: 0 0 0 1px var(--card-line), 0 16px 40px rgba(40, 30, 20, .14);
+}
+:root:not([data-theme=dark]) .vw-start-icon { background: var(--fill); }
+:root:not([data-theme=dark]) .vw-start-actions .btn.primary { color: var(--on-ink); background: var(--ink); }
+:root:not([data-theme=dark]) .video-workspace .vw-start-card .btn:not(.primary):not(.ghost),
+:root:not([data-theme=dark]) .video-workspace .vw-start .vw-start-actions .btn.vw-start-story:not(.primary):not(.ghost) { box-shadow: inset 0 0 0 1px var(--line-2); }
+:root:not([data-theme=dark]) .vw-gl-error { color: var(--text); background: var(--card); }
+/* nothing on the timeline yet: no black frame behind the start card (both appearances) */
+.vw-monitor-container:has(> .vw-start) .vw-canvas { opacity: 0; }
+
+/* pass 11: the bin's six tabs read as words while they fit and as icons (named in their tooltips) when the column or
+   window is too narrow — the words used to be cut off ("Med…") or pushed out of sight */
+.vw-bin-panel .side-tabs button > svg { display: none; }
+/* words while they fit (12 px, 3 px sides: six labels need ~236 px), icons below */
+.vw-bin-panel .side-tabs { gap: 0; }
+.vw-bin-panel .side-tabs button { font-size: 12px; padding: 0 3px; }
+@container tabs (max-width: 226px) {
+  .vw-bin-panel .side-tabs button > svg { display: inline-block; }
+  .vw-bin-panel .side-tabs button .tab-label { display: none; }
+  .vw-bin-panel .side-tabs button { padding: 0; justify-content: center; }
+}

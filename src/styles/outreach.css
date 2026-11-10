@@ -1191,3 +1191,16 @@
 /* Sender: the service and region pickers are the app's Select, full width and as tall as the fields beside them */
 .or-sender-form .select.or-sender-select { width: 100%; height: 32px; min-height: 32px; justify-content: flex-start; }
 .or-sender-form .select.or-sender-select .chev { margin-left: auto; }
+
+/* pass 11: the list's file icon sits on a soft well (a card-coloured tile with a shadow read as a hole in dark), and the
+   chosen filter chip is the app's selected chip (raised in light, the light chip in dark) instead of a category blue */
+.or-file-icon { color: var(--text-2); background: var(--fill); box-shadow: none; }
+.or-fchip.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); font-weight: 600; }
+:root[data-theme=dark] .or-fchip.on { color: var(--chip-on-fg); background: var(--chip-on-bg); box-shadow: none; }
+.or-fchip.on span { color: inherit; opacity: .7; }
+.or-list-remove:hover:not(:disabled) { color: var(--danger); }
+/* the header's campaign name may be shortened by headerCenter.ts so Compose/Activity can reach the window's centre */
+.topbar .or-camp-chip { min-width: 0; }
+.topbar .or-camp-chip .or-camp-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.topbar .or-camp-chip.hc-away { display: none; }
+.or-list-remove { width: 32px; padding: 0; justify-content: center; }

@@ -4,7 +4,7 @@ import { COLLAGES } from '../core/collage'
 import { FONTS } from '../core/fonts'
 import type { FontId } from '../core/fonts'
 import { QUOTE_PRESETS, STAT_PRESETS, cardDesign, dateParts, headlineSize } from '../core/templates'
-import { CATEGORIES, darkAccent, getFormat, OPTIMAL_IMAGE_SPACES } from '../core/tokens'
+import { CATEGORIES, darkAccent, getFormat } from '../core/tokens'
 import type { Category } from '../core/tokens'
 import type { Backdrop, CardDesign, CardType, El, HeadDesign, Override, PhotosEl, Shadow, Stroke, TextEl } from '../core/types'
 import { LABEL_PRESETS, suggestHighlight, generatePlatformCaption, SECTOR_IMAGE_SUGGESTIONS } from '../core/newsroom'
@@ -1050,27 +1050,8 @@ export function PhotosPanel({ addPhotos }: { addPhotos: () => void }) {
     return Math.min(r.w / img.width, r.h / img.height) / Math.max(r.w / img.width, r.h / img.height)
   }
 
-  const opt = OPTIMAL_IMAGE_SPACES[format]
-  const fmt = getFormat(format)
-
   return (
     <>
-      <Panel defaultOpen={false} title="Optimal image dimensions" icon="image" sub={fmt.name}>
-        <div className="opt-space-card">
-          <div className="opt-space-hero">
-            <b>{opt.w} × {opt.h} px</b>
-            <span className="opt-badge">{opt.ratioStr}</span>
-          </div>
-          <p className="opt-desc">
-            After deducting the header and footer/headline elements from the {fmt.w}×{fmt.h} template, the body photo space is exactly <b>{opt.w} × {opt.h} px</b>.
-          </p>
-          <div className="opt-math-line">
-            <Icon name="info" size={12} />
-            <span>{opt.shortDeduction}</span>
-          </div>
-        </div>
-      </Panel>
-
       <Panel title="Photo library" persist={false} sub={images.length ? `${images.length} photo${images.length === 1 ? '' : 's'}` : undefined} icon="image" actions={<button className="btn sm primary" onClick={addPhotos}><Icon name="plus" size={13} />Add</button>}>
         {images.length === 0 ? (
           <div className="dropzone" onClick={addPhotos}>
