@@ -215,15 +215,15 @@ export function HomeWorkspace() {
         >
           {session ? (
             <>
-              <UserAvatar name={session.name || session.email} className="ed-avatar" />
               <span className="home-user-name">{session.name || session.email}</span>
               <Icon name="chevDown" size={12} className="home-user-chev" />
+              <UserAvatar name={session.name || session.email} className="ed-avatar" />
             </>
           ) : (
             <>
-              <Icon name="user" size={14} />
               <span className="home-user-label">Sign in</span>
               <Icon name="chevDown" size={12} className="home-user-chev" />
+              <span className="home-user-ic"><Icon name="user" size={15} /></span>
             </>
           )}
         </button>

@@ -1336,3 +1336,67 @@
 .home-user-menu .menu-item, .home-user-menu button { border-radius: 6px !important; padding: 0 10px !important; }
 .home-user-menu .menu-head { padding: 6px 10px 4px; }
 .home-user-menu hr { margin: 4px 4px; }
+
+/* ---------------------------------------------------------------- pass 13: Home's corner control, rebuilt
+   It unfolded by animating width/max-width/padding of every button (a full layout per frame) under a live 20 px blur,
+   with 30 px buttons beside a 32 px avatar. Now the capsule is always laid out at its full width and only REVEALED:
+   folded, a clip shows just its rightmost 38 px (the avatar / sign-in disc); open, the clip slides left on one curve and
+   the controls fade in. Every control is 32 px in a 38 px capsule (3 px all round), corners concentric. */
+.home-shell .home-head-actions,
+.home-shell .home-topbar:hover .home-head-actions,
+.home-shell .home-head-actions:hover,
+.home-shell .home-head-actions:focus-within,
+.home-shell .home-head-actions.open {
+  width: auto !important; min-width: 0 !important; max-width: none !important;
+  height: 38px; padding: 3px !important; gap: 2px !important; justify-content: flex-end;
+  opacity: 1; overflow: visible;
+  background: color-mix(in srgb, var(--card, #fff) 94%, transparent);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  border: 1px solid var(--line-2);
+  box-shadow: 0 2px 10px rgba(40, 30, 20, .08);
+  clip-path: inset(0 0 0 calc(100% - 38px) round 19px);
+  transition: clip-path .34s cubic-bezier(.22, 1, .36, 1), box-shadow .25s ease;
+  will-change: clip-path;
+}
+.home-shell .home-topbar:hover .home-head-actions,
+.home-shell .home-head-actions:hover,
+.home-shell .home-head-actions:focus-within,
+.home-shell .home-head-actions.open { clip-path: inset(0 0 0 0 round 19px); box-shadow: 0 6px 22px rgba(40, 30, 20, .14); }
+:root[data-theme=dark] .home-shell .home-head-actions { background: color-mix(in srgb, var(--surface-raised, #30302e) 94%, transparent); border-color: rgba(255, 255, 255, .12); box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
+:root[data-theme=dark] .home-shell .home-topbar:hover .home-head-actions,
+:root[data-theme=dark] .home-shell .home-head-actions:hover,
+:root[data-theme=dark] .home-shell .home-head-actions:focus-within,
+:root[data-theme=dark] .home-shell .home-head-actions.open { box-shadow: 0 8px 26px rgba(0, 0, 0, .55); }
+
+/* every control: 32 px, round, laid out all the time; the ones left of the disc fade in as the clip opens */
+.home-shell .home-head-actions .home-head-btn,
+.home-shell .home-head-actions .home-head-btn:not(.home-user-btn) {
+  width: auto; min-width: 32px; max-width: none; height: 32px; padding: 0; margin: 0;
+  border-radius: 999px; transform: none; overflow: visible; pointer-events: auto;
+  opacity: 0; transition: opacity .18s ease, background-color .15s ease, color .15s ease;
+}
+.home-shell .home-head-actions .home-head-btn.quit { padding: 0 12px 0 10px; gap: 6px; }
+.home-shell .home-topbar:hover .home-head-actions .home-head-btn,
+.home-shell .home-head-actions:hover .home-head-btn,
+.home-shell .home-head-actions:focus-within .home-head-btn,
+.home-shell .home-head-actions.open .home-head-btn { opacity: 1; transition-delay: .06s; }
+.home-shell .home-head-actions .home-head-sep,
+.home-shell .home-head-actions:hover .home-head-sep,
+.home-shell .home-head-actions.open .home-head-sep { width: 1px; max-width: 1px; height: 16px; margin: 0 4px; opacity: 1; flex: none; }
+
+/* the account control: name and chevron, then the disc in the corner (the disc is all that shows when folded) */
+.home-shell .home-head-actions .home-user-btn,
+.home-shell .home-head-actions:hover .home-user-btn,
+.home-shell .home-head-actions.open .home-user-btn {
+  opacity: 1 !important; width: auto; min-width: 32px; height: 32px; padding: 0 0 0 12px; gap: 6px; background: transparent;
+  transition: background-color .15s ease;
+}
+.home-shell .home-head-actions .home-user-btn:hover, .home-shell .home-head-actions .home-user-btn.open { background: color-mix(in srgb, var(--text) 9%, transparent) !important; }
+.home-shell .home-head-actions .home-user-name,
+.home-shell .home-head-actions .home-user-label { max-width: 140px; opacity: 1; margin: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; font: 600 12.5px/1 var(--ui); }
+.home-shell .home-head-actions .home-user-chev { opacity: .6; width: 12px; max-width: 12px; }
+.home-shell .home-head-actions .home-user-btn .ed-avatar,
+.home-shell .home-head-actions .home-user-ic { order: 9; flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50% !important; }
+.home-shell .home-head-actions .home-user-ic { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+@media (prefers-reduced-motion: reduce) { .home-shell .home-head-actions { transition: none; } .home-shell .home-head-actions .home-head-btn { transition: none; } }
+.home-shell .home-head-actions .home-head-btn:not(.quit):not(.home-user-btn) { width: 32px !important; min-width: 32px !important; }
