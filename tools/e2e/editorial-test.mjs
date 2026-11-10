@@ -54,6 +54,7 @@ try {
   // Hermetic translation: no live API calls from the suite (SPEC §3). The app's injectable
   // translator seam (window.__customTranslator) gets a deterministic Bengali→English map.
   await page.addInitScript(() => {
+    window.__esbNoArm = true // skip the 5 s publish countdown; the test checks the publish itself
     const dict = {
       '৫৯২ কোটি টাকায় দুটি নতুন কূপ খনন করবে পেট্রোবাংলা, জাতীয় গ্রিডে যুক্ত হবে ৩০ এমএমসিএফডি গ্যাস': 'Petrobangla to drill two new wells for Tk 592 crore, adding 30 MMCFD gas to the national grid',
       'সিলেট গ্যাস ফিল্ডের আওতায় দুটি নতুন উন্নয়ন কূপ খননের উদ্যোগ নিয়েছে পেট্রোবাংলা ও বাপেক্স।': 'Petrobangla and BAPEX have taken the initiative to drill two new development wells under the Sylhet gas field.',

@@ -49,6 +49,27 @@ export function PublishDialog(p: {
   const blocked = p.busy || !draft.headline.trim()
   const verb = p.updating ? 'Update' : 'Publish'
   const publishedDone = !!(p.result?.ok && p.result.url && !p.busy)
+  // Publish arms a short countdown the editor can cancel; the send fires only when it reaches zero.
+  // Automated tests set window.__esbNoArm to publish at once (the countdown is a human affordance).
+  const ARM_MS = (window as unknown as { __esbNoArm?: boolean }).__esbNoArm ? 0 : 5000
+  const [armedAt, setArmedAt] = useState<number | null>(null)
+  const [, tick] = useState(0)
+  const fired = useRef(false)
+  useEffect(() => {
+    if (armedAt == null) return
+    fired.current = false
+    const iv = setInterval(() => {
+      const left = ARM_MS - (Date.now() - armedAt)
+      if (left <= 0) {
+        clearInterval(iv)
+        if (!fired.current) { fired.current = true; setArmedAt(null); p.onPublish('PUBLISHED') }
+      } else tick((n) => n + 1)
+    }, 50)
+    return () => clearInterval(iv)
+  }, [armedAt]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (p.busy) setArmedAt(null) }, [p.busy])
+  const armLeft = armedAt != null ? Math.max(0, ARM_MS - (Date.now() - armedAt)) : 0
+  const armPct = armedAt != null ? Math.min(100, ((ARM_MS - armLeft) / ARM_MS) * 100) : 0
   const budget = (n: number, max: number) => <b className={n > max ? 'over' : ''}>{n}/{max}{n > max ? ' · over' : ''}</b>
   return (
     <Dialog
@@ -69,10 +90,17 @@ export function PublishDialog(p: {
               <span>Back to News</span>
             </button>
           ) : (
-            <button type="button" className="btn primary" onClick={() => p.onPublish('PUBLISHED')} disabled={blocked}
-              title={p.updating ? 'Change the article that is live now' : 'Publish live to esbpowerline.com'}>
+            armedAt != null ? (
+            <button type="button" className="btn primary pub-arming" style={{ ['--arm' as string]: armPct + '%' }} onClick={() => setArmedAt(null)}
+              title="Press to cancel">
+              <i className="pub-arm-ring" aria-hidden /><span>{verb === 'Update' ? 'Updating' : 'Publishing'} in {Math.ceil(armLeft / 1000)} — press to cancel</span>
+            </button>
+            ) : (
+            <button type="button" className="btn primary" onClick={() => setArmedAt(Date.now())} disabled={blocked}
+              title={p.updating ? 'Change the article that is live now — a 5-second countdown you can cancel' : 'Publish live to esbpowerline.com — a 5-second countdown you can cancel'}>
               <Icon name="upload" size={14} /><span>{p.busy ? (p.updating ? 'Updating…' : 'Publishing…') : verb + (p.fbOn && p.fbPage ? ' + Facebook' : '')}</span>
             </button>
+            )
           )}
         </>
       }
@@ -107,12 +135,7 @@ export function PublishDialog(p: {
                   <Icon name="globe" size={12} /><span>{p.result.fbUrl ? 'Open the article and the Facebook post' : 'View on esbpowerline.com'}</span>
                 </button>
               )}
-              {publishedDone && p.onBackToNews && (
-                <button type="button" className="btn sm primary" onClick={p.onBackToNews}>
-                  <span>Back to News</span>
-                </button>
-              )}
-              {p.result.existingSlug && <button type="button" className="btn sm primary" onClick={() => p.onUpdateExisting(p.result!.existingSlug!)}><Icon name="refresh" size={12} /><span>Update that article instead</span></button>}
+              {p.result.existingSlug &&<button type="button" className="btn sm primary" onClick={() => p.onUpdateExisting(p.result!.existingSlug!)}><Icon name="refresh" size={12} /><span>Update that article instead</span></button>}
             </div>
           </div>
         )}

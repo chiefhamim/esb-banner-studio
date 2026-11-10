@@ -2018,3 +2018,14 @@ img.ed-avatar { padding: 0; background: var(--fill); }
     0 1px 3px -1px rgba(0, 0, 0, .18);
 }
 @media (prefers-reduced-motion: reduce) { .pnl:not(.open) > header:hover { box-shadow: none; } }
+
+/* ---------------------------------------------------------------- publish countdown (2026-11-10)
+   Publish arms a 5 s countdown instead of firing at once; the button becomes the cancel, with a ring
+   that fills as the moment approaches. Cancel is a plain press anywhere on it. */
+.btn.pub-arming { position: relative; overflow: hidden; }
+.btn.pub-arming::before { content: ''; position: absolute; inset: 0; width: var(--arm, 0%); background: rgba(255, 255, 255, .14); transition: width 60ms linear; pointer-events: none; }
+.pub-arm-ring { flex: none; width: 14px; height: 14px; border-radius: 50%;
+  background: conic-gradient(currentColor var(--arm, 0%), color-mix(in srgb, currentColor 25%, transparent) 0);
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 54%, #000 56%); mask: radial-gradient(circle at 50% 50%, transparent 54%, #000 56%); }
+.btn.pub-arming span { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .btn.pub-arming::before { transition: none; } }
