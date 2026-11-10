@@ -9,7 +9,7 @@
 // wants a pacing triple in outreach-smtp.json, so the engine's numbers are passed through unchanged.
 
 import { useEffect, useState } from 'react'
-import { Dialog, Field } from '../ui/controls'
+import { Dialog, Field, Select } from '../ui/controls'
 import { Icon } from '../ui/Icon'
 import { useOutreachStore } from './outreachStore'
 import { useEngineStore } from './engineStore'
@@ -122,9 +122,10 @@ export function SenderDialog({ onClose, onSendingSettings }: { onClose: () => vo
     >
       <div className="stack or-sender-form" style={{ gap: 12 }}>
         <Field label="Sending service">
-          <select className="input" value={f.provider} onChange={(e) => pick(e.target.value as EsbMailProvider)} aria-label="Sending service">
-            {(Object.keys(PRESETS) as EsbMailProvider[]).map((id) => <option key={id} value={id}>{PRESETS[id].label}</option>)}
-          </select>
+          {/* the app's own Select (the native list was the OS's grey box): each service with its kind — a mailbox keeps
+              replies in its inbox, a relay only sends */}
+          <Select<EsbMailProvider> className="or-sender-select" title="Sending service" value={f.provider} onChange={pick}
+            options={(Object.keys(PRESETS) as EsbMailProvider[]).map((id) => ({ value: id, label: PRESETS[id].label, icon: id === 'custom' ? 'globe' : PRESETS[id].mailbox ? 'mail' : 'send', hint: id === 'custom' ? 'Any server' : PRESETS[id].mailbox ? 'Mailbox' : 'Relay' }))} />
         </Field>
         <div className="grid2">
           <Field label="From name"><input className="input" value={f.name} onChange={(e) => up('name', e.target.value)} /></Field>
@@ -142,9 +143,8 @@ export function SenderDialog({ onClose, onSendingSettings }: { onClose: () => vo
         <div className="grid2">
           {f.provider === 'ses'
             ? <Field label="SES region">
-                <select className="input" value={sesRegion} onChange={(e) => up('host', `email-smtp.${e.target.value}.amazonaws.com`)} aria-label="SES region">
-                  {[...new Set([sesRegion, ...SES_REGIONS])].map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
+                <Select<string> className="or-sender-select" title="SES region" value={sesRegion} onChange={(r) => up('host', `email-smtp.${r}.amazonaws.com`)}
+                  options={[...new Set([sesRegion, ...SES_REGIONS])].map((r) => ({ value: r, label: r }))} />
               </Field>
             : <Field label="SMTP server"><input className="input" value={f.host} onChange={(e) => up('host', e.target.value)} placeholder="smtp.example.com" /></Field>}
           <Field label="Port"><input className="input" type="number" value={f.port} onChange={(e) => up('port', Number(e.target.value))} /></Field>

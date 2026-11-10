@@ -290,7 +290,7 @@ export function HomeWorkspace() {
           <div className="home-header-brand">
             <div className="home-title-group">
               <h1 className="home-title" aria-label="ESB Power Line AI Studio"><img className="home-mark" src={markUrl} alt="" aria-hidden draggable={false} /><span className="home-stick" aria-hidden /><span className="home-name"><span className="home-ai">Ai</span> <span className="home-title-accent">Studio</span></span></h1>
-              <p className="home-subtitle">Where stories are written, imagination is designed<br />and reality is cut</p>
+              <p className="home-subtitle">Where stories are written, imagination is designed and reality is cut</p>
             </div>
           </div>
         </header>

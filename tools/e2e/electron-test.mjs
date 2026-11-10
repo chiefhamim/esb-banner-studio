@@ -182,7 +182,7 @@ try {
 
   // Home → Quit ends the app (last: nothing runs after it)
   await page.click('[data-ws="home"]:visible')
-  await page.waitForSelector('.home-head-btn.quit')
+  await page.waitForSelector('.home-head-btn.quit', { state: 'attached' }) // folded into the corner handle until hovered
   await page.screenshot({ path: path.join(root, 'tools', 'out', 'electron-home.png') })
   const closed = new Promise((r) => app.process().once('exit', () => r(true)))
   // the corner controls are folded into one handle that opens on hover

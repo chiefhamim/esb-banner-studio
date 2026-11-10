@@ -2040,9 +2040,8 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 
 
 /* ---------------------------------------------------------------- the fold button, inside its panel (pass 10)
-   One shape everywhere: a 36 px outlined tile with the tab well's radius, exactly as tall as the tab bar it sits
-   beside; the hairline ring (no fill) sets it apart from the filled tools and rail sections — it is the column's own
-   control, not one more tool. Each column's first row starts 10 px from
+   One shape everywhere: a plain sidebar icon (no container) in a 36 px hit area as tall as the tab bar it sits
+   beside; only hover shows a soft tint. Each column's first row starts 10 px from
    the top and 12 px from the edges; the button takes the row's outer end, 6 px from the tabs. Folded, it is the rail's
    top tile, centred in the 52 px rail, and it fades in WITH the rail's icons (same curve, same delay); opening, it fades
    back in with the content. */
@@ -2050,12 +2049,12 @@ img.ed-avatar { padding: 0; background: var(--fill); }
   position: absolute; z-index: 8; top: var(--fold-top, 10px);
   display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
   color: var(--text-2); background: transparent; border: 0; border-radius: var(--r-2); cursor: pointer;
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  transition: background-color 120ms var(--ease), color 120ms var(--ease), box-shadow 120ms var(--ease), transform 120ms var(--ease);
+  transition: background-color 120ms var(--ease), color 120ms var(--ease), transform 120ms var(--ease);
 }
 .col-fold.left { right: var(--fold-inset, 12px); }
 .col-fold.right { left: var(--fold-inset, 12px); }
-.col-fold:hover { color: var(--text); background: var(--fill); box-shadow: inset 0 0 0 1px var(--line-3); }
+.col-fold:hover { color: var(--text); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.col-fold:active { background: color-mix(in srgb, var(--ink) 14%, transparent); }
 .col-fold:active { transform: scale(.96); }
 .col-fold:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .col-fold > svg { width: 17px; height: 17px; }
@@ -2085,8 +2084,9 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .nw-left { --fold-top: 6px; --fold-inset: 14px; }
 /* News' detail card and Editorial's status card: the button is the card's top-right tile, centred on the card's first
    row, as far from the card's top as from its right edge (8 px); the first row stops short of it */
-.nw-right > .col-fold.right { left: auto; right: 20px; top: 20px; }
-.nw-right .nw-detail-top { min-height: 36px; margin-top: -7px; padding-right: 32px; }
+.nw-right > .col-fold.right { left: 20px; right: auto; top: 20px; }
+/* the button leads the card's first row, its icon on the card's text edge; the source name follows it */
+.nw-right .nw-detail-top { min-height: 36px; margin-top: -7px; padding-left: 32px; }
 .ed-side > .col-fold.right { left: auto; right: 20px; top: 14px; }
 .is-railed.nw-right > .col-fold.right, .is-railed.ed-side > .col-fold.right { left: auto; right: calc((var(--rail-w) - 36px) / 2); top: 10px; }
 
@@ -2192,3 +2192,5 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 @container topbar (max-width: 1300px) { .topbar.ed-head .ed-story-chip { min-width: 140px; } .topbar.ed-head .ed-story-chip .or-camp-name { max-width: 140px; } }
 /* a parked desk's slot is out of layout and out of reach (its <Activity> also hides the desk itself) */
 .workspace-main > .desk-slot.is-parked { display: none; }
+/* Graphics' one invisible warm-up draw (App.tsx): laid out and painted under the desk on screen, never seen or reached */
+.workspace-main > .desk-slot.is-warming { opacity: .001; pointer-events: none; z-index: -1; contain: strict; }

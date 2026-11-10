@@ -1320,3 +1320,10 @@
   .home-shell .format-glyph { display: none; }
   .home-shell .format-card { padding-inline: 14px; }
 }
+
+/* the lockup and the tagline share one width again (as on 2026-10-26): the tagline is ONE line that runs edge to edge
+   from the monogram's left edge to the end of "Studio"; whichever is naturally wider sets the width and the other is
+   spread to it (the tagline by word spacing, the lockup by its gaps) */
+.home-shell .home-title-group { width: fit-content; max-width: 100%; margin-left: auto; margin-right: auto; }
+.home-shell .home-title { display: flex; justify-content: space-between; width: 100%; }
+.home-shell .home-subtitle { white-space: nowrap; text-align: justify; text-align-last: justify; }

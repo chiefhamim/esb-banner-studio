@@ -1188,3 +1188,6 @@
 .or-compose .or-line-input { height: 34px; }
 .or-compose .or-fmt { margin-top: 8px; }
 .or-left > .or-tab > .or-list { padding: 4px 0 12px 12px; }
+/* Sender: the service and region pickers are the app's Select, full width and as tall as the fields beside them */
+.or-sender-form .select.or-sender-select { width: 100%; height: 32px; min-height: 32px; justify-content: flex-start; }
+.or-sender-form .select.or-sender-select .chev { margin-left: auto; }

@@ -8,7 +8,7 @@ import type { Assets } from './core/render'
 import { HomeWorkspace } from './shell/HomeWorkspace'
 import { GraphicsWorkspace } from './shell/GraphicsWorkspace'
 import { startScheduler } from './outreach/campaign'
-import { useShellStore, deskMotion } from './shell/shellStore'
+import { useShellStore, deskMotion, deskMoving } from './shell/shellStore'
 import { arriveFrames, reducedMotion } from './ui/motion'
 import { useStore } from './store'
 import { Dialog, Tooltips } from './ui/controls'
@@ -142,6 +142,36 @@ export default function App() {
     KEEP_ALIVE.forEach((id, i) => timers.push(window.setTimeout(() => idle(() => startTransition(() => setKept((k) => (k.has(id) ? k : new Set([...k, id])))), { timeout: 4000 }), 2500 + i * 1200)))
     return () => timers.forEach((t) => window.clearTimeout(t))
   }, [])
+  // Graphics' first reveal cost ~250 ms: the GPU rasterises the desk and uploads the banner's artwork and glyphs the
+  // first time they are drawn (a hidden <Activity> draws nothing). Once it has been built, show it ONCE while the app
+  // is idle — invisible (opacity .001, no pointer, under the desk on screen) for a few frames — so that first draw
+  // happens when nobody is watching; later reveals reuse the GPU's caches (measured: tools/audit/graphics-first-open.mjs).
+  // Only Graphics: its effects make no network calls (News would start its scan).
+  const [warming, setWarming] = useState<WorkspaceId | null>(null)
+  const warmed = useRef(false)
+  useEffect(() => {
+    if (warmed.current || !kept.has('graphics') || workspace === 'graphics' || !base) return
+    let last = performance.now()
+    const note = () => { last = performance.now() }
+    window.addEventListener('pointerdown', note, true); window.addEventListener('keydown', note, true); window.addEventListener('wheel', note, { capture: true, passive: true })
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 300))
+    let off = 0, timer = 0, stop = false
+    const tryWarm = () => {
+      if (stop || warmed.current) return
+      // only when the editor has left the app alone for 1.5 s and no desk is moving
+      if (performance.now() - last < 1500 || deskMoving() || useShellStore.getState().workspace === 'graphics') { timer = window.setTimeout(tryWarm, 800); return }
+      idle(() => {
+        if (stop || warmed.current) return
+        warmed.current = true
+        setWarming('graphics')
+        off = window.setTimeout(() => setWarming(null), 900)
+      }, { timeout: 2000 })
+    }
+    timer = window.setTimeout(tryWarm, 1200)
+    return () => { stop = true; window.clearTimeout(timer); window.removeEventListener('pointerdown', note, true); window.removeEventListener('keydown', note, true); window.removeEventListener('wheel', note, true); void off }
+  }, [kept, workspace, base])
+  useEffect(() => { if (warming && workspace === warming) setWarming(null) }, [workspace, warming])
+
   // React's <Activity> parks a desk: hidden from layout, its effects (timers, listeners, observers) stopped, its state
   // and DOM kept; showing it re-runs the effects only. The desk elements are memoised so an App update never re-renders
   // a desk (with four desks kept, that re-render was ~20-40 ms per switch — tools/audit/electron-switch-trace.mjs).
@@ -151,7 +181,8 @@ export default function App() {
     // the slot (and its active/parked mark) sits OUTSIDE the <Activity>: React defers every update inside a hidden
     // Activity, so a mark inside it stayed "is-active" after the desk was parked — the next switch then faded out the
     // wrong desk, which came back at opacity 0 (a blank window)
-    return <div key={id} className={'desk-slot ' + (on ? 'is-active' : 'is-parked')} data-desk={id}><Activity mode={on ? 'visible' : 'hidden'}>{node}</Activity></div>
+    const warm = !on && warming === id
+    return <div key={id} className={'desk-slot ' + (on ? 'is-active' : warm ? 'is-warming' : 'is-parked')} data-desk={id} aria-hidden={warm || undefined} inert={warm || undefined}><Activity mode={on || warm ? 'visible' : 'hidden'}>{node}</Activity></div>
   }
   const newsDesk = useMemo(() => <Suspense fallback={<DeskLoading />}><DeskBoundary desk="News" onLeave={toHome}><NewsWorkspace /></DeskBoundary></Suspense>, [])
   const editorialDesk = useMemo(() => <Suspense fallback={<DeskLoading />}><DeskBoundary desk="Editorial" onLeave={toHome}><EditorialWorkspace /></DeskBoundary></Suspense>, [])
