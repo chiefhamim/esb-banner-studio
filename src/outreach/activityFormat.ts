@@ -165,9 +165,13 @@ export function describeRun(
   const tzShort = tz.split('/').pop()?.replace(/_/g, ' ') || 'Dhaka'
 
   if (!job || job.status === 'queued' && job.sent === 0 && job.total === 0) {
-    const days = (settings?.window?.days || [0, 1, 2, 3, 4]).map((d) => DOW_NAMES[d]).join(', ')
+    const dayList = settings?.window?.days || [0, 1, 2, 3, 4]
+    const days = dayList.length === 7 ? 'Every day' : dayList.map((d) => DOW_NAMES[d]).join(', ')
+    const allHours = settings?.window?.from === '00:00' && (settings?.window?.to === '23:59' || settings?.window?.to === '24:00')
     const winText = settings?.window?.enabled
-      ? `${days} ${fmtWallClock(settings.window.from)}–${fmtWallClock(settings.window.to)}, ${tzShort}`
+      ? allHours
+        ? `${days}, any hour, ${tzShort}`
+        : `${days} ${fmtWallClock(settings.window.from)}–${fmtWallClock(settings.window.to)}, ${tzShort}`
       : 'Sending anytime'
     const rampText = settings?.ramp
       ? `Up to ${settings?.dailyLimit ?? 100} a day (ramp)`

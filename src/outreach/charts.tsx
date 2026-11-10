@@ -143,7 +143,8 @@ export function BarChart({
               y={paddingTop}
               width={Math.max(0, (band.toIndex - band.fromIndex + 1) * stepX)}
               height={plotHeight}
-              fill="var(--or-sent-soft)"
+              fill="var(--or-sent)"
+              opacity={0.06}
               className="oa-chart-band"
             >
               {band.label && <title>{band.label}</title>}

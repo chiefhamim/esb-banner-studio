@@ -52,7 +52,7 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
   if (!initial) {
     return (
       <Dialog title="Sending settings" kicker="OUTREACH" width={640} onClose={() => (onClose ? onClose() : ui.set({ sheet: null }))}>
-        <p className="or-muted">Reading the saved settings…</p>
+        <p className="or-muted">{window.esb?.outreachSend ? 'Reading the saved settings…' : 'Sending settings live in the ESB Studio desktop app — the browser preview cannot read them.'}</p>
       </Dialog>
     )
   }

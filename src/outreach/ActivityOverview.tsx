@@ -133,8 +133,8 @@ export function ActivityOverview() {
   // Send window band for today (default 09:00 to 17:00)
   const windowBand = stats.window
     ? {
-        fromIndex: parseInt(stats.window.from.split(':')[0], 10) || 9,
-        toIndex: parseInt(stats.window.to.split(':')[0], 10) || 17,
+        fromIndex: Number.isFinite(parseInt(stats.window.from.split(':')[0], 10)) ? parseInt(stats.window.from.split(':')[0], 10) : 9,
+        toIndex: Number.isFinite(parseInt(stats.window.to.split(':')[0], 10)) ? parseInt(stats.window.to.split(':')[0], 10) : 17,
         label: `Send window (${stats.window.from}–${stats.window.to})`,
       }
     : undefined
