@@ -100,11 +100,11 @@ const loadFolds = (): Folds => {
   const d: Folds = { show: true, trending: true, pressWings: false, portals: false }
   try { return { ...d, ...JSON.parse(localStorage.getItem(FOLDS_KEY) ?? '{}') } } catch { return d }
 }
-function Fold({ id, title, aside, open, onToggle, children }: { id: keyof Folds; title: string; aside?: React.ReactNode; open: boolean; onToggle: (id: keyof Folds) => void; children: React.ReactNode }) {
+function Fold({ id, title, icon, aside, open, onToggle, children }: { id: keyof Folds; title: string; icon?: IconName; aside?: React.ReactNode; open: boolean; onToggle: (id: keyof Folds) => void; children: React.ReactNode }) {
   return (
     <section className={'nw-sec nw-fold' + (open ? ' open' : '')}>
       <button type="button" className="nw-sec-h nw-fold-h" aria-expanded={open} onClick={() => onToggle(id)}>
-        <Icon name="chevDown" size={13} className="nw-fold-chev" /><span>{title}</span>{aside ? <small>{aside}</small> : null}
+        <Icon name="chevDown" size={13} className="nw-fold-chev" />{icon && <Icon name={icon} size={13} className="nw-fold-ic" />}<span>{title}</span>{aside ? <small>{aside}</small> : null}
       </button>
       <div className="nw-fold-body" inert={!open}><div className="nw-fold-inner">{children}</div></div>
     </section>
@@ -397,7 +397,7 @@ export function NewsWorkspace() {
               </div>
             </Fold>
 
-            <Fold id="pressWings" title="Official Press Wings" open={folds.pressWings} onToggle={toggleFold}
+            <Fold id="pressWings" title="Official Press Wings" icon="quote" open={folds.pressWings} onToggle={toggleFold}
               aside={<>{portal && pressOfficeRows.some((o) => o.name === portal) && !folds.pressWings ? <b className="nw-fold-pick">{portal}</b> : <>{pressOfficesOn} offices</>}</>}>
               <div className="nw-nav">
                 {pressOfficeRows.map((o) => (
@@ -413,7 +413,7 @@ export function NewsWorkspace() {
               </div>
             </Fold>
 
-            <Fold id="portals" title="Portals" open={folds.portals} onToggle={toggleFold}
+            <Fold id="portals" title="Portals" icon="globe" open={folds.portals} onToggle={toggleFold}
               aside={<>{down ? <><b className="nw-warn">{down} not answering</b> · </> : null}{portal && !folds.portals ? <b className="nw-fold-pick">{portal}</b> : <>{portalsOn} · {FEED_COUNT} feeds</>}</>}>
               <div className="nw-nav">
                 {portalRows.map((p) => (

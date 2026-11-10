@@ -13,11 +13,11 @@ const probe = (sel) => page.evaluate((sel) => [...document.querySelectorAll(`.de
   return null
 }), sel)
 const rows = {
-  graphics: [['.app > .left > .col-fold', '.app > .left > .side-tabs'], ['.app > .right > .col-fold', '.app > .right .pnl:first-child > header']],
+  graphics: [['.app > .left > .col-fold', '.app > .left > .side-tabs'], ['.app > .right .col-fold', '.app > .right .pnl:first-child > header']],
   news: [['.nw-left > .col-fold', '.nw-left > .nw-brandbar, .nw-left > :first-child:not(.col-fold)'], ['.nw-right > .col-fold', '.nw-right .nw-detail-top']],
   outreach: [['.or-left > .col-fold', '.or-left > .side-tabs'], ['.or-right > .col-fold', '.or-right > .side-tabs']],
   video: [['.vw-bin-panel > .col-fold', '.vw-bin-panel > .side-tabs'], ['.vw-inspector-panel > .col-fold', '.vw-ih-row']],
-  editorial: [['.ed-src > .col-fold', '.ed-src > .side-tabs'], ['.ed-side > .col-fold', '.ed-side .es-status']],
+  editorial: [['.ed-src > .col-fold', '.ed-src > .side-tabs'], ['.ed-side .col-fold', '.ed-side .es-status']],
 }
 for (const d of ['Graphics', 'News', 'Outreach', 'Video', 'Editorial']) {
   await go(d)

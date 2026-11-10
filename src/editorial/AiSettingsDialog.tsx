@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react'
 import { Dialog, Field, Select, Seg } from '../ui/controls'
+import type { AiEffort } from './aiProviders'
 import { Icon } from '../ui/Icon'
 import { useEditorialStore } from './editorialStore'
 import { AI_PROVIDERS, listModels, providerMeta, roleProvider, testAiKey } from './aiProviders'
@@ -154,6 +155,14 @@ export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; on
               <span>{status.msg}</span>
             </div>
           )}
+        </section>
+
+        <section className="ai-section">
+          {/* how hard the story writer thinks: Claude's effort, OpenAI's reasoning effort, Gemini's thinking budget */}
+          <Field label={<span className="ai-label">Writing effort <span className="hint">{(draft.effort ?? 'balanced') === 'fast' ? 'Quickest, lowest cost' : (draft.effort ?? 'balanced') === 'thorough' ? 'Slower and costlier: the most careful rewrite' : 'The newsroom default'}</span></span>}>
+            <Seg<AiEffort> label="Writing effort" value={draft.effort ?? 'balanced'} onChange={(v) => patch((d) => ({ ...d, effort: v }))}
+              options={[{ value: 'fast', label: 'Fast', tip: 'Least thinking: fastest and cheapest' }, { value: 'balanced', label: 'Balanced', tip: 'The default: careful enough for a full story' }, { value: 'thorough', label: 'Thorough', tip: 'Most thinking: the strongest rewrite and structure, slower and costlier' }]} />
+          </Field>
         </section>
 
         <section className="ai-section">

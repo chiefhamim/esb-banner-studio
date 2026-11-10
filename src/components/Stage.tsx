@@ -188,6 +188,20 @@ export function Stage({ base }: { base: Assets }) {
 
   const scroller = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  // the element's floating bar (and its popovers' anchor) stays inside the work area: it was clamped by a guessed 200 px
+  // half-width, so a wide bar (or a narrow window) ran under the side panels. Measured after every render instead.
+  const qbarRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const a = qbarRef.current, sc = scroller.current
+    if (!a || !sc) return
+    a.style.marginLeft = '0px'
+    const r = a.getBoundingClientRect(), box = sc.getBoundingClientRect()
+    const pad = 10
+    let dx = 0
+    if (r.left < box.left + pad) dx = box.left + pad - r.left
+    else if (r.right > box.right - pad) dx = box.right - pad - r.right
+    if (dx) a.style.marginLeft = `${Math.round(dx)}px`
+  })
   const canvas = useRef<HTMLCanvasElement>(null)
   const overlay = useRef<HTMLDivElement>(null)
   const rulerTop = useRef<HTMLCanvasElement>(null)
@@ -1175,7 +1189,7 @@ export function Stage({ base }: { base: Assets }) {
               const above = topEdge > 96
               const k = editKindOf(single)
               return (
-                <div className={'qbar-anchor' + (above ? '' : ' below')} style={{ left: clampBar(r.left + r.width / 2), top: above ? (pr ? pr.top - 10 : r.top - 34) : r.top + r.height + 12 }}>
+                <div ref={qbarRef} className={'qbar-anchor' + (above ? '' : ' below')} style={{ left: clampBar(r.left + r.width / 2), top: above ? (pr ? pr.top - 10 : r.top - 34) : r.top + r.height + 12 }}>
                   <Quickbar el={single} onEdit={k ? () => startEdit(single) : undefined} editLabel={k === 'date' ? 'Change date' : k === 'category' ? 'Change category' : k === 'label' ? 'Change label' : 'Edit text'} onHighlight={single.id === 'headline' ? () => startHighlight(single) : undefined} />
                 </div>
               )

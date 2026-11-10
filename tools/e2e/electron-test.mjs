@@ -186,9 +186,10 @@ try {
   await page.screenshot({ path: path.join(root, 'tools', 'out', 'electron-home.png') })
   const closed = new Promise((r) => app.process().once('exit', () => r(true)))
   // the corner controls are folded into one handle that opens on hover
-  await page.hover('.home-head-actions').catch(() => {})
+  // folded, only the disc at the control's right end shows: hover the disc (the button's centre is still folded away)
+  { const b = await page.locator('.home-user-btn').boundingBox(); if (b) await page.mouse.move(b.x + b.width - 14, b.y + b.height / 2) }
   await page.waitForTimeout(400)
-  await page.click('.home-head-btn.quit').catch(() => {})
+  await page.click('.home-head-btn.quit', { timeout: 5000 }).catch((e) => console.log('quit click:', String(e.message).replace(/[[0-9;]*m/g, '').slice(0, 2500)))
   const quitOk = await Promise.race([closed, new Promise((r) => setTimeout(() => r(false), 8000))])
   console.log(quitOk ? 'PASS' : 'FAIL', 'Home → Quit closes the app')
 } finally {

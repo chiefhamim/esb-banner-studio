@@ -99,13 +99,13 @@ export function TranslateProgress({ status }: { status: string | null }) {
     <div ref={chipRef} className={'ed-topbar-progress ed-tp'} role="group" aria-label="Task times">
       <button type="button" className={'ed-tp-history' + (open ? ' on' : '')} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label="Activity"
         data-tip={live ? `Activity — ${live.title} running, ${fmt(total(live))}` : jobs.length ? `Activity for this story — ${jobs.length} ${jobs.length === 1 ? 'task' : 'tasks'}, with model and time` : 'Activity — translation, SEO, caption and publish runs for this story, with model and time'}>
-        <Icon name="activity" size={16} />
+        <Icon name="listChecks" size={16} />
         {live ? <span className="ed-tp-live" aria-hidden /> : jobs.length > 0 && <span className="ed-tp-count">{jobs.length > 99 ? '99+' : jobs.length}</span>}
       </button>
       {open && at && createPortal(
         <div ref={popRef} className="ed-tp-pop" role="status" aria-live="polite" style={{ top: at.top, right: at.right }}>
           <div className="ed-tp-head">
-            <span className="ed-tp-head-ic"><Icon name="activity" size={15} /></span>
+            <span className="ed-tp-head-ic"><Icon name="listChecks" size={15} /></span>
             <div className="ed-tp-head-t">
               <b>Activity</b>
               <span>This story · {jobs.length} {jobs.length === 1 ? 'run' : 'runs'}</span>

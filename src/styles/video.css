@@ -785,3 +785,8 @@
   .vw-bin-panel .side-tabs button .tab-label { display: none; }
   .vw-bin-panel .side-tabs button { padding: 0; justify-content: center; }
 }
+/* no "…": a long clip name fades out at its end (its tooltip has the whole name) */
+.vw-ih-name { text-overflow: clip; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent); }
+/* the clip inspector's tabs: words while they fit, icons when the column is narrow (like the bin) */
+.vw-inspector-panel .side-tabs { gap: 0; }
+.vw-inspector-panel .side-tabs button { padding: 0 4px; font-size: 12px; }

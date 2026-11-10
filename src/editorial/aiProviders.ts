@@ -154,7 +154,16 @@ export interface AiModelInfo { id: string; label: string; hint?: string }
 /** The jobs the desk gives a provider. */
 export type AiRole = 'main' | 'seo' | 'social' | 'outreach' | 'research' | 'review'
 
+/** How hard the story writer thinks: maps to Claude's effort, OpenAI's reasoning effort and Gemini's thinking budget. */
+export type AiEffort = 'fast' | 'balanced' | 'thorough'
+export const AI_EFFORTS: AiEffort[] = ['fast', 'balanced', 'thorough']
+const isEffort = (v: unknown): v is AiEffort => v === 'fast' || v === 'balanced' || v === 'thorough'
+/** The request-level effort for a writing job (checks and tests stay 'low'). */
+export const effortLevel = (e: AiEffort | undefined): 'low' | 'medium' | 'high' => (e === 'fast' ? 'low' : e === 'thorough' ? 'high' : 'medium')
+
 export interface AiSettings {
+  /** How hard the story writer thinks (default balanced). */
+  effort?: AiEffort
   /** The main provider: translation and the whole story, and the provider SEO and social use unless given their own. */
   provider: AiProviderId
   /** A provider just for "Write with AI" on the SEO tab; '' follows the main one. */
@@ -253,6 +262,7 @@ export function loadAiSettings(): AiSettings {
         models: { ...base.models, ...(s.models ?? {}) },
         prompt: typeof s.prompt === 'string' ? s.prompt : '',
         paused: s.paused === true,
+        ...(isEffort(s.effort) ? { effort: s.effort } : {}),
         ...(s.escalate && typeof s.escalate === 'object' ? { escalate: Object.fromEntries(Object.entries(s.escalate).filter(([k, v]) => ROLE_IDS.includes(k as AiRole) && typeof v === 'boolean')) as AiSettings['escalate'] } : {}),
       }
     }
@@ -480,7 +490,7 @@ export interface AiJsonRequest {
   /** Long for a whole article, short for captions and SEO. */
   maxTokens?: number
   /** How hard Claude thinks: medium for a whole article, low for short structured jobs. Other providers ignore it. */
-  effort?: 'low' | 'medium'
+  effort?: 'low' | 'medium' | 'high'
   timeoutMs?: number
   signal?: AbortSignal
 }
@@ -510,7 +520,11 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: system }] },
           contents: [{ parts: [...(attachment ? [{ inlineData: { mimeType: attachment.mime, data: attachment.data } }] : []), { text: user }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: Math.max(maxTokens, 8192), responseMimeType: 'application/json', responseSchema: toGeminiSchema(schema) },
+          generationConfig: {
+            temperature: req.effort === 'medium' || req.effort === 'high' ? 0.4 : 0.1, maxOutputTokens: Math.max(maxTokens, 8192), responseMimeType: 'application/json', responseSchema: toGeminiSchema(schema),
+            // Thorough gives Gemini 2.5 a larger thinking budget; otherwise the model decides how much to think
+            ...(/gemini-2.5/.test(model) && req.effort === 'high' ? { thinkingConfig: { thinkingBudget: 16384 } } : {}),
+          },
         }),
       })
       if (!res.ok) throw new Error(`${geminiLabel(model)}: ${await errorText(res)}`)
@@ -557,6 +571,8 @@ export async function aiJson<T extends Record<string, unknown>>(req: AiJsonReque
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
         ...(provider === 'openai' ? { max_completion_tokens: /^gpt-4/.test(model) ? Math.min(maxTokens, 16000) : maxTokens } : { max_tokens: maxTokens }),
         ...(format ? { response_format: format } : {}),
+        // reasoning models (o-series, gpt-5) take the effort setting; gpt-4 models reject it
+        ...(provider === 'openai' && req.effort && /^(o\d|gpt-5)/.test(model) ? { reasoning_effort: req.effort } : {}),
       }),
     })
     let res = await send({ type: 'json_schema', json_schema: { name: 'esb_result', strict: true, schema: strictSchema(schema) } })

@@ -2080,8 +2080,10 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 /* the button is the Inspector header's first tile: 6 px inside the card, centred on the 44 px header row, 8 px before the title tile */
 .app > .right > .scroll > .pnl:first-child > header { padding-left: 50px; }
 /* Video's clip inspector: its title row makes room */
-.vw-inspector-panel { --fold-top: 6px; }
-.vw-inspector-panel .vw-inspector-head { min-height: 52px; padding-left: 54px; }
+.vw-inspector-panel { --fold-top: 18px; }
+.vw-inspector-panel .vw-inspector-head { min-height: 52px; padding-left: 0; }
+/* only the title row makes room for the fold button; the tabs under it use the column's full width */
+.vw-inspector-panel .vw-ih-row { min-height: 52px; padding-left: 48px; }
 .vw-inspector-panel .vw-inspector { padding: 0 0 16px 12px; }
 /* News: the brand bar's own height, the brand's own inset */
 .nw-left { --fold-top: 6px; --fold-inset: 14px; }
@@ -2090,13 +2092,12 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .nw-right > .col-fold.right { left: 20px; right: auto; top: 21px; }
 /* the button leads the card's first row, its icon on the card's text edge; the source name follows it */
 .nw-right .nw-detail-top { min-height: 36px; margin-top: -7px; padding-left: 32px; }
-.ed-side > .col-fold.right { left: auto; right: 20px; top: 14px; }
-/* Editorial's status card grows with its text: the button is centred on the card itself (anchor positioning), whatever
-   its height, and the card's text stops short of it */
-.ed-side .es-status { anchor-name: --es-status; padding-right: 50px; }
-.ed-side:not(.is-railed) > .col-fold.right { top: anchor(--es-status center, 14px); translate: 0 -50%; }
-.ed-side.is-railed > .col-fold.right { translate: none; }
-.is-railed.nw-right > .col-fold.right, .is-railed.ed-side > .col-fold.right { left: auto; right: calc((var(--rail-w) - 36px) / 2); top: 10px; }
+/* Editorial's sidebar carries its fold button inside its scroll (SideColumn foldHost), so it scrolls with the status card;
+   it leads the card's row on the left (like every right column), centred on the card whatever its height */
+.ed-side > .es-scroll { position: relative; }
+.ed-side .es-status { anchor-name: --es-status; padding-left: 50px; }
+.ed-side > .es-scroll > .col-fold.in-host { left: 20px; right: auto; top: anchor(--es-status center, 30px); translate: 0 -50%; }
+.is-railed.nw-right > .col-fold.right, .is-railed.ed-side > .col-fold.right, .is-railed.ed-side > .col-fold { left: auto; right: calc((var(--rail-w) - 36px) / 2); top: 10px; }
 
 /* ---------------------------------------------------------------- Going to press (PressCountdown.tsx, pass 7)
    The phone's hold-to-publish card, on the desktop: the ESB masthead stripe fills across the top, the seconds badge
@@ -2250,3 +2251,37 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 /* pass 12: a folded column's rail — a short hairline under the fold button sets it apart from the section icons */
 .is-railed > .col-rail::before { content: ''; position: absolute; top: 50px; left: 50%; width: 22px; height: 1px; margin-left: -11px; border-radius: 1px; background: var(--line-3); opacity: .7; }
 .topbar.ed-head .ed-story-chip .or-camp-name { text-overflow: clip; }
+
+/* ---------------------------------------------------------------- pass 13: the desk rail, quieter and balanced
+   One rhythm: 64 px rail, 52 px items, 4 px apart. The selected desk is marked by a soft pill behind its ICON only
+   (no raised card around icon and word), its icon in full ink and its word in weight 600; hover is a fainter pill.
+   Home sits on its own above a hairline. */
+.desk-rail { width: 64px; gap: 4px; padding: 8px 0 12px; }
+.desk-rail-btn { position: relative; width: 56px; height: 52px; gap: 3px; border-radius: 12px; color: var(--text-2); background: transparent !important; box-shadow: none !important; transition: color 140ms var(--ease), transform 160ms var(--spring); }
+.desk-rail-btn > svg { position: relative; z-index: 1; }
+.desk-rail-btn > span { position: relative; z-index: 1; font: 500 10.5px/1.1 var(--ui); letter-spacing: 0; color: var(--text-3); transition: color 140ms var(--ease); }
+.desk-rail-btn::before { content: ''; position: absolute; top: 5px; left: 50%; width: 40px; height: 26px; margin-left: -20px; border-radius: 13px; background: transparent; transform: scaleX(.7); opacity: 0; transition: transform 200ms var(--spring), opacity 160ms var(--ease), background-color 160ms var(--ease); }
+.desk-rail-btn:hover:not(.on) { color: var(--text); }
+.desk-rail-btn:hover:not(.on) > span { color: var(--text-2); }
+.desk-rail-btn:hover:not(.on)::before { background: color-mix(in srgb, var(--text) 7%, transparent); transform: scaleX(1); opacity: 1; }
+.desk-rail-btn.on, :root[data-theme=dark] .desk-rail-btn.on { color: var(--text); background: transparent !important; }
+.desk-rail-btn.on > span { color: var(--text); font-weight: 600; }
+.desk-rail-btn.on::before { background: color-mix(in srgb, var(--text) 12%, transparent); transform: scaleX(1); opacity: 1; }
+:root[data-theme=dark] .desk-rail-btn.on::before { background: color-mix(in srgb, var(--text) 15%, transparent); }
+.desk-rail-btn:active { transform: scale(.96); }
+.desk-rail-btn:first-child { margin-bottom: 9px; }
+.desk-rail-btn:first-child::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 24px; height: 1px; margin-left: -12px; background: var(--line-2); }
+@media (prefers-reduced-motion: reduce) { .desk-rail-btn::before { transition: none; } }
+
+/* ---------------------------------------------------------------- pass 13: the app's own words are not text to select
+   A double-click on a label, button, menu, tab or heading selected it like a web page. The chrome is now unselectable;
+   what an editor may want to copy stays selectable: every field and editor, the story (verified view, source
+   paragraphs, preview), headlines and the detail card on News, the Outreach letter and its preview facts, log rows and
+   error messages. */
+body, .studio-shell { -webkit-user-select: none; user-select: none; }
+input, textarea, select, [contenteditable], [contenteditable] *, .ProseMirror, .ProseMirror *,
+.rv, .rv *, .source-paragraphs, .source-paragraphs *, .rb-doc, .rb-doc *, .article-body, .article-body *,
+.nw-detail-hl, .nw-detail-when, .nw-hl, .or-text, .or-preview dd, .oa-log, .oa-log *, .conn-detail, .acct-err,
+.signin-error, .or-warnings p, .or-preview-warn, .ed-input-headline, .hint.bad, [role='alert'], .selectable, .selectable * {
+  -webkit-user-select: text; user-select: text;
+}

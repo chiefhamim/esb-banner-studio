@@ -432,3 +432,5 @@
    on the logo, and the logo and name start after it */
 .nw-right .nw-about .nw-credit { padding-left: 32px; }
 .nw-right:has(.nw-about) > .col-fold.right { top: 30px; }
+/* the fold headings carry the same icons as the folded column's rail (Official Press Wings = quote, Portals = globe) */
+.nw-fold-h .nw-fold-ic { flex: none; color: var(--text-3); }

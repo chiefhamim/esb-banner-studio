@@ -1245,13 +1245,13 @@ export function EditorialWorkspace() {
     { label: 'Story', items: [
       { label: 'New story', icon: 'plus', onClick: handleNewStory },
       { label: 'Load another link', icon: 'link', disabled: !hasStory, onClick: () => { setSourceOpen(true); setLeftTab('intake'); setLauncherTab('url') } },
-      { label: 'Re-translate the source', icon: 'refresh', disabled: !source || translating, onClick: () => void handleRetranslateSource() },
+      { label: 'Re-translate the source', icon: 'languages', disabled: !source || translating, onClick: () => void handleRetranslateSource() },
       { divider: true },
       { label: 'Copy CMS JSON', icon: 'copy', disabled: !draft.headline.trim(), onClick: handleCopyCmsPayload },
       { label: 'Review & publish', icon: 'upload', disabled: !draft.headline.trim(), onClick: openPublish },
     ] },
     { label: 'Site', items: [
-      { label: 'Sync stories from esbpowerline.com', icon: 'refresh', onClick: () => void handleSyncFeed() },
+      { label: 'Sync stories from esbpowerline.com', icon: 'cloudDown', onClick: () => void handleSyncFeed() },
       { label: 'Open the site CMS', icon: 'externalLink', onClick: handleOpenInSiteCms },
       { divider: true },
       { label: staffSession ? `Signed in as ${staffSession.name}` : 'Staff sign-in', icon: 'user', onClick: () => setShowLoginModal(true) },
@@ -1293,7 +1293,7 @@ export function EditorialWorkspace() {
         <Seg<'desk' | 'insights'> value={deskView} onChange={setDeskView} className="ed-desk-seg" options={[{ value: 'desk', label: 'Desk', icon: 'edit', tip: 'Story desk — source, story and publishing' }, { value: 'insights', label: 'Insights', icon: 'chart', tip: 'Insights — how published stories did on Facebook, and what AI cost' }]} />
         <div className="spacer" />
         <div className="fmtgroup ed-head-group">
-          <IconButton icon="refresh" tip={syncing ? 'Syncing' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
+          <IconButton icon={syncing ? 'refresh' : 'cloudDown'} tip={syncing ? 'Syncing' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
           {hasStory && (
             <button type="button" className={'pv-btn' + (sourceOpen ? ' on' : '')} onClick={() => setSourceOpen(!sourceOpen)} aria-pressed={sourceOpen} data-tip={sourceOpen ? `Hide the source column — ${sourceHost}` : `Show the original article — ${sourceHost}`}>
               <Icon name="newspaper" size={15} />
@@ -1303,7 +1303,7 @@ export function EditorialWorkspace() {
           )}
           {hasStory && source && (
             <button type="button" className="pv-btn" onClick={handleRetranslateSource} disabled={translating} aria-label="Re-translate" data-tip={mainAi ? `Translate the original story again with ${aiName} · ${aiModelLabel}` : 'Translate the original story again (free machine translation — add an AI key for better results)'}>
-              <Icon name="refresh" size={14} />
+              <Icon name={translating ? 'refresh' : 'languages'} size={14} className={translating ? 'spin' : ''} />
               <span className="ed-retranslate-label">{translating ? 'Translating' : 'Re-translate'}</span>
             </button>
           )}
@@ -1637,7 +1637,7 @@ export function EditorialWorkspace() {
 
           {/* RIGHT — the CMS sidebar: publish, featured image, organise; then the outputs Graphics shares */}
           <aside className={'right ed-side' + railClass(sideCol)} aria-label="Publishing and image">
-            <ColumnHandle col={sideCol} label="Resize the sidebar" root={() => wsRef.current} apply={liveCol('side')} />
+            <ColumnHandle col={sideCol} label="Resize the sidebar" root={() => wsRef.current} apply={liveCol('side')} foldHost=":scope > .es-scroll" />
             <ColumnRail col={sideCol} label="Sidebar" items={[
               { id: 'details', icon: 'folder', label: '1 Details', onClick: () => openSidePanel('ed-organize') },
               { id: 'banner', icon: 'image', label: '2 Banner', onClick: () => openSidePanel('ed-image') },

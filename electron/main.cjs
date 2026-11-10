@@ -108,6 +108,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // an installed build has no DevTools: with them, anyone at the PC could read the keys the page holds in memory
+      devTools: !app.isPackaged || !!process.env.ESB_DEVTOOLS,
+      spellcheck: true,
     },
   })
   // No native menu: the app has its own menu bar, and a hidden native one pops up whenever Alt is tapped (Alt is a drag modifier here).

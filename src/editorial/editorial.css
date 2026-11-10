@@ -1023,3 +1023,6 @@
 /* pass 12: the launcher's Published and Stories lists keep their scrollbar OUTSIDE the cards with air on both sides
    (the thumb ran along the cards' edge and its rounded ends were cut) */
 .ed-launcher-wrap .ed-feed-list, .ed-launcher-queue .sq-list { scrollbar-gutter: stable; margin-right: -18px; padding-right: 6px; }
+/* the selection ring of a story row is drawn outside the row: the list keeps 3 px of room on every side for it (the
+   scroller clipped it left and right), shifted back so the rows still line up with the card's heading */
+.ed-launcher-wrap .ed-feed-list, .ed-launcher-queue .sq-list { margin-left: -3px; padding: 3px 6px 3px 3px; }

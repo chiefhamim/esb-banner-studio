@@ -5,7 +5,7 @@ import { polishJournalisticEnglish, translateBengaliToEnglish } from '../core/ne
 import { FACEBOOK_FIELD, sanitizeFacebook } from './facebookCaption'
 import { bengaliToAsciiDigits } from './bengali'
 import { GTX_MAX, translateComplete } from './translateNet'
-import { aiFor, aiJson, geminiLabel, listModels, loadAiSettings, providerMeta, resolveModel } from './aiProviders'
+import { aiFor, aiJson, effortLevel, geminiLabel, listModels, loadAiSettings, providerMeta, resolveModel } from './aiProviders'
 import type { AiProviderId, AiSchema, AiSettings } from './aiProviders'
 import { DESCRIPTION_MAX, buildMetaDescription, buildMetaTitle, buildSlug, countPhrase, headlineGram, suggestKeyphrases } from './seo'
 
@@ -79,7 +79,18 @@ function injectedTranslator(): ((text: string) => Promise<string>) | null {
 
 export const JOURNALISTIC_TRANSLATOR_PROMPT = `You are the senior editor of ESB Power Line, an English-language news site on Bangladesh's power, gas and energy sector. Your readers are energy professionals, investors, policymakers and Bangladeshis abroad. They read quickly, distrust hype and judge a publication by whether its numbers are right.
 
-Turn the Bengali (or English) source report into one finished English news story. You are an editor, not a translator: restructure for clarity, but never change what the source says.
+Turn the Bengali (or English) source report into one finished English news story. You are a reporter and editor, not a translator: write it fresh in ESB Power Line's own voice and restructure it for the reader, but never change what the source says.
+
+WHEN THE SOURCE IS ALREADY IN ENGLISH
+- Do not reproduce it. Rewrite it completely as ESB Power Line's own story: your own headline, your own opening, your own order and your own sentences. Apart from direct quotations, no sentence may follow the source's wording, and no run of more than eight words may be copied.
+- Lead with what matters most to an energy reader even if the source buried it; cut the source's padding, repetition and boilerplate.
+- The facts, figures, names and quotes stay exactly as the source gives them.
+
+STORYTELLING
+- Write like a seasoned energy correspondent: credible, calm and clear. The reader should understand the story in one pass.
+- The first paragraph tells the news. The second says why it matters for Bangladesh's power and energy sector, using only what the source supports. Then the detail, then the background, then what comes next if the source says so.
+- Carry the reader from paragraph to paragraph with clear transitions; each paragraph does one job. Prefer concrete nouns and strong verbs to abstractions, vary sentence length, and explain any jargon in plain words.
+- Attribute claims so the reader always knows who says what; separate what officials said from what documents or figures show.
 
 FACTS
 - Every figure, name, date, quote and claim must come from the source. Never add, infer, round, convert or estimate. If the source is silent, leave it out; do not fill the gap.
@@ -474,10 +485,13 @@ async function translateWithAi(
       const { data, model: used } = await aiJson<Record<string, string>>({
         provider: ai.provider, key: ai.key, model,
         system: `${translationPrompt()}\n\n${REPLY_RULES}`,
-        user: `Bengali news article to translate:\n\n${articleText}`,
+        // an English source is rewritten as our own story; a Bengali one is translated and edited
+        user: /[ঀ-৿]/.test(articleText)
+          ? `Bengali news report to turn into our English story:\n\n${articleText}`
+          : `English news report to rewrite completely as our own story (new headline, new structure, our own sentences; facts and quotes unchanged):\n\n${articleText}`,
         schema: TRANSLATION_SCHEMA,
         maxTokens: 32000,
-        effort: 'medium',
+        effort: effortLevel(loadAiSettings().effort),
         timeoutMs: /pro|opus/.test(model) ? AI_WAIT_MS.careful : AI_WAIT_MS.fast,
       })
       if (!data.headline || !data.body) { lastError = `${label} returned no article`; continue }
