@@ -104,7 +104,7 @@ export function ComponentGallery() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>Text Input</label>
-            <input type="text" placeholder="Enter headline text…" defaultValue="Prime Minister addresses national assembly" />
+            <input type="text" placeholder="Enter headline text" defaultValue="Prime Minister addresses national assembly" />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

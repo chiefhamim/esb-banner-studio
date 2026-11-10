@@ -30,6 +30,8 @@ function fit(h: HTMLElement) {
     }
   }
   place(h, a, b)
+  // a shortened name fades out at its end (the app shows no "…")
+  h.querySelectorAll<HTMLElement>('.or-camp-name').forEach((n) => n.classList.toggle('is-cut', n.scrollWidth > n.clientWidth + 1))
 }
 
 /** How wide the left spacer must be for the control between the spacers to sit on the header's centre. */

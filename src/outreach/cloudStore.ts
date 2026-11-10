@@ -39,7 +39,7 @@ export interface CloudStore {
   engagement: Record<string, Record<string, Engagement>>
   /** campaignId → who holds its send lock (null = nobody, as last read). */
   locks: Record<string, LockInfo | null>
-  /** This PC's name as other PCs see it in "Sending from …". */
+  /** This PC's name as other PCs see it in "Sending from ". */
   pcLabel: string
   set: (p: Partial<Omit<CloudStore, 'set'>>) => void
 }

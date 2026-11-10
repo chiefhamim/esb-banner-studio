@@ -401,3 +401,20 @@
 :root[data-theme='dark'] .topbar .btn.primary.nw-check:hover:not(:disabled) { background: color-mix(in srgb, var(--nw-teal) 22%, transparent); }
 .topbar .btn.primary.nw-check:disabled { opacity: 1; }
 .topbar .btn.primary.nw-check > svg { color: inherit; }
+/* the "+N" topics menu: no tick column (nothing in it is a setting), even 10 / 12 px insets, the count right-aligned */
+.menu.nw-trend-menu { padding: 6px; min-width: 200px; }
+.menu.nw-trend-menu .menu-item { gap: 12px; padding: 0 12px 0 10px; height: 32px; }
+.menu.nw-trend-menu .menu-item .mi-check { display: none; }
+.menu.nw-trend-menu .menu-item.checked { font-weight: 600; }
+.menu.nw-trend-menu .mi-hint { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-3); }
+.menu.nw-trend-menu .mi-label { display: flex; align-items: center; gap: 12px; } .menu.nw-trend-menu .mi-label small { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--text-3); }
+
+/* pass 12: time headings sit centred between two hairlines (a heading for everything under it, not a left caption),
+   and stick flush to the top of the list: the list's 2 px top padding and its 4/8 px side room are covered too, so no
+   strip of the headlines shows above or beside a heading while scrolling */
+.nw-group-h { top: -2px; justify-content: center; margin: 0 -8px 0 -4px; padding: 12px 8px 8px 4px; }
+.nw-group:first-child .nw-group-h { padding-top: 4px; }
+.nw-group-h::before { content: ''; flex: 1 1 auto; height: 1px; margin-right: 4px; background: var(--card-line); }
+/* News settings: four tabs, one rhythm (pass 12) */
+.nw-settings .nw-set-tabs { align-self: flex-start; }
+.nw-settings { min-height: 440px; }

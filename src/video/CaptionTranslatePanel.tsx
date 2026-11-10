@@ -38,8 +38,8 @@ export function CaptionTranslatePanel() {
       <div className="vw-sec-head"><h4 className="vw-sec-title">Translate captions</h4><span className="vw-tag" data-tag="caption">AI draft</span></div>
       <p className="vw-hint">Makes a second caption track in the other language. Your captions stay as they are, and a caption whose figures change is left out.</p>
       <div className="vw-transcript-actions">
-        <button type="button" className="btn xs" onClick={() => void run('en')} disabled={!!busy || !sources.length} aria-busy={busy === 'en'}>{busy === 'en' ? 'Translating…' : 'To English'}</button>
-        <button type="button" className="btn xs" onClick={() => void run('bn')} disabled={!!busy || !sources.length} aria-busy={busy === 'bn'}>{busy === 'bn' ? 'Translating…' : 'To বাংলা'}</button>
+        <button type="button" className="btn xs" onClick={() => void run('en')} disabled={!!busy || !sources.length} aria-busy={busy === 'en'}>{busy === 'en' ? 'Translating' : 'To English'}</button>
+        <button type="button" className="btn xs" onClick={() => void run('bn')} disabled={!!busy || !sources.length} aria-busy={busy === 'bn'}>{busy === 'bn' ? 'Translating' : 'To বাংলা'}</button>
       </div>
       {!sources.length && <p className="vw-hint">Add captions first (type one above, or make them from a transcript).</p>}
       {error && <p className="vw-hint vw-error" role="alert">{error}</p>}

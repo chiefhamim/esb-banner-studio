@@ -37,7 +37,7 @@ export function BannerPreviews({ base, heroMode, onHeroMode, photoUrl, caption, 
           <div className="pcard-t"><b>Your website</b><span>esbpowerline.com · {heroMode === 'banner' ? 'Web banner, 16:9' : 'Original photo'}</span></div>
           {onHeroMode && <button type="button" className="btn xs" onClick={() => onHeroMode(heroMode === 'banner' ? 'photo' : 'banner')}>{heroMode === 'banner' ? 'Use photo' : 'Use banner'}</button>}
         </header>
-        <div className="bp-frame web" style={{ ['--r' as string]: 16 / 9 } as CSSProperties}>{siteImg ? <img src={siteImg} alt="Banner as the article image on esbpowerline.com" /> : <span className="hint">{heroMode === 'photo' ? 'No photo on this story, so the article will have no image' : 'Rendering…'}</span>}</div>
+        <div className="bp-frame web" style={{ ['--r' as string]: 16 / 9 } as CSSProperties}>{siteImg ? <img src={siteImg} alt="Banner as the article image on esbpowerline.com" /> : <span className="hint">{heroMode === 'photo' ? 'No photo on this story, so the article will have no image' : 'Rendering'}</span>}</div>
         {heroMode === 'banner' && webExtra}
       </figure>
       <figure className="bp-card pcard">
@@ -46,7 +46,7 @@ export function BannerPreviews({ base, heroMode, onHeroMode, photoUrl, caption, 
           <div className="pcard-t"><b>Facebook</b><span>{pageName ? pageName + ' · feed banner, 4:5' : 'Feed banner, 4:5'}</span></div>
           {fbToggle}
         </header>
-        <div className="bp-frame fb" style={{ ['--r' as string]: 4 / 5 } as CSSProperties}>{fb ? <img src={fb} alt="Banner as the Facebook post image" /> : <span className="hint">Rendering…</span>}</div>
+        <div className="bp-frame fb" style={{ ['--r' as string]: 4 / 5 } as CSSProperties}>{fb ? <img src={fb} alt="Banner as the Facebook post image" /> : <span className="hint">Rendering</span>}</div>
         {caption && <p className="bp-caption">{caption}</p>}
         {fbExtra}
         {fbNote}

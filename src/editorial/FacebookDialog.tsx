@@ -55,11 +55,11 @@ export function FacebookDialog({ onClose, onChange }: { onClose: () => void; onC
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
           {perm ? (
             <button type="button" className="btn primary" onClick={() => void makePermanent()} disabled={busy || !/^\d{5,}$/.test(pageId.trim()) || !userToken.trim() || !appId.trim() || !appSecret.trim()}>
-              <Icon name={busy ? 'refresh' : 'check'} size={14} /><span>{busy ? 'Working…' : 'Make permanent & connect'}</span>
+              <Icon name={busy ? 'refresh' : 'check'} size={14} /><span>{busy ? 'Working' : 'Make permanent & connect'}</span>
             </button>
           ) : (
             <button type="button" className="btn primary" onClick={() => void connect()} disabled={busy || !/^\d{5,}$/.test(pageId.trim()) || !(token.trim() || current)}>
-              <Icon name={busy ? 'refresh' : 'check'} size={14} /><span>{busy ? 'Checking…' : 'Check & connect'}</span>
+              <Icon name={busy ? 'refresh' : 'check'} size={14} /><span>{busy ? 'Checking' : 'Check & connect'}</span>
             </button>
           )}
         </>

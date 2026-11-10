@@ -187,7 +187,7 @@ export default function App() {
   const newsDesk = useMemo(() => <Suspense fallback={<DeskLoading />}><DeskBoundary desk="News" onLeave={toHome}><NewsWorkspace /></DeskBoundary></Suspense>, [])
   const editorialDesk = useMemo(() => <Suspense fallback={<DeskLoading />}><DeskBoundary desk="Editorial" onLeave={toHome}><EditorialWorkspace /></DeskBoundary></Suspense>, [])
   const outreachDesk = useMemo(() => <Suspense fallback={<DeskLoading />}><DeskBoundary desk="Outreach" onLeave={toHome}><OutreachWorkspace /></DeskBoundary></Suspense>, [])
-  const graphicsDesk = useMemo(() => base ? <DeskBoundary desk="Graphics" onLeave={toHome}><GraphicsWorkspace base={base} /></DeskBoundary> : <div className="loading"><div className="spinner" />Loading fonts and artwork…</div>, [base])
+  const graphicsDesk = useMemo(() => base ? <DeskBoundary desk="Graphics" onLeave={toHome}><GraphicsWorkspace base={base} /></DeskBoundary> : <div className="loading"><div className="spinner" />Loading fonts and artwork</div>, [base])
   if (isGallery) {
     return <Suspense fallback={<DeskLoading />}><ComponentGallery /></Suspense>
   }

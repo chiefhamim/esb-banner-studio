@@ -79,7 +79,7 @@ function ResultView({ result }: { result: unknown }) {
         const rest = Object.fromEntries(Object.entries(o).filter(([kk]) => !['name', 'label'].includes(kk) && !/(^id|Id)$/.test(kk)))
         rows.push([name, rest])
       })
-      if (v.length > 12) rows.push(['…', `${v.length - 12} more`])
+      if (v.length > 12) rows.push(['More', `${v.length - 12} more`])
     } else rows.push([human(k), v])
   }
   if (!rows.length) return null

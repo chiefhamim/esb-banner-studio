@@ -48,7 +48,7 @@ export function ChartDialog({ accent, initial, busy, error, onInsert, onClose }:
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
           <button type="button" className="btn primary" disabled={!spec || busy} onClick={() => spec && onInsert(spec)}>
             <Icon name={busy ? 'refresh' : 'check'} size={14} className={busy ? 'spin' : ''} />
-            <span>{busy ? 'Uploading…' : 'Insert chart'}</span>
+            <span>{busy ? 'Uploading' : 'Insert chart'}</span>
           </button>
         </>
       }

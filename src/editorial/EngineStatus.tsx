@@ -91,7 +91,7 @@ export function EngineStatus({ ai, offline, onAddKey, roles = ['main', 'seo', 's
   const summary = ai.paused ? { cls: 'off', text: 'AI OFF' }
     : offline ? { cls: 'bad', text: 'Offline' }
     : !distinct.length ? { cls: 'free', text: roles.includes('main') ? 'Free translation' : 'No AI key' }
-    : busy ? { cls: 'busy', text: 'Checking…' }
+    : busy ? { cls: 'busy', text: 'Checking' }
     : bad ? { cls: 'bad', text: `${bad} of ${rows.length} need attention` }
     : noKey ? { cls: 'warn', text: `Working · ${noKey} on free` }
     : { cls: 'ok', text: 'Working' }
@@ -111,7 +111,7 @@ export function EngineStatus({ ai, offline, onAddKey, roles = ['main', 'seo', 's
         <div ref={pop} className="eng-pop" role="dialog" aria-label="AI engines" style={{ bottom: at.bottom, left: at.left }}>
           <div className="eng-head">
             <span className="eng-head-ic"><Icon name="chip" size={16} /></span>
-            <div className="eng-head-t"><b>AI engines</b><span>{busy ? 'Checking each key…' : 'Each key is tested with one tiny request'}</span></div>
+            <div className="eng-head-t"><b>AI engines</b><span>{busy ? 'Checking each key' : 'Each key is tested with one tiny request'}</span></div>
             <button type="button" className="btn sm" onClick={() => refresh()} disabled={ai.paused || busy || !distinct.length}><Icon name="refresh" size={13} /><span>Refresh all</span></button>
             <button type="button" role="switch" aria-checked={!ai.paused} className={'eng-power' + (ai.paused ? '' : ' on')} onClick={() => setAiPaused(!ai.paused)} data-tip={ai.paused ? 'Turn AI ON' : 'Turn AI OFF: nothing is sent to any AI company'}><Icon name="power" size={13} /><span>{ai.paused ? 'OFF' : 'ON'}</span></button>
           </div>

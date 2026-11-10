@@ -28,10 +28,10 @@ export function ReframePanel({ clip }: { clip: Clip }) {
   const aspectMismatch = projectAspect !== target
 
   const analyse = async () => {
-    setError(''); setBusy(true); setProgress('Opening the clip…')
+    setError(''); setBusy(true); setProgress('Opening the clip')
     const c = new AbortController()
     setCtrl(c)
-    const r = await reframeClip(clip, target, { signal: c.signal, onProgress: (d, t) => setProgress(`Finding the face… ${Math.round((d / t) * 100)}%`) })
+    const r = await reframeClip(clip, target, { signal: c.signal, onProgress: (d, t) => setProgress(`Finding the face ${Math.round((d / t) * 100)}%`) })
     if (r.ok) setPlan({ clipId: clip.id, plan: r.plan, frames: r.frames })
     else if (!c.signal.aborted) setError(r.why)
     setBusy(false); setProgress(''); setCtrl(null)

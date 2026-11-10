@@ -127,12 +127,12 @@ export function InsightsDesk({ fb, ai, onConnectFb }: { fb: FacebookConfig | nul
       <header className="ed-ins-bar">
         <div className="ed-ins-bar-l">
           <Seg<Range> value={range} onChange={setRange} className="ed-ins-range" options={RANGES.map((r) => ({ value: r.value, label: r.label, tip: `Stories published in the last ${r.label}` }))} />
-          <span className="ed-ins-age" aria-live="polite">{busy ? 'Reading Facebook…' : oldest != null ? `Figures from ${fmtAge(oldest)}` : fb ? 'No figures read yet' : 'Facebook not connected'}</span>
+          <span className="ed-ins-age" aria-live="polite">{busy ? 'Reading Facebook' : oldest != null ? `Figures from ${fmtAge(oldest)}` : fb ? 'No figures read yet' : 'Facebook not connected'}</span>
         </div>
         <div className="ed-ins-bar-r">
           {reviewAi && thisWeek.length > 0 && (
             <button type="button" className="btn sm ed-ins-ai" onClick={summarise} disabled={summary?.state === 'busy'} data-tip="Ask the Review AI for a short note on this week's table (only the table is sent)">
-              <Icon name="sparkle" size={13} /><span>{summary?.state === 'busy' ? 'Writing…' : 'Summarise week'}</span>
+              <Icon name="sparkle" size={13} /><span>{summary?.state === 'busy' ? 'Writing' : 'Summarise week'}</span>
             </button>
           )}
           <button type="button" className="btn sm ed-ins-refresh" onClick={refresh} disabled={busy || !!blocked} data-tip={refreshTip}>
@@ -205,7 +205,7 @@ export function InsightsDesk({ fb, ai, onConnectFb }: { fb: FacebookConfig | nul
             {summary && (
               <section className={'ed-ins-card ed-ins-summary' + (summary.state === 'bad' ? ' bad' : '')} aria-live="polite">
                 <span className="ed-ins-k">AI draft · check it against the table</span>
-                <p>{summary.state === 'busy' ? 'The Review AI is reading this week’s table…' : summary.state === 'ok' ? summary.text : summary.error}</p>
+                <p>{summary.state === 'busy' ? 'The Review AI is reading this week’s table' : summary.state === 'ok' ? summary.text : summary.error}</p>
                 {summary.state === 'ok' && <i>Written by {summary.model} from the table only.</i>}
               </section>
             )}

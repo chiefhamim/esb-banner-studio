@@ -1050,17 +1050,17 @@ function VideoDesk() {
   const menus: MenuDef[] = [
     { label: 'File', items: [
       { label: 'New video', icon: 'filePlus', onClick: doNew },
-      { label: 'Open project…', icon: 'folder', onClick: doOpen },
+      { label: 'Open project', icon: 'folder', onClick: doOpen },
       { label: 'Save project', icon: 'download', shortcut: 'Ctrl+S', onClick: () => void doSave() },
-      { label: 'Save project as…', shortcut: 'Ctrl+Shift+S', onClick: () => void doSave(true) },
+      { label: 'Save project as', shortcut: 'Ctrl+Shift+S', onClick: () => void doSave(true) },
       { divider: true },
-      { label: 'Import media…', icon: 'upload', onClick: () => void importFromDialog() },
+      { label: 'Import media', icon: 'upload', onClick: () => void importFromDialog() },
       voPhase === 'recording'
         ? { label: 'Stop the voiceover take', icon: 'mic', shortcut: 'R', onClick: stopVoiceover }
-        : { label: 'Record voiceover…', icon: 'mic', shortcut: 'R', disabled: voPhase !== 'idle', hint: '3-2-1, then it records at the playhead', onClick: () => void startVoiceover() },
+        : { label: 'Record voiceover', icon: 'mic', shortcut: 'R', disabled: voPhase !== 'idle', hint: '3-2-1, then it records at the playhead', onClick: () => void startVoiceover() },
       { divider: true },
-      { label: 'Export…', icon: 'download', disabled: exporting, onClick: () => setExportModal(true) },
-      { label: 'Publish…', icon: 'globe', hint: 'Render sizes, post to YouTube and Facebook', onClick: () => setPublishModal(true) },
+      { label: 'Export', icon: 'download', disabled: exporting, onClick: () => setExportModal(true) },
+      { label: 'Publish', icon: 'globe', hint: 'Render sizes, post to YouTube and Facebook', onClick: () => setPublishModal(true) },
     ] },
     { label: 'Edit', items: [
       { label: 'Undo', icon: 'undo', shortcut: 'Ctrl+Z', disabled: !canUndo, onClick: undo },
@@ -1122,7 +1122,7 @@ function VideoDesk() {
           <AiChip role="main" onToast={flash} />
           <AccountButton onToast={flash} />
           <button type="button" className="btn primary sm" onClick={() => setExportModal(true)} disabled={exporting}>
-            <Icon name="download" size={14} /> {exporting ? 'Exporting…' : 'Export'}
+            <Icon name="download" size={14} /> {exporting ? 'Exporting' : 'Export'}
           </button>
         </div>
       </header>
@@ -1165,7 +1165,7 @@ function VideoDesk() {
                     onDrop={(e) => { e.preventDefault(); setDragOver(false); void importFiles(Array.from(e.dataTransfer.files)) }}
                   >
                     <span className="vw-dropzone-icon"><Icon name="upload" size={18} /></span>
-                    <p>{importing ? 'Reading files…' : 'Import media'}</p>
+                    <p>{importing ? 'Reading files' : 'Import media'}</p>
                     <span>Click or drop video, audio or pictures · MP4, MOV, WebM, MP3, WAV, PNG, JPG</span>
                   </button>
                   <BinImportMode />
@@ -1368,7 +1368,7 @@ function VideoDesk() {
           footer={<>
             <button type="button" className="btn" onClick={() => setConfirmReplace(null)}>Cancel</button>
             <button type="button" className="btn vw-confirm-save" onClick={() => { const k = confirmReplace; setConfirmReplace(null); void doSave().then((ok) => { if (ok) replaceNow(k) }) }}>Save first</button>
-            <button type="button" className={`btn primary ${confirmReplace === 'new' ? 'vw-confirm-new' : 'vw-confirm-open'}`} onClick={() => { const k = confirmReplace; setConfirmReplace(null); replaceNow(k) }}>{confirmReplace === 'new' ? 'New video' : 'Open…'}</button>
+            <button type="button" className={`btn primary ${confirmReplace === 'new' ? 'vw-confirm-new' : 'vw-confirm-open'}`} onClick={() => { const k = confirmReplace; setConfirmReplace(null); replaceNow(k) }}>{confirmReplace === 'new' ? 'New video' : 'Open'}</button>
           </>}
         >
           <p className="vw-confirm-body">This video has changes that are not saved to a file. Save it first, or {confirmReplace === 'new' ? 'start an empty one' : 'open another'} without saving. Its last autosave is kept, so it can still be restored.</p>

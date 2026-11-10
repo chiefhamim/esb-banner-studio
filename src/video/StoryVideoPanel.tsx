@@ -198,7 +198,7 @@ export function StoryVideoPanel() {
           <label className="vw-story-quote">
             <select value={quoteIdx} onChange={(e) => setQuoteIdx(Number(e.target.value))} aria-label="Quote card">
               <option value={-1}>No quote card</option>
-              {quotes.named.map((q, i) => <option key={q.quote} value={i}>{q.speaker}: “{q.quote.length > 60 ? q.quote.slice(0, 57) + '…' : q.quote}”</option>)}
+              {quotes.named.map((q, i) => <option key={q.quote} value={i}>{q.speaker}: “{q.quote.length > 60 ? q.quote.slice(0, 57)  : q.quote}”</option>)}
             </select>
           </label>
         ) : <p className="vw-hint">No quote in this story names its speaker, so no quote card is offered.</p>}
@@ -221,7 +221,7 @@ export function StoryVideoPanel() {
         <div className="vw-story-confirm">
           <span>This replaces the current timeline.</span>
           <button type="button" className="btn sm" onClick={() => setConfirm(false)}>Keep it</button>
-          <button type="button" className="btn sm primary" onClick={() => void build()} disabled={busy}>{busy ? 'Building…' : 'Replace'}</button>
+          <button type="button" className="btn sm primary" onClick={() => void build()} disabled={busy}>{busy ? 'Building' : 'Replace'}</button>
         </div>
       ) : (
         <button type="button" className="btn primary vw-story-build" onClick={() => setConfirm(true)} disabled={busy}>

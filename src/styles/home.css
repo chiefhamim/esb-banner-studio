@@ -1327,3 +1327,12 @@
 .home-shell .home-title-group { width: fit-content; max-width: 100%; margin-left: auto; margin-right: auto; }
 .home-shell .home-title { display: flex; justify-content: space-between; width: 100%; }
 .home-shell .home-subtitle { white-space: nowrap; text-align: justify; text-align-last: justify; }
+
+/* pass 12: Home's user menu is the app's own menu — solid, no live blur over the drifting picture (the blur re-rendered
+   every frame the background moved, so the menu felt heavy), concentric corners (12 px outside, 6 px padding, 6 px items)
+   and the same 10 px text inset for the heading and the rows */
+.home-user-menu { border-radius: 12px !important; padding: 6px !important; background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--line-2); box-shadow: 0 12px 32px -8px rgba(20, 16, 10, .28), 0 2px 6px rgba(20, 16, 10, .08); }
+:root[data-theme=dark] .home-user-menu { background: var(--surface-raised); border-color: var(--line-2); box-shadow: 0 14px 36px -8px rgba(0, 0, 0, .6), 0 2px 8px rgba(0, 0, 0, .35); }
+.home-user-menu .menu-item, .home-user-menu button { border-radius: 6px !important; padding: 0 10px !important; }
+.home-user-menu .menu-head { padding: 6px 10px 4px; }
+.home-user-menu hr { margin: 4px 4px; }

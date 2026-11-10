@@ -7,6 +7,7 @@
 // desk did not keep; a failed read is said, never papered over. Pictures are not put in the letter: the letter's
 // marks have no picture mark (digest.ts IMAGE_MARK).
 
+import { previewDoc } from './previewDoc'
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_SIGNATURE, useDesk } from './outreachStore'
 import { OPT_OUT_LINE } from './compose'
@@ -151,7 +152,7 @@ export function DigestDialog({ onClose }: { onClose: () => void }) {
           <div className="or-dg-subject"><span>Subject</span><b>{letter.subject}</b></div>
           {/* a fresh frame when the logo or the site's decks arrive: Chromium can drop a srcdoc change made while the
               frame's first document is still loading, which left the preview without them */}
-          <iframe key={`${logo !== null}-${site.state}`} className="or-frame" title="Digest preview" sandbox="" srcDoc={html} />
+          <iframe key={`${logo !== null}-${site.state}`} className="or-frame" title="Digest preview" sandbox="" srcDoc={previewDoc(html)} />
           <p className="hint">A draft: after Create it needs a list, and goes out only through Review & send.</p>
         </div>
       </div>

@@ -49,7 +49,7 @@ export function TranscriptPanel() {
 
   const transcribe = async () => {
     if (!clip) return
-    setError(''); setNotice(''); setBusy(true); setProgress('Reading the sound…')
+    setError(''); setNotice(''); setBusy(true); setProgress('Reading the sound')
     const ctrl = new AbortController()
     abortRef.current = ctrl
     try {
@@ -57,7 +57,7 @@ export function TranscriptPanel() {
       if (!asset) throw new Error('This clip has no source file to read.')
       const audio = await sourceAudio(asset, clip.in, clip.out)
       if ('error' in audio) throw new Error(audio.error)
-      setProgress('Sending to Gemini…')
+      setProgress('Sending to Gemini')
       const res = await geminiEngine().transcribe(audio, {
         signal: ctrl.signal,
         onProgress: (done, total) => setProgress(`Transcribing part ${done} of ${total}…`),
@@ -171,7 +171,7 @@ export function TranscriptPanel() {
         <p className="vw-hint vw-transcript-clip">Clip: {clip.title}</p>
         <div className="vw-transcript-actions">
           <button type="button" className="btn xs" onClick={transcribe} disabled={busy} aria-busy={busy}>
-            {busy ? 'Working…' : words.length ? 'Transcribe again' : 'Transcribe with Gemini'}
+            {busy ? 'Working' : words.length ? 'Transcribe again' : 'Transcribe with Gemini'}
           </button>
         </div>
         {busy && <p className="vw-hint" role="status">{progress}</p>}
@@ -237,7 +237,7 @@ export function TranscriptPanel() {
           <span className="vw-cut-value">{minSil.toFixed(1)} s</span>
         </label>
         <div className="vw-transcript-actions">
-          <button type="button" className="btn xs" onClick={findSilences} disabled={busy || planBusy}>{planBusy ? 'Listening…' : 'Find silences'}</button>
+          <button type="button" className="btn xs" onClick={findSilences} disabled={busy || planBusy}>{planBusy ? 'Listening' : 'Find silences'}</button>
           {words.length > 0 && <button type="button" className="btn xs" onClick={findHesitations} disabled={busy}>Find hesitations</button>}
         </div>
         {plan && plan.clipId === clip.id && (

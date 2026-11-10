@@ -314,7 +314,7 @@ export async function automateNewsFromUrl(
 
   // 1. Fetch HTML via the Electron net-guard bridge (desktop) or, in the browser, directly / through the local dev proxy.
   //    No third-party relay: the URL an editor is working on never leaves the machine except to the publisher.
-  onProgress?.('Fetching story from URL…')
+  onProgress?.('Fetching story from URL')
   let html = ''
   if (typeof window !== 'undefined' && window.esb?.fetchUrl) {
     const res = await window.esb.fetchUrl(cleanUrl)
@@ -342,7 +342,7 @@ export async function automateNewsFromUrl(
   }
 
   // 2. Extract Document & Images
-  onProgress?.('Extracting article content & media…')
+  onProgress?.('Extracting article content & media')
   let article: ExtractedArticle = parseArticleDocument(html, cleanUrl)
 
   // A page that is built in the browser arrives with no story in its HTML. When the publisher's own JSON endpoint is
@@ -350,7 +350,7 @@ export async function automateNewsFromUrl(
   if (article.paragraphs.length < 2 && typeof window !== 'undefined' && window.esb?.fetchUrl) {
     const hit = adapterFor(cleanUrl)
     if (hit) {
-      onProgress?.('The page loads its story in the browser — reading it from the site’s own feed…')
+      onProgress?.('The page loads its story in the browser — reading it from the site’s own feed')
       const api = await window.esb.fetchUrl(hit.apiUrl, { allowedTypes: ['application/json'], timeoutMs: 20000 })
       if (api.ok && api.html) {
         try {
@@ -371,12 +371,12 @@ export async function automateNewsFromUrl(
   useEditorialStore.getState().setSourceArticle(article, cleanUrl)
 
   // 3. Detect Sector Desk (1-10)
-  onProgress?.('Classifying industry sector desk…')
+  onProgress?.('Classifying industry sector desk')
   const combinedContext = [cleanUrl, originalTitle, originalDeck, paragraphs.slice(0, 3).join(' ')].join(' ')
   const categoryId = detectCategory(combinedContext) || '01'
 
   // 4. Translate & Polish Headline (< 104), Deck (< 200), Slug (< 80), and Full English Body (Fast Parallel Pipeline)
-  onProgress?.('Translating story elements in parallel…')
+  onProgress?.('Translating story elements in parallel')
   const translation = await escalateTranslation(await translateNewsArticle({
     title: originalTitle,
     deck: originalDeck,
@@ -406,7 +406,7 @@ export async function automateNewsFromUrl(
   const highlight = suggestHighlight(englishHeadline)
 
   // 7. Fact Table & Discrepancies
-  onProgress?.('Verifying facts, figures and entities…')
+  onProgress?.('Verifying facts, figures and entities')
   const rawSourceText = [originalTitle, originalDeck, ...paragraphs].filter(Boolean).join('\n\n')
   const factTable = extractFactTable(rawSourceText)
   const draftText = `${englishHeadline} ${englishDeck} ${englishBody}`
@@ -419,7 +419,7 @@ export async function automateNewsFromUrl(
   if (translation.facebook) socialCaptions.facebook = translation.facebook
 
   // 9. Sync Editorial Store with English Translation
-  onProgress?.('Syncing Editorial Desk…')
+  onProgress?.('Syncing Editorial Desk')
   const edStore = useEditorialStore.getState()
   edStore.setDeskAuto(true)
   edStore.setDraftField('headline', englishHeadline)
@@ -440,7 +440,7 @@ export async function automateNewsFromUrl(
   edStore.reverify()
 
   // 10. Sync Graphics Banner Store
-  onProgress?.('Generating graphics banner…')
+  onProgress?.('Generating graphics banner')
   const bannerStore = useStore.getState()
   autoDesk(() => bannerStore.setContent({
     headline: englishHeadline,
@@ -453,12 +453,12 @@ export async function automateNewsFromUrl(
 
   // 11. Auto-Fetch and apply lead article photo to banner slot + pre-load remaining article photos in background
   if (article.images && article.images.length > 0) {
-    onProgress?.('Importing article photos to Graphics Studio…')
+    onProgress?.('Importing article photos to Graphics Studio')
     // Non-blocking: allows instant UI render while photo loads into slot 0 in the background
     void syncArticlePhotosToBanner(article.images)
   }
 
-  bannerStore.setNotice(`Auto-generated news for: “${englishHeadline.slice(0, 36)}…”`)
+  bannerStore.setNotice(`Auto-generated news for: “${englishHeadline.slice(0, 36)}”`)
 
   const translationNote = translationNoticeFor(translation) ?? undefined
   return {

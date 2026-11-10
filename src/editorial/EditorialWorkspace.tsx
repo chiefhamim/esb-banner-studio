@@ -505,7 +505,7 @@ export function EditorialWorkspace() {
     setLoading(true)
     setErrorMsg(null)
     setErrorDetail(null)
-    setProgressStatus('Fetching article & translating to English…')
+    setProgressStatus('Fetching article & translating to English')
 
     try {
       const result = await automateNewsFromUrl(cleanUrl, (status: string) => setProgressStatus(status))
@@ -561,7 +561,7 @@ export function EditorialWorkspace() {
     useStoryQueue.getState().beginStory()
     setTranslating(true)
     setErrorMsg(null)
-    setProgressStatus('Translating story to English…')
+    setProgressStatus('Translating story to English')
 
     try {
       const lines = raw.split(/\n+/).map((l) => l.trim()).filter(Boolean)
@@ -674,7 +674,7 @@ export function EditorialWorkspace() {
     if (!source) return
     setTranslating(true)
     setErrorMsg(null)
-    setProgressStatus('Re-translating story…')
+    setProgressStatus('Re-translating story')
     try {
       const res = await translateNewsArticle(
         {
@@ -983,7 +983,7 @@ export function EditorialWorkspace() {
     else if (fix === 'seo') setStoryTab('seo')
     else if (fix === 'photo') window.dispatchEvent(new CustomEvent('esb:open-panel', { detail: 'ed-image' }))
     else if (fix === 'tags') window.dispatchEvent(new CustomEvent('esb:open-panel', { detail: 'ed-organize' }))
-    else if (fix === 'site') { void useEditorialStore.getState().checkConnection(); showToast('Checking esbpowerline.com…') }
+    else if (fix === 'site') { void useEditorialStore.getState().checkConnection(); showToast('Checking esbpowerline.com') }
     else setShowLoginModal(true)
   }
   const openPublish = () => { setPublishResult(null); setPublishJobId(null); setFbCfg(getFacebook()); setFbOn(!linked && !!getFacebook()); setShowPublishModal(true) }
@@ -1029,7 +1029,7 @@ export function EditorialWorkspace() {
                   id="ed-link-input"
                   type="url"
                   className="ed-link-input"
-                  placeholder="https://…"
+                  placeholder="https://"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
@@ -1054,7 +1054,7 @@ export function EditorialWorkspace() {
               </div>
               <button type="button" className="btn primary ed-link-go" aria-label="Fetch & Process" data-tip="Fetch the story and process it" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
                 {loading ? <Icon name="refresh" size={15} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={15} />}
-                <span>{loading ? 'Extracting…' : 'Fetch & Process'}</span>
+                <span>{loading ? 'Extracting' : 'Fetch & Process'}</span>
               </button>
             </div>
           </div>
@@ -1073,7 +1073,7 @@ export function EditorialWorkspace() {
               <input
                 type="url"
                 className="input ed-url-input"
-                placeholder={compact ? "Paste a news link…" : "https://bonikbarta.net/news/… or prothomalo.com/…"}
+                placeholder={compact ? "Paste a news link" : "A link from bonikbarta.net, prothomalo.com or any news site"}
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
@@ -1097,7 +1097,7 @@ export function EditorialWorkspace() {
             </div>
             <button type="button" className="btn primary" onClick={() => handleFetchUrl()} disabled={loading || !urlInput.trim()}>
               {loading ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
-              <span>{loading ? 'Extracting…' : 'Fetch & Auto-Translate'}</span>
+              <span>{loading ? 'Extracting' : 'Fetch & Auto-Translate'}</span>
             </button>
           </div>
           <p className="hint">Paste a Bengali or English news link. The article is extracted, translated and laid out as a CMS draft; the original stays on the left for checking.</p>
@@ -1115,7 +1115,7 @@ export function EditorialWorkspace() {
             onDrop={() => setDocDrag(false)}
           >
             {docBusy ? (
-              <><span className="ed-doc-tile"><Icon name="refresh" size={16} className="spin" /></span><div className="ed-doc-text"><b>{progressStatus || 'Reading the file…'}</b><span>This takes a few seconds</span></div></>
+              <><span className="ed-doc-tile"><Icon name="refresh" size={16} className="spin" /></span><div className="ed-doc-text"><b>{progressStatus || 'Reading the file'}</b><span>This takes a few seconds</span></div></>
             ) : docInfo ? (
               <>
                 <FileTypeIcon kind={docInfo.kind} size={38} />
@@ -1135,7 +1135,7 @@ export function EditorialWorkspace() {
           <div className="ed-paste-area-wrap">
             <textarea
               className="input ed-paste-area"
-              placeholder="…or paste the Bengali headline on the first line, then the story"
+              placeholder="Or paste the Bengali headline on the first line, then the story"
               value={rawBengaliInput}
               onChange={(e) => { setRawBengaliInput(e.target.value); if (docInfo) setDocInfo(null) }}
               title="Paste Bengali story text (or press Ctrl+V)"
@@ -1160,7 +1160,7 @@ export function EditorialWorkspace() {
             </button>
             <button type="button" className="btn primary" onClick={() => void handleTranslateRawBengali()} disabled={translating || docBusy || !rawBengaliInput.trim()}>
               {translating ? <Icon name="refresh" size={14} className="spin" /> : mainAi ? <ProviderMark id={ai.provider} size={15} /> : <Icon name="sparkle" size={14} />}
-              <span>{translating ? 'Processing…' : 'Process Story'}</span>
+              <span>{translating ? 'Processing' : 'Process Story'}</span>
             </button>
           </div>
         </div>
@@ -1177,10 +1177,10 @@ export function EditorialWorkspace() {
       {launcherTab === 'live_feed' && (
         <div className="ed-intake-body">
           <div className="ed-intake-url ed-feed-filter-row">
-            <input type="text" className="input ed-url-input" placeholder="Filter stories by keyword…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <input type="text" className="input ed-url-input" placeholder="Filter stories by keyword" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             <button type="button" className="btn" onClick={handleSyncFeed} disabled={syncing}>
               <Icon name="refresh" size={13} />
-              <span>{syncing ? 'Syncing…' : 'Sync'}</span>
+              <span>{syncing ? 'Syncing' : 'Sync'}</span>
             </button>
           </div>
           <div className="ed-feed-list">
@@ -1195,7 +1195,7 @@ export function EditorialWorkspace() {
                     <b>{art.title}</b>
                     <span><i className="ed-feed-cat">{art.category}</i>{fmtPublished(art.publishedAt)}</span>
                   </div>
-                  <button type="button" className="btn sm" onClick={() => void handleEditLive(art)} disabled={editingLive === art.slug}>{editingLive === art.slug ? 'Opening…' : 'Edit'}</button>
+                  <button type="button" className="btn sm" onClick={() => void handleEditLive(art)} disabled={editingLive === art.slug}>{editingLive === art.slug ? 'Opening' : 'Edit'}</button>
                 </div>
                 )
               })
@@ -1293,7 +1293,7 @@ export function EditorialWorkspace() {
         <Seg<'desk' | 'insights'> value={deskView} onChange={setDeskView} className="ed-desk-seg" options={[{ value: 'desk', label: 'Desk', icon: 'edit', tip: 'Story desk — source, story and publishing' }, { value: 'insights', label: 'Insights', icon: 'chart', tip: 'Insights — how published stories did on Facebook, and what AI cost' }]} />
         <div className="spacer" />
         <div className="fmtgroup ed-head-group">
-          <IconButton icon="refresh" tip={syncing ? 'Syncing…' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
+          <IconButton icon="refresh" tip={syncing ? 'Syncing' : 'Sync published stories from esbpowerline.com'} onClick={handleSyncFeed} disabled={syncing} className={syncing ? 'spin' : ''} />
           {hasStory && (
             <button type="button" className={'pv-btn' + (sourceOpen ? ' on' : '')} onClick={() => setSourceOpen(!sourceOpen)} aria-pressed={sourceOpen} data-tip={sourceOpen ? `Hide the source column — ${sourceHost}` : `Show the original article — ${sourceHost}`}>
               <Icon name="newspaper" size={15} />
@@ -1304,7 +1304,7 @@ export function EditorialWorkspace() {
           {hasStory && source && (
             <button type="button" className="pv-btn" onClick={handleRetranslateSource} disabled={translating} aria-label="Re-translate" data-tip={mainAi ? `Translate the original story again with ${aiName} · ${aiModelLabel}` : 'Translate the original story again (free machine translation — add an AI key for better results)'}>
               <Icon name="refresh" size={14} />
-              <span className="ed-retranslate-label">{translating ? 'Translating…' : 'Re-translate'}</span>
+              <span className="ed-retranslate-label">{translating ? 'Translating' : 'Re-translate'}</span>
             </button>
           )}
         </div>
@@ -1366,7 +1366,7 @@ export function EditorialWorkspace() {
                         <span className="mono" title={sourceUrl}>{sourceUrl.replace(/^https?:\/\/(www\.)?/, '')}</span>
                         <div className="ed-src-url-actions">
                           <a className="btn xs" href={sourceUrl} target="_blank" rel="noopener noreferrer" title="Open the original article"><Icon name="externalLink" size={12} /><span>Open</span></a>
-                          <button type="button" className="btn xs" onClick={() => void handleFetchUrl(sourceUrl, true)} disabled={loading} title="Fetch and translate this link again"><Icon name="refresh" size={12} /><span>{loading ? 'Fetching…' : 'Re-fetch'}</span></button>
+                          <button type="button" className="btn xs" onClick={() => void handleFetchUrl(sourceUrl, true)} disabled={loading} title="Fetch and translate this link again"><Icon name="refresh" size={12} /><span>{loading ? 'Fetching' : 'Re-fetch'}</span></button>
                         </div>
                       </div>
                     ) : (
@@ -1479,14 +1479,14 @@ export function EditorialWorkspace() {
                       <label htmlFor="draft-headline">Headline</label>
                       <span className={`ed-budget-counter ${draft.headline.length > 104 ? 'over' : ''}`}>{draft.headline.length} / 104</span>
                     </div>
-                    <textarea id="draft-headline" className="ed-input ed-input-headline" rows={2} placeholder="The English headline readers will see…" value={draft.headline} onChange={(e) => setDraftField('headline', e.target.value)} />
+                    <textarea id="draft-headline" className="ed-input ed-input-headline" rows={2} placeholder="The English headline readers will see" value={draft.headline} onChange={(e) => setDraftField('headline', e.target.value)} />
                   </div>
                   <div className="ed-field">
                     <div className="ed-field-row">
                       <label htmlFor="draft-deck">Deck / excerpt</label>
                       <span className={`ed-budget-counter ${draft.deck.length > 200 ? 'over' : ''}`}>{draft.deck.length} / 200</span>
                     </div>
-                    <textarea id="draft-deck" className="ed-input ed-input-deck" rows={2} placeholder="One or two sentences that summarise the story…" value={draft.deck} onChange={(e) => setDraftField('deck', e.target.value)} />
+                    <textarea id="draft-deck" className="ed-input ed-input-deck" rows={2} placeholder="One or two sentences that summarise the story" value={draft.deck} onChange={(e) => setDraftField('deck', e.target.value)} />
                   </div>
                 </div>
               </section>
@@ -1583,7 +1583,7 @@ export function EditorialWorkspace() {
                       <div className="spacer" />
                       <button type="button" className="btn sm ai-btn" data-provider={socialAi?.provider} onClick={() => void handleAiCaptions()} disabled={!!aiBusy || !draft.headline.trim()} data-tip={socialAi ? `Write all four captions with ${providerMeta(socialAi.provider).name}, from the story, each ending with the article link` : `Add a ${providerMeta(roleProvider(ai, 'social')).name} key to write captions from the story`}>
                         <Icon name="sparkle" size={13} className={aiBusy === 'social' ? 'spin' : ''} />
-                        <span>{aiBusy === 'social' ? 'Writing…' : 'Write with AI'}</span>
+                        <span>{aiBusy === 'social' ? 'Writing' : 'Write with AI'}</span>
                       </button>
                     </div>
                     <textarea className="ed-input ed-input-social" rows={7} value={draft.social[activeSocialTab] || ''} onChange={(e) => setSocialCaption(activeSocialTab, e.target.value)} />
@@ -1703,7 +1703,7 @@ export function EditorialWorkspace() {
                   <input
                     type="text"
                     value={tagInput}
-                    placeholder={tagList.length ? '' : 'Type and press comma…'}
+                    placeholder={tagList.length ? '' : 'Type and press comma'}
                     onChange={(e) => { const v = e.target.value; if (v.endsWith(',')) addTag(v.slice(0, -1)); else setTagInput(v) }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput) }

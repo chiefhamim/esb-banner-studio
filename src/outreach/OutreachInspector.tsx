@@ -4,6 +4,8 @@
 // process's ledger, the campaign or the list; nothing here is a placeholder. In the browser preview (no desktop
 // bridge) the column says sending needs the desktop app instead of pretending to send.
 
+import { engineClient } from './engineClient'
+import { previewDoc } from './previewDoc'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useDesk, useOutreachStore } from './outreachStore'
 import { useSideColumn } from '../ui/sideColumnState'
@@ -354,7 +356,7 @@ function ContactTab() {
               style={{ width: '100%', height: 440, border: '1px solid var(--card-line)', borderRadius: 'var(--r-2)', background: '#fff' }}
               title="Recipient email preview"
               sandbox=""
-              srcDoc={personalPreview?.html || ''}
+              srcDoc={previewDoc(personalPreview?.html || '')}
             />
           </div>
         </Dialog>
@@ -594,6 +596,11 @@ function SendFooter() {
         <AnyHourWarning />
         <div className="or-meter"><i style={{ width: `${s.runTotal ? (s.runSent / s.runTotal) * 100 : 0}%` }} /></div>
         <div className="or-actions">
+          {/* you decide the pace: a pacing gap can be skipped for the next email (hours, the daily limit and
+              per-organisation spacing still hold — the engine checks the next send as usual) */}
+          {waiting?.why === 'gap' && !s.current && (
+            <button type="button" className="btn primary" onClick={() => { if (job) void engineClient.control(job.jobId, 'send-next') }} data-tip="Skip this wait and send the next email now (the pace returns after it)"><Icon name="send" size={14} /><span>Send next now</span></button>
+          )}
           {s.run === 'running'
             ? <button type="button" className="btn" onClick={pauseBatch}><Icon name="pause" size={14} /><span>Pause</span></button>
             : <button type="button" className="btn primary" onClick={resumeBatch} disabled={!!blocked} data-tip={blocked ?? (lock && lock.stale && !lock.mine ? `${lock.label} was last seen ${cloudAgo(lock.heartbeatAt)} — Resume offers to take over` : 'Carry on from where it paused; nobody already sent is sent again')}><Icon name="play" size={14} /><span>Resume</span></button>}

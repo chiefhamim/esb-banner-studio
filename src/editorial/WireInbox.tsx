@@ -112,7 +112,7 @@ export function WireInbox({ onUse }: { onUse: (url: string) => void }) {
   return (
     <div className="ed-intake-body ed-wire">
       <div className="ed-intake-url ed-feed-filter-row">
-        <input type="text" className="input ed-url-input" placeholder="Filter stories…" aria-label="Filter wire stories" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input type="text" className="input ed-url-input" placeholder="Filter stories" aria-label="Filter wire stories" value={q} onChange={(e) => setQ(e.target.value)} />
         <button type="button" className="btn ed-wire-check" onClick={() => void checkNow()} disabled={polling}>
           <Icon name="refresh" size={13} className={polling ? 'spin' : undefined} />
           <span>{polling ? 'Checking' : 'Check now'}</span>

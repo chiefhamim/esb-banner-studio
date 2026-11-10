@@ -236,7 +236,7 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
     connected: false,
     latencyMs: 0,
     lastChecked: 'Never',
-    statusText: 'Connecting to esbpowerline.com…',
+    statusText: 'Connecting to esbpowerline.com',
   },
   staffSession: typeof localStorage !== 'undefined' ? getStoredStaffSession() : null,
   liveArticles: [],

@@ -319,18 +319,18 @@ export function NewsWorkspace() {
   const menus: MenuDef[] = [
     { label: 'News', items: [
       { label: range ? 'Search this range again' : 'Check now', icon: 'refresh', disabled: busy, onClick: refresh },
-      { label: 'Pick dates and times…', icon: 'calendar', onClick: () => setDialog('range') },
+      { label: 'Pick dates and times', icon: 'calendar', onClick: () => setDialog('range') },
       ...(range ? [{ label: 'Back to the latest', icon: 'clock' as IconName, onClick: () => useRange.getState().clear() }] : []),
       { divider: true },
       { label: 'Mark all as read', icon: 'checkDouble', disabled: !freshCount, onClick: markAll },
       { label: hidden.length ? `Show hidden headlines again (${hidden.length})` : 'Show hidden headlines again', icon: 'eye', disabled: !hidden.length, onClick: showHidden },
       { divider: true },
-      { label: 'News settings…', icon: 'sliders', onClick: () => setDialog('settings') },
+      { label: 'News settings', icon: 'sliders', onClick: () => setDialog('settings') },
     ] },
     { label: 'View', items: [
       { heading: 'Headlines from' },
       ...WINDOWS.map((h) => ({ label: windowLabel(h), checked: !range && prefs.maxAgeH === h, onClick: () => setWindow(h) })),
-      { label: 'Dates and times…', checked: !!range, onClick: () => setDialog('range') },
+      { label: 'Dates and times', checked: !!range, onClick: () => setDialog('range') },
       { divider: true },
       { heading: 'Categories' },
       { label: CAT_LABEL.energy, checked: prefs.show.energy !== false, onClick: () => useWatch.getState().setPrefs({ show: { ...prefs.show, energy: prefs.show.energy === false } }) },
@@ -350,7 +350,7 @@ export function NewsWorkspace() {
   const timeMenu: MenuEntry[] = [
     ...WINDOWS.map((h) => ({ label: windowLabel(h), checked: !range && prefs.maxAgeH === h, onClick: () => setWindow(h) })),
     { divider: true },
-    { label: 'Pick dates and times…', icon: 'calendar', checked: !!range, onClick: () => setDialog('range') },
+    { label: 'Pick dates and times', icon: 'calendar', checked: !!range, onClick: () => setDialog('range') },
   ]
 
   const when = (x: WatchItem) => (x.published ? (range || cat === 'press' ? fmtDateTime(Date.parse(x.published)) : relTime(Math.min(Date.parse(x.published), now), now)) : `time not given · found ${relTime(Math.min(x.foundAt, now), now)}`)
@@ -654,7 +654,11 @@ function WordList({ title, help, words, onChange, placeholder }: { title: string
   )
 }
 
+type SetTab = 'general' | 'words' | 'press' | 'portals'
+
 function SettingsDialog({ onClose, onRestored }: { onClose: () => void; onRestored: () => void }) {
+  // four tabs instead of one long scroll: what to show, your words, the press wings, the portals
+  const [tab, setTab] = useState<SetTab>('general')
   const prefs = useWatch((s) => s.prefs)
   const setPrefs = useWatch((s) => s.setPrefs)
   const feeds = useWatch((s) => s.feeds)
@@ -685,8 +689,10 @@ function SettingsDialog({ onClose, onRestored }: { onClose: () => void; onRestor
         <button type="button" className="btn primary" onClick={onClose}>Done</button>
       </>}>
       <div className="nw-settings">
+        <Seg<SetTab> className="nw-set-tabs" label="News settings" value={tab} onChange={setTab} options={[{ value: 'general', label: 'General', icon: 'sliders' }, { value: 'words', label: 'Keywords', icon: 'search' }, { value: 'press', label: 'Press wings', icon: 'shield' }, { value: 'portals', label: 'Portals', icon: 'globe' }]} />
         <div className="nw-credit nw-credit-lg"><EwMark size={40} /><span><b><EwName /></b><small>Made by <YeasinName /> for ESB Power Line. Its portals, official press wings, and keyword rules come from EnergyWatch; your changes here stay on this computer.</small></span></div>
 
+        {tab === 'general' && <>
         <section className="nw-dsec">
           <h4 className="nw-sec-h">Categories</h4>
           <div className="nw-rows">
@@ -709,11 +715,15 @@ function SettingsDialog({ onClose, onRestored }: { onClose: () => void; onRestor
           </section>
         </div>
 
+        </>}
+        {tab === 'words' && <>
         <WordList title="Always show headlines with" help="Your own words, on top of EnergyWatch's list. English matches whole words; Bangla matches inside words, so বিদ্যুৎ also finds বিদ্যুতের."
           words={prefs.keep} onChange={(keep) => setPrefs({ keep })} placeholder="e.g. Rooppur, সৌরবিদ্যুৎ" />
         <WordList title="Never show headlines with" help="A headline with any of these is left out, whatever else it says."
           words={prefs.never} onChange={(never) => setPrefs({ never })} placeholder="e.g. cricket" />
 
+        </>}
+        {tab === 'press' && <>
         <section className="nw-dsec">
           <h4 className="nw-sec-h">Official Government Press Wings<small>{PRESS_OFFICES.filter((o) => !off.has(o.name)).length} of {PRESS_OFFICES.length} on · Ministries, Divisions, Commissions & Utilities</small></h4>
           <div className="nw-rows nw-portals">
@@ -730,6 +740,8 @@ function SettingsDialog({ onClose, onRestored }: { onClose: () => void; onRestor
           </div>
         </section>
 
+        </>}
+        {tab === 'portals' && <>
         <section className="nw-dsec">
           <h4 className="nw-sec-h">Portals<small>{PORTALS.filter((p) => !off.has(p.name)).length} of {PORTALS.length} on · {FEED_COUNT} feeds: own, Google News and Bing News</small></h4>
           <div className="nw-rows nw-portals">
@@ -745,6 +757,7 @@ function SettingsDialog({ onClose, onRestored }: { onClose: () => void; onRestor
             })}
           </div>
         </section>
+        </>}
       </div>
     </Dialog>
   )
@@ -832,7 +845,7 @@ function TrendBar({ trending, press, needle, onPick }: { trending: [string, numb
     <div ref={row} className="nw-trendbar" role="group" aria-label="Trending topics">
       <span className="nw-trendbar-h"><Icon name="trendingUp" size={13} />{press ? 'Offices' : 'Trending'}</span>
       {trending.slice(0, fit).map(([t, n]) => chip(t, n))}
-      {rest.length > 0 && <MenuButton label={`+${rest.length}`} className="nw-chip nw-trend-more" align="end" title="More trending topics"
+      {rest.length > 0 && <MenuButton label={`+${rest.length}`} className="nw-chip nw-trend-more" menuClassName="nw-trend-menu" align="end" title="More trending topics"
         items={rest.map(([t, n]) => ({ label: t, hint: String(n), checked: needle === t.toLowerCase(), onClick: () => onPick(t) }))} />}
       {/* every chip at its natural width, out of sight, so the row knows what fits */}
       <div className="nw-trend-measure" aria-hidden>{trending.map(([t, n]) => <span key={t} className="nw-chip"><span>{t}</span><small>{n}</small></span>)}</div>

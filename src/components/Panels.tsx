@@ -553,7 +553,7 @@ export function StoryPanel() {
 
   const applyPhoto = async (imgUrl: string) => {
     try {
-      useStore.getState().setNotice('Loading selected photo…')
+      useStore.getState().setNotice('Loading selected photo')
       const ok = await importImageToBanner(imgUrl, 'selected-photo.jpg', { slotIndex: 0 })
       if (ok) {
         useStore.getState().setNotice('Photo applied to banner!')
@@ -582,7 +582,7 @@ export function StoryPanel() {
         description: res.deck,
         author: res.byline,
       })
-      useStore.getState().setNotice(`Auto-generated news for: “${res.englishHeadline.slice(0, 36)}…”`)
+      useStore.getState().setNotice(`Auto-generated news for: “${res.englishHeadline.slice(0, 36)}”`)
     } catch (err) {
       useStore.getState().setNotice(`Could not import article: ${(err as Error).message}`)
     } finally {
@@ -640,13 +640,13 @@ export function StoryPanel() {
           <input
             type="url"
             className="input sm"
-            placeholder="Paste a news link…"
+            placeholder="Paste a news link"
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleImportUrl()}
           />
           <button className="btn sm primary" onClick={handleImportUrl} disabled={loadingUrl || !urlInput.trim()}>
-            {loadingUrl ? 'Processing…' : 'Fetch & Translate'}
+            {loadingUrl ? 'Processing' : 'Fetch & Translate'}
           </button>
         </div>
         <p className="hint">Processes news in natural English, extracts photos, suggests relevant images & sets desk category.</p>
@@ -734,7 +734,7 @@ export function StoryPanel() {
               rows={4}
               className="input"
               value={content.quoteText || content.headline}
-              placeholder="“Type or paste the official statement or quote here…”"
+              placeholder="“Type or paste the official statement or quote here”"
               onChange={(e) => setContent({ quoteText: e.target.value, headline: e.target.value })}
             />
           </Field>
@@ -835,7 +835,7 @@ export function StoryPanel() {
       {cardType === 'standard' && <HeadlineDesignPanel />}
       {cardType === 'standard' && (
         <Panel defaultOpen={false} title="Headline" focusKey="headline" sub="Auto-sized" icon="newspaper" actions={<span className={'count' + (len > 90 ? ' bad' : len > 70 ? ' warn' : '')}>{len} / 90</span>}>
-          <textarea ref={area} rows={4} className="input" value={content.headline} placeholder="Type the exact article title…" onChange={(e) => setContent({ headline: e.target.value })} />
+          <textarea ref={area} rows={4} className="input" value={content.headline} placeholder="Type the exact article title" onChange={(e) => setContent({ headline: e.target.value })} />
           <div className="row" style={{ marginTop: 6, marginBottom: 8, gap: 6 }}>
             <button
               type="button"
@@ -1305,7 +1305,7 @@ export function Inspector() {
           )}
           {el.id === 'headline' && o.size != null && <button className="btn sm" onClick={() => st().clearOverrideFields(el.id, ['size'])}><Icon name="reset" size={13} />Back to auto size</button>}
           {CONTENT_DRIVEN.has(el.id) && <p className="hint">Wording comes from the Story panel (double-click the text to jump there).</p>}
-          <p className="hint">Tip: drag a label (Size, Track…) sideways to scrub the value. Shift = ×10, Alt = fine.</p>
+          <p className="hint">Tip: drag a label (Size, Track and the rest) sideways to scrub the value. Shift = ×10, Alt = fine.</p>
         </Panel>
       )}
 
@@ -1432,7 +1432,7 @@ function LayersList() {
 
   return (
     <>
-      <div className="search"><Icon name="layers" size={13} /><input value={q} placeholder="Filter layers…" onChange={(e) => setQ(e.target.value)} />{q && <button onClick={() => setQ('')}><Icon name="x" size={12} /></button>}</div>
+      <div className="search"><Icon name="layers" size={13} /><input value={q} placeholder="Filter layers" onChange={(e) => setQ(e.target.value)} />{q && <button onClick={() => setQ('')}><Icon name="x" size={12} /></button>}</div>
       <div className="layers" onDragLeave={() => setOver(null)}>
         {list.map((e) => {
           const o = doc.overrides[`${format}:${e.id}`]

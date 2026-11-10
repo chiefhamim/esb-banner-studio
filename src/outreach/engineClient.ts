@@ -220,7 +220,7 @@ export const engineClient = {
 
   async control(
     jobId: string,
-    action: 'pause' | 'resume' | 'stop' | 'hold' | 'release',
+    action: 'pause' | 'resume' | 'stop' | 'hold' | 'release' | 'send-next',
     arg?: string | number
   ): Promise<{ ok: boolean; error?: string }> {
     const bridge = getBridge()

@@ -1204,3 +1204,20 @@
 .topbar .or-camp-chip .or-camp-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .topbar .or-camp-chip.hc-away { display: none; }
 .or-list-remove { width: 32px; padding: 0; justify-content: center; }
+
+/* pass 12: the preview can show the letter as a dark-mode phone mail app shows it, and at phone width */
+.or-look { display: flex; flex-wrap: wrap; gap: 8px; }
+.or-frame-wrap { display: flex; flex: 1 1 auto; min-height: 360px; justify-content: center; }
+.or-frame-wrap > .or-frame { flex: 1 1 auto; }
+.or-frame-wrap.phone { padding: 14px 0 6px; }
+.or-frame-wrap.phone > .or-frame { flex: 0 0 auto; width: 375px; max-width: 100%; border-radius: 28px; box-shadow: 0 0 0 9px #18181b, 0 0 0 10px rgba(255, 255, 255, .08), 0 18px 40px rgba(0, 0, 0, .3); }
+.or-frame-wrap.dark > .or-frame { background: #121212; }
+/* no "…" in the app: a header name that must shorten fades out instead */
+.topbar .or-camp-chip .or-camp-name { text-overflow: clip; }
+.topbar .or-camp-chip .or-camp-name.is-cut { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent); }
+/* List → Saved lists */
+.or-lists { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.or-lists-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--fill); border-radius: var(--r-3); }
+.or-lists-t { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.or-lists-t b { font: 600 13px/18px var(--ui); color: var(--text); overflow-wrap: anywhere; }
+.or-lists-t small { font: 500 12px/16px var(--ui); color: var(--text-2); }

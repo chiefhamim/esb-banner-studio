@@ -152,7 +152,7 @@ function HighlightPopover({ anchor, onClose }: { anchor: { x: number; y: number 
         <p className="hint">Type a headline first to pick words to highlight.</p>
       )}
       <div className="hl-custom">
-        <input ref={inputRef} type="text" className="input" value={content.highlight} placeholder="Or type exact phrase to highlight…"
+        <input ref={inputRef} type="text" className="input" value={content.highlight} placeholder="Or type exact phrase to highlight"
           onChange={(e) => setContent({ highlight: e.target.value, ...(e.target.value.trim() && isStack ? { highlightOnSocial: true } : {}) })} />
         <button type="button" className="btn sm" disabled={!content.headline.trim()} onClick={() => applyPhrase(suggestHighlight(content.headline))} title="Auto-pick figure or number">
           <Icon name="sparkle" size={13} />Suggest
@@ -1195,7 +1195,7 @@ export function Stage({ base }: { base: Assets }) {
                     onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}>
                     {inlineSel ? (
                       <button type="button" className="chl-btn primary" onClick={() => highlightInlineSelection(inlineSel)}>
-                        <Icon name="sparkle" size={13} />Highlight “{inlineSel.length > 26 ? inlineSel.slice(0, 26) + '…' : inlineSel}”
+                        <Icon name="sparkle" size={13} />Highlight “{inlineSel.length > 26 ? inlineSel.slice(0, 26)  : inlineSel}”
                       </button>
                     ) : (
                       <span className="chl-tip"><Icon name="sparkle" size={12} />Select text to highlight</span>

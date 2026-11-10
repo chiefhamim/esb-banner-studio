@@ -51,7 +51,7 @@ export interface EsbBridge {
   outreachInbox?: (force?: boolean) => Promise<EsbInboxResult>
   outreachSend?: (mail: EsbOutreachMail) => Promise<{ ok: true; messageId: string; messageKey?: string | null; sent24h: number } | { ok: false; error: string; nextAt?: number; duplicate?: boolean }>
   outreachJobSubmit?: (spec: JobSpec) => Promise<{ ok: true; jobId: string; rejected: { index: number; error: string }[] } | { ok: false; error: string }>
-  outreachJobControl?: (jobId: string, action: 'pause' | 'resume' | 'stop' | 'hold' | 'release', arg?: string | number) => Promise<{ ok: boolean; error?: string }>
+  outreachJobControl?: (jobId: string, action: 'pause' | 'resume' | 'stop' | 'hold' | 'release' | 'send-next', arg?: string | number) => Promise<{ ok: boolean; error?: string }>
   outreachPauseAll?: (on: boolean) => Promise<{ ok: boolean }>
   outreachJobs?: () => Promise<JobSnapshot[]>
   outreachEvents?: (q?: { since?: string; before?: string; from?: number; to?: number; jobId?: string; campaignId?: string; types?: string[]; q?: string; limit?: number; includeDry?: boolean }) => Promise<{ events: OutreachEvent[]; hasMore: boolean }>

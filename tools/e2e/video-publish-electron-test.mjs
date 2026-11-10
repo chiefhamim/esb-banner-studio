@@ -152,7 +152,7 @@ try {
 
   // post tab: pick the 9:16 render; YouTube private + Facebook Reel draft; Approve in the (stubbed) native dialog
   await page.getByRole('button', { name: 'Show in folder' }).first().isVisible()
-  await page.locator('.vw-q-out.st-done', { hasText: '9:16' }).getByRole('button', { name: 'Publish…' }).click()
+  await page.locator('.vw-q-out.st-done', { hasText: '9:16' }).getByRole('button', { name: 'Publish' }).click()
   await page.waitForSelector('.vw-pub-post')
   await page.waitForFunction(() => /Everything checks out|could not be read|×/.test(document.querySelector('[aria-label="Checks"]')?.textContent ?? '') || document.querySelectorAll('[aria-label="Checks"] .vw-error').length > 0, null, { timeout: 60000 })
   await page.locator('label:has-text("Facebook Reel")').locator('input').check()
@@ -161,7 +161,7 @@ try {
   const checksText = await page.locator('[aria-label="Checks"]').innerText()
   console.log('checks:', checksText.replace(/\s+/g, ' ').slice(0, 500))
   await answer(1)
-  await page.getByRole('button', { name: 'Approve…' }).click()
+  await page.getByRole('button', { name: 'Approve' }).click()
   // the new post exists once main lists a second job; it is judged when every job has finished
   for (let i = 0; i < 500; i++) { const js = (await vp('vpubJobs')).jobs ?? []; if (js.length >= 2 && js.every((j) => ['done', 'failed', 'cancelled'].includes(j.status))) break; await new Promise((r) => setTimeout(r, 300)) }
   await page.waitForFunction(() => document.querySelectorAll('.vw-pub-post .vw-q-job.st-done, .vw-pub-post .vw-q-job.st-failed').length >= 2, null, { timeout: 30000 })

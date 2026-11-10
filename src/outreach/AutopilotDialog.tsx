@@ -52,7 +52,7 @@ export function AutopilotDialog({ onClose }: { onClose?: () => void }) {
   if (!initial) {
     return (
       <Dialog title="Sending settings" kicker="OUTREACH" width={640} onClose={() => (onClose ? onClose() : ui.set({ sheet: null }))}>
-        <p className="or-muted">{window.esb?.outreachSend ? 'Reading the saved settings…' : 'Sending settings live in the ESB Studio desktop app — the browser preview cannot read them.'}</p>
+        <p className="or-muted">{window.esb?.outreachSend ? 'Reading the saved settings' : 'Sending settings live in the ESB Studio desktop app — the browser preview cannot read them.'}</p>
       </Dialog>
     )
   }
@@ -313,7 +313,7 @@ function SendingForm({ initial, onClose }: { initial: AutopilotSettings; onClose
           <div className="or-plan" role="status" aria-live="polite" data-testid="or-plan">
             <span className="or-plan-ic" aria-hidden><Icon name="clock" size={14} /></span>
             <div className="or-plan-body">
-              {live ? <p className="or-plan-line" data-testid="or-plan-line">{planLine(live, { campaign: !!camp })}</p> : <p className="or-plan-line or-muted">{window.esb?.outreachPlan ? 'Working out the plan…' : 'The plan needs the desktop app.'}</p>}
+              {live ? <p className="or-plan-line" data-testid="or-plan-line">{planLine(live, { campaign: !!camp })}</p> : <p className="or-plan-line or-muted">{window.esb?.outreachPlan ? 'Working out the plan' : 'The plan needs the desktop app.'}</p>}
               {planError && <p className="or-plan-warn bad">{planError}</p>}
               {live?.warnings.map((w, i) => (
                 <p key={i} className={'or-plan-warn' + (w.kind === 'anyHour' || w.kind === 'ramp' ? ' soft' : '')} data-testid={`or-plan-warn-${w.kind}`}>
@@ -360,7 +360,7 @@ function SendingForm({ initial, onClose }: { initial: AutopilotSettings; onClose
               </div>
               <div className="or-adv-row">
                 <Switch checked={warmupRamp} onChange={setWarmupRamp} label="Start slowly (warm-up)" />
-                <p className="or-adv-why">For a new address: the first sending days allow 30, 50, 70… emails until your daily number is reached. Lowers today’s limit while it lasts.</p>
+                <p className="or-adv-why">For a new address: the first sending days allow 30, 50, 70 and so on until your daily number is reached. Lowers today’s limit while it lasts.</p>
               </div>
               <div className="or-adv-row">
                 <Switch checked={traySending} onChange={setTraySending} label="Keep sending from the tray when I close the window" />

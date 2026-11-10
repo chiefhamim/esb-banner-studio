@@ -83,7 +83,7 @@ export function PublishDialog(p: {
             (
             <button type="button" className="btn primary" onClick={() => setArmed(true)} disabled={blocked || armed}
               title={p.updating ? 'Change the article that is live now — a 5-second countdown you can stop' : 'Publish live to esbpowerline.com — a 5-second countdown you can stop'}>
-              <Icon name="upload" size={14} /><span>{p.busy ? (p.updating ? 'Updating…' : 'Publishing…') : verb + (p.fbOn && p.fbPage ? ' + Facebook' : '')}</span>
+              <Icon name="upload" size={14} /><span>{p.busy ? (p.updating ? 'Updating' : 'Publishing') : verb + (p.fbOn && p.fbPage ? ' + Facebook' : '')}</span>
             </button>
             )
           )}

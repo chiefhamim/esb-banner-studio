@@ -97,7 +97,7 @@ export function TitlesTab({ bug, onBug, onAddLogo }: { bug: boolean; onBug: (on:
           )}
           <textarea ref={bodyRef} className="vw-tt-body" readOnly value={draft.body} rows={4} aria-label="The story: select a quote" onSelect={takeSelection} onMouseUp={takeSelection} onKeyUp={takeSelection} />
           <div className="vw-tt-quote-row">
-            <span className="vw-preset-desc">{sel ? `Quote: “${sel.length > 90 ? sel.slice(0, 88) + '…' : sel}”` : quotes.length ? 'Pick a quote above or select one in the story.' : 'Select a quote in the story text above.'}</span>
+            <span className="vw-preset-desc">{sel ? `Quote: “${sel.length > 90 ? sel.slice(0, 88)  : sel}”` : quotes.length ? 'Pick a quote above or select one in the story.' : 'Select a quote in the story text above.'}</span>
             <button type="button" className="btn xs vw-tt-quotecard" disabled={!sel} onClick={() => add('quote', { quote: sel })}><Icon name="plus" size={12} />Quote card</button>
           </div>
         </div>

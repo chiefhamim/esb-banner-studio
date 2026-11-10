@@ -393,7 +393,10 @@ function createEngine(deps = {}) {
     const elapsedSinceLastSendMs = now - lastSendAt
     const effectiveGapMs = Math.round((requiredGapSec * 1000) / speed)
     const gapKey = `${cfg.minDelaySec}|${cfg.maxDelaySec}`
-    if (job.why === 'gap' && job.until && job.gapKey === gapKey) {
+    if (job.skipGapOnce) {
+      // the editor asked for the next email now: this one send goes without the gap
+      job.skipGapOnce = false
+    } else if (job.why === 'gap' && job.until && job.gapKey === gapKey) {
       // the gap after the last send was chosen once, when that send finished (step 8), and announced as job.until —
       // wait it out exactly, never re-roll it (a re-roll made the countdown jump or vanish). A pacing change in
       // Settings (different gapKey) falls through to the ordinary check below, so it applies from the next send.
@@ -937,6 +940,19 @@ function createEngine(deps = {}) {
       if (isRunning && !activeTimer) {
         activeTimer = setTimer(tick, 100)
       }
+      return { ok: true }
+    }
+
+    // the editor's "Send next now": skips the pacing gap the job is waiting out, once. Only the gap — sending hours,
+    // the daily limit, per-organisation spacing and held contacts still apply (the next send is checked as usual).
+    if (action === 'send-next') {
+      if (job.status !== 'waiting' || job.why !== 'gap') return { ok: false, error: 'Nothing to skip: the job is not waiting out a pacing gap' }
+      job.skipGapOnce = true
+      job.until = clock()
+      jobs.saveState(job, { force: true })
+      events.append({ type: 'job.skip-gap', jobId: job.id, campaignId: job.campaignId, by: 'user', dry: job.dry })
+      if (activeTimer) { clearTimer(activeTimer); activeTimer = null }
+      if (isRunning) activeTimer = setTimer(tick, 50)
       return { ok: true }
     }
 

@@ -21,7 +21,7 @@ export function ImageOptions({ dest, base }: { dest: Dest; base: Assets | null }
       <button type="button" className="io-sum" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         <span className="io-sum-main">{o.scale}× · {kind}{o.type === 'jpeg' ? ` · ${Math.round(o.quality * 100)}%` : ''}</span>
         <span className="io-sum-px">{px.w} × {px.h}</span>
-        <span className="io-sum-size">{bytes == null ? 'measuring…' : '≈ ' + humanSize(bytes)}</span>
+        <span className="io-sum-size">{bytes == null ? 'measuring' : '≈ ' + humanSize(bytes)}</span>
         <Icon name="chevDown" size={13} className="io-chev" />
       </button>
       {open && (

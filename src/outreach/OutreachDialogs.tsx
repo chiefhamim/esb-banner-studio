@@ -1,6 +1,7 @@
 // The desk's sheets: signatures, the house prompt every AI job follows, a name (rename / save as template) and
 // Review & send — the last look before a batch starts, now or at a time.
 
+import { previewDoc } from './previewDoc'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, uid, useDesk, useOutreachStore } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
@@ -30,7 +31,7 @@ export function SignaturesDialog() {
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
   const open = (sid: string) => { const x = s.signatures.find((y) => y.id === sid); if (!x) return; setId(sid); setName(x.name); setText(x.text) }
   const dirty = !!cur && (name !== cur.name || text !== cur.text)
-  const html = useMemo(() => withViewerMargin(renderEmail({ body: 'Dear Sir/Madam,\n\n…', signature: text, letterhead: false, logoSrc: logo, fontFamily: s.fontFamily }).html, false), [text, logo, s.fontFamily])
+  const html = useMemo(() => withViewerMargin(renderEmail({ body: 'Dear Sir/Madam,\n\n', signature: text, letterhead: false, logoSrc: logo, fontFamily: s.fontFamily }).html, false), [text, logo, s.fontFamily])
   const close = () => ui.set({ sheet: null })
 
   return (
@@ -54,7 +55,7 @@ export function SignaturesDialog() {
           <Field label="Signature — the same marks as the letter: **bold**, [words](https://link). Enter = new paragraph, Shift+Enter = line break">
             <textarea className="input or-sig-text" rows={7} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => softBreakOnEnter(e, text, setText)} />
           </Field>
-          <iframe className="or-frame or-sig-frame" title="Signature preview" sandbox="" srcDoc={html} />
+          <iframe className="or-frame or-sig-frame" title="Signature preview" sandbox="" srcDoc={previewDoc(html)} />
         </div>
       </div>
     </Dialog>
@@ -79,7 +80,7 @@ export function FooterDialog() {
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
   const close = () => ui.set({ sheet: null })
   const html = useMemo(() => renderEmail({
-    body: 'Dear Sir/Madam,\n\n…', letterhead: true, logoSrc: logo, footerLine: text, fontFamily: s.fontFamily,
+    body: 'Dear Sir/Madam,\n\n', letterhead: true, logoSrc: logo, footerLine: text, fontFamily: s.fontFamily,
     headerBg: s.headerBg, footerBg: useBg ? hex : '', stripeColors: s.stripeColors,
   }).html, [text, logo, s.headerBg, useBg, hex, s.stripeColors, s.fontFamily])
   const mark = async (kind: string) => {
@@ -121,7 +122,7 @@ export function FooterDialog() {
             {useBg && <input type="color" className="input" style={{ width: 44, height: 32, padding: 2 }} value={hex} onChange={(e) => setHex(e.target.value)} aria-label="Footer background colour" />}
           </div>
         </Field>
-        <iframe className="or-frame or-sig-frame" title="Footer preview" sandbox="" srcDoc={html} />
+        <iframe className="or-frame or-sig-frame" title="Footer preview" sandbox="" srcDoc={previewDoc(html)} />
       </div>
     </Dialog>
   )
@@ -145,7 +146,7 @@ export function HeaderDialog() {
   useEffect(() => { void logoDataUrl().then(setLogo) }, [])
   const close = () => ui.set({ sheet: null })
   const html = useMemo(() => renderEmail({
-    body: 'Dear Sir/Madam,\n\nWe are pleased to introduce ESB Power Line…', letterhead: true, logoSrc: logo,
+    body: 'Dear Sir/Madam,\n\nWe are pleased to introduce ESB Power Line', letterhead: true, logoSrc: logo,
     footerLine: s.footerLine, headerBg: useBg ? hex : '', footerBg: s.footerBg, fontFamily: fontId, stripeColors: stripesCsv,
   }).html, [logo, s.footerLine, s.footerBg, useBg, hex, fontId, stripesCsv])
   const save = () => {
@@ -184,7 +185,7 @@ export function HeaderDialog() {
         <Field label="Font — the handful that render as themselves in Outlook, Gmail and Apple Mail, not whatever is installed on this PC (which the recipient's inbox never sees)">
           <Select<string> value={fontId} onChange={setFontId} options={EMAIL_FONTS.map((f) => ({ value: f.id, label: f.label }))} />
         </Field>
-        <iframe className="or-frame or-sig-frame" title="Header preview" sandbox="" srcDoc={html} />
+        <iframe className="or-frame or-sig-frame" title="Header preview" sandbox="" srcDoc={previewDoc(html)} />
       </div>
     </Dialog>
   )
@@ -500,7 +501,7 @@ export function ReviewSendDialog() {
                 <div key={ct.id} className="or-rs-spot-card">
                   <span className="or-rs-spot-to">{ct.personName || ct.email}</span>
                   <span className="or-rs-spot-sub">{msg.subject}</span>
-                  <span className="or-rs-spot-body">{msg.body.slice(0, 100)}…</span>
+                  <span className="or-rs-spot-body">{msg.body.slice(0, 100)}</span>
                   <button
                     type="button"
                     className="or-link-btn"
@@ -645,6 +646,40 @@ export function TemplatesDialog() {
             </div>
           ))}
         </div>
+      )}
+    </Dialog>
+  )
+}
+
+/** List → Saved lists: every mailing list kept on this computer, with what uses it, and Delete. */
+export function ListsDialog() {
+  const s = useDesk()
+  const ui = useOutreachUi()
+  const close = () => ui.set({ sheet: null })
+  const del = async (id: string, name: string, usedBy: string[]) => {
+    const ok = await ask({
+      title: `Delete ${name}?`,
+      body: usedBy.length ? `${usedBy.join(', ')} ${usedBy.length === 1 ? 'uses' : 'use'} it. They keep their letters and their record of who was sent to, without a list until you import one.` : 'It is removed from this computer. You can import it again at any time.',
+      ok: 'Delete list', danger: true,
+    })
+    if (ok) await s.deleteList(id)
+  }
+  return (
+    <Dialog title="Saved lists" kicker="OUTREACH" width={560} onClose={close} footer={<><div className="spacer" /><button type="button" className="btn primary" onClick={close}>Done</button></>}>
+      {s.lists.length === 0 ? <p className="or-muted">No lists on this computer.</p> : (
+        <ul className="or-lists">
+          {s.lists.map((l) => {
+            const usedBy = s.campaigns.filter((c) => c.listId === l.id).map((c) => c.name)
+            const rows = l.sheets.reduce((n, x) => n + x.contacts, 0)
+            return (
+              <li key={l.id} className="or-lists-row">
+                <span className="or-file-icon"><Icon name="users" size={15} /></span>
+                <span className="or-lists-t"><b>{l.fileName}</b><small>{rows} contacts · added {fmtShortDay(l.addedAt)}{usedBy.length ? ` · used by ${usedBy.join(', ')}` : ' · not used by a campaign'}</small></span>
+                <button type="button" className="btn sm or-list-remove" aria-label={`Delete ${l.fileName}`} data-tip="Delete this list from this computer" disabled={s.run !== 'idle'} onClick={() => void del(l.id, l.fileName, usedBy)}><Icon name="trash" size={13} /></button>
+              </li>
+            )
+          })}
+        </ul>
       )}
     </Dialog>
   )

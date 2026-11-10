@@ -10,6 +10,7 @@ export type RightTab = 'send' | 'contact' | 'review'
 export type DeskView = 'compose' | 'activity'
 export type Sheet =
   | null
+  | 'lists'
   | 'sender'
   | 'ai'
   | 'signatures'

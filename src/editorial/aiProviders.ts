@@ -141,10 +141,10 @@ export interface AiProviderMeta {
 }
 
 export const AI_PROVIDERS: AiProviderMeta[] = [
-  { id: 'gemini', name: 'Gemini', keyUrl: 'https://aistudio.google.com/apikey', keyPlaceholder: 'AIza…', color: '#4285f4', autoLabel: 'Auto — newest Flash (fast)', help: 'Google AI Studio → Get API key. Pro models translate most carefully; Flash is fastest.' },
-  { id: 'anthropic', name: 'Claude', keyUrl: 'https://console.anthropic.com/settings/keys', keyPlaceholder: 'sk-ant-…', color: '#d97757', autoLabel: 'Auto — Claude Sonnet 5.5', help: 'Anthropic Console → API keys. Billed to that Console account, separate from a Claude.ai subscription.' },
-  { id: 'openai', name: 'OpenAI', keyUrl: 'https://platform.openai.com/api-keys', keyPlaceholder: 'sk-…', color: '#10a37f', autoLabel: 'Auto — newest GPT', help: 'OpenAI Platform → API keys. Billed to the Platform account, separate from ChatGPT Plus.' },
-  { id: 'openrouter', name: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', keyPlaceholder: 'sk-or-…', color: '#6467f2', autoLabel: 'Auto — OpenRouter picks', help: 'One key for many model families (Llama, Mistral, DeepSeek, Qwen and more). openrouter.ai → Keys.' },
+  { id: 'gemini', name: 'Gemini', keyUrl: 'https://aistudio.google.com/apikey', keyPlaceholder: 'Starts with AIza', color: '#4285f4', autoLabel: 'Auto — newest Flash (fast)', help: 'Google AI Studio → Get API key. Pro models translate most carefully; Flash is fastest.' },
+  { id: 'anthropic', name: 'Claude', keyUrl: 'https://console.anthropic.com/settings/keys', keyPlaceholder: 'Starts with sk-ant-', color: '#d97757', autoLabel: 'Auto — Claude Sonnet 5.5', help: 'Anthropic Console → API keys. Billed to that Console account, separate from a Claude.ai subscription.' },
+  { id: 'openai', name: 'OpenAI', keyUrl: 'https://platform.openai.com/api-keys', keyPlaceholder: 'Starts with sk-', color: '#10a37f', autoLabel: 'Auto — newest GPT', help: 'OpenAI Platform → API keys. Billed to the Platform account, separate from ChatGPT Plus.' },
+  { id: 'openrouter', name: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys', keyPlaceholder: 'Starts with sk-or-', color: '#6467f2', autoLabel: 'Auto — OpenRouter picks', help: 'One key for many model families (Llama, Mistral, DeepSeek, Qwen and more). openrouter.ai → Keys.' },
 ]
 
 export const providerMeta = (id: AiProviderId) => AI_PROVIDERS.find((p) => p.id === id)!

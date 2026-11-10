@@ -40,7 +40,7 @@ function MailSenderCard() {
   const set = mail?.settings
   const fail = smtp.state === 'bad' ? mailFailView(smtp.kind, smtp.error, { host: set?.host }) : null
   const tone = !desktop || !set ? 'none' : !mail?.hasPassword || fail ? 'bad' : smtp.state === 'busy' ? 'checking' : 'ok'
-  const word = !desktop ? 'Desktop app only' : !set ? 'Not set up' : !mail?.hasPassword ? 'No app password' : smtp.state === 'busy' ? 'Checking…' : fail ? fail.text : smtp.state === 'ok' ? 'Connected' : 'Saved'
+  const word = !desktop ? 'Desktop app only' : !set ? 'Not set up' : !mail?.hasPassword ? 'No app password' : smtp.state === 'busy' ? 'Checking' : fail ? fail.text : smtp.state === 'ok' ? 'Connected' : 'Saved'
   return (
     <div className={'acct-card ' + tone}>
       <span className="acct-logo aimark" aria-hidden><Icon name="mail" size={18} /></span>
@@ -181,7 +181,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
             {error && <div className="signin-error" role="alert"><Icon name="info" size={14} /><span>{error}</span></div>}
 
             <button type="submit" className="btn primary signin-submit" disabled={busy || !email.trim() || !password}>
-              {busy ? <><span className="signin-spin" aria-hidden />Signing in…</> : 'Sign in'}
+              {busy ? <><span className="signin-spin" aria-hidden />Signing in</> : 'Sign in'}
             </button>
             <div className="signin-foot">
               <span>Your password goes only to the site's sign-in service. The Studio keeps the session, not the password.</span>
@@ -214,15 +214,15 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
               <div className={'acct-card ' + (siteCheck.s === 'checking' ? 'checking' : siteCheck.s === 'bad' || !siteStatus.connected ? 'bad' : 'ok')}>
                 <img className="acct-logo" src={siteIcon} alt="" />
                 <div className="acct-main">
-                  <div className="acct-title"><b>esbpowerline.com</b><span className={'acct-pill ' + (siteCheck.s === 'checking' ? 'checking' : siteCheck.s === 'bad' || !siteStatus.connected ? 'bad' : 'ok')}><i />{siteCheck.s === 'checking' ? 'Checking…' : !siteStatus.connected ? 'Unreachable' : siteCheck.s === 'bad' ? 'Needs attention' : `Connected · ${siteStatus.latencyMs} ms`}</span></div>
+                  <div className="acct-title"><b>esbpowerline.com</b><span className={'acct-pill ' + (siteCheck.s === 'checking' ? 'checking' : siteCheck.s === 'bad' || !siteStatus.connected ? 'bad' : 'ok')}><i />{siteCheck.s === 'checking' ? 'Checking' : !siteStatus.connected ? 'Unreachable' : siteCheck.s === 'bad' ? 'Needs attention' : `Connected · ${siteStatus.latencyMs} ms`}</span></div>
                   <p>CMS and article database · signed in as {session.email}</p>
                   {siteCheck.s === 'bad' && siteBad.map((c) => <p key={c.id} className="acct-err">{c.label}: {c.detail}</p>)}
                   {siteCheck.at && siteCheck.s !== 'checking' && <p className="acct-fine">{siteCheck.checks.filter((c) => c.status === 'ok').length} checks passed{siteCheck.checks.some((c) => c.status === 'skip') ? ', ' + siteCheck.checks.filter((c) => c.status === 'skip').length + ' skipped' : ''} · {fmtTime(siteCheck.at)}</p>}
                   {expires && <p className="acct-fine">Session renews automatically · current token until {fmtTime(expires)}</p>}
                   <div className="acct-actions">
-                    <button type="button" className="btn sm primary" onClick={() => void openCms('/cms/articles/new')} disabled={opening}><Icon name="externalLink" size={13} /><span>{opening ? 'Opening…' : 'New article'}</span></button>
+                    <button type="button" className="btn sm primary" onClick={() => void openCms('/cms/articles/new')} disabled={opening}><Icon name="externalLink" size={13} /><span>{opening ? 'Opening' : 'New article'}</span></button>
                     <button type="button" className="btn sm" onClick={() => void openCms('/cms')} disabled={opening}><Icon name="globe" size={13} /><span>CMS dashboard</span></button>
-                    <button type="button" className="btn sm" onClick={() => void checkSite()} disabled={siteCheck.s === 'checking'}><Icon name="refresh" size={13} className={siteCheck.s === 'checking' ? 'spin' : ''} /><span>{siteCheck.s === 'checking' ? 'Checking…' : 'Check again'}</span></button>
+                    <button type="button" className="btn sm" onClick={() => void checkSite()} disabled={siteCheck.s === 'checking'}><Icon name="refresh" size={13} className={siteCheck.s === 'checking' ? 'spin' : ''} /><span>{siteCheck.s === 'checking' ? 'Checking' : 'Check again'}</span></button>
                   </div>
                 </div>
               </div>
@@ -236,14 +236,14 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
                 <div className="acct-main">
                   <div className="acct-title">
                     <b>{fb ? fbState.s === 'ok' && fbState.msg ? fbState.msg : fb.pageName || 'Facebook Page' : 'Facebook Page'}</b>
-                    <span className={'acct-pill ' + (!fb ? 'none' : fbState.s)}><i />{!fb ? 'Not connected' : fbState.s === 'checking' ? 'Checking…' : fbState.s === 'ok' ? 'Connected' : fbState.s === 'bad' ? 'Needs attention' : 'Saved'}</span>
+                    <span className={'acct-pill ' + (!fb ? 'none' : fbState.s)}><i />{!fb ? 'Not connected' : fbState.s === 'checking' ? 'Checking' : fbState.s === 'ok' ? 'Connected' : fbState.s === 'bad' ? 'Needs attention' : 'Saved'}</span>
                   </div>
                   <p>{fb ? `Page ID ${fb.pageId} · posts the 4:5 banner when you publish` : 'Connect the ESB Page to post the banner to Facebook when you publish.'}</p>
                   {fb && fbState.s === 'bad' && fbState.msg && <p className="acct-err">{fbState.msg}</p>}
                   {fb && fbState.s !== 'bad' && <p className="acct-fine">{fb.permanent ? 'Token does not expire.' : 'Token from the Graph API Explorer: it can stop within an hour. Open Change Page, then “Make it permanent”.'}</p>}
                   <div className="acct-actions">
                     <button type="button" className={'btn sm' + (fb ? '' : ' primary')} onClick={() => setFbDialog(true)}><Icon name="link" size={13} /><span>{fb ? 'Change Page or token' : 'Connect Page'}</span></button>
-                    {fb && <button type="button" className="btn sm" onClick={() => void checkFb(fb, true)} disabled={fbState.s === 'checking'}><Icon name="refresh" size={13} /><span>{fbState.s === 'checking' ? 'Checking…' : 'Check again'}</span></button>}
+                    {fb && <button type="button" className="btn sm" onClick={() => void checkFb(fb, true)} disabled={fbState.s === 'checking'}><Icon name="refresh" size={13} /><span>{fbState.s === 'checking' ? 'Checking' : 'Check again'}</span></button>}
                   </div>
                 </div>
               </div>
@@ -264,7 +264,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
               <div className="acct-sec-head">
                 <h3>Connection check</h3>
                 {checks && !checking && <em className={failed ? 'bad' : 'good'}>{failed ? `${failed} to fix` : 'All clear'}</em>}
-                <button type="button" className="btn sm conn-run" onClick={() => void check()} disabled={checking}>{checking ? 'Checking…' : checks ? 'Run again' : 'Run check'}</button>
+                <button type="button" className="btn sm conn-run" onClick={() => void check()} disabled={checking}>{checking ? 'Checking' : checks ? 'Run again' : 'Run check'}</button>
               </div>
               {checks && checks.length > 0 ? (
                 <ul className="conn-list" aria-live="polite">

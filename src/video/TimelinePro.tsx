@@ -316,7 +316,7 @@ function EaseMenus({ clip, prop }: { clip: Clip; prop: string }) {
     const items: MenuEntry[] = [
       { heading: `Ease after ${formatShortTime(clip.start + menu.t)}` },
       ...EASES.map((e) => ({ label: EASE_LABEL[e], hint: e === 'hold' ? 'Keeps this value until the next key' : undefined, checked: cur === e, onClick: () => edit((c) => propsAt(c, prop, menu.t).reduce((acc, p) => setKeyEase(acc, p, menu.t, e), c)) })),
-      { label: 'Custom curve…', checked: cur === 'bezier', onClick: () => { edit((c) => propsAt(c, prop, menu.t).reduce((acc, p) => (easeName(keyAt(acc, p, menu.t) ?? {}) === 'bezier' ? acc : setKeyEase(acc, p, menu.t, 'bezier', ref ? easePoints(ref) : DEFAULT_BEZIER)), c)); setTimeout(() => useKfUi.setState({ curve: { ...menu, ...curveAnchor() }, menu: null }), 0) } },
+      { label: 'Custom curve', checked: cur === 'bezier', onClick: () => { edit((c) => propsAt(c, prop, menu.t).reduce((acc, p) => (easeName(keyAt(acc, p, menu.t) ?? {}) === 'bezier' ? acc : setKeyEase(acc, p, menu.t, 'bezier', ref ? easePoints(ref) : DEFAULT_BEZIER)), c)); setTimeout(() => useKfUi.setState({ curve: { ...menu, ...curveAnchor() }, menu: null }), 0) } },
       { divider: true },
       { label: 'Delete keyframe', icon: 'trash', danger: true, onClick: () => edit((c) => propsAt(c, prop, menu.t).reduce((acc, p) => removeKey(acc, p, menu.t), c)) },
     ]

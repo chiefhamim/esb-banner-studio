@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { KeyboardEvent, PointerEvent as RPointerEvent, ReactNode } from 'react'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
@@ -13,8 +14,11 @@ import type { ColState, SideColumn } from './sideColumnState'
  * While dragging it writes the width through `apply` (a CSS variable or grid template — no React render per frame) and
  * only touches the column's state when the rail flips, so the content swaps for the rail as you cross the line.
  */
-export function ColumnHandle({ col, label, root, apply, max }: {
+export function ColumnHandle({ col, label, root, apply, max, foldHost }: {
   col: SideColumn
+  /** A scrolling element inside the column (selector) that should carry the open column's fold button, so the button
+   * scrolls with the content it sits beside (Graphics' Inspector); folded, the button is the rail's again. */
+  foldHost?: string
   label: string
   /** Element that gets `resizing` (no transitions, no hover under the pointer) during the drag. */
   root: () => HTMLElement | null
@@ -133,12 +137,20 @@ export function ColumnHandle({ col, label, root, apply, max }: {
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
   const edge = col.side === 'left' ? 'r' : 'l'
-  return (
-    <>
-      <button type="button" className={'col-fold ' + col.side} aria-label={col.collapsed ? `Expand ${label}` : `Collapse ${label}`} data-tip={col.collapsed ? 'Expand' : 'Collapse'} data-tip-pos={col.side === 'left' ? 'right' : 'left'} 
+  const [host, setHost] = useState<HTMLElement | null>(null)
+  useLayoutEffect(() => {
+    if (!foldHost || col.collapsed) { setHost(null); return }
+    setHost(ref.current?.parentElement?.querySelector<HTMLElement>(foldHost) ?? null)
+  }, [foldHost, col.collapsed])
+  const foldBtn = (
+      <button type="button" className={'col-fold ' + col.side + (host ? ' in-host' : '')} aria-label={col.collapsed ? `Expand ${label}` : `Collapse ${label}`} data-tip={col.collapsed ? 'Expand' : 'Collapse'} data-tip-pos={col.side === 'left' ? 'right' : 'left'} 
         onClick={toggle}>
         <Icon name={col.side === 'left' ? 'panelLeft' : 'panelRight'} size={16} />
       </button>
+  )
+  return (
+    <>
+    {host ? createPortal(foldBtn, host) : foldBtn}
     <div ref={ref} className={`splitter vert ${edge} col-handle`} role="separator" aria-orientation="vertical" aria-label={label}
       aria-valuenow={col.px} aria-valuemin={RAIL_W} aria-valuemax={spec.max} aria-expanded={!col.collapsed} tabIndex={0}
       data-tip={col.collapsed ? 'Drag to open · double-click for the default width' : 'Drag to resize · double-click for the default width'} data-tip-pos={col.side === 'left' ? 'right' : 'left'}

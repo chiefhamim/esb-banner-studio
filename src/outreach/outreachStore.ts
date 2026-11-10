@@ -212,6 +212,8 @@ interface OutreachState extends Saved {
   useList: (listId: string) => Promise<void>
   /** Take the list off the open campaign (the campaign, its letter and its send record stay). */
   removeList: () => Promise<void>
+  /** Delete a saved list from this computer; campaigns that used it keep their letters and records, without a list. */
+  deleteList: (listId: string) => Promise<void>
   setSheet: (name: string) => void
   setRecipients: (addresses: string[]) => void
   setAudience: (a: Partial<Campaign['audience']>) => void
@@ -504,6 +506,20 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
       set({ contacts: [], sheets: [], activeContact: null, importNote: null })
       await loadContacts()
       get().addLog('info', `${name} removed from this campaign`)
+    },
+    deleteList: async (listId) => {
+      if (get().run !== 'idle') { get().addLog('warn', 'Stop the batch before deleting a list'); return }
+      const name = get().lists.find((l) => l.id === listId)?.fileName ?? 'The list'
+      for (const c of get().campaigns.filter((x) => x.listId === listId)) {
+        set({ campaigns: get().campaigns.map((x) => (x.id === c.id ? { ...x, listId: null, sheet: '', audience: { group: null, purposes: [] }, updatedAt: Date.now() } : x)) })
+      }
+      listCache.delete(listId)
+      void idbDel(`list:${listId}`)
+      void idbDel(`verify:${listId}`)
+      set({ lists: get().lists.filter((l) => l.id !== listId) })
+      if (!get().campaign()?.listId) set({ contacts: [], sheets: [], activeContact: null, importNote: null })
+      await loadContacts()
+      get().addLog('info', `${name} deleted from this computer`)
     },
     useList: async (listId) => {
       if (get().run !== 'idle') return

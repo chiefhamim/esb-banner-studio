@@ -76,7 +76,7 @@ export function ColourPanel({ clip, onChange }: { clip: Clip; onChange: (c: Clip
         </div>
       ) : <p className="vw-hint">A 3D .cube file (17, 33 or 65 points), applied after the sliders.</p>}
       {lutText && lut && <ParamSlider p={INTENSITY} value={paramValue(lut, INTENSITY) as number} onChange={(v) => onChange(setParam(clip, lut.id, 'intensity', v))} cls="vw-s-fx-lut-intensity" />}
-      <button type="button" className="btn sm vw-fx-load" disabled={reading} onClick={() => fileRef.current?.click()}><Icon name="upload" size={12} />{reading ? 'Reading…' : lutText ? 'Replace .cube' : 'Load .cube LUT'}</button>
+      <button type="button" className="btn sm vw-fx-load" disabled={reading} onClick={() => fileRef.current?.click()}><Icon name="upload" size={12} />{reading ? 'Reading' : lutText ? 'Replace .cube' : 'Load .cube LUT'}</button>
       <input ref={fileRef} type="file" accept=".cube,text/plain" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void loadLut(f) }} />
       {error && <p className="vw-fx-error" role="alert"><Icon name="alert" size={12} />{error}</p>}
     </FxSection>

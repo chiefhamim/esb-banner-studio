@@ -136,7 +136,7 @@ export function DataPanel() {
           <button type="button" className="btn xs vw-data-load" disabled={busy || !date || (!session && !saved.includes(date))} data-tip={!session && !saved.includes(date) ? 'Sign in to load this day (only saved days open offline)' : undefined} onClick={() => void run(date, () => (session ? loadGridDay(date) : cachedGridDay(date)))}>Load</button>
           <button type="button" className="btn xs subtle vw-data-latest" disabled={busy || !session} data-tip={session ? 'The newest day the site has published' : 'Sign in to ask the site for its newest day'} onClick={() => void run('the newest published day', () => loadLatestGridDay())}>Latest</button>
         </div>
-        {load.state === 'loading' && <p className="vw-hint vw-data-status">Reading {load.what}…</p>}
+        {load.state === 'loading' && <p className="vw-hint vw-data-status">Reading {load.what}</p>}
         {load.state === 'error' && <p className="vw-hint vw-data-error" role="alert"><Icon name="alert" size={12} /> {load.error}</p>}
         {day && (
           <p className="vw-hint vw-data-status">
@@ -242,7 +242,7 @@ export function DataCardInspector({ clip, locked, onChange }: { clip: Clip; lock
 
       <div className="vw-data-refresh">
         <button type="button" className="btn sm vw-data-refresh-btn" disabled={locked || refresh.state === 'checking' || !canFetchGrid() || !signedIn} data-tip={signedIn ? 'Ask the site for this day again and compare' : 'Sign in to check the site'} onClick={() => void check()}>
-          <Icon name="reset" size={12} />{refresh.state === 'checking' ? 'Checking…' : 'Refresh data'}
+          <Icon name="reset" size={12} />{refresh.state === 'checking' ? 'Checking' : 'Refresh data'}
         </button>
         {!signedIn && <p className="vw-hint">Not signed in: the card keeps its stored figure.</p>}
         {refresh.state === 'error' && <p className="vw-hint vw-data-error" role="alert">{refresh.error}. The card keeps its stored figure.</p>}

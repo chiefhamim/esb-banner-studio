@@ -19,7 +19,7 @@ interface Job { id: string; status: string; createdAt: number; title: string; fi
 type Api = { vpubRenders?: () => Promise<{ renders?: RenderEntry[] }>; vpubApprove?: (i: unknown) => Promise<{ ok: boolean; problems?: { message: string }[]; cancelled?: boolean; approvalToken?: string; error?: string }>; vpubStart?: (i: unknown) => Promise<{ ok: boolean; jobId?: string; error?: string }>; vpubJobs?: () => Promise<{ jobs?: Job[] }>; vpubRetry?: (id: string) => Promise<unknown>; vpubCancel?: (id: string) => Promise<unknown>; onVpubUpdate?: (cb: (j: Job) => void) => () => void }
 const esb = () => (window as unknown as { esb?: Api }).esb
 const KIND: Record<string, string> = { youtube: 'YouTube', facebook_reel: 'Facebook Reel', facebook_video: 'Facebook video' }
-const STEP_DONE: Record<string, string> = { done: '✓', running: '…', failed: '✕', pending: '·', waiting: '⏳' }
+const STEP_DONE: Record<string, string> = { done: '✓', running: '•', failed: '✕', pending: '·', waiting: '⏳' }
 
 export function PublishPost({ initialRenderId }: { initialRenderId?: string }) {
   const project = useVideoStore((s) => s.project)
@@ -140,7 +140,7 @@ export function PublishPost({ initialRenderId }: { initialRenderId?: string }) {
           </select>
         ) : <p className="vw-hint">No render yet. Export the video, or queue sizes in the Renders tab.</p>}
         {factsErr && <p className="vw-hint vw-error" role="alert">{factsErr}</p>}
-        {chosen && !facts && !factsErr && <p className="vw-hint" role="status">Reading the file…</p>}
+        {chosen && !facts && !factsErr && <p className="vw-hint" role="status">Reading the file</p>}
         {facts && <p className="vw-hint">{facts.facts.width}×{facts.facts.height} · {Math.round((facts.facts.durationSec ?? 0) * 10) / 10} s · {facts.facts.fps ?? '?'} fps {facts.facts.fpsMode === 'variable' ? '(variable)' : ''} · {facts.facts.videoCodec ?? '?'} / {facts.facts.audioCodec ?? 'no sound'}</p>}
       </section>
 
@@ -174,7 +174,7 @@ export function PublishPost({ initialRenderId }: { initialRenderId?: string }) {
         {needs.map((p) => <p key={p} className="vw-hint vw-error" role="alert">{p}</p>)}
         {warnings.map((p) => <p key={p} className="vw-hint vw-warn" role="status">{p}</p>)}
         {ready && !warnings.length && <p className="vw-hint" role="status">Everything checks out against the platforms’ rules.</p>}
-        <div className="vw-transcript-actions"><button type="button" className="btn primary" onClick={() => void approveAndPost()} disabled={!ready || busy} aria-busy={busy}>{busy ? 'Waiting for your approval…' : 'Approve…'}</button></div>
+        <div className="vw-transcript-actions"><button type="button" className="btn primary" onClick={() => void approveAndPost()} disabled={!ready || busy} aria-busy={busy}>{busy ? 'Waiting for your approval' : 'Approve'}</button></div>
         <p className="vw-hint">A window from the app asks you to approve exactly what will be posted and where. Nothing is posted before you press “Approve and post” in it.</p>
         {note && <p className="vw-hint" role="status">{note}</p>}
         {err && <p className="vw-hint vw-error" role="alert">{err}</p>}

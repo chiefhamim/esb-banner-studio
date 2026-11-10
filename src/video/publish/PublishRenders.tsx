@@ -74,7 +74,7 @@ export function PublishRenders({ onPublish }: { onPublish: (renderId: string) =>
                       {(o.status === 'queued' || o.status === 'running') && <button type="button" className="btn xs" onClick={() => cancel(o.id)}>Cancel</button>}
                       {o.status === 'done' && o.renderId && <>
                         <button type="button" className="btn xs" onClick={() => void show(o.renderId)}>Show in folder</button>
-                        <button type="button" className="btn xs primary" onClick={() => onPublish(o.renderId!)}>Publish…</button>
+                        <button type="button" className="btn xs primary" onClick={() => onPublish(o.renderId!)}>Publish</button>
                       </>}
                     </span>
                   </div>
@@ -100,7 +100,7 @@ export function PublishRenders({ onPublish }: { onPublish: (renderId: string) =>
                   <span className="vw-q-status">{r.exists ? mb(r.size) : 'File moved or deleted'}</span>
                   {r.exists && <span className="vw-q-actions">
                     <button type="button" className="btn xs" onClick={() => void show(r.id)}>Show in folder</button>
-                    <button type="button" className="btn xs primary" onClick={() => onPublish(r.id)}>Publish…</button>
+                    <button type="button" className="btn xs primary" onClick={() => onPublish(r.id)}>Publish</button>
                   </span>}
                 </div>
                 <span className="vw-hint">{new Date(r.at).toLocaleString()}</span>

@@ -238,7 +238,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
     if (filePath && window.esb?.startDrag) {
       e.preventDefault()
       window.esb.startDrag(filePath)
-      useStore.getState().setNotice('Dropping banner directly into post…')
+      useStore.getState().setNotice('Dropping banner directly into post')
       return
     }
     // Fallback: If not ready, prewarm and fire immediately
@@ -489,17 +489,17 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
             onPointerEnter={() => void prewarmDragFile()}
             onPointerDown={() => void prewarmDragFile()}
             onDragStart={handleDragStart}
-            title="Drag banner directly into Facebook composer, Chrome tab, WhatsApp, or File Explorer"
+            aria-label="Drag to post"
+            data-tip="Drag to post — drop the banner into Facebook, a Chrome tab, WhatsApp or File Explorer"
           >
-            <Icon name="hand" size={13} />
-            <span className="dpc-label">Drag to Post</span>
+            <Icon name="hand" size={14} />
             <span className="dpc-tag">{format === 'web' ? '16:9' : format === 'fb45' ? '4:5' : '1:1'}</span>
           </button>
         </div>
         <AiChip role="main" onToast={(m) => st().setNotice(m)} />
         <AccountButton onToast={(m) => st().setNotice(m)} />
         <div className="split">
-          <button className="btn primary" disabled={busy} onClick={() => setShowExport(true)}><Icon name="download" size={15} />{busy ? 'Exporting…' : 'Export'}</button>
+          <button className="btn primary" disabled={busy} onClick={() => setShowExport(true)}><Icon name="download" size={15} />{busy ? 'Exporting' : 'Export'}</button>
           <MenuButton className="primary split-caret" align="end" title="Quick export" items={[
             { label: 'Export options', icon: 'sliders', shortcut: 'Ctrl+E', onClick: () => setShowExport(true) },
             { divider: true },
@@ -557,7 +557,7 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
       </main>
 
       <aside className={'right' + railClass(rightCol)}>
-        <ColumnHandle col={rightCol} label="Resize the right panel" root={() => appRef.current} apply={liveSize('rw')} max={maxW} />
+        <ColumnHandle col={rightCol} label="Resize the right panel" root={() => appRef.current} apply={liveSize('rw')} max={maxW} foldHost=":scope > .scroll.insp" />
         <ColumnRail col={rightCol} label="Inspector and layers" items={[
           { id: 'inspector', icon: 'sliders', label: 'Inspector', onClick: () => {} },
           { id: 'elements', icon: 'grid', label: 'Elements', onClick: () => showDockTab('elements') },

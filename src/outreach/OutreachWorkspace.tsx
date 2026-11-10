@@ -20,7 +20,7 @@ import { AutopilotDialog } from './AutopilotDialog'
 import { SegmentsDialog } from './SegmentsDialog'
 import { SubjectVersionsDialog } from './SubjectVersionsDialog'
 import { AssistantDialog } from './AssistantDialog'
-import { AskDialog, FollowUpDialog, FooterDialog, HeaderDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog } from './OutreachDialogs'
+import { AskDialog, FollowUpDialog, FooterDialog, HeaderDialog, HousePromptDialog, NameDialog, ReviewSendDialog, SignaturesDialog, TemplatesDialog, ListsDialog } from './OutreachDialogs'
 import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, useOutreachStore, useDesk } from './outreachStore'
 import { ask, useOutreachUi, type LeftTab } from './outreachUi'
 import { downloadText, eligible, inAudience, resultsCsv, resumeBatch } from './campaign'
@@ -311,6 +311,7 @@ export function OutreachWorkspace() {
       {(ui.sheet === 'rename' || ui.sheet === 'save-template') && c && <NameDialog mode={ui.sheet} />}
       {ui.sheet === 'follow-up' && c && <FollowUpDialog />}
       {ui.sheet === 'templates' && <TemplatesDialog />}
+      {ui.sheet === 'lists' && <ListsDialog />}
       {ui.sheet === 'segments' && c && <SegmentsDialog onClose={() => ui.set({ sheet: null })} />}
       {ui.sheet === 'subject-versions' && c && <SubjectVersionsDialog onClose={() => ui.set({ sheet: null })} />}
       {ui.sheet === 'assistant' && <AssistantDialog onClose={() => ui.set({ sheet: null })} />}

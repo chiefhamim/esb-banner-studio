@@ -291,6 +291,44 @@ describe('outreach-engine: headless send loop, error recovery & lifecycle (§1.5
     expect(h.sentMails.length).toBe(2)
   })
 
+  // (4b) the editor's "Send next now" skips the pacing gap once, and only the gap
+  it('(4b) send-next skips the pacing gap once; the pace returns after it', async () => {
+    const h = createTestHarness({ settings: { pace: 'manual', minDelaySec: 300, maxDelaySec: 300 } })
+    h.engine.start()
+    h.engine.submit({
+      campaignId: 'c4b',
+      messages: [
+        { to: 'u1@ex1.com', subject: '1', body: '1' },
+        { to: 'u2@ex2.com', subject: '2', body: '2' },
+        { to: 'u3@ex3.com', subject: '3', body: '3' },
+      ],
+    })
+    await h.engine.tick()
+    expect(h.sentMails.length).toBe(1)
+    now += 2000
+    await h.engine.tick()
+    const job = h.engine.snapshot()[0]
+    expect(job.why).toBe('gap')
+    // refused when nothing to skip is not the case here: it is waiting out a gap
+    expect(h.engine.control(job.jobId, 'send-next').ok).toBe(true)
+    now += 100
+    await h.engine.tick()
+    expect(h.sentMails.length).toBe(2)
+    // the next one waits the pace again
+    now += 2000
+    await h.engine.tick()
+    expect(h.sentMails.length).toBe(2)
+    expect(h.engine.snapshot()[0].why).toBe('gap')
+  })
+
+  it('(4c) send-next is refused when the job is not waiting out a pacing gap', async () => {
+    const h = createTestHarness()
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c4c', messages: [{ to: 'u1@ex1.com', subject: '1', body: '1' }] })
+    const job = h.engine.snapshot()[0]
+    expect(h.engine.control(job.jobId, 'send-next').ok).toBe(false)
+  })
+
   // (5) pause finishes the in-flight send then halts, resume continues, stop cancels, pauseAll covers every job
   it('(5) pause finishes the in-flight send then halts, resume continues, stop cancels, pauseAll covers every job', async () => {
     const h = createTestHarness()

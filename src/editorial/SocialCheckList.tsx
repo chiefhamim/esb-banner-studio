@@ -21,7 +21,7 @@ export function SocialChecks({ checks, active, onFix, busy, onUndo }: { checks: 
         <span className="hint">All channels: {good} of {checks.length} pass. These are current newsroom practice, not Google rules.</span>
         <div className="seo-fixbtns">
           {onUndo && <button type="button" className="btn sm" onClick={onUndo} disabled={busy}><Icon name="undo" size={13} /><span>Undo</span></button>}
-          {onFix && <button type="button" className="btn sm ai-btn" onClick={onFix} disabled={busy || good === checks.length}><Icon name="sparkle" size={13} className={busy ? 'spin' : ''} /><span>{busy ? 'Fixing…' : good === checks.length ? 'All fixed' : 'Fix all with AI'}</span></button>}
+          {onFix && <button type="button" className="btn sm ai-btn" onClick={onFix} disabled={busy || good === checks.length}><Icon name="sparkle" size={13} className={busy ? 'spin' : ''} /><span>{busy ? 'Fixing' : good === checks.length ? 'All fixed' : 'Fix all with AI'}</span></button>}
         </div>
       </div>
       <div className="seo-group">

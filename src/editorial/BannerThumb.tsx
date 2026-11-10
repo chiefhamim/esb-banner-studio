@@ -60,7 +60,7 @@ export function BannerHero({ base, onToast }: { base: Assets | null; onToast: (m
         <span className={'bh-flag ' + (hasPhoto ? 'ok' : 'warn')}><i />{hasPhoto ? 'Photo set' : 'No photo yet'}</span>
       </div>
       <div className="bh-frame" style={{ ['--r' as string]: FORMATS[fmtId].w / FORMATS[fmtId].h } as CSSProperties}>
-        {url ? <img src={url} alt={`The ${fmt.name} banner`} /> : <span className="hint">Drawing the banner…</span>}
+        {url ? <img src={url} alt={`The ${fmt.name} banner`} /> : <span className="hint">Drawing the banner</span>}
       </div>
       <div className="bh-foot">
         <span className="bh-meta"><b>{fmt.name}</b>{FORMATS[fmtId].w} × {FORMATS[fmtId].h}</span>

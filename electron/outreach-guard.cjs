@@ -177,7 +177,7 @@ function validateControl(jobId, action, arg) {
     return { ok: false, error: 'Invalid jobId' }
   }
 
-  const allowedActions = ['pause', 'resume', 'stop', 'hold', 'release']
+  const allowedActions = ['pause', 'resume', 'stop', 'hold', 'release', 'send-next']
   if (typeof action !== 'string' || !allowedActions.includes(action)) {
     return { ok: false, error: `Invalid action: ${action}` }
   }

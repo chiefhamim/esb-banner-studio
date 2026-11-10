@@ -144,9 +144,9 @@ function Toolbar({ editor, onFile, onChart, msg }: { editor: Editor; onFile: (f:
       )}
       {imgUrl !== null && (
         <div className="rb-link rb-add-img">
-          <button type="button" className="btn sm" onClick={() => fileRef.current?.click()}><Icon name="upload" size={13} /><span>Choose a file…</span></button>
+          <button type="button" className="btn sm" onClick={() => fileRef.current?.click()}><Icon name="upload" size={13} /><span>Choose a file</span></button>
           <span className="hint">or</span>
-          <input className="input" type="url" placeholder="Paste a picture link (https://…)" value={imgUrl} onChange={(e) => setImgUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && /^https?:\/\//i.test(imgUrl)) { e.preventDefault(); addByUrl() } }} />
+          <input className="input" type="url" placeholder="Paste a picture link (https://)" value={imgUrl} onChange={(e) => setImgUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && /^https?:\/\//i.test(imgUrl)) { e.preventDefault(); addByUrl() } }} />
           <button type="button" className="btn primary sm" disabled={!/^https?:\/\//i.test(imgUrl)} onClick={addByUrl}>Add</button>
           <button type="button" className="btn sm" onClick={() => setImgUrl(null)}>Close</button>
         </div>
@@ -168,7 +168,7 @@ function Toolbar({ editor, onFile, onChart, msg }: { editor: Editor; onFile: (f:
       {msg && <p className="rb-msg" role="status">{msg}</p>}
       {linkOpen && (
         <form className="rb-link" onSubmit={(e) => { e.preventDefault(); applyLink() }}>
-          <input className="input" autoFocus type="url" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setLinkOpen(false)} />
+          <input className="input" autoFocus type="url" placeholder="https://" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setLinkOpen(false)} />
           <button type="submit" className="btn primary sm">Apply</button>
           <button type="button" className="btn sm" onClick={() => setLinkOpen(false)}>Cancel</button>
         </form>
@@ -216,10 +216,10 @@ export function RichBodyEditor({ body, bodyHtml, onChange, uploadImage, accent, 
   addRef.current = async (file: File) => {
     const ed = edRef.current
     if (!ed) return
-    setMsg('Preparing the picture…')
+    setMsg('Preparing the picture')
     try {
       const blob = await prepareImage(file)
-      setMsg('Uploading to the site…')
+      setMsg('Uploading to the site')
       const up = await upRef.current(blob)
       if (!up.ok) { setMsg(up.error); return }
       ed.chain().focus().insertContent({ type: 'image', attrs: { src: up.url, alt: altFromName(file.name), caption: '', credit: '', align: 'default' } }).run()

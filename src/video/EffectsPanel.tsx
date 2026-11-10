@@ -439,7 +439,7 @@ function MatteNote() {
   }, [])
   if (s.state === 'ready') return <p className="vw-hint" role="status">Ready. The cut-out is made on this PC; nothing is uploaded. Best on one person facing the camera.</p>
   if (s.state === 'failed') return <p className="vw-hint vw-error" role="alert">The background model could not be loaded: {s.failure} <button type="button" className="btn xs" onClick={() => { retryPersonMatte(); void loadPersonMatte().catch(() => {}) }}>Try again</button></p>
-  return <p className="vw-hint" role="status">Loading the background model…</p>
+  return <p className="vw-hint" role="status">Loading the background model</p>
 }
 
 /** The Titles tab card: an adjustment layer at the playhead, 5 s, with a neutral colour, on its own "Adjustment"

@@ -107,7 +107,7 @@ export function shortFolder(p: string): string {
   const parts = p.split(/[\\/]+/).filter(Boolean)
   parts.pop() // the file itself
   if (parts.length <= 2) return parts.join('\\')
-  return '…\\' + parts.slice(-2).join('\\')
+  return parts.slice(-2).join('\\')
 }
 
 /** A missing entry that was found again by size + hash: where it is now (the row's Use it button relinks it). */

@@ -51,7 +51,7 @@ export function VideoCopyPanel() {
       </div>
       <p className="vw-hint">Written from the story on the Editorial desk, using only its facts. Sending it to your AI provider is the only thing this does; nothing is posted.</p>
       <div className="vw-transcript-actions">
-        <button type="button" className="btn xs" onClick={write} disabled={busy || !hasStory} aria-busy={busy}>{busy ? 'Writing…' : copy ? 'Write again' : 'Write with AI'}</button>
+        <button type="button" className="btn xs" onClick={write} disabled={busy || !hasStory} aria-busy={busy}>{busy ? 'Writing' : copy ? 'Write again' : 'Write with AI'}</button>
       </div>
       {!hasStory && <p className="vw-hint">Open a story with a headline and body on the Editorial desk first.</p>}
       {error && <p className="vw-hint vw-error" role="alert">{error}</p>}

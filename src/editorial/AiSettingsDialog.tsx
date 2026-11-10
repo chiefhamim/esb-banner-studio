@@ -75,7 +75,7 @@ export function AiSettingsDialog({ onClose, onToast }: { onClose: () => void; on
         <>
           <button type="button" className="btn" onClick={() => void check()} disabled={testing || !key.trim()}>
             <Icon name={testing ? 'refresh' : 'check'} size={14} className={testing ? 'spin' : ''} />
-            <span>{testing ? 'Checking…' : `Check ${meta.name} key`}</span>
+            <span>{testing ? 'Checking' : `Check ${meta.name} key`}</span>
           </button>
           <div className="spacer" />
           <button type="button" className="btn" onClick={onClose}>Cancel</button>

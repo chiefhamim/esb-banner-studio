@@ -56,7 +56,7 @@ export function PressCountdown({ ms, items, verb, sub, onFire, onCancel }: {
             {go ? <Icon name="check" size={20} strokeWidth={2.6} /> : <b key={left}>{left}</b>}
           </span>
           <span className="gp-head-t">
-            <b>{go ? `${verb === 'Update' ? 'Updating' : 'Publishing'}…` : 'Going to press'}</b>
+            <b>{go ? `${verb === 'Update' ? 'Updating' : 'Publishing'}` : 'Going to press'}</b>
             <small>{go ? sub : 'Esc or Cancel stops it'}</small>
           </span>
         </header>

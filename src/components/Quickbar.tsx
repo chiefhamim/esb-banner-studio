@@ -209,7 +209,7 @@ export function Quickbar({ el, onEdit, editLabel, onHighlight }: { el: El; onEdi
         <button type="button" className="qb-text qb-reset-btn" disabled={!ov && !hasPhotoFraming} aria-label="Reset to default" data-tip="Reset layer to default" onClick={resetAllOnLayer}>
           <Icon name="reset" size={13} />Reset
         </button>
-        <button ref={resetCaretRef} type="button" className="qb-i qb-reset-caret" disabled={!hasAny} aria-label="Reset options" data-tip="Reset specific property (position, size, colour…)" onClick={() => setResetOpen((o) => !o)}>
+        <button ref={resetCaretRef} type="button" className="qb-i qb-reset-caret" disabled={!hasAny} aria-label="Reset options" data-tip="Reset specific property (position, size, colour and more)" onClick={() => setResetOpen((o) => !o)}>
           <Icon name="chevDown" size={11} />
         </button>
       </span>

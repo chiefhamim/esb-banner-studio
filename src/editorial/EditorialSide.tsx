@@ -179,7 +179,7 @@ export function EditorialSide(p: {
               : <span className="es-dest-logo fb" aria-hidden>f</span>}
             <div className="es-dest-t"><b>Facebook</b><span>{!p.fbCfg ? 'Connect a Page to post the banner' : fb.s === 'bad' ? fb.err : `${getFormat('fb45').ratio} banner with the caption`}</span></div>
             {p.fbCfg
-              ? <button type="button" className={'es-pill btn-pill ' + (fb.s === 'ok' ? 'ok' : fb.s === 'bad' ? 'bad' : 'wait')} onClick={recheckFb} data-tip="Check the connection again"><i />{fb.s === 'ok' ? 'Connected' : fb.s === 'bad' ? 'Needs attention' : 'Checking…'}</button>
+              ? <button type="button" className={'es-pill btn-pill ' + (fb.s === 'ok' ? 'ok' : fb.s === 'bad' ? 'bad' : 'wait')} onClick={recheckFb} data-tip="Check the connection again"><i />{fb.s === 'ok' ? 'Connected' : fb.s === 'bad' ? 'Needs attention' : 'Checking'}</button>
               : <span className="es-pill off"><i />Not connected</span>}
           </div>
           <div className="es-post">

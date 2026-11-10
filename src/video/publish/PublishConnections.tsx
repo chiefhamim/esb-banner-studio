@@ -42,7 +42,7 @@ export function PublishConnections() {
     } catch (e) { setErr((e as Error).message) } finally { setBusy('') }
   }
 
-  if (!status) return <p className="vw-hint">Checking…</p>
+  if (!status) return <p className="vw-hint">Checking</p>
   if (!status.ok && !status.credentials) return <p className="vw-hint vw-error" role="alert">{status.error ?? 'Publishing is not available.'}</p>
   const c = status.credentials!
   const fb = getFacebook()
@@ -66,11 +66,11 @@ export function PublishConnections() {
             <li>Credentials → Create credentials → OAuth client ID → type <b>Desktop app</b>. Copy the client ID and secret into the boxes below.</li>
           </ol>
         )}
-        <label className="vw-cut-row"><span className="vw-cut-label">Client ID</span><input type="text" autoComplete="off" spellCheck={false} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder={c.youtube.clientSaved ? 'Saved (paste to replace)' : '…apps.googleusercontent.com'} aria-label="Google OAuth client ID" /></label>
+        <label className="vw-cut-row"><span className="vw-cut-label">Client ID</span><input type="text" autoComplete="off" spellCheck={false} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder={c.youtube.clientSaved ? 'Saved (paste to replace)' : 'your-client-id.apps.googleusercontent.com'} aria-label="Google OAuth client ID" /></label>
         <label className="vw-cut-row"><span className="vw-cut-label">Secret</span><input type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder={c.youtube.clientSaved ? 'Saved' : 'Client secret'} aria-label="Google OAuth client secret" /></label>
         <div className="vw-transcript-actions">
           <button type="button" className="btn xs" disabled={!!busy || !clientId.trim()} onClick={() => void run('client', () => esb()?.vpubYtClient?.({ clientId, clientSecret: secret }), 'Saved. Now connect.').then(() => { setClientId(''); setSecret('') })}>Save client</button>
-          <button type="button" className="btn xs primary" disabled={!!busy || !c.youtube.clientSaved} onClick={() => void run('connect', () => esb()?.vpubYtConnect?.({ captions }), 'Connected.')}>{busy === 'connect' ? 'Waiting for the browser…' : c.youtube.connected ? 'Connect again' : 'Connect YouTube'}</button>
+          <button type="button" className="btn xs primary" disabled={!!busy || !c.youtube.clientSaved} onClick={() => void run('connect', () => esb()?.vpubYtConnect?.({ captions }), 'Connected.')}>{busy === 'connect' ? 'Waiting for the browser' : c.youtube.connected ? 'Connect again' : 'Connect YouTube'}</button>
           {c.youtube.connected && <button type="button" className="btn xs" disabled={!!busy} onClick={() => void run('forget', () => esb()?.vpubForget?.('youtube'), 'Disconnected.')}>Disconnect</button>}
         </div>
         <label className="vw-cut-row vw-check"><input type="checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /><span>Also allow uploading captions (asks for one more permission)</span></label>

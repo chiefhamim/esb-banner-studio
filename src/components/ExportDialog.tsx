@@ -48,7 +48,7 @@ export function ExportDialog({ base, settings, setSettings, onClose }: { base: A
   const go = async () => {
     setError(null); setResult(null)
     cancel.current = { cancelled: false }
-    setRunning({ done: 0, total: jobs.length, label: 'Starting…' })
+    setRunning({ done: 0, total: jobs.length, label: 'Starting' })
     try {
       const r = await runExport(doc, base, s, (done, total, label) => setRunning({ done, total, label }), cancel.current)
       setResult(r)

@@ -1009,3 +1009,17 @@
 .ed-launcher-wrap .ed-link > .ed-link-stage { background: var(--surface-sunken); border: 1px solid var(--line); box-shadow: inset 0 1px 2px color-mix(in srgb, var(--text) 5%, transparent); }
 .ed-launcher-wrap .ed-link > .ed-link-stage:hover { border-color: var(--line-2); }
 .ed-launcher-wrap .ed-link > .ed-link-stage.drag { border: 1.5px dashed var(--accent); }
+
+/* pass 12: the signed-in account sheet fits the window without scrolling — it is wider, the four connection cards sit
+   two by two, and the connection check lists in two columns. Nothing on it was removed. */
+.dialog.signin:has(.acct) { width: min(880px, 96vw); }
+.acct { gap: 14px; padding: 20px 22px 16px; }
+.acct-sec[aria-label="Connections"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+.acct-sec[aria-label="Connections"] > h3 { grid-column: 1 / -1; }
+.acct-sec[aria-label="Connections"] > .acct-card { height: 100%; box-sizing: border-box; }
+.acct .conn-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+@media (max-width: 760px) { .acct-sec[aria-label="Connections"], .acct .conn-list { grid-template-columns: minmax(0, 1fr); } }
+
+/* pass 12: the launcher's Published and Stories lists keep their scrollbar OUTSIDE the cards with air on both sides
+   (the thumb ran along the cards' edge and its rounded ends were cut) */
+.ed-launcher-wrap .ed-feed-list, .ed-launcher-queue .sq-list { scrollbar-gutter: stable; margin-right: -18px; padding-right: 6px; }

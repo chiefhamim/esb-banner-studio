@@ -2075,7 +2075,6 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 /* every column's first row: 10 px from the top, 12 px from both edges, the fold button's 36 + 6 px kept free */
 :is(.left, .vw-bin-panel, .or-left) > .side-tabs { margin: 10px 54px 4px 12px; }
 .or-right > .side-tabs { margin: 10px 12px 4px 54px; }
-.is-railed > .side-tabs { margin: 0; }
 /* Graphics' right column opens with the Inspector card: the button sits in that card's header row */
 .app > .right { --fold-top: 13px; --fold-inset: 18px; }
 /* the button is the Inspector header's first tile: 6 px inside the card, centred on the 44 px header row, 8 px before the title tile */
@@ -2239,3 +2238,15 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .about2-desks > li b { font: 700 14px/1.2 var(--font-display); color: var(--text); }
 .about2-desks > li small { font: 500 12px/17px var(--ui); color: var(--text-2); }
 .about2-credit { margin: -8px 0 0; font: 500 12px/16px var(--ui); text-align: center; color: var(--text-3); }
+
+/* pass 12: Graphics' Inspector carries its own fold button (SideColumn foldHost): it scrolls with the Inspector's
+   first header, so the two never part */
+.app > .right > .scroll.insp { position: relative; }
+.app > .right > .scroll.insp > .col-fold.in-host { top: var(--fold-top); left: var(--fold-inset); }
+.app > .right > .scroll.insp > .pnl:first-of-type > header { position: relative; top: 0; } /* scrolls with the fold beside it */
+/* pass 12: the desk switcher's hover bar sits along the TOP of the icon — at the bottom the pointer covered it */
+.ws-switch .ws-btn::after { top: 3px; bottom: auto; }
+
+/* pass 12: a folded column's rail — a short hairline under the fold button sets it apart from the section icons */
+.is-railed > .col-rail::before { content: ''; position: absolute; top: 50px; left: 50%; width: 22px; height: 1px; margin-left: -11px; border-radius: 1px; background: var(--line-3); opacity: .7; }
+.topbar.ed-head .ed-story-chip .or-camp-name { text-overflow: clip; }

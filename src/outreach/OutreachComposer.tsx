@@ -18,6 +18,7 @@ import { Icon, type IconName } from '../ui/Icon'
 import { MenuButton, Select, Seg, Switch } from '../ui/controls'
 import type { OutreachLang } from './types'
 import { designPreviewHtml } from './design'
+import { previewDoc, type MailLook } from './previewDoc'
 import { applyDesignFile } from './designImport'
 
 const SUBJECT_MAX = 70
@@ -45,6 +46,11 @@ export const OutreachComposer = memo(function OutreachComposer() {
   const [variants, setVariants] = useState<string[]>([])
   const [aiNote, setAiNote] = useState<{ model: string; unsourced: string[]; undo: { subject: string; body: string; lang: OutreachLang } } | null>(null)
   const [toText, setToText] = useState('')
+  // how the preview frame shows the letter (a viewer setting, remembered on this PC)
+  const [look, setLookS] = useState<MailLook>(() => { try { return localStorage.getItem('esb-banner-studio/outreach/preview-look') === 'dark' ? 'dark' : 'light' } catch { return 'light' } })
+  const [device, setDeviceS] = useState<'desk' | 'phone'>(() => { try { return localStorage.getItem('esb-banner-studio/outreach/preview-device') === 'phone' ? 'phone' : 'desk' } catch { return 'desk' } })
+  const setLook = (v: MailLook) => { setLookS(v); try { localStorage.setItem('esb-banner-studio/outreach/preview-look', v) } catch { /* private */ } }
+  const setDevice = (v: 'desk' | 'phone') => { setDeviceS(v); try { localStorage.setItem('esb-banner-studio/outreach/preview-device', v) } catch { /* private */ } }
   const [logo, setLogo] = useState('')
   const [padSidebar, setPadSidebar] = useState('')
   const [padQr, setPadQr] = useState('')
@@ -317,7 +323,13 @@ export const OutreachComposer = memo(function OutreachComposer() {
             {s.attachments.length > 0 && <><dt>Files</dt><dd>{s.attachments.map((a) => a.name).join(', ')}</dd></>}
           </dl>
           {active && missingFields(active, c.subject, c.body).length > 0 && <p className="or-preview-warn">This contact will be skipped: missing {missingFields(active, c.subject, c.body).join(', ')}.</p>}
-          <iframe className="or-frame" title="Email preview" sandbox="" srcDoc={preview.html} />
+          <div className="or-look" role="group" aria-label="Preview as">
+            <Seg<MailLook> className="or-look-seg" value={look} onChange={setLook} options={[{ value: 'light', icon: 'sun', label: 'Light', tip: 'As most mail apps show it' }, { value: 'dark', icon: 'moon', label: 'Dark', tip: 'As the Gmail and Outlook phone apps show it in dark mode' }]} />
+            <Seg<'desk' | 'phone'> className="or-look-seg" value={device} onChange={setDevice} options={[{ value: 'desk', icon: 'monitor', label: 'Desktop', tip: 'A desktop mail window' }, { value: 'phone', icon: 'phone', label: 'Phone', tip: 'An average phone screen (375 px wide)' }]} />
+          </div>
+          <div className={'or-frame-wrap ' + device + ' ' + look}>
+            <iframe className="or-frame" title="Email preview" sandbox="" srcDoc={previewDoc(preview.html, look)} />
+          </div>
         </div>
       )}
 
