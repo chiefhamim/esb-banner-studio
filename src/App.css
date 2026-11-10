@@ -820,7 +820,7 @@ textarea.input { height: auto; padding: 8px 10px; line-height: 20px; resize: ver
   cursor: grab;
   user-select: none;
   white-space: nowrap;
-  transition: all var(--t-1) var(--ease);
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease);
 }
 .drag-post-chip:hover {
   color: var(--text);
@@ -865,7 +865,7 @@ textarea.input { height: auto; padding: 8px 10px; line-height: 20px; resize: ver
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
-  transition: all var(--t-1) var(--ease);
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease);
 }
 .dual-toggle-btn:hover {
   color: var(--text);
@@ -1430,7 +1430,7 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
 
 /* ---------------------------------------------------------------- Editorial Card Archetypes & Importer */
 .card-type-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 12px 14px 6px; }
-.ct-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 8px; font: 600 12px/1 var(--ui); color: var(--text-2); background: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--r-2); cursor: pointer; transition: all var(--t-1) var(--ease); }
+.ct-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 8px; font: 600 12px/1 var(--ui); color: var(--text-2); background: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--r-2); cursor: pointer; transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease); }
 .ct-tab:hover { color: var(--text); background: var(--bg-3); border-color: var(--line-3); }
 .ct-tab.on { color: var(--text); background: var(--ink-soft); border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); font-weight: 700; }
 
@@ -1441,7 +1441,7 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
   border-radius: var(--r-2);
   padding: 12px;
   box-shadow: var(--shadow-1);
-  transition: all var(--t-1) var(--ease);
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease);
 }
 .url-importer:focus-within {
   border-color: color-mix(in srgb, var(--cat, var(--ink)) 60%, var(--line-2));
@@ -1464,7 +1464,7 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
 .url-importer .hint { margin: 8px 0 0; font-size: 11px; line-height: 15px; color: var(--text-3); }
 
 .caption-platform-tabs { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid var(--line-2); padding-bottom: 6px; }
-.cpt-tab { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; font: 600 11px/1 var(--ui); color: var(--text-3); background: transparent; border: 1px solid transparent; border-radius: var(--r-1); cursor: pointer; transition: all var(--t-1) var(--ease); }
+.cpt-tab { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; font: 600 11px/1 var(--ui); color: var(--text-3); background: transparent; border: 1px solid transparent; border-radius: var(--r-1); cursor: pointer; transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease); }
 .cpt-tab:hover { color: var(--text-2); background: var(--bg-2); }
 .cpt-tab.on { color: var(--text); background: var(--bg-3); border-color: var(--line-2); }
 
@@ -1596,7 +1596,7 @@ html.theme-switching *, html.theme-switching *::before, html.theme-switching *::
   border-radius: var(--r-2);
   text-align: left;
   cursor: pointer;
-  transition: all var(--t-1) var(--ease);
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease);
 }
 
 .recent-card:hover {
@@ -2221,7 +2221,7 @@ html[data-theme="dark"] .g-preview-title {
   border-radius: var(--r-1);
   color: var(--text-3);
   cursor: pointer;
-  transition: all var(--t-1) var(--ease);
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease);
 }
 
 .social-tab:hover {
@@ -3677,7 +3677,7 @@ html[data-theme="dark"] .fb-action-btn:hover {
   background: rgba(59, 130, 246, 0.08);
   color: #3b82f6;
   cursor: pointer;
-  transition: all var(--t-1) var(--ease);
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease);
 }
 
 .staff-session-pill:hover {
@@ -3736,7 +3736,7 @@ html[data-theme="dark"] .fb-action-btn:hover {
   cursor: pointer;
   color: var(--text-3);
   font-size: 11px;
-  transition: all var(--t-1) var(--ease);
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease);
 }
 
 .hb-break-point:hover {
@@ -3800,7 +3800,7 @@ html[data-theme="dark"] .fb-action-btn:hover {
   border: 1px solid var(--line-2);
   color: var(--text-2);
   cursor: pointer;
-  transition: all var(--t-1) var(--ease);
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease);
 }
 
 .cms-preview-chip:hover {

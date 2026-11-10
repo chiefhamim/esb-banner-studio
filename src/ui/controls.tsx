@@ -98,7 +98,9 @@ export function Tooltips() {
   useEffect(() => {
     let timer = 0
     let cur: HTMLElement | null = null
-    const hide = () => { window.clearTimeout(timer); cur = null; setTip(null); setAt(null) }
+    let shown = false
+    // runs on every scroll event: once nothing is shown or pending it is a no-op, not two state updates per frame
+    const hide = () => { window.clearTimeout(timer); if (!shown && cur === null) return; cur = null; shown = false; setTip(null); setAt(null) }
     const over = (e: PointerEvent) => {
       // A plain title="" shows the operating system's own grey tooltip — the generic hover on the site pill and
       // Re-translate. Any title met under the pointer becomes this tooltip instead (aria-label keeps it for readers).
@@ -115,7 +117,7 @@ export function Tooltips() {
       hide()
       if (!el || !el.dataset.tip) return
       cur = el
-      timer = window.setTimeout(() => setTip({ text: el.dataset.tip!, r: el.getBoundingClientRect(), pos: el.dataset.tipPos ?? 'bottom' }), 420)
+      timer = window.setTimeout(() => { shown = true; setTip({ text: el.dataset.tip!, r: el.getBoundingClientRect(), pos: el.dataset.tipPos ?? 'bottom' }) }, 420)
     }
     window.addEventListener('pointerover', over, true)
     window.addEventListener('pointerdown', hide, true)

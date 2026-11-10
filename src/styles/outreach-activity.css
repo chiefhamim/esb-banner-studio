@@ -124,7 +124,7 @@
   border: 0 !important;
   box-shadow: none !important;
   gap: 7px;
-  transition: all var(--t-1) var(--ease);
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease);
 }
 
 .oa-campaign-select:hover {
@@ -686,7 +686,7 @@
   border: none;
   cursor: pointer;
   padding: 0;
-  transition: all var(--t-1) var(--ease);
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease);
 }
 .oa-search-clear:hover {
   background: var(--danger-soft);

@@ -13,6 +13,7 @@ import { Dialog, Tooltips } from './ui/controls'
 import { DeskBoundary } from './ui/DeskBoundary'
 import { CATEGORIES } from './core/tokens'
 import { installBannerLink } from './editorial/bannerLink'
+import { installScrollCalm } from './ui/scrollCalm'
 import './styles/home.css'
 import './styles/outreach.css'
 import './styles/outreach-activity.css'
@@ -22,6 +23,7 @@ import './styles/newsroom.css'
 import './styles/side-rail.css'
 
 installBannerLink()
+installScrollCalm()
 
 // Editorial (TipTap, the AI SDKs), Video (mediabunny) and Outreach (the workbook reader) are their own chunks, so the
 // app opens on Home and Graphics without parsing them: the single bundle was 2.3 MB. They are fetched in the background

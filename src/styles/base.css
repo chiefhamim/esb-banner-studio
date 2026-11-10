@@ -103,3 +103,6 @@ pre {
     scroll-behavior: auto !important;
   }
 }
+
+/* scrollCalm.ts: content of whatever is scrolling ignores the pointer until it settles (no hover restyle per frame) */
+.is-scrolling > * { pointer-events: none !important; }
