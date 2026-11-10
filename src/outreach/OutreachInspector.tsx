@@ -100,7 +100,9 @@ function SendTab() {
   const used = s.mail?.sentToday ?? s.mail?.sent24h ?? 0
   const queue = c ? eligible(s.contacts, c.subject, c.body, c.audience) : []
   // what can go today counts only letters the job will send (Needs you holds the rest), like the Send footer
-  const willSend = Math.min(c ? sendableQueue(c, s.contacts).length : 0, Math.max(0, limit - used))
+  const sendable = c ? sendableQueue(c, s.contacts).length : 0
+  const willSend = Math.min(sendable, Math.max(0, limit - used))
+  const heldInNeedsYou = Math.max(0, queue.length - sendable)
   const active = s.contacts.find((x) => x.id === s.activeContact)
   const sent = c ? Object.keys(c.sent).length : 0
   const failed = c ? Object.keys(c.failed).length : 0
@@ -130,7 +132,7 @@ function SendTab() {
           <>
             <div className="or-meter-row"><span>Today</span><span className="or-figure">{used} <small>of {limit}</small></span></div>
             <div className="or-meter" role="meter" aria-valuemin={0} aria-valuemax={limit} aria-valuenow={used}><i style={{ width: `${limit ? Math.min(100, (used / limit) * 100) : 0}%` }} /></div>
-            <p className="or-muted">{Math.max(0, limit - used)} more can go today · {pacingText(engineSet ?? set)}</p>
+            <p className="or-muted">Room for {Math.max(0, limit - used)} more today · {pacingText(engineSet ?? set)}</p>
           </>
         )}
       </section>
@@ -150,7 +152,7 @@ function SendTab() {
 
       <section className="or-card">
         <header><h3 className="sec-title">{c?.name ?? 'Campaign'}</h3>{c && <span className={'or-chip cs-' + c.status}>{STATUS_TEXT[c.status]}</span>}</header>
-        <p className="or-muted">{!c ? 'Open or create a campaign.' : queue.length ? `${queue.length} ready${desktop && set ? ` · ${willSend} can go today` : ''}` : s.contacts.length ? 'Nobody in this audience is ready — see Skipped in Contacts' : c.kind === 'direct' ? 'Type addresses in the To line' : 'Import a list to start'}</p>
+        <p className="or-muted">{!c ? 'Open or create a campaign.' : queue.length ? `${queue.length} in the queue${desktop && set ? ` · ${willSend} clear to go today${heldInNeedsYou > 0 ? ` · ${heldInNeedsYou} wait in Needs you` : ''}` : ''}` : s.contacts.length ? 'Nobody in this audience is ready — see Skipped in Contacts' : c.kind === 'direct' ? 'Type addresses in the To line' : 'Import a list to start'}</p>
         {c?.status === 'scheduled' && c.scheduledAt && s.run === 'idle' && <p className="or-sched"><Icon name="clock" size={13} /><span>Starts {fmtDateTime(c.scheduledAt)} — keep the app open</span><button type="button" className="btn xs" onClick={() => s.patch({ status: 'draft', scheduledAt: null })}>Cancel</button></p>}
         {c && (sent > 0 || failed > 0) && (
           <div className="or-results">

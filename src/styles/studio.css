@@ -1986,3 +1986,35 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .statusbar .sb-item .sb-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .statusbar .sb-item > :not(.sb-k) { color: var(--text); font-weight: 600; }
 .statusbar .vw-sb-save.failed > :not(.sb-k) { color: var(--warning); }
+
+/* ---------------------------------------------------------------- icon hover depth (2026-11-10)
+   Icon-only buttons and collapsed panel headers answered the pointer with a flat tint; they now get the
+   same quiet depth language as the tiles: the fill plus a lit top edge, a hairline ring and a soft drop —
+   colour and depth, never movement. The raised/selected chip stays as it is. */
+.ws-switch .ws-btn:not(.on):hover,
+.topbar .pillbar .ibtn:hover:not(:disabled):not(.on),
+.col-rail-btn:hover:not(:disabled):not(.on):not(.primary),
+.ws-home-btn:hover,
+.home-head-btn:hover {
+  background: var(--fill-hover);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent),
+    0 1px 2px rgba(0, 0, 0, .14);
+}
+:root[data-theme=dark] .ws-switch .ws-btn:not(.on):hover,
+:root[data-theme=dark] .topbar .pillbar .ibtn:hover:not(:disabled):not(.on),
+:root[data-theme=dark] .col-rail-btn:hover:not(:disabled):not(.on):not(.primary) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .07),
+    0 0 0 1px rgba(255, 255, 255, .07),
+    0 1px 3px rgba(0, 0, 0, .4);
+}
+/* collapsed accordion panels: the header lifts a little instead of only tinting */
+.pnl:not(.open) > header:hover {
+  background: color-mix(in srgb, var(--fill) 80%, var(--card));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 7%, transparent),
+    0 1px 3px -1px rgba(0, 0, 0, .18);
+}
+@media (prefers-reduced-motion: reduce) { .pnl:not(.open) > header:hover { box-shadow: none; } }

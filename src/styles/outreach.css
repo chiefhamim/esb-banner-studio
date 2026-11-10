@@ -186,7 +186,7 @@
 .or-camp { padding: 0; align-items: stretch; cursor: default; }
 .or-camp-open { display: flex; flex: 1 1 auto; min-width: 0; padding: 10px 6px 10px 12px; color: inherit; text-align: left; background: none; border: 0; border-radius: inherit; cursor: pointer; font: inherit; }
 .or-camp-open:disabled { cursor: default; opacity: .6; }
-.or-camp-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.or-camp-top { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 .or-camp-top b { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .or-row-main .or-camp-n { color: var(--text-3); font-variant-numeric: tabular-nums; }
 /* the actions appear on the row being pointed at, or the open one — perfectly square 28x28 around the three dots */
