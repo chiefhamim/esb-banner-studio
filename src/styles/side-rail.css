@@ -10,7 +10,7 @@
 @media (prefers-reduced-motion: reduce) { .side-cols, .side-col-w { transition: none !important; } }
 
 /* while railed, only the rail and the edge handle show; the content stays mounted (its state, scroll and open panels survive) */
-.is-railed:not(.col-anim) > :not(.col-rail):not(.col-handle) { display: none !important; }
+.is-railed:not(.col-anim) > :not(.col-rail):not(.col-handle):not(.col-fold) { display: none !important; }
 .is-railed { min-width: 0; }
 
 .col-rail {

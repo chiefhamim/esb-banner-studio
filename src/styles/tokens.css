@@ -185,53 +185,51 @@
 
 /* ================================================================ Dark Theme Palette */
 :root[data-theme="dark"] {
-  /* Obsidian (pass 6). Near-black neutral graphite with a trace of cool, so light has somewhere to land: five clear
-     luminance steps (canvas < columns < cards < raised < hover), edges drawn as translucent white hairlines (light
-     catching an edge, not grey lines on grey), text in three confident tiers. The colour in this theme comes from
-     the content — the story's sector glow, the ESB stripe, the category chips — not from the chrome. */
-  --surface-app: #060608;
-  --surface-panel: #101015;
-  --surface-raised: #1a1a21;
-  --surface-sunken: #09090c;
-  --surface-hover: #23232b;
+  /* Dark is the light theme in negative: the same structure (a quiet canvas, columns a step up, cards a step above
+     those, solid hairline borders, soft shadows), in neutral greys with no tint, no gradients and no glow. */
+  --surface-app: #0f0f10;
+  --surface-panel: #1b1b1e;
+  --surface-raised: #232326;
+  --surface-sunken: #141416;
+  --surface-hover: #26262a;
 
-  --border-subtle: rgba(255, 255, 255, 0.055);
-  --border-default: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.17);
+  --border-subtle: #232326;
+  --border-default: #2e2e32;
+  --border-strong: #46464c;
 
-  --text-primary: #f7f7fa;
-  --text-secondary: #adafbc;
-  --text-tertiary: #868896;
-  --text-disabled: rgba(247, 247, 250, 0.38);
+  --text-primary: #ededef;
+  --text-secondary: #b1b1b8;
+  --text-tertiary: #8e8e96;
+  --text-disabled: rgba(237, 237, 239, 0.4);
 
-  --accent: #f7f7fa;
-  --on-accent: #0c0c10;
-  --accent-soft: rgba(247, 247, 250, 0.08);
-  --focus-ring: rgba(150, 160, 255, 0.55);
+  --accent: #ededef;
+  --on-accent: #161618;
+  --accent-soft: rgba(237, 237, 239, 0.07);
+  --focus-ring: rgba(237, 237, 239, 0.3);
 
-  --danger: #ff8f87;
-  --danger-soft: rgba(255, 143, 135, 0.13);
-  --warning: #f4b95b;
-  --warning-soft: rgba(244, 185, 91, 0.13);
-  --success: #45dba0;
-  --success-soft: rgba(69, 219, 160, 0.13);
+  --danger: #f2877e;
+  --danger-soft: rgba(242, 135, 126, 0.12);
+  --warning: #e5b04a;
+  --warning-soft: rgba(229, 176, 74, 0.12);
+  --success: #3fcf8e;
+  --success-soft: rgba(63, 207, 142, 0.12);
 
-  --tip-bg: #25252d;
-  --tip-fg: #f7f7fa;
-  --scrim: rgba(2, 2, 5, 0.68);
+  --tip-bg: #2a2a2e;
+  --tip-fg: #ededef;
+  --scrim: rgba(0, 0, 0, 0.6);
 
-  --side: #0f0f14;
-  --ctl-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.14), 0 1px 1.5px rgba(0, 0, 0, 0.5);
-  --ctl-shadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.24), 0 1px 3px rgba(0, 0, 0, 0.6);
-  --menu-bg: rgba(22, 22, 28, 0.86);
-  --shadow-1: 0 .5px 1px rgba(0, 0, 0, 0.6);
-  --shadow-2: 0 0 0 .5px rgba(255, 255, 255, 0.14), 0 16px 44px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.5);
+  --side: #161618;
+  --ctl-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.1), 0 1px 1.5px rgba(0, 0, 0, 0.4);
+  --ctl-shadow-hover: 0 0 0 .5px rgba(255, 255, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.45);
+  --menu-bg: rgba(34, 34, 37, 0.92);
+  --shadow-1: 0 .5px 1px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 0 0 .5px rgba(255, 255, 255, 0.1), 0 12px 36px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
 
   color-scheme: dark;
 
-  --bg-4: #2a2a32;
-  --ink-2: #d4d5df;
-  --ink-ring: rgba(247, 247, 250, 0.22);
+  --bg-4: #303035;
+  --ink-2: #d6d6da;
+  --ink-ring: rgba(237, 237, 239, 0.2);
 
   --surface: var(--surface-panel);
   --surface-2: var(--surface-sunken);
@@ -239,18 +237,18 @@
   --border: var(--border-default);
   --muted: var(--text-secondary);
 
-  --card: #17171d;
-  --card-line: rgba(255, 255, 255, 0.085);
-  --card-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.55), 0 12px 28px -16px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --card-shadow-open: 0 0 0 .5px rgba(255, 255, 255, 0.09), 0 8px 26px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --fill: rgba(255, 255, 255, 0.055);
-  --fill-hover: rgba(255, 255, 255, 0.09);
-  --fill-active: rgba(255, 255, 255, 0.135);
+  --card: #1f1f22;
+  --card-line: rgba(255, 255, 255, 0.07);
+  --card-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --card-shadow-open: 0 0 0 .5px rgba(255, 255, 255, 0.08), 0 2px 4px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.4);
+  --fill: rgba(255, 255, 255, 0.05);
+  --fill-hover: rgba(255, 255, 255, 0.08);
+  --fill-active: rgba(255, 255, 255, 0.11);
   --field: rgba(255, 255, 255, 0.045);
-  --field-hover: rgba(255, 255, 255, 0.075);
-  --raised: #30303a;
-  --raised-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.16), 0 1px 2px rgba(0, 0, 0, 0.6);
-  --primary-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6);
-  --split-line: rgba(0, 0, 0, 0.25);
-  --header-bg: rgba(16, 16, 21, 0.92);
+  --field-hover: rgba(255, 255, 255, 0.07);
+  --raised: #34343a;
+  --raised-shadow: 0 0 0 .5px rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.45);
+  --primary-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --split-line: rgba(0, 0, 0, 0.18);
+  --header-bg: rgba(27, 27, 30, 0.92);
 }

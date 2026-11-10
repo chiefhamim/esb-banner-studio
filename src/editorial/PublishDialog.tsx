@@ -9,6 +9,7 @@ import { fmtDuration, useJobLog } from './jobLog'
 import { Icon } from '../ui/Icon'
 import { BannerPreviews } from './BannerPreviews'
 import { ImageOptions } from './ImageOptions'
+import { PressCountdown, type PressItem } from './PressCountdown'
 import type { Assets } from '../core/render'
 import type { HeroMode } from './heroMode'
 import type { EditorialDraft } from './editorialStore'
@@ -49,27 +50,16 @@ export function PublishDialog(p: {
   const blocked = p.busy || !draft.headline.trim()
   const verb = p.updating ? 'Update' : 'Publish'
   const publishedDone = !!(p.result?.ok && p.result.url && !p.busy)
-  // Publish arms a short countdown the editor can cancel; the send fires only when it reaches zero.
+  // Publish arms the "Going to press" countdown (PressCountdown); the send fires only when it reaches zero.
   // Automated tests set window.__esbNoArm to publish at once (the countdown is a human affordance).
   const ARM_MS = (window as unknown as { __esbNoArm?: boolean }).__esbNoArm ? 0 : 5000
-  const [armedAt, setArmedAt] = useState<number | null>(null)
-  const [, tick] = useState(0)
-  const fired = useRef(false)
-  useEffect(() => {
-    if (armedAt == null) return
-    fired.current = false
-    const iv = setInterval(() => {
-      const left = ARM_MS - (Date.now() - armedAt)
-      if (left <= 0) {
-        clearInterval(iv)
-        if (!fired.current) { fired.current = true; setArmedAt(null); p.onPublish('PUBLISHED') }
-      } else tick((n) => n + 1)
-    }, 50)
-    return () => clearInterval(iv)
-  }, [armedAt]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (p.busy) setArmedAt(null) }, [p.busy])
-  const armLeft = armedAt != null ? Math.max(0, ARM_MS - (Date.now() - armedAt)) : 0
-  const armPct = armedAt != null ? Math.min(100, ((ARM_MS - armLeft) / ARM_MS) * 100) : 0
+  const [armed, setArmed] = useState(false)
+  const pressItems: PressItem[] = [
+    { label: 'The story', sub: draft.headline.trim() || 'Untitled story' },
+    { label: 'Banner', sub: p.fbOn && p.fbPage ? 'Website 16:9 · Facebook 4:5' : 'Website 16:9' },
+    { label: 'esbpowerline.com', sub: p.updating ? 'Updates the live article' : 'A new article' },
+    ...(p.fbOn && p.fbPage ? [{ label: 'Facebook Page', sub: p.fbPage + (p.fbLink ? ' · link as first comment' : '') }] : []),
+  ]
   const budget = (n: number, max: number) => <b className={n > max ? 'over' : ''}>{n}/{max}{n > max ? ' · over' : ''}</b>
   return (
     <Dialog
@@ -90,14 +80,9 @@ export function PublishDialog(p: {
               <span>Back to News</span>
             </button>
           ) : (
-            armedAt != null ? (
-            <button type="button" className="btn primary pub-arming" style={{ ['--arm' as string]: armPct + '%' }} onClick={() => setArmedAt(null)}
-              title="Press to cancel">
-              <i className="pub-arm-ring" aria-hidden /><span>{verb === 'Update' ? 'Updating' : 'Publishing'} in {Math.ceil(armLeft / 1000)} — press to cancel</span>
-            </button>
-            ) : (
-            <button type="button" className="btn primary" onClick={() => setArmedAt(Date.now())} disabled={blocked}
-              title={p.updating ? 'Change the article that is live now — a 5-second countdown you can cancel' : 'Publish live to esbpowerline.com — a 5-second countdown you can cancel'}>
+            (
+            <button type="button" className="btn primary" onClick={() => setArmed(true)} disabled={blocked || armed}
+              title={p.updating ? 'Change the article that is live now — a 5-second countdown you can stop' : 'Publish live to esbpowerline.com — a 5-second countdown you can stop'}>
               <Icon name="upload" size={14} /><span>{p.busy ? (p.updating ? 'Updating…' : 'Publishing…') : verb + (p.fbOn && p.fbPage ? ' + Facebook' : '')}</span>
             </button>
             )
@@ -105,6 +90,7 @@ export function PublishDialog(p: {
         </>
       }
     >
+      {armed && <PressCountdown ms={ARM_MS} items={pressItems} verb={verb} sub={p.fbOn && p.fbPage ? 'Website and Facebook' : 'esbpowerline.com'} onFire={() => p.onPublish('PUBLISHED')} onCancel={() => setArmed(false)} />}
       <div className="pub">
         <div className="pub-top">
           <div className={'pub-link' + (p.updating ? ' live' : '')}>

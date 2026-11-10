@@ -386,8 +386,8 @@
 @container topbar (max-width: 1180px) {
   .topbar .fmtgroup .pv-btn .pv-label, .topbar .fmtgroup .pv-btn kbd { display: none; }
   /* the quick switch keeps its place as an icon (its words are in the tooltip) instead of vanishing */
-  .topbar .fmtgroup .dual-toggle-btn { padding: 0; width: 28px; justify-content: center; }
-  .topbar .fmtgroup .dual-toggle-btn span { display: none; }
+  .topbar.gx-head .fmtgroup .dual-toggle-btn { padding: 0; width: 28px; justify-content: center; }
+  .topbar.gx-head .fmtgroup .dual-toggle-btn span { display: none; }
 }
 @container topbar (max-width: 1000px) {
   .topbar .back-to-desk .back-label { display: none; }
@@ -971,7 +971,7 @@ label.switch:active i { filter: brightness(.94); }
    track) is not; the selected segment/tab is a light chip with dark ink (well over 3 : 1 against the track, the WCAG
    floor for a state indicator) and a heavier weight, so it reads at a glance and without colour. Unselected stay dim,
    hover only lifts them to a soft fill. ---- */
-:root[data-theme=dark] { --chip-on-bg: #e6e6ec; --chip-on-fg: #131316; }
+:root[data-theme=dark] { --chip-on-bg: #ececee; --chip-on-fg: #161618; }
 :root[data-theme=dark] .pill-slide { background: var(--chip-on-bg); box-shadow: 0 1px 2px rgba(0, 0, 0, .55), 0 0 0 .5px rgba(255, 255, 255, .5); }
 :root[data-theme=dark] .seg-ctl button.on, :root[data-theme=dark] .side-tabs button.on, :root[data-theme=dark] .ws-switch .ws-btn.on { color: var(--chip-on-fg); font-weight: 600; }
 :root[data-theme=dark] .seg-ctl button.on svg, :root[data-theme=dark] .side-tabs button.on svg, :root[data-theme=dark] .ws-switch .ws-btn.on svg { color: var(--chip-on-fg); }
@@ -1979,16 +1979,6 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .statusbar .sb-item > :not(.sb-k) { color: var(--text); font-weight: 600; }
 .statusbar .vw-sb-save.failed > :not(.sb-k) { color: var(--warning); }
 
-/* ---------------------------------------------------------------- publish countdown (2026-11-10)
-   Publish arms a 5 s countdown instead of firing at once; the button becomes the cancel, with a ring
-   that fills as the moment approaches. Cancel is a plain press anywhere on it. */
-.btn.pub-arming { position: relative; overflow: hidden; }
-.btn.pub-arming::before { content: ''; position: absolute; inset: 0; width: var(--arm, 0%); background: rgba(255, 255, 255, .14); transition: width 60ms linear; pointer-events: none; }
-.pub-arm-ring { flex: none; width: 14px; height: 14px; border-radius: 50%;
-  background: conic-gradient(currentColor var(--arm, 0%), color-mix(in srgb, currentColor 25%, transparent) 0);
-  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 54%, #000 56%); mask: radial-gradient(circle at 50% 50%, transparent 54%, #000 56%); }
-.btn.pub-arming span { font-variant-numeric: tabular-nums; }
-@media (prefers-reduced-motion: reduce) { .btn.pub-arming::before { transition: none; } }
 
 /* ---------------------------------------------------------------- one hover language (2026-11-10, pass 4)
    The Select / Hand / Text tools answer a pointer with ONE flat tint on a 32 px, 8 px-radius square. Every other
@@ -2015,8 +2005,8 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .pnl:not(.open) > header:hover { box-shadow: none; }
 
 /* Graphics header: Preview is an icon-only square wherever its label gives way, same size as its neighbours */
-.topbar .fmtgroup .pv-btn { min-width: 28px; justify-content: center; }
-@container topbar (max-width: 1180px) { .topbar .fmtgroup .pv-btn { padding: 0; width: 28px; } }
+.topbar.gx-head .fmtgroup .pv-btn { min-width: 28px; justify-content: center; }
+@container topbar (max-width: 1180px) { .topbar.gx-head .fmtgroup .pv-btn { padding: 0; width: 28px; } }
 
 
 /* 900 px: every Graphics header control stays on screen — the row's own padding and the switcher's labels give way */
@@ -2040,11 +2030,11 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 /* ---------------------------------------------------------------- Graphics header, one shape at every width (pass 5)
    Format = its icon + ratio, quick switch = the swap icon, Preview = the eye. Words live in the tooltips. Under 960 px
    the menu words fold into one "more" button so Export is never pushed off the window. */
-.topbar .fmtpick .fp-name, .topbar .fmtpick .fp-dims { display: none; }
-.topbar .fmtpick .fp-ratio { font: 600 12px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text-2); }
-.topbar .fmtgroup .dual-toggle-btn, .topbar .fmtgroup .pv-btn { width: 28px; min-width: 28px; padding: 0; justify-content: center; }
-.topbar .fmtgroup .pv-btn .pv-label, .topbar .fmtgroup .pv-btn kbd, .topbar .fmtgroup .dual-toggle-btn span { display: none; }
-.topbar .fmtgroup .pv-btn { display: inline-flex !important; }
+.topbar.gx-head .fmtpick .fp-name, .topbar.gx-head .fmtpick .fp-dims { display: none; }
+.topbar.gx-head .fmtpick .fp-ratio { font: 600 12px/1 var(--ui); font-variant-numeric: tabular-nums; color: var(--text-2); }
+.topbar.gx-head .fmtgroup .dual-toggle-btn, .topbar.gx-head .fmtgroup .pv-btn { width: 28px; min-width: 28px; padding: 0; justify-content: center; }
+.topbar.gx-head .fmtgroup .pv-btn .pv-label, .topbar.gx-head .fmtgroup .pv-btn kbd, .topbar.gx-head .fmtgroup .dual-toggle-btn span { display: none; }
+.topbar.gx-head .fmtgroup .pv-btn { display: inline-flex !important; }
 .menubar .mb-fold { display: none; width: 28px; height: 28px; }
 @container topbar (max-width: 960px) {
   .topbar.gx-head .menubar > .mb-item { display: none; }
@@ -2058,8 +2048,8 @@ img.ed-avatar { padding: 0; background: var(--fill); }
    on an iOS-sheet curve; the track clips it, the content fades over the first 60 %, the rail fades in over the last 40 %.
    Opening is the same film backwards. */
 .col-anim { position: relative; overflow: hidden; }
-.col-anim-in > :not(.col-rail):not(.col-handle) { animation: col-content-out 230ms cubic-bezier(.4, 0, .6, 1) both; }
-.col-anim-out > :not(.col-rail):not(.col-handle) { animation: col-content-in 280ms cubic-bezier(.2, 0, 0, 1) 110ms both; }
+.col-anim-in > :not(.col-rail):not(.col-handle):not(.col-fold) { animation: col-content-out 230ms cubic-bezier(.4, 0, .6, 1) both; }
+.col-anim-out > :not(.col-rail):not(.col-handle):not(.col-fold) { animation: col-content-in 280ms cubic-bezier(.2, 0, 0, 1) 110ms both; }
 .col-anim-in > .col-rail { animation: col-rail-in 240ms cubic-bezier(.2, 0, 0, 1) 170ms both; }
 .col-rail { position: absolute; top: 0; bottom: 0; }
 .col-rail.left { left: 0; } .col-rail.right { right: 0; }
@@ -2072,19 +2062,81 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 @keyframes col-rail-out { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .col-anim > *, .col-rail, .col-rail.leaving { animation: none !important; } }
 
-/* the fold button: one round chevron on the column's edge, in the same spot on every desk — level with the first row
-   of the column — and the same button opens a folded rail. Quiet at rest, firm under the pointer. */
-.col-handle .col-fold { position: absolute; top: 29px; left: 50%; z-index: 3; display: grid; place-items: center; width: 22px; height: 22px; margin: -11px 0 0 -11px; padding: 0; color: var(--text-3); background: var(--card); border: 0; border-radius: 50%; cursor: pointer; opacity: .62; box-shadow: 0 0 0 1px var(--card-line), 0 2px 6px -1px rgba(0, 0, 0, .3); transition: opacity 160ms var(--ease), color 120ms var(--ease), transform 220ms var(--spring), background-color 120ms var(--ease); }
-.col-handle:hover .col-fold, .col-handle:focus-within .col-fold { opacity: 1; }
-.col-handle .col-fold:hover { color: var(--text); background: var(--raised); transform: scale(1.1); }
-.col-handle .col-fold:active { transform: scale(.94); }
-.col-handle.drag .col-fold, .resizing .col-handle .col-fold { opacity: 0 !important; }
-@media (prefers-reduced-motion: reduce) { .col-handle .col-fold { transition: none; } }
 
 /* category tiles: a word is never cut in the middle ("Commoditie-s"); the chosen tile keeps a weight that fits the same room */
 .pnl-body .cat-txt b { overflow-wrap: normal; hyphens: manual; -webkit-hyphens: manual; letter-spacing: -.005em; }
 .pnl-body .cat.on .cat-txt b { font-weight: 600; }
 
-/* the fold button sits mostly OUTSIDE its column (only 4 px inside), so it never covers the column's first row */
-.col-handle.r .col-fold { margin-left: -4px; }
-.col-handle.l .col-fold { margin-left: -18px; }
+
+/* ---------------------------------------------------------------- the fold button, inside its panel (pass 7)
+   A plain sidebar icon in the panel's first row, on the side that faces the work area, styled exactly like the tool
+   buttons (32 px, flat tint). The first row gives it room; folded, it is the top button of the rail. */
+.col-fold { position: absolute; z-index: 4; top: var(--fold-top, 12px); display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: var(--text-2); background: transparent; border: 0; border-radius: 8px; cursor: pointer; transition: background-color 120ms var(--ease), color 120ms var(--ease); }
+.col-fold.left { right: var(--fold-inset, 12px); }
+.col-fold.right { left: var(--fold-inset, 12px); }
+.col-fold:hover { color: var(--text); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.col-fold:active { background: color-mix(in srgb, var(--ink) 14%, transparent); }
+.col-fold:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.col-anim > .col-fold { opacity: 0; }
+.is-railed > .col-fold { top: 10px; left: 50%; right: auto; margin-left: -16px; }
+.is-railed > .col-rail { padding-top: 50px; }
+.resizing .col-fold { pointer-events: none; }
+
+/* room for it in each panel's first row */
+:is(.left, .or-left, .vw-bin-panel) > .side-tabs { margin-right: 52px; }
+.or-right > .side-tabs { margin-left: 52px; }
+.left.ed-src > .side-tabs, .ed-src > .side-tabs { margin-right: 52px; }
+/* Graphics' right column opens with the Inspector card: the button sits in that card's header row */
+.app > .right { --fold-top: 18px; --fold-inset: 16px; }
+.app > .right > .scroll > .pnl:first-child > header { padding-left: 50px; }
+/* News: the brand bar has room on its right; the detail card and Editorial's status card have room at their top right */
+.nw-left { --fold-top: 9px; --fold-inset: 10px; }
+.nw-right > .col-fold.right, .ed-side > .col-fold.right { left: auto; right: 20px; top: 18px; }
+.is-railed.nw-right > .col-fold.right, .is-railed.ed-side > .col-fold.right { left: 50%; right: auto; top: 10px; }
+
+/* ---------------------------------------------------------------- Going to press (PressCountdown.tsx, pass 7)
+   The phone's hold-to-publish card, on the desktop: the ESB masthead stripe fills across the top, the seconds badge
+   carries an exact progress ring, the outputs tick off one by one, and at zero the badge springs into a green check.
+   Transform/opacity only, so it stays smooth while the publish keeps the page busy. */
+.gp-overlay { position: fixed; inset: 0; z-index: 3100; display: grid; place-items: center; background: rgba(12, 10, 8, .34); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: gp-fade .2s ease-out both; }
+:root[data-theme=dark] .gp-overlay { background: rgba(0, 0, 0, .5); }
+.gp-overlay.is-go { animation: gp-fade-out .32s ease-in .3s both; }
+@keyframes gp-fade { from { opacity: 0; } }
+@keyframes gp-fade-out { to { opacity: 0; } }
+.gp-card { position: relative; width: min(380px, calc(100vw - 48px)); overflow: hidden; color: var(--text); background: var(--card); border-radius: 16px; box-shadow: 0 0 0 .5px var(--card-line), 0 28px 70px -18px rgba(0, 0, 0, .45), 0 6px 18px -8px rgba(0, 0, 0, .25); animation: gp-in .34s cubic-bezier(.2, .9, .3, 1.12) both; }
+.gp-overlay.is-go .gp-card { animation: gp-pop .34s cubic-bezier(.25, 1.2, .5, 1), gp-settle .32s cubic-bezier(.4, 0, 1, 1) .3s both; }
+@keyframes gp-in { from { opacity: 0; transform: translate3d(0, 24px, 0) scale(.95); } }
+@keyframes gp-pop { 30% { transform: scale(1.035); } }
+@keyframes gp-settle { to { opacity: 0; transform: translate3d(0, 10px, 0) scale(.97); } }
+.gp-rule { position: relative; height: 5px; background: var(--fill); }
+.gp-rule i { position: absolute; inset: 0; background: linear-gradient(90deg, #16a34a 0 33.34%, #dc2626 33.34% 66.67%, #f97316 66.67% 100%); clip-path: inset(0 calc((1 - var(--hold, 0)) * 100%) 0 0); }
+.gp-head { display: flex; align-items: center; gap: 14px; padding: 20px 22px 12px; }
+.gp-badge { position: relative; flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; color: #dc2626; background: color-mix(in srgb, #dc2626 10%, transparent); font: 800 18px/1 var(--ui); font-variant-numeric: tabular-nums; }
+.gp-badge > b { grid-area: 1 / 1; animation: gp-num .4s cubic-bezier(.2, .9, .3, 1.3); }
+@keyframes gp-num { from { transform: scale(.55); opacity: 0; } }
+.gp-ring { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; background: conic-gradient(#dc2626 calc(var(--hold, 0) * 100%), color-mix(in srgb, #dc2626 16%, transparent) 0); -webkit-mask: radial-gradient(circle, transparent calc(50% - 3px), #000 calc(50% - 2.5px)); mask: radial-gradient(circle, transparent calc(50% - 3px), #000 calc(50% - 2.5px)); }
+.gp-badge.is-go { color: #fff; background: #16a34a; animation: gp-badge-go .42s cubic-bezier(.25, 1.35, .5, 1); }
+.gp-badge.is-go .gp-ring { background: #16a34a; }
+@keyframes gp-badge-go { 0% { transform: scale(.5); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.gp-head-t { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.gp-head-t b { font: 700 19px/1.15 var(--font-display, var(--ui)); letter-spacing: -.01em; }
+.gp-head-t small { font: 500 12.5px/1.3 var(--ui); color: var(--text-2); }
+.gp-list { list-style: none; margin: 0; padding: 2px 22px 8px; display: flex; flex-direction: column; }
+.gp-list li { display: flex; align-items: center; gap: 12px; padding: 9px 0; opacity: .4; transition: opacity .22s ease; }
+.gp-list li + li { border-top: 1px solid var(--card-line); }
+.gp-list li.is-done { opacity: 1; }
+.gp-tick { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: transparent; box-shadow: inset 0 0 0 1.5px var(--line-3); transition: background-color .2s ease, box-shadow .2s ease, color .2s ease; }
+.gp-tick svg { transform: scale(.4); transition: transform .32s cubic-bezier(.25, 1.5, .5, 1); }
+.gp-list li.is-done .gp-tick { color: #fff; background: #16a34a; box-shadow: none; }
+.gp-list li.is-done .gp-tick svg { transform: scale(1); }
+.gp-it { display: flex; flex-direction: column; min-width: 0; }
+.gp-it b { font: 600 13.5px/1.3 var(--ui); }
+.gp-it small { font: 500 12px/1.35 var(--ui); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gp-foot { display: flex; justify-content: flex-end; padding: 10px 22px 18px; }
+.gp-foot .btn { min-width: 96px; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .gp-overlay, .gp-card, .gp-badge, .gp-badge > b, .gp-tick svg { animation: none !important; transition: none !important; } }
+
+/* Editorial header with a story open: the story's own title chip keeps a readable width; the source and re-translate
+   pills give their words to their tooltips first (icon + paragraph count stay) */
+.topbar.ed-head .ed-story-chip { min-width: 180px; }
+@container topbar (max-width: 1640px) { .topbar.ed-head .ed-head-host, .topbar.ed-head .ed-retranslate-label { display: none; } .topbar.ed-head .ed-head-group .pv-btn { padding: 0 9px; } }

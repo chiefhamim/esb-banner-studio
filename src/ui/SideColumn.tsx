@@ -108,7 +108,7 @@ export function ColumnHandle({ col, label, root, apply, max }: {
     // clipped by the shrinking column and revealed by the growing one instead of reflowing at every width in between
     const open = Math.round(col.collapsed ? seenW.current || col.w : col.w)
     const chrome = el.offsetWidth - el.clientWidth
-    const kids = Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement && !c.classList.contains('col-rail') && !c.classList.contains('col-handle'))
+    const kids = Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement && !c.classList.contains('col-rail') && !c.classList.contains('col-handle') && !c.classList.contains('col-fold'))
     for (const k of kids) {
       const cs = getComputedStyle(k)
       k.style.width = Math.max(0, open - chrome - (parseFloat(cs.marginLeft) || 0) - (parseFloat(cs.marginRight) || 0)) + 'px'
@@ -124,20 +124,20 @@ export function ColumnHandle({ col, label, root, apply, max }: {
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
   const edge = col.side === 'left' ? 'r' : 'l'
-  // the chevron points where the column goes: toward its window edge to fold, away from it to open
-  const foldIcon = (col.side === 'left') === !col.collapsed ? 'chevLeft' : 'chevRight'
   return (
+    <>
+      <button type="button" className={'col-fold ' + col.side} aria-label={col.collapsed ? `Expand ${label}` : `Collapse ${label}`} data-tip={col.collapsed ? 'Expand' : 'Collapse'} data-tip-pos={col.side === 'left' ? 'right' : 'left'} 
+        onClick={toggle}>
+        <Icon name={col.side === 'left' ? 'panelLeft' : 'panelRight'} size={16} />
+      </button>
     <div ref={ref} className={`splitter vert ${edge} col-handle`} role="separator" aria-orientation="vertical" aria-label={label}
       aria-valuenow={col.px} aria-valuemin={RAIL_W} aria-valuemax={spec.max} aria-expanded={!col.collapsed} tabIndex={0}
       data-tip={col.collapsed ? 'Drag or double-click to expand' : 'Drag to resize · double-click to collapse'} data-tip-pos={col.side === 'left' ? 'right' : 'left'}
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
       onDoubleClick={toggle} onKeyDown={key}>
       <i className="grab" />
-      <button type="button" className="col-fold" aria-label={col.collapsed ? `Expand ${label}` : `Collapse ${label}`} data-tip={col.collapsed ? 'Expand' : 'Collapse'} data-tip-pos={col.side === 'left' ? 'right' : 'left'} tabIndex={-1}
-        onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); toggle() }}>
-        <Icon name={foldIcon} size={12} strokeWidth={2.4} />
-      </button>
     </div>
+    </>
   )
 }
 
