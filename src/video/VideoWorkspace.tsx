@@ -304,7 +304,13 @@ function Monitor({ aspect }: { aspect: number }) {
     return () => {
       unsub(); offProxy(); offGuides(); window.removeEventListener('esb:video-media-ready', schedule); ro?.disconnect(); cancelAnimationFrame(raf)
       if (eng.onFrame === schedule) eng.onFrame = () => {}
+      // give the GPU context back NOW: a desk change unmounts the monitor and each visit made a new WebGL2 context,
+      // which the GPU only reclaimed at garbage collection — enough round trips hit Chromium's context cap and the
+      // monitor of the next visit could be the one that was lost
+      comp.onLost = () => {}
+      comp.onRestored = () => {}
       comp.dispose()
+      try { comp.gl.getExtension('WEBGL_lose_context')?.loseContext() } catch { /* already gone */ }
     }
   }, [])
   return (

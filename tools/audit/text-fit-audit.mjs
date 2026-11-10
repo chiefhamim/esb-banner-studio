@@ -155,7 +155,7 @@ try {
     // ---- Editorial: a story, then everything set long
     await page.keyboard.press('Escape')
     await page.locator('.dialog .ibtn[aria-label="Close"], .dialog button:has-text("Cancel")').first().click({ timeout: 1000 }).catch(() => {})
-    await page.click('.ws-btn[data-ws="editorial"]')
+    await page.click('.ws-btn[data-ws="editorial"]:visible')
     await page.waitForSelector('.editorial-workspace')
     await tryStep('editorial-launch', async () => {})
     // a headline typed in Graphics already opens a desk (the banner link is two-way): load through its "New link" tab,
@@ -198,7 +198,7 @@ try {
     await page.keyboard.press('Escape')
 
     // ---- Video
-    await page.click('.ws-btn[data-ws="video"]')
+    await page.click('.ws-btn[data-ws="video"]:visible')
     await page.waitForTimeout(500)
     await tryStep('video-start', async () => { await page.waitForSelector('.vw-start-card') })
     const vtab = (t) => page.click(`.vw-bin-panel .side-tabs button:has-text("${t}")`)

@@ -26,7 +26,7 @@ try {
   await page.goto(`http://localhost:${PORT}/`)
   await page.waitForSelector('.studio-shell')
   const tile = page.locator('.launch-tile:has-text("Outreach")')
-  if (await tile.count()) await tile.first().click(); else await page.click('.ws-btn[data-ws="outreach"]')
+  if (await tile.count()) await tile.first().click(); else await page.click('.ws-btn[data-ws="outreach"]:visible')
   await page.waitForSelector('.outreach-workspace')
   await page.evaluate(async () => {
     const st = window.__outreachStore.getState()

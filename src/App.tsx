@@ -16,6 +16,7 @@ import { DeskBoundary } from './ui/DeskBoundary'
 import { CATEGORIES } from './core/tokens'
 import { installBannerLink } from './editorial/bannerLink'
 import { installScrollCalm } from './ui/scrollCalm'
+import { installHeaderCentering } from './ui/headerCenter'
 import './styles/home.css'
 import './styles/outreach.css'
 import './styles/outreach-activity.css'
@@ -26,6 +27,7 @@ import './styles/side-rail.css'
 
 installBannerLink()
 installScrollCalm()
+installHeaderCentering()
 
 // Editorial (TipTap, the AI SDKs), Video (mediabunny) and Outreach (the workbook reader) are their own chunks, so the
 // app opens on Home and Graphics without parsing them: the single bundle was 2.3 MB. They are fetched in the background
@@ -69,7 +71,7 @@ export default function App() {
     // a parked desk keeps the end state of its exit animation (faded, shifted, pointer-events off): clear it now, while
     // it is hidden, so it is whole the next time it is shown
     for (const p of document.querySelectorAll<HTMLElement>('.workspace-main > .desk-slot.is-parked')) { p.getAnimations().forEach((a) => a.cancel()); p.style.removeProperty('pointer-events') }
-    const el = document.querySelector<HTMLElement>('.workspace-main > .desk-slot.is-active')
+    const el = document.querySelector<HTMLElement>(`.workspace-main > .desk-slot[data-desk="${workspace}"]`)
     if (!el || typeof el.animate !== 'function' || reducedMotion()) return
     el.animate(arriveFrames(deskMotion.dir), { duration: 560, easing: 'linear' })
   }, [workspace])
@@ -146,7 +148,10 @@ export default function App() {
   const slot = (id: WorkspaceId, node: ReactNode) => {
     const on = workspace === id
     if (!on && !kept.has(id)) return null
-    return <Activity key={id} mode={on ? 'visible' : 'hidden'}><div className={'desk-slot ' + (on ? 'is-active' : 'is-parked')}>{node}</div></Activity>
+    // the slot (and its active/parked mark) sits OUTSIDE the <Activity>: React defers every update inside a hidden
+    // Activity, so a mark inside it stayed "is-active" after the desk was parked — the next switch then faded out the
+    // wrong desk, which came back at opacity 0 (a blank window)
+    return <div key={id} className={'desk-slot ' + (on ? 'is-active' : 'is-parked')} data-desk={id}><Activity mode={on ? 'visible' : 'hidden'}>{node}</Activity></div>
   }
   const newsDesk = useMemo(() => <Suspense fallback={<DeskLoading />}><DeskBoundary desk="News" onLeave={toHome}><NewsWorkspace /></DeskBoundary></Suspense>, [])
   const editorialDesk = useMemo(() => <Suspense fallback={<DeskLoading />}><DeskBoundary desk="Editorial" onLeave={toHome}><EditorialWorkspace /></DeskBoundary></Suspense>, [])
@@ -164,12 +169,12 @@ export default function App() {
             switching back is instant: no rebuild, scroll and open panels exactly as left. Home is light and Video holds
             decoded media (and could keep playing), so those two are built only while open. A parked desk's effects are
             stopped by <Activity>; its window listeners also check deskIs() as a second guard. */}
-        {workspace === 'home' && <div className="desk-slot is-active"><DeskBoundary desk="Home"><HomeWorkspace /></DeskBoundary></div>}
+        {workspace === 'home' && <div className="desk-slot is-active" data-desk="home"><DeskBoundary desk="Home"><HomeWorkspace /></DeskBoundary></div>}
         {slot('news', newsDesk)}
         {slot('editorial', editorialDesk)}
         {slot('graphics', graphicsDesk)}
         {slot('outreach', outreachDesk)}
-        {workspace === 'video' && <div className="desk-slot is-active"><Suspense fallback={<DeskLoading />}><DeskBoundary desk="Video" onLeave={toHome}><VideoWorkspace /></DeskBoundary></Suspense></div>}
+        {workspace === 'video' && <div className="desk-slot is-active" data-desk="video"><Suspense fallback={<DeskLoading />}><DeskBoundary desk="Video" onLeave={toHome}><VideoWorkspace /></DeskBoundary></Suspense></div>}
       </div>
       {/* one tooltip layer for every workspace (it lived inside Graphics, so Editorial, Video and Home had none) */}
       <Tooltips />

@@ -70,7 +70,7 @@ export const useShellStore = create<ShellState>((set, get) => ({
     // any move away from Graphics ends the round trip, so the back button never outlives it
     const apply = () => set((st) => ({ workspace: ws, returnTo: ws === 'graphics' ? st.returnTo : null }))
     const from = get().workspace
-    const el = document.querySelector<HTMLElement>('.workspace-main > .desk-slot.is-active')
+    const el = document.querySelector<HTMLElement>(`.workspace-main > .desk-slot[data-desk="${from}"]`)
     if (from === ws || !el || typeof el.animate !== 'function' || reducedMotion()) { apply(); return }
     // the desk on screen eases out toward the side it came from, then the new desk drifts in and settles (App.tsx)
     if (moving) { queued = ws; return }

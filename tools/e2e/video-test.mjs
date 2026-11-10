@@ -326,7 +326,7 @@ try {
   check('New → confirm → an empty video', (await page.evaluate(() => window.__videoStore.getState().project.clips.length)) === 0 && (await page.locator('.vw-start-card').count()) === 1)
 
   // 11. Back to Graphics
-  await page.click('.vw-header .ws-btn[data-ws="graphics"]')
+  await page.click('.vw-header .ws-btn[data-ws="graphics"]:visible')
   await page.waitForSelector('.app > .topbar')
   check('Switched back to Graphics workspace', (await page.locator('.app > .topbar').count()) === 1 && (await page.locator('.video-workspace').count()) === 0)
 

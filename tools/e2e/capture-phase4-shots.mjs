@@ -67,7 +67,7 @@ try {
       if ((await tile.count()) > 0) {
         await tile.first().click()
       } else {
-        await page.click('.ws-btn[data-ws="outreach"]')
+        await page.click('.ws-btn[data-ws="outreach"]:visible')
       }
       await page.waitForSelector('.outreach-workspace')
       await page.waitForTimeout(400)

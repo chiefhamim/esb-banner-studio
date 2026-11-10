@@ -136,7 +136,6 @@
 .vw-au-fold { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 28px; padding: 0; border: 0; background: none; cursor: pointer; color: inherit; font: inherit; text-align: left; }
 .vw-au-fold:hover { color: var(--text); }
 .vw-au-fold-sum { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--text-2); }
-.vw-audio-panel { padding-bottom: 20px; }
 .vw-au-fade-label { color: var(--text); }
 .vw-au-fade .vw-numfield input { color: var(--text); }
 .vw-gslider:disabled { opacity: 0.45; }
@@ -257,7 +256,7 @@
 .vx-loud-verdict.check { color: var(--warning); }
 
 /* every button of the audio UI keeps a 28 px target (beats the .btn.xs height) */
-.vw-au .btn, .vw-mixer .btn, .vw-audio-panel .btn.xs, .vw-audio-panel .btn.sm { min-height: 28px; height: auto; }
+.vw-au .btn, .vw-mixer .btn { min-height: 28px; height: auto; }
 
 
 /* shortcuts sheet: the last group ends above the "more below" fade */

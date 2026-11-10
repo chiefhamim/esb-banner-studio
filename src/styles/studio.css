@@ -82,7 +82,7 @@
 .btn.primary:hover:not(:disabled) { background: var(--ink-2); }
 .topbar .btn.primary, .vw-header .btn.primary { height: 32px; padding: 0 14px; gap: 6px; border-radius: var(--r-2); font: 600 13px/1 var(--ui); }
 .topbar .split { display: inline-flex; align-items: stretch; height: 32px; border-radius: var(--r-2); background: var(--ink); box-shadow: var(--primary-sheen); overflow: hidden; }
-.topbar .split > .btn.primary, .topbar .split > .mbtn, .topbar .split > * { height: 32px; margin: 0; border-radius: 0; box-shadow: none; }
+.topbar .split > .btn.primary, .topbar .split > * { height: 32px; margin: 0; border-radius: 0; box-shadow: none; }
 .topbar .split > .btn.primary:first-child { padding: 0 12px 0 14px; }
 .topbar .split > .btn.primary.split-caret { width: 30px; padding: 0; color: var(--on-ink); background: transparent; border: 0; box-shadow: inset 1px 0 0 var(--split-line); border-radius: 0; }
 .topbar .split > .btn.primary.split-caret:hover:not(:disabled) { background: color-mix(in srgb, var(--on-ink) 12%, transparent); }
@@ -112,10 +112,12 @@
 
 /* ---------------------------------------------------------------- side columns & panel cards */
 .left, .right, .ed-src, .ed-side { background: var(--side); }
+/* the stable 12 px scrollbar gutter is the right margin, so the cards sit 12 px from both edges */
 .left .scroll.rail > .pane,
 .right > .scroll.rail.insp,
 .ed-src-scroll,
-.ed-side-scroll { padding: 6px 8px 16px; }
+.ed-side-scroll { padding: 6px 0 16px 12px; }
+.right > .scroll.rail.insp, .ed-src-scroll, .ed-side-scroll { scrollbar-gutter: stable; }
 .right > .scroll.rail.insp { padding-top: 8px; }
 
 .pnl {
@@ -206,7 +208,6 @@
 .ed-input,
 .ed-input-headline,
 .ed-input-deck,
-.ed-input-body,
 .ed-input-social,
 #draft-headline,
 #draft-deck {
@@ -219,7 +220,6 @@
 .ed-input:hover,
 .ed-input-headline:hover,
 .ed-input-deck:hover,
-.ed-input-body:hover,
 .ed-input-social:hover,
 #draft-headline:hover,
 #draft-deck:hover {
@@ -230,7 +230,6 @@
 .ed-input:focus,
 .ed-input-headline:focus,
 .ed-input-deck:focus,
-.ed-input-body:focus,
 .ed-input-social:focus,
 #draft-headline:focus,
 #draft-deck:focus {
@@ -272,10 +271,6 @@
 }
 
 /* Story tab: the card-type switch is a segmented control, the link importer a card */
-.pane .card-type-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 4px 0 8px; padding: 2px; background: var(--fill); border-radius: var(--r-2); }
-.pane .card-type-bar .ct-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; min-width: 0; padding: 0 6px; font: 500 12px/1 var(--ui); white-space: nowrap; color: var(--text-2); background: transparent; border: 0; border-radius: 6px; box-shadow: none; transition: background var(--t-2) var(--spring), color var(--t-1) var(--ease); }
-.pane .card-type-bar .ct-tab:hover { color: var(--text); }
-.pane .card-type-bar .ct-tab.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
 .pane .url-importer { margin: 0 0 8px; padding: 12px; background: var(--card); border: 0; border-radius: 12px; box-shadow: var(--card-shadow); }
 .pane .url-importer .input { height: 32px; }
 
@@ -287,11 +282,8 @@
 .vw-bin-tabs button.active::after { display: none; }
 
 /* Home: the ESB logo is drawn for a light ground, so in dark mode it sits on a white plate (artwork untouched) */
-:root[data-theme="dark"] .home-brand-logo { padding: 6px 10px; background: #fff; border-radius: var(--r-3); box-sizing: content-box; }
 
 /* narrow side columns: the card-type switch is text-only, and category tiles give their words more room */
-.pane .card-type-bar .ct-tab svg { display: none; }
-.pane .card-type-bar .ct-tab { overflow: hidden; text-overflow: ellipsis; }
 .pnl-body .cat { padding: 7px 6px; gap: 7px; }
 .pnl-body .cat-ico { width: 24px; height: 24px; }
 .pnl-body .cat-ico svg { width: 14px; height: 14px; }
@@ -466,7 +458,6 @@
 .ed-account.in:hover .ed-avatar { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--sel); }
 .ibtn.spin svg { animation: ed-spin 900ms linear infinite; }
 @keyframes ed-spin { to { transform: rotate(360deg); } }
-@container ed (max-width: 1100px) { .ed-account-label { display: none; } }
 
 /* ---------------------------------------------------------------- side tabs follow their column: a narrow column keeps the
    label on the chosen tab and shows the others as icons (named in their tooltip), so nothing runs past the edge */
@@ -534,12 +525,6 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 .ed-head .ed-head-group .pv-btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
 .ed-head .ed-head-group .pv-btn.on > svg { color: var(--sel-text); }
 .ed-head .ed-head-group .pv-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--sel) 70%, transparent); outline-offset: 1px; }
-.ed-head .ed-site-pill { border: 0; }
-.ed-head .ed-site-pill .site-host { font: 500 13px/1 var(--ui); letter-spacing: -.005em; }
-.ed-head .ed-site-pill .site-state { padding: 2px 6px; font: 500 10.5px/14px var(--mono); color: var(--text-3); background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 999px; }
-.ed-head .ed-site-pill .site-dot { width: 7px; height: 7px; transition: box-shadow var(--t-2) var(--ease); }
-.ed-head .ed-site-pill .site-dot.online { box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent); }
-.ed-head .ed-site-pill .site-dot.offline { box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent); }
 .ed-head .ed-head-group .dpc-tag { padding: 2px 6px; font: 500 10.5px/14px var(--mono); color: var(--text-3); background: color-mix(in srgb, var(--text) 6%, transparent); border: 0; border-radius: 999px; }
 
 /* ---------------------------------------------------------------- AI settings dialog */
@@ -811,9 +796,8 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 @media (prefers-reduced-motion: reduce) { .ed-statusbar .sb-cms.on .sb-dot { animation: none; } }
 @media (max-width: 1280px) { .ed-statusbar .sb-who, .ed-statusbar .sb-rname { display: none; } }
 /* header account: avatar + the editor's name */
-.ed-account .ed-account-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12.5px/1 var(--ui); color: var(--text-2); }
 .ed-account.in { gap: 0; padding: 0 4px; }
-@media (max-width: 1280px) { .ed-account .ed-account-name { display: none; } .ed-account.in { padding: 0 4px; } }
+@media (max-width: 1280px) { .ed-account.in { padding: 0 4px; } }
 .ed-statusbar::before { display: none; }  /* the CMS dot in the footer replaces the old category dot */
 
 /* footer balance: every muted label (CMS, ENGINE, MAIN, SEO, SOCIAL) is one style, every value is one style, one gap */
@@ -927,7 +911,7 @@ kbd, .kbd { display: inline-flex; align-items: center; justify-content: center; 
 
 /* ---- one hover / press / selected language for every chip, tab and toggle (it was missing on tabs, segmented controls,
    the link pill, switches and disclosure rows: only the text colour moved, so the pointer got no answer) ---- */
-.seg-ctl button, .side-tabs button, .ws-switch .ws-btn, .ed-link-pill, .ed-more > summary, .bc-actions .btn, .ed-steps li { transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), transform var(--t-1) var(--ease); }
+.seg-ctl button, .side-tabs button, .ws-switch .ws-btn, .ed-link-pill, .ed-more > summary, .ed-steps li { transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), transform var(--t-1) var(--ease); }
 .seg-ctl button:not(.on):not(:disabled):hover, .side-tabs button:not(.on):not(:disabled):hover, .ws-switch .ws-btn:not(.on):hover { background: transparent; color: var(--text); }
 .seg-ctl button.on:hover, .side-tabs button.on:hover, .ws-switch .ws-btn.on:hover { background: transparent; }
 .seg-ctl button:focus-visible, .side-tabs button:focus-visible, .ws-switch .ws-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
@@ -1059,11 +1043,9 @@ label.switch:active i { filter: brightness(.94); }
 
 /* publish sheet: stats strip, then one column per destination, then switch / progress / result - no scrolling */
 .pub { display: flex; flex-direction: column; gap: 14px; }
-.pub-stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 10px 16px; }
-.pub-stats-row > div:last-child { grid-column: auto; }
 .bp.wide { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .bp.wide .bp-frame.fb { width: min(100%, calc(236px * 0.8)); }
-@media (max-width: 800px) { .bp.wide, .pub-stats-row { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 800px) { .bp.wide { grid-template-columns: minmax(0, 1fr); } }
 
 /* SEO / social checklists: score, fix row, source tag */
 .seo-score { font-variant-numeric: tabular-nums; }
@@ -1089,7 +1071,6 @@ label.switch:active i { filter: brightness(.94); }
 .pcard .bp-caption { padding: 8px 10px; background: var(--card); border-radius: var(--r-2); color: var(--text-2); }
 .pcard-note { margin: 0; }
 .io-note { margin: 0; font: 400 11.5px/16px var(--ui); color: var(--text-3); }
-.pub-stats-row { padding: 12px 14px; background: var(--fill); border-radius: var(--r-3); box-shadow: inset 0 0 0 1px var(--card-line); }
 .pub > .pp, .pub > .callout { margin: 0; }
 
 /* Activity: a step is just a tick - no circle (that is for the job itself) - with equal room either side */
@@ -1245,8 +1226,7 @@ label.switch:active i { filter: brightness(.94); }
 /* sidebar tabs share the edges of the cards under them: the list keeps a stable scrollbar gutter (thin = 10 px on Windows)
    and the tabs stop where the cards stop, instead of running 8 px past them on the right and 2 px short on the left */
 .left > .scroll, .vw-bin-content { scrollbar-gutter: stable; }
-.left > .side-tabs, .vw-bin-panel > .side-tabs { margin: 10px 18px 4px 8px; }
-.vw-bin-content { padding: 6px 8px 10px; }
+.vw-bin-content { padding: 6px 0 10px 12px; }
 /* a narrow Video header gives up the timecode chip first (the transport under the monitor shows the same time) */
 @container vwh (max-width: 1040px) { .vw-header .vw-timecode { display: none; } }
 :root[data-theme=dark] .topbar .pv-btn kbd, :root[data-theme=dark] .topbar .dpc-tag { color: #c8c8d0; }
@@ -1768,15 +1748,8 @@ label.switch:active i { filter: brightness(.94); }
 .card-look.edited b::after { content: ' · edited'; font-weight: 500; color: var(--text-3); }
 .card-look-art { --a-bg: color-mix(in srgb, var(--cat, #3b82f6) 10%, #fbfbfc); --a-ink: rgb(20 24 32 / .62); --a-hi: var(--cat, #3b82f6);
   display: flex; flex-direction: column; height: 64px; background: var(--a-bg); }
-.card-look-art.bg-paper { --a-bg: #f7f5ef; }
-.card-look-art.bg-ink { --a-bg: #0e1420; --a-ink: rgb(255 255 255 / .8); --a-hi: color-mix(in srgb, var(--cat, #3b82f6) 62%, #fff); }
-.card-look-art.bg-accent { --a-bg: var(--cat, #3b82f6); --a-ink: rgb(255 255 255 / .9); --a-hi: #fff; }
-.card-look-art.bg-gradient { --a-bg: linear-gradient(180deg, var(--cat, #3b82f6), color-mix(in srgb, var(--cat, #3b82f6) 45%, #000)); --a-ink: rgb(255 255 255 / .9); --a-hi: #fff; }
 .card-look-art .a-photo { position: static; flex: 0 0 44%; background: linear-gradient(135deg, #9aa7b6, #c9d2dc 60%, #aeb9c6); }
 .card-look-art .a-block { position: relative; flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 4px 10px; min-height: 0; }
-.card-look-art.al-left .a-block { align-items: flex-start; }
-.card-look-art.al-center .a-block { align-items: center; }
-.card-look-art.al-right .a-block { align-items: flex-end; }
 .card-look-art .a-block i { position: static; display: block; height: 3px; border-radius: 2px; background: var(--a-ink); }
 .card-look-art .a-l1 { width: 70%; } .card-look-art .a-l2 { width: 48%; }
 .card-look-art .a-name, .card-look-art .a-label { width: 34%; background: var(--a-hi) !important; }
@@ -1787,8 +1760,6 @@ label.switch:active i { filter: brightness(.94); }
 .card-look-art .a-num { font: 800 15px/1 var(--ui); letter-spacing: -.03em; color: var(--a-hi); }
 .card-look-art .a-num.big { font-size: 22px; }
 .card-look-art.noph .a-num { font-size: 20px; } .card-look-art.noph .a-num.big { font-size: 26px; }
-.card-look-art.mk-bar.al-left .a-block { border-left: 3px solid var(--a-hi); margin: 8px 0 8px 8px; padding-left: 7px; }
-.card-look-art.mk-bar.al-center .a-block::before { content: ''; width: 14px; height: 3px; border-radius: 2px; background: var(--a-hi); }
 .card-look-art.mk-frame .a-block { margin: 8px; border: 1.5px solid var(--a-hi); border-radius: 4px; }
 .card-look-art .a-split { display: flex; align-items: center; gap: 6px; }
 .card-look-art .a-split > span { display: flex; flex-direction: column; gap: 3px; width: 34px; }
@@ -2068,34 +2039,56 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .pnl-body .cat.on .cat-txt b { font-weight: 600; }
 
 
-/* ---------------------------------------------------------------- the fold button, inside its panel (pass 7)
-   A plain sidebar icon in the panel's first row, on the side that faces the work area, styled exactly like the tool
-   buttons (32 px, flat tint). The first row gives it room; folded, it is the top button of the rail. */
-.col-fold { position: absolute; z-index: 8; top: var(--fold-top, 14px); display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: var(--text-2); background: transparent; border: 0; border-radius: 8px; cursor: pointer; transition: background-color 120ms var(--ease), color 120ms var(--ease); }
-.col-fold.left { right: var(--fold-inset, 10px); }
-.col-fold.right { left: var(--fold-inset, 10px); }
-.col-fold:hover { color: var(--text); background: color-mix(in srgb, var(--ink) 8%, transparent); }
-.col-fold:active { background: color-mix(in srgb, var(--ink) 14%, transparent); }
-.col-fold:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
-.col-anim > .col-fold { opacity: 0; }
-.is-railed > .col-fold { top: 12px; left: 50%; right: auto; margin-left: -14px; }
-.is-railed > .col-rail { padding-top: 50px; }
+/* ---------------------------------------------------------------- the fold button, inside its panel (pass 10)
+   One shape everywhere: a 36 px outlined tile with the tab well's radius, exactly as tall as the tab bar it sits
+   beside; the hairline ring (no fill) sets it apart from the filled tools and rail sections — it is the column's own
+   control, not one more tool. Each column's first row starts 10 px from
+   the top and 12 px from the edges; the button takes the row's outer end, 6 px from the tabs. Folded, it is the rail's
+   top tile, centred in the 52 px rail, and it fades in WITH the rail's icons (same curve, same delay); opening, it fades
+   back in with the content. */
+.col-fold {
+  position: absolute; z-index: 8; top: var(--fold-top, 10px);
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+  color: var(--text-2); background: transparent; border: 0; border-radius: var(--r-2); cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  transition: background-color 120ms var(--ease), color 120ms var(--ease), box-shadow 120ms var(--ease), transform 120ms var(--ease);
+}
+.col-fold.left { right: var(--fold-inset, 12px); }
+.col-fold.right { left: var(--fold-inset, 12px); }
+.col-fold:hover { color: var(--text); background: var(--fill); box-shadow: inset 0 0 0 1px var(--line-3); }
+.col-fold:active { transform: scale(.96); }
+.col-fold:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.col-fold > svg { width: 17px; height: 17px; }
 .resizing .col-fold { pointer-events: none; }
+/* folded: the rail's top tile */
+.is-railed > .col-fold { top: 10px; }
+.is-railed > .col-fold.left { left: calc((var(--rail-w) - 36px) / 2); right: auto; }
+.is-railed > .col-fold.right { right: calc((var(--rail-w) - 36px) / 2); left: auto; }
+.is-railed > .col-rail { padding-top: 54px; }
+/* the film: out with the content, in with whatever shows next */
+.col-anim-in > .col-fold { animation: col-rail-in 240ms cubic-bezier(.2, 0, 0, 1) 170ms both; }
+.col-anim-out > .col-fold { animation: col-content-in 280ms cubic-bezier(.2, 0, 0, 1) 110ms both; }
+@media (prefers-reduced-motion: reduce) { .col-anim > .col-fold { animation: none !important; } }
 
-/* room for it in each panel's first row */
-:is(.left, .or-left, .vw-bin-panel) > .side-tabs { margin-right: 42px; }
-.or-right > .side-tabs { margin-left: 42px; }
-.left.ed-src > .side-tabs, .ed-src > .side-tabs { margin-right: 42px; }
+/* every column's first row: 10 px from the top, 12 px from both edges, the fold button's 36 + 6 px kept free */
+:is(.left, .vw-bin-panel, .or-left) > .side-tabs { margin: 10px 54px 4px 12px; }
+.or-right > .side-tabs { margin: 10px 12px 4px 54px; }
+.is-railed > .side-tabs { margin: 0; }
 /* Graphics' right column opens with the Inspector card: the button sits in that card's header row */
-.app > .right { --fold-top: 18px; --fold-inset: 16px; }
-.app > .right > .scroll > .pnl:first-child > header { padding-left: 50px; }
-/* News: the brand bar has room on its right; the detail card and Editorial's status card have room at their top right */
-.nw-left { --fold-top: 9px; --fold-inset: 10px; }
-.ed-side > .col-fold.right { left: auto; right: 20px; top: 18px; }
-/* News' detail card: the fold button sits at the card's top right and the card's top row (source, New tag) stops short of it */
-.nw-right > .col-fold.right { left: auto; right: 18px; top: 22px; }
-.nw-right .nw-detail-top { padding-right: 34px; }
-.is-railed.nw-right > .col-fold.right, .is-railed.ed-side > .col-fold.right { left: 50%; right: auto; top: 12px; }
+.app > .right { --fold-top: 12px; --fold-inset: 14px; }
+.app > .right > .scroll > .pnl:first-child > header { padding-left: 54px; }
+/* Video's clip inspector: its title row makes room */
+.vw-inspector-panel { --fold-top: 6px; }
+.vw-inspector-panel .vw-inspector-head { min-height: 52px; padding-left: 44px; }
+.vw-inspector-panel .vw-inspector { padding: 0 0 16px 12px; }
+/* News: the brand bar's own height, the brand's own inset */
+.nw-left { --fold-top: 6px; --fold-inset: 14px; }
+/* News' detail card and Editorial's status card: the button is the card's top-right tile, centred on the card's first
+   row, as far from the card's top as from its right edge (8 px); the first row stops short of it */
+.nw-right > .col-fold.right { left: auto; right: 20px; top: 20px; }
+.nw-right .nw-detail-top { min-height: 36px; margin-top: -7px; padding-right: 32px; }
+.ed-side > .col-fold.right { left: auto; right: 20px; top: 14px; }
+.is-railed.nw-right > .col-fold.right, .is-railed.ed-side > .col-fold.right { left: auto; right: calc((var(--rail-w) - 36px) / 2); top: 10px; }
 
 /* ---------------------------------------------------------------- Going to press (PressCountdown.tsx, pass 7)
    The phone's hold-to-publish card, on the desktop: the ESB masthead stripe fills across the top, the seconds badge
@@ -2149,8 +2142,8 @@ img.ed-avatar { padding: 0; background: var(--fill); }
    to every other desk's rounded containers. Now: the list's file block is a rounded card like the rows under it, and
    the send column is ONE rounded group (an inset list: sections on hairlines inside one soft container) instead of a
    stack of separately boxed cards. Content and controls unchanged. */
-.or-left > .or-tab > .or-left-head { margin: 2px 10px 8px; padding: 12px; background: var(--card); border: 0; border-radius: var(--r-3); box-shadow: var(--card-shadow); }
-.or-right-scroll { gap: 0; padding: 4px 12px 12px; }
+.or-left > .or-tab > .or-left-head { margin: 2px 12px 8px; padding: 12px; background: var(--card); border: 0; border-radius: var(--r-3); box-shadow: var(--card-shadow); }
+.or-right-scroll { gap: 0; padding: 4px 0 8px 12px; }
 .or-right-scroll > .or-card { padding: 14px 14px 16px; background: var(--card); box-shadow: none; border: 0; border-radius: 0; }
 .or-right-scroll > .or-card:first-child { border-top-left-radius: var(--r-3); border-top-right-radius: var(--r-3); }
 .or-right-scroll > .or-card:last-child { border-bottom-left-radius: var(--r-3); border-bottom-right-radius: var(--r-3); }
@@ -2158,7 +2151,7 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .or-right-scroll > .or-card > header { min-height: 20px; }
 .or-right-scroll > .or-card > header .sec-title, .or-right-scroll > .or-card > header h3 { font: 600 11px/16px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
 .or-right-scroll > .or-card .or-muted { line-height: 19px; }
-.or-right-foot { margin: 0 12px 12px; padding: 12px; background: var(--card); border: 0; border-radius: var(--r-3); box-shadow: var(--card-shadow); }
+.or-right-foot { margin: 4px 12px 12px; padding: 12px; background: var(--card); border: 0; border-radius: var(--r-3); box-shadow: var(--card-shadow); }
 
 /* ---------------------------------------------------------------- desks down the left (Help > Desks on the left, pass 8)
    A 72 px column of desks — icon over name — instead of the switcher at the start of every header. The header then
@@ -2183,3 +2176,19 @@ img.ed-avatar { padding: 0; background: var(--fill); }
    stopped, state and DOM kept). */
 .workspace-main > .desk-slot { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .workspace-main > .desk-slot > * { flex: 1 1 auto; min-width: 0; min-height: 0; }
+
+/* ---------------------------------------------------------------- pass 10: Outreach rows that share a line share a height
+   The centre toolbar sits in the same row as the side columns' 36 px tab bars, so its controls are 36 too (a segmented
+   control keeps its 4 px well). On Review, "Needs you" is a soft card like the rest (no outline), and the group under it
+   starts with rounded corners: a group's first card is rounded whatever comes before it. */
+.or-body .or-toolbar .btn, .or-body .or-toolbar .select { height: 36px; min-height: 36px; }
+.or-body .or-toolbar > .seg-ctl { height: 36px; padding: 4px; }
+.or-right-scroll > .or-needs-you { margin: 0 0 10px; padding: 14px; background: var(--card); border: 0; box-shadow: none; }
+.or-right-scroll > :not(.or-card) + .or-card { border-top-left-radius: var(--r-3); border-top-right-radius: var(--r-3); box-shadow: none; }
+
+/* pass 10: Editorial's header at laptop widths (a story open + a job running ran Publish 60 px off the window at 1280):
+   the AI chip gives its word first, then the story chip narrows */
+@container topbar (max-width: 1380px) { .topbar.ed-head .ed-ai-chip .ed-ai-label { display: none; } .topbar.ed-head .ed-ai-chip { padding: 0 9px; min-width: 0; } }
+@container topbar (max-width: 1300px) { .topbar.ed-head .ed-story-chip { min-width: 140px; } .topbar.ed-head .ed-story-chip .or-camp-name { max-width: 140px; } }
+/* a parked desk's slot is out of layout and out of reach (its <Activity> also hides the desk itself) */
+.workspace-main > .desk-slot.is-parked { display: none; }

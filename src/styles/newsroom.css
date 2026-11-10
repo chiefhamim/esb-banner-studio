@@ -43,3 +43,26 @@
    Nothing selected, the Editorial launcher) share one size too, whatever tag they are */
 :root .empty-title { display: block; font-family: var(--font-display); font-weight: 700; font-size: 18px; line-height: 1.3; letter-spacing: -0.005em; color: var(--text); }
 
+
+/* ---- pass 10: the phone's duo type on the desktop. Whatever NAMES a piece of work — the open story / campaign /
+   video in the header, a story or campaign in a list, a headline, a results card — speaks in the display serif;
+   controls, labels, figures and people's data stay in the UI sans. The serif sets ~1 px smaller to the eye, so it
+   gets 1 px more. Bangla falls through to Noto Serif Bengali (in --font-display). */
+:root .topbar .or-camp-name,
+:root .vw-header .vw-title-input,
+:root .sq-title,
+:root .or-camp-top > b,
+:root .oa-results > header h3,
+:root .nw-detail-hl:not([lang='bn']) {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  font-feature-settings: 'lnum' 1, 'kern' 1;
+}
+:root .topbar .or-camp-name { font-size: 14px; }
+:root .vw-header .vw-title-input { font-size: 15px; }
+:root .or-camp-top > b { font-size: 14px; }
+:root .oa-results > header h3 { font-size: 15px; }
+:root .nw-detail-hl:not([lang='bn']) { font-size: 18px; line-height: 1.32; }
+:root .topbar .or-camp-name { line-height: 18px; }
+@container topbar (max-width: 1440px) { :root .topbar.ed-head .ed-story-chip .or-camp-name { max-width: 170px; } }

@@ -25,17 +25,7 @@
 .home-shell .home-header-brand { flex-direction: column; gap: 18px; }
 .home-shell .home-title { font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -.028em; }
 .home-shell .home-subtitle { margin-top: 8px; font-size: 14px; line-height: 20px; letter-spacing: -.005em; color: var(--text-2); }
-.home-shell .home-quick-actions { flex-wrap: wrap; justify-content: center; gap: 10px; }
 /* buttons: soft pills with a shine, springy press */
-.home-shell .home-quick-actions .btn {
-  height: 38px; padding: 0 18px; border-radius: 999px; font-size: 13px; font-weight: 550; letter-spacing: -.005em;
-  border: .5px solid var(--h-hair); box-shadow: var(--h-shine), var(--h-shadow);
-  transition: transform .35s var(--h-spring), box-shadow .25s ease, background .2s ease;
-}
-.home-shell .home-quick-actions .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--h-shine), var(--h-shadow-up); }
-.home-shell .home-quick-actions .btn:active:not(:disabled) { transform: scale(.97); transition-duration: .1s; }
-.home-shell .home-quick-actions .btn.primary { border-color: transparent; background: linear-gradient(180deg, color-mix(in srgb, var(--ink) 88%, #fff), var(--ink)); }
-.home-shell .home-quick-actions .btn.secondary, .home-shell .home-quick-actions .btn.subtle { background: var(--h-glass-hi); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); }
 /* sections */
 .home-shell .home-section { gap: 14px; }
 .home-shell .section-title { font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: none; color: var(--text-2); padding-left: 4px; }
@@ -65,7 +55,6 @@
 .home-shell .recent-name { font-size: 13.5px; letter-spacing: -.01em; }
 .home-shell .empty-notice { padding: 22px; text-align: center; font-size: 12.5px; border-style: solid; }
 /* alert + footer */
-.home-shell .home-alert.recovery-alert { border-radius: 16px; -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); }
 .home-shell .home-footer { justify-content: center; gap: 12px; border: 0; padding-top: 4px; }
 /* arrival: sections and cards rise in one after another */
 @keyframes home-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
@@ -74,7 +63,7 @@
 .home-shell .format-card { animation: home-rise .7s var(--h-spring) both; animation-delay: calc(.2s + .035s * var(--i, 0)); }
 @media (prefers-reduced-motion: reduce) {
   .home-shell .home-header, .home-shell .home-section, .home-shell .format-card { animation: none; }
-  .home-shell .format-card, .home-shell .recent-card, .home-shell .home-quick-actions .btn { transition: none; }
+  .home-shell .format-card, .home-shell .recent-card { transition: none; }
 }
 @media (max-width: 760px) { .home-shell .home-workspace { padding: 0 18px 40px; } .home-shell .home-title { font-size: 28px; line-height: 34px; } }
 /* ---- fit to one screen: Home never scrolls. Everything is sized from the window height so a 14" laptop (about 1280 x 720) fits. ---- */
@@ -127,11 +116,6 @@
 .home-shell .home-head-actions { height: auto; padding: 0; gap: 6px; background: none; }
 .home-shell .home-head-btn { height: 32px; min-width: 32px; border-radius: 8px; background: var(--fill); }
 .home-shell .home-head-btn:hover { background: var(--fill-hover); }
-.home-shell .home-quick-actions .btn { height: 36px; padding: 0 16px; border-radius: 8px; box-shadow: none; border: 1px solid var(--line-2); font-weight: 500; }
-.home-shell .home-quick-actions .btn:hover:not(:disabled) { transform: none; box-shadow: var(--h-shadow); }
-.home-shell .home-quick-actions .btn:active:not(:disabled) { transform: scale(.98); }
-.home-shell .home-quick-actions .btn.primary { border-color: transparent; background: var(--ink); }
-.home-shell .home-quick-actions .btn.secondary, .home-shell .home-quick-actions .btn.subtle { background: color-mix(in srgb, var(--card, #fff) 90%, transparent); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .home-shell .format-card, .home-shell .recent-card, .home-shell .empty-notice {
   background: color-mix(in srgb, var(--card, #fff) 92%, transparent); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: var(--h-shadow);
   -webkit-backdrop-filter: none; backdrop-filter: none;
@@ -147,10 +131,8 @@
 .home-shell .format-tag { border-radius: 4px; padding: 1px 6px; }
 .home-shell .empty-notice { text-align: left; border-style: dashed; }
 .home-shell .section-title { font: 700 11px/1 var(--mono); letter-spacing: var(--track-kicker); text-transform: uppercase; color: var(--text-3); padding-left: 0; }
-.home-shell .home-alert.recovery-alert { border-radius: 10px; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* the three stripes of the ESB banner, as a quiet divider between name and actions */
 .home-shell .home-header-brand { order: 0; }
-.home-shell .home-quick-actions { order: 2; }
 /* ---- launcher: the four desks plus Outreach and Open, then a compact format strip ---- */
 .home-shell .home-launch { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
 .home-shell .launch-tile {
@@ -1113,8 +1095,6 @@
 /* an unsaved session found after a crash is the first card of Recent projects */
 .home-shell .recovery-card { cursor: default; border-color: color-mix(in srgb, #f0953a 55%, var(--line-2)); }
 .home-shell .recovery-card .recent-icon { color: #f0953a; }
-.home-shell .recovery-actions { margin-left: auto; display: flex; gap: 6px; flex: none; }
-.home-shell .recovery-actions .btn { height: 28px; padding: 0 12px; border-radius: 8px; font-size: 12px; }
 .home-shell .recovery-card:hover { transform: none; }
 
 /* Title balance: a firm "ESB Power Line" under a heavier, coloured "Studio" */
@@ -1203,8 +1183,6 @@
 /* an unsaved session is one slot like any project: icon, two lines, Restore and a discard button on the same row */
 .home-shell .recovery-card { flex-wrap: nowrap; padding: 0 12px 0 14px; row-gap: 0; }
 .home-shell .recovery-card .recent-info { flex: 1 1 0; min-width: 0; }
-.home-shell .recovery-actions { margin-left: auto; align-items: center; gap: 4px; }
-.home-shell .recovery-actions .btn { height: 28px; }
 
 
 /* the title lockup: the original monogram, the ESB stripe, "Ai Studio" — as tall as one another (ink height of the lettering, .78em), standing on one baseline,
@@ -1247,7 +1225,6 @@
 
 /* one row, filling the container: the unsaved session if there is one, otherwise the latest project */
 .home-shell .recents-box { grid-template-rows: minmax(0, 1fr); }
-.home-shell .recovery-actions { gap: 2px; }
 
 /* the project that is on top shows what it is — name, folder, kind and when — and keeps showing it; Restore and Delete slide in from the right only after the pointer has rested on it for a second */
 .home-shell .recent-main.recent-card.recent-card { cursor: pointer; overflow: hidden; align-items: center; gap: 14px; }

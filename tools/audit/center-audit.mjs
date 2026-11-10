@@ -63,7 +63,7 @@ try {
     for (const ws of ['graphics', 'video', 'outreach', 'editorial']) {
       // from Home a desk opens by its tile (Home has no switcher); from a desk, by the switcher
       const tile = page.locator(`.launch-tile:has-text("${ws[0].toUpperCase() + ws.slice(1)}")`)
-      if (await tile.count()) await tile.first().click(); else await page.click(`.ws-btn[data-ws="${ws}"]`)
+      if (await tile.count()) await tile.first().click(); else await page.click(`.ws-btn[data-ws="${ws}"]:visible`)
       await page.waitForTimeout(600)
       if (ws === 'editorial') {
         add('editorial-empty', await page.evaluate(measure))

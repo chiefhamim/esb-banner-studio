@@ -49,6 +49,7 @@ if (!gotTheLock) {
   process.exit(0)
 }
 
+let recoveries = []
 const DEV_URL = process.env.ESB_DEV_URL
 const INDEX_FILE = path.join(__dirname, '..', 'dist', 'index.html')
 // the only pages the editor window may show: its own index.html (or the dev server); a taken-over page cannot load another file: URL
@@ -125,7 +126,18 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:\/\//i.test(url)) shell.openExternal(url); return { action: 'deny' } })  // only web links ever leave the app (never file:, ms-settings:, custom schemes)
   win.webContents.on('will-navigate', (e, url) => { if (!guard.isAppUrl(url, APP_URLS)) e.preventDefault() })
   // a video export streams from this window: if it crashes or reloads mid-render, close and remove the half file
-  win.webContents.on('render-process-gone', () => { videoExports.abortActive(); videoProxyWriter.abortActive() })
+  win.webContents.on('render-process-gone', (_e, details) => {
+    videoExports.abortActive(); videoProxyWriter.abortActive()
+    // a dead renderer left a blank window until the app was restarted: bring the page back (Video's autosave and
+    // Editorial's story queue restore the work), at most 3 times a minute so a page that dies at load cannot loop
+    if (process.env.ESB_NO_RENDERER_RECOVERY || details?.reason === 'clean-exit' || win.isDestroyed()) return
+    const now = Date.now()
+    recoveries = recoveries.filter((t) => now - t < 60000)
+    if (recoveries.length >= 3) return
+    recoveries.push(now)
+    console.warn('[esb] renderer gone (' + details?.reason + ') — reloading')
+    setTimeout(() => { if (!win.isDestroyed()) win.webContents.reload() }, 400)
+  })
   win.webContents.on('did-start-navigation', (_e, _url, isInPlace, isMainFrame) => { if (isMainFrame && !isInPlace) { videoExports.abortActive(); videoProxyWriter.abortActive() } })
 
   // S3: Install permission handlers: only microphone (media) for app origin, deny everything else

@@ -41,7 +41,7 @@ try {
   console.log(changed.length ? 'PASS' : 'FAIL', 'Quick export (this banner only) wrote', changed.join(', ') || 'nothing', '| dialog open:', await page.locator('.dialog').count())
   // Editorial → Outputs → Export PNG (one file, through the save dialog)
   await page.evaluate(() => { window.__customTranslator = async (t) => t.replace(/[\u0980-\u09FF]+/g, 'gas') })
-  await page.click('.ws-btn[data-ws="editorial"]')
+  await page.click('.ws-btn[data-ws="editorial"]:visible')
   await page.click('button:has-text("Paste Text or File")')
   await page.fill('.ed-paste-area', 'সিলেটে দুটি নতুন কূপ\nপ্রকল্পটিতে মোট ৫৯২ কোটি টাকা ব্যয় হবে।')
   await page.click('button:has-text("Process Story")')
@@ -56,7 +56,7 @@ try {
   if (!changed2.length) failed++
   console.log(changed2.length ? 'PASS' : 'FAIL', 'Editorial Export PNG wrote', changed2.join(', ') || 'nothing')
   // Video → Export: the desktop app renders a 10 s draft and saves the MP4 through the save dialog
-  await page.click('.ws-btn[data-ws="video"]')
+  await page.click('.ws-btn[data-ws="video"]:visible')
   await page.waitForSelector('.video-workspace')
   await page.click('.vw-header-actions button:has-text("Export")')
   await page.click('.vx-row .seg-ctl button:has-text("draft")')

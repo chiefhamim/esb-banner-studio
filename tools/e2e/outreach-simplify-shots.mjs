@@ -65,7 +65,7 @@ const shot = async (name, loc) => { const f = path.join(out, `${name}.png`); awa
 const toOutreach = async () => {
   await page.waitForSelector('.home-shell, .topbar', { timeout: 30000 })
   const tile = page.locator('.launch-tile:has-text("Outreach")')
-  if (await tile.count()) await tile.first().click(); else await page.click('.ws-btn[data-ws="outreach"]')
+  if (await tile.count()) await tile.first().click(); else await page.click('.ws-btn[data-ws="outreach"]:visible')
   await page.waitForSelector('.outreach-workspace')
   await page.waitForTimeout(600)
 }

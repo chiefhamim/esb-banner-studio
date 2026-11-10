@@ -44,8 +44,8 @@ const LIB = [
 async function openVideo(page) {
   await page.goto(BASE)
   const tile = page.locator('.launch-tile:has-text("Video")')
-  await Promise.race([tile.first().waitFor({ timeout: 30000 }), page.locator('.ws-btn[data-ws="video"]').first().waitFor({ timeout: 30000 })])
-  if (await tile.count()) await tile.first().click(); else await page.click('.ws-btn[data-ws="video"]')
+  await Promise.race([tile.first().waitFor({ timeout: 30000 }), page.locator('.ws-btn[data-ws="video"]:visible').first().waitFor({ timeout: 30000 })])
+  if (await tile.count()) await tile.first().click(); else await page.click('.ws-btn[data-ws="video"]:visible')
   await page.waitForSelector('.video-workspace', { timeout: 30000 })
 }
 const tab = (page, label) => page.locator('.vw-bin-panel').getByRole('tab', { name: label, exact: true }).first().click()

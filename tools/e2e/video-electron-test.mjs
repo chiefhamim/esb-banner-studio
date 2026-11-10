@@ -36,7 +36,7 @@ const projectFile = path.join(work, 'phase0.esbvideo') // a project folder since
 const projectJson = path.join(projectFile, 'project.json')
 
 async function launch() {
-  const app = await electron.launch({ executablePath: exe, args: [...(win ? [] : ['--no-sandbox']), root, '--user-data-dir=' + profile], env: { ...process.env, ESB_NO_SYNC: '1' } })
+  const app = await electron.launch({ executablePath: exe, args: [...(win ? [] : ['--no-sandbox']), root, '--user-data-dir=' + profile], env: { ...process.env, ESB_NO_SYNC: '1', ESB_NO_RENDERER_RECOVERY: '1' } })
   const page = await app.firstWindow()
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))

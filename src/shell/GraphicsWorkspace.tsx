@@ -94,6 +94,19 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
     g.select('photos')
     return 'photos'
   })
+  // the desk stays mounted between visits (App.tsx keeps it alive), so a later "Edit in Graphics" arrives while it
+  // exists: take the focus when the desk is shown (Activity re-runs layout effects on reveal, before paint) or set
+  useLayoutEffect(() => {
+    const take = () => {
+      if (useShellStore.getState().graphicsFocus !== 'photos' || useShellStore.getState().consumeGraphicsFocus() !== 'photos') return
+      const g = useStore.getState()
+      g.selectSlot(0)
+      g.select('photos')
+      setTab('photos')
+    }
+    take()
+    return useShellStore.subscribe((st, prev) => { if (st.graphicsFocus !== prev.graphicsFocus) take() })
+  }, [])
   const returnTo = useShellStore((s) => s.returnTo)
   const [exp, setExpState] = useState<ExportSettings>(loadSettings)
   const [showExport, setShowExport] = useState(false)

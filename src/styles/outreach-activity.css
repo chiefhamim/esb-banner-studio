@@ -1222,3 +1222,9 @@
   .oa-dry-toggle { position: relative; }
   .oa-toolbar-left { overflow: clip; }
 }
+
+/* pass 10: the result tiles fill even rows (10 tiles = 2 rows of 5, never 9 and a lone 1) */
+.oa-results { container: oa-results / inline-size; }
+.oa-results-grid { grid-template-columns: repeat(var(--c2, 5), minmax(0, 1fr)); }
+@container oa-results (max-width: 700px) { .oa-results-grid { grid-template-columns: repeat(var(--c3, 4), minmax(0, 1fr)); } }
+@container oa-results (max-width: 520px) { .oa-results-grid { grid-template-columns: repeat(var(--c4, 3), minmax(0, 1fr)); } }

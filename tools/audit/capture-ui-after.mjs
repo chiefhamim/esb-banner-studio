@@ -64,13 +64,13 @@ try {
         await page.waitForTimeout(200)
 
         // 3. Switch to Home Workspace
-        await page.click('[data-ws="home"]')
+        await page.click('[data-ws="home"]:visible')
         await page.waitForSelector('.home-workspace')
         await page.waitForTimeout(200)
         await page.screenshot({ path: path.join(outDir, `home-${vp.name}-${theme}-dpr${dpr}.png`) })
 
         // 4. Switch to Editorial Workspace
-        await page.click('.ws-btn[data-ws="editorial"]')
+        await page.click('.ws-btn[data-ws="editorial"]:visible')
         await page.waitForSelector('.editorial-workspace')
         await page.waitForTimeout(200)
         await page.screenshot({ path: path.join(outDir, `editorial-${vp.name}-${theme}-dpr${dpr}.png`) })

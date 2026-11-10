@@ -70,7 +70,7 @@ try {
   await page.waitForSelector('.studio-shell')
 
   // 1. Switch to Editorial Desk via Workspace Rail
-  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]'))
+  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]:visible'))
   await page.waitForSelector('.editorial-workspace')
   check('Editorial Desk workspace opened', (await page.getAttribute('.editorial-workspace .ws-btn.on', 'data-ws')) === 'editorial')
 
@@ -105,7 +105,7 @@ try {
   await page.evaluate(() => { try { localStorage.removeItem('esb-banner-studio/editorial/v1'); sessionStorage.clear() } catch {} })
   await page.reload()
   await page.waitForSelector('.studio-shell')
-  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]'))
+  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]:visible'))
   await page.waitForSelector('button:has-text("Paste Text or File")')
 
   // 3. Select Paste Text or File mode and enter Bengali story text
@@ -152,7 +152,7 @@ try {
   check('Banner line-break strip is gone from the editor', layout.breaker === 0)
 
   // 5a. Shell: one workspace switcher in the header, no side rail, no logo outside Home / About
-  const shell = await page.evaluate(() => ({ sw: document.querySelectorAll('.editorial-workspace .topbar .ws-switch').length, rail: document.querySelectorAll('.workspace-rail').length, logo: document.querySelectorAll('.editorial-workspace img[src*="esb-logo"]').length, on: document.querySelector('.ws-btn.on')?.dataset.ws }))
+  const shell = await page.evaluate(() => ({ sw: document.querySelectorAll('.editorial-workspace .topbar .ws-switch').length, rail: document.querySelectorAll('.workspace-rail').length, logo: document.querySelectorAll('.editorial-workspace img[src*="esb-logo"]').length, on: document.querySelector('.desk-slot.is-active .ws-btn.on')?.dataset.ws }))
   check('Header carries the workspace switcher; no rail, no logo', shell.sw === 1 && shell.rail === 0 && shell.logo === 0 && shell.on === 'editorial', JSON.stringify(shell))
 
   // the Banner panel opts out of the accordion (accordion={false}), so Details is the section that is opened here
@@ -182,7 +182,14 @@ try {
   await page.mouse.move(sp.x + sp.width / 2, sp.y + 200); await page.mouse.down(); await page.mouse.move(sp.x - 60, sp.y + 200, { steps: 6 }); await page.mouse.up()
   const sideW1 = await page.evaluate(() => document.querySelector('.ed-side').getBoundingClientRect().width)
   check('Dragging the sidebar edge widens it', sideW1 > sideW0 + 40, `${Math.round(sideW0)} → ${Math.round(sideW1)}`)
+  // a double-click on the edge folds the column to its rail (SideColumn); its fold button opens it again
   await page.dblclick('.ed-side > .splitter')
+  await page.waitForSelector('.ed-side.is-railed')
+  await page.waitForTimeout(450)
+  await page.click('.ed-side > .col-fold')
+  await page.waitForSelector('.ed-side:not(.is-railed)')
+  await page.waitForTimeout(450)
+  check('Double-clicking the sidebar edge folds it; its fold button opens it again', await page.locator('.ed-side.is-railed').count() === 0)
   await page.click('.ed-story-tabs button:has-text("SEO")')
   check('Story → SEO holds the slug with the /articles/ prefix', (await page.locator('.ed-card-story #draft-slug').count()) === 1 && (await page.locator('.ed-slug-prefix').innerText()) === '/articles/')
   const chips = await page.locator('.seo-chip').allTextContents()
@@ -284,6 +291,7 @@ try {
   await page.evaluate(() => { const s = window.__store.getState(); s.setCollage('single') })
   await page.waitForTimeout(200)
   await page.locator('.fi-canvas').scrollIntoViewIfNeeded()
+  await page.waitForTimeout(250) // the column settles after the scroll (its rows ignore the pointer while it moves)
   const box = await page.locator('.fi-canvas').boundingBox()
   const pan0 = (await slotOf()).panX
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -294,7 +302,7 @@ try {
   check('Dragging the featured image reframes the banner photo', pan1 > pan0, `${pan0} → ${pan1}`)
   await page.click('.fi-open')
   await page.waitForSelector('.stage-canvas')
-  const gfx = await page.evaluate(() => ({ tab: document.querySelector('.left .side-tabs button.on')?.textContent, sel: window.__store.getState().selectedId }))
+  const gfx = await page.evaluate(() => ({ tab: document.querySelector('.desk-slot.is-active .left .side-tabs button.on')?.textContent, sel: window.__store.getState().selectedId }))
   check('Edit in Graphics opens on the Photos tab with the photo selected', gfx.tab === 'Photos' && gfx.sel === 'photos', JSON.stringify(gfx))
   await page.evaluate(() => window.__store.getState().setSlot(0, { brightness: 30 }))
   await page.click('.back-to-desk')
@@ -453,6 +461,8 @@ try {
   await page.waitForSelector('.ed-launcher-queue .sq-row')
   const launch = await page.evaluate(() => [...document.querySelectorAll('.ed-launcher-queue .sq-row')].map((r) => r.innerText.replace(/\s+/g, ' ')))
   check('New story keeps the last one: launcher lists it as Published', launch.length === 1 && launch[0].includes(firstHead) && /Published/.test(launch[0]), JSON.stringify(launch))
+  // the launcher remembers its last tab (this run pasted text before): come back to the link tab
+  if (!(await page.locator('.ed-link-input:visible').count())) await page.locator('.ed-intake-tabs button:visible').first().click()
   await page.fill('.ed-link-input', `http://localhost:${PORT}/tools/fixtures/next-data.html`)
   await page.click('.ed-link button:has-text("Fetch & Process")')
   await page.waitForSelector('.ed-card-story', { timeout: 30000 })
@@ -477,7 +487,7 @@ try {
   check('A failed import does not duplicate the story on the desk', afterFail === 2, String(afterFail))
   await page.reload()
   await page.waitForSelector('.studio-shell')
-  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]')).catch(() => {})
+  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]:visible')).catch(() => {})
   await page.waitForSelector('#draft-headline')
   const after = { head: await page.inputValue('#draft-headline'), n: await page.evaluate(() => JSON.parse(localStorage.getItem('esb-banner-studio/editorial/queue/v1')).stories.length) }
   check('The queue and the edit survive a reload', after.head === firstHead + ' (edited)' && after.n === 2, JSON.stringify(after))
@@ -555,7 +565,7 @@ try {
   // hand-off to Graphics
   await page.locator(`.ql-row:has-text("${W1_QUOTE}") .ql-use`).click()
   await page.waitForSelector('.stage-canvas')
-  const qc = await page.evaluate(() => { const c = window.__store.getState().doc.content; return { cardType: c.cardType, quoteText: c.quoteText, speakerName: c.speakerName, speakerTitle: c.speakerTitle, ws: document.querySelector('.ws-btn.on')?.dataset.ws } })
+  const qc = await page.evaluate(() => { const c = window.__store.getState().doc.content; return { cardType: c.cardType, quoteText: c.quoteText, speakerName: c.speakerName, speakerTitle: c.speakerTitle, ws: document.querySelector('.desk-slot.is-active .ws-btn.on')?.dataset.ws } })
   check('"Use as quote banner" fills a Quote card verbatim with the speaker and switches to Graphics', qc.cardType === 'quote' && qc.quoteText === W1_QUOTE && qc.speakerName === 'Test Speaker' && /managing director of BAPEX/.test(qc.speakerTitle) && qc.ws === 'graphics', JSON.stringify(qc))
   await page.click('.back-to-desk')
   await page.waitForSelector('.editorial-workspace #draft-headline')
@@ -563,7 +573,7 @@ try {
   const statEntry = await page.evaluate(() => window.__quoteLibrary.getState().entries.find((e) => e.kind === 'stat' && e.value === 5.92e9))
   await page.locator(`.ql-row[data-entry="${statEntry.id}"] .ql-use`).click()
   await page.waitForSelector('.stage-canvas')
-  const sc = await page.evaluate(() => { const c = window.__store.getState().doc.content; return { cardType: c.cardType, statNumber: c.statNumber, statLabel: c.statLabel, statNote: c.statNote, statDelta: c.statDelta, ws: document.querySelector('.ws-btn.on')?.dataset.ws } })
+  const sc = await page.evaluate(() => { const c = window.__store.getState().doc.content; return { cardType: c.cardType, statNumber: c.statNumber, statLabel: c.statLabel, statNote: c.statNote, statDelta: c.statDelta, ws: document.querySelector('.desk-slot.is-active .ws-btn.on')?.dataset.ws } })
   check('"Use as stat banner" fills a Stats card with the figure as written, a label from its sentence and the story as source', sc.cardType === 'stat' && sc.statNumber === statEntry.text && sc.statLabel.length > 2 && (' ' + statEntry.sentence.toLowerCase()).includes(' ' + sc.statLabel.toLowerCase()) && sc.statNote === `Source: ${statEntry.headline}` && sc.statDelta === '' && sc.ws === 'graphics', JSON.stringify(sc))
   await page.click('.back-to-desk')
   await page.waitForSelector('.editorial-workspace #draft-headline')
@@ -601,7 +611,7 @@ try {
   const nLib = (await lib()).entries.length
   await page.reload()
   await page.waitForSelector('.studio-shell')
-  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]')).catch(() => {})
+  await (await page.$('.launch-tile:has-text("Editorial")') ? page.click('.launch-tile:has-text("Editorial")') : page.click('.ws-btn[data-ws="editorial"]:visible')).catch(() => {})
   await page.waitForSelector('#draft-headline')
   await openLibrary()
   await page.waitForSelector('.ql-row')

@@ -23,7 +23,7 @@ const TIME = /\d+:\d{2}/
 try {
   await page.waitForSelector('.home-shell, .topbar', { timeout: 15000 })
   const tile = page.locator('.launch-tile:has-text("Outreach")')
-  if (await tile.count()) await tile.first().click(); else await page.click('.ws-btn[data-ws="outreach"]')
+  if (await tile.count()) await tile.first().click(); else await page.click('.ws-btn[data-ws="outreach"]:visible')
   await page.waitForSelector('.outreach-workspace')
   // a real campaign on the desk, so the pill and the Send footer follow this job
   const newEmail = page.locator('button:has-text("New email")')

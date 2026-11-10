@@ -23,6 +23,9 @@ const ORDER: [OutcomeState, string, string][] = [
   ['ready', 'Ready', 'Will be sent by the next run'],
 ]
 
+/** Even rows: the tiles split into 2, 3 or 4 equal rows by width (never 9 + a lone 1). */
+const tileCols = (n: number) => ({ '--c2': Math.ceil(n / 2), '--c3': Math.ceil(n / 3), '--c4': Math.ceil(n / 4) }) as React.CSSProperties
+
 export function CampaignResults({ campaignId }: { campaignId: string | null }) {
   const s = useDesk()
   const c = s.campaigns.find((x) => x.id === campaignId) ?? null
@@ -62,7 +65,7 @@ export function CampaignResults({ campaignId }: { campaignId: string | null }) {
   return (
     <section className="or-card oa-results" aria-label="Campaign results">
       <header><Icon name="send" size={14} /><h3>{c.name} — results</h3><span className="or-small">{counts.whole ? 'every contact in the audience' : 'from the campaign’s record (open it to count its whole list)'}</span></header>
-      <div className="oa-results-grid">
+      <div className="oa-results-grid" style={tileCols(ORDER.filter(([st]) => counts.whole || (st !== 'ready' && st !== 'noemail')).length + (counts.machine > 0 ? 1 : 0))}>
         {ORDER.filter(([st]) => counts.whole || (st !== 'ready' && st !== 'noemail')).map(([st, label, tip]) => (
           <span key={st} className={'oa-result st-' + st} data-tip={tip}><b>{(counts.n[st] ?? 0).toLocaleString()}</b>{label}</span>
         ))}

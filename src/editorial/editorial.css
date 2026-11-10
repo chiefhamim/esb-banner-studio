@@ -20,19 +20,17 @@
 .ed-head .pv-btn { flex: none; white-space: nowrap; }
 .ed-head .pv-btn:disabled { opacity: .5; }
 .ed-head-host { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ed-head .ed-site-pill { height: var(--h-md); gap: 8px; padding: 0 12px; font: 500 13px/20px var(--ui); color: var(--text); border-radius: var(--r-2); }
-.ed-head .ed-site-pill .site-state { font: 500 11px/16px var(--mono); color: var(--text-3); }
 .ed-head .ed-topbar-progress { flex: none; }
 .site-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--text-3); }
 .site-dot.online { background: var(--success); }
 .site-dot.offline { background: var(--danger); }
 
-@container ed (max-width: 1240px) { .ed-head .ed-site-pill .site-host, .ed-head .pv-btn .dpc-tag { display: none; } .ed-head-host { max-width: 128px; } }
+@container ed (max-width: 1240px) { .ed-head .pv-btn .dpc-tag { display: none; } .ed-head-host { max-width: 128px; } }
 /* Narrow windows (a 1366 laptop at 125-150 %): the centre group goes to icons first; the menus and the icon bar stay,
    because they hold sign-in, the Gemini key, New story and the View menu's theme and font. */
 /* with a story loaded the header also carries the source and site pills, the task times and three 96 px buttons: below 1360 the Re-translate label and the latency go */
-@container ed (max-width: 1359px) { .ed-head .ed-retranslate-label, .ed-head .ed-site-pill .site-state { display: none; } }
-@container ed (max-width: 1100px) { .ed-head .ed-retranslate-label, .ed-head .ed-site-pill .site-state { display: none; } .ed-head-host { max-width: 104px; } }
+@container ed (max-width: 1359px) { .ed-head .ed-retranslate-label { display: none; } }
+@container ed (max-width: 1100px) { .ed-head .ed-retranslate-label { display: none; } .ed-head-host { max-width: 104px; } }
 @container ed (max-width: 960px) { .ed-head .ed-head-host, .ed-head .pv-btn .dpc-tag { display: none; } .ed-head .pillbar .pill-sep { display: none; } }
 
 /* ---------------------------------------------------------------- empty desk */
@@ -144,7 +142,6 @@
 .ed-input::placeholder { color: var(--text-3); }
 .ed-input-headline { min-height: 64px; padding: 10px 12px; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -.015em; resize: none; field-sizing: content; }
 .ed-input-deck { min-height: 52px; font-size: 15px; line-height: 22px; resize: none; field-sizing: content; }
-.ed-input-body { min-height: 420px; padding: 12px 14px; font-size: 15px; line-height: 1.65; field-sizing: content; }
 .ed-input-social { min-height: 140px; line-height: 1.55; }
 
 .ed-body-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
@@ -184,9 +181,6 @@
 .ed-kv dd { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; color: var(--text); }
 .ed-status.draft { color: var(--text-2); }
 .ed-status.live { color: var(--success); font-weight: 500; }
-.ed-publish-btn { justify-content: center; width: 100%; height: var(--h-lg); }
-.ed-publish-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.ed-publish-row .btn { justify-content: center; min-width: 0; padding-inline: 6px; }
 .ed-desk-select { flex: 1; min-width: 0; height: auto; min-height: var(--h-md); }
 .ed-desk-select .select-label { white-space: normal; line-height: 1.35; overflow: visible; text-overflow: clip; }
 .ed-auto-desk { align-self: flex-start; margin-top: -4px; }
@@ -226,22 +220,6 @@
 
 /* outputs */
 .ed-outputs { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.ed-outputs-tabs button { min-width: 0; padding: 0 8px; }
-.ed-outputs-link { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.ed-outputs-link .ed-link-pill { margin-right: auto; }
-.ed-outputs-stage { display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0; }
-.ed-outputs-stage > .fmtpick { align-self: stretch; }
-.ed-outputs-canvas { overflow: hidden; border-radius: var(--r-2); box-shadow: var(--shadow-1); }
-.ed-outputs-canvas canvas { display: block; }
-.ed-outputs-meta { display: flex; align-self: stretch; justify-content: space-between; gap: 8px; font-size: 11px; line-height: 16px; color: var(--text-3); }
-.ed-outputs-meta .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ed-outputs-row { display: flex; flex-wrap: wrap; align-self: stretch; gap: 6px; }
-.ed-outputs-row .seg-ctl { flex: 1; }
-.ed-outputs-fb { align-self: center; }
-.ed-outputs-fields { display: flex; flex-direction: column; gap: 12px; }
-.ed-outputs-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.ed-outputs-actions .btn { justify-content: center; }
-.field-label { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-2); }
 
 /* toasts sit above the status bar, centred on the whole desk */
 .editorial-workspace .toast { bottom: 44px; }
@@ -335,14 +313,6 @@
 
 /* ---------------------------------------------------------------- outputs: the preview sits in an inset well */
 .ed-outputs { gap: 10px; }
-.ed-outputs-stage { padding: 10px; gap: 10px; background: var(--bg-0); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--card-line); }
-.ed-outputs-stage > .fmtpick { align-self: stretch; height: 32px; background: var(--card); border: 0; box-shadow: var(--raised-shadow); }
-.ed-outputs-canvas { border-radius: var(--r-2); box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 4px 14px rgba(0, 0, 0, .08); }
-.ed-outputs-meta { padding: 0 2px; }
-.ed-outputs-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; align-self: stretch; }
-.ed-outputs-opts .select { min-width: 0; height: 30px; background: var(--card); box-shadow: var(--raised-shadow); }
-.ed-outputs-opts .select .select-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ed-outputs-link { gap: 2px; }
 .ed-outputs .esb-site-mock { border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 4px 14px rgba(0, 0, 0, .08); }
 
 /* ---------------------------------------------------------------- story queue */
@@ -439,16 +409,6 @@
 .ed-card .ed-kv { gap: 10px 12px; align-items: center; }
 .ed-card .ed-kv dd { gap: 8px; }
 .bc { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.bc-seg { width: 100%; }
-.bc-frame { width: 100%; max-height: 280px; display: grid; place-items: center; overflow: hidden; background: var(--bg-0); border-radius: var(--r-2); box-shadow: inset 0 0 0 1px var(--card-line); }
-.bc-frame img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.bc-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: -4px; font: 400 11.5px/16px var(--ui); color: var(--text-3); }
-.bc-flag { height: 20px; padding: 0 8px; font: 600 11px/20px var(--ui); border-radius: var(--r-pill); }
-.bc-flag.ok { color: var(--success); background: var(--success-soft); }
-.bc-flag.warn { color: var(--warning); background: var(--warning-soft); }
-.bc-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.bc-actions { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 6px; padding-top: 2px; }
-.bc-actions .btn { justify-content: center; min-width: 0; padding-inline: 6px; }
 .ed-more > summary { cursor: pointer; display: flex; align-items: center; gap: 8px; min-height: 28px; font: 500 12.5px/20px var(--ui); color: var(--text-2); list-style: none; }
 .ed-more > summary::-webkit-details-marker { display: none; }
 .ed-more > summary::before { content: ''; width: 6px; height: 6px; margin: 0 4px 0 2px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(-45deg); transition: transform var(--t-1) var(--ease); }
@@ -457,8 +417,6 @@
 .ed-card .ed-kv { grid-template-columns: 68px minmax(0, 1fr); }
 
 /* the banner is shown whole, at its own proportions, centred - it fits the card and the window height, never cropped or stretched */
-.bc-frame { width: min(100%, calc(min(320px, 38vh) * var(--r, 1.78))); aspect-ratio: var(--r, 1.78); max-height: none; margin: 0 auto; background: var(--fill); }
-.bc-frame img { object-fit: contain; }
 
 .ed-last { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 8px 10px; font: 500 12px/16px var(--ui); border-radius: var(--r-2); overflow-wrap: anywhere; }
 .ed-last svg { flex: none; margin-top: 2px; }
@@ -570,13 +528,6 @@
 .rb-scroll .rb-doc { max-width: 740px; }
 /* the banner thumbnail that heads the sidebar */
 .bt { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--r-3); background: var(--card); box-shadow: var(--card-shadow); }
-.bt-frame { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 8px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--card-line, transparent); display: grid; place-items: center; }
-.bt-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.bt-edit { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: rgba(15, 15, 18, .78); color: #fff; font: 700 12px/1 var(--ui); cursor: pointer; opacity: 0; transform: translateY(4px); transition: opacity var(--t-1) var(--ease), transform var(--t-1) var(--ease); backdrop-filter: blur(6px); }
-.bt-frame:hover .bt-edit, .bt-edit:focus-visible { opacity: 1; transform: none; }
-.bt-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 2px; }
-.bt-meta b { font: 700 13px/18px var(--ui); color: var(--text); }
-.bt-meta span { font: 500 11.5px/16px var(--ui); color: var(--text-3); }
 /* what the empty source column says: how a story is made */
 .ed-how { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 0; padding: 14px 0 0; list-style: none; border-top: 1px solid var(--line); }
 .ed-how li { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; }
@@ -790,8 +741,6 @@
 .ed-launcher-queue .sq-title { -webkit-line-clamp: 2; line-clamp: 2; }
 
 /* the card gives up optional parts as it gets smaller */
-@container ed-main (max-width: 560px) {
-}
 @container ed-main (max-width: 400px) {
   .ed-link-row > .ed-link-go span { display: none; }
   .ed-link-row > .ed-link-go { width: 44px; padding: 0; justify-content: center; }
@@ -849,8 +798,6 @@
 .ed-launcher-wrap.has-queue {
   grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr);
   padding-inline: max(clamp(16px, 3vw, 40px), calc((100% - 1100px) / 2));
-}
-@container ed-main (max-width: 560px) {
 }
 /* narrow card: the link field keeps the whole width and Fetch & Process sits under it (side by side squeezed the
    field to "h.." at the app's smallest window) */

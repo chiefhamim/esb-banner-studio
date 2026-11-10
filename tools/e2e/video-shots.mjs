@@ -94,9 +94,9 @@ const na = (why) => { throw new NA(why) }
 async function openVideo(page) {
   await page.goto(BASE)
   const tile = page.locator('.launch-tile:has-text("Video")')
-  await Promise.race([tile.first().waitFor({ timeout: 30000 }), page.locator('.ws-btn[data-ws="video"]').first().waitFor({ timeout: 30000 })])
+  await Promise.race([tile.first().waitFor({ timeout: 30000 }), page.locator('.ws-btn[data-ws="video"]:visible').first().waitFor({ timeout: 30000 })])
   if (await tile.count()) await tile.first().click()
-  else await page.click('.ws-btn[data-ws="video"]')
+  else await page.click('.ws-btn[data-ws="video"]:visible')
   await page.waitForSelector('.video-workspace', { timeout: 30000 })
   if (!(await page.evaluate(() => !!window.__videoStore))) na('window.__videoStore dev handle missing')
   // neutral text for anything the Graphics doc lends the Video desk (the story banner)
@@ -612,9 +612,9 @@ const STATES = {
       const text = JSON.stringify({ id: 'proj-shot', name: 'Sample unsaved video', aspect: '16:9', width: 1920, height: 1080, fps: 30, duration: 30, tracks: [{ id: 'v2', name: 'V2', kind: 'overlay', muted: false, locked: false }], clips: [{ id: 'c1', trackId: 'v2', title: 'Lower third', kind: 'overlay', start: 0, duration: 4, in: 0, out: 4, color: '#10b981', overlayType: 'lower-third', overlayText: 'Sample name', overlaySub: '' }] })
       localStorage.setItem('esb-banner-studio/video-autosave/v1', JSON.stringify([{ at: Date.now(), text, id: 'proj-shot' }]))
     })
-    await page.click('.vw-header .ws-btn[data-ws="graphics"]')
+    await page.click('.vw-header .ws-btn[data-ws="graphics"]:visible')
     await page.waitForSelector('.app > .topbar')
-    await page.click('.topbar .ws-btn[data-ws="video"]')
+    await page.click('.topbar .ws-btn[data-ws="video"]:visible')
     await page.waitForSelector('.vw-restore-card', { timeout: 8000 }).catch(() => na('no restore card'))
     return {}
   },

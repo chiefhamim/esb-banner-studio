@@ -134,7 +134,7 @@ try {
   console.log(canvasOk ? 'PASS' : 'FAIL', 'stage canvas rendered')
 
   // Workspace switcher navigation
-  await page.click('[data-ws="home"]')
+  await page.click('[data-ws="home"]:visible')
   await page.waitForSelector('.home-workspace')
   const homeOk = await page.evaluate(() => !!document.querySelector('.home-workspace h1')?.textContent.includes('Ai Studio'))
   console.log(homeOk ? 'PASS' : 'FAIL', 'switched to Home workspace')
@@ -144,7 +144,7 @@ try {
   await page.evaluate(() => localStorage.setItem('esb-banner-studio/home-bg-pos', JSON.stringify({ light: { x: 6, y: -6, s: 1 }, dark: { x: 6, y: -6, s: 1 } })))
   await page.reload()
   await page.waitForSelector('.topbar, .home-shell')
-  await page.evaluate(() => document.querySelector('[data-ws="home"]')?.click())
+  await page.evaluate(() => document.querySelector('.desk-slot.is-active [data-ws="home"]')?.click())
   await page.waitForSelector('.home-bg-img')
   const gap = await page.evaluate(async () => {
     const img = document.querySelector('.home-bg-img'); img.style.animationPlayState = 'paused'
@@ -163,17 +163,17 @@ try {
   const editorialOk = await page.waitForSelector('.editorial-workspace .ws-btn.on[data-ws="editorial"]', { timeout: 8000 }).then(() => true, () => false)
   console.log(editorialOk ? 'PASS' : 'FAIL', 'switched to Editorial workspace')
 
-  await page.click('.ws-btn[data-ws="video"]')
+  await page.click('.ws-btn[data-ws="video"]:visible')
   await page.waitForSelector('.video-workspace')
   const videoOk = await page.evaluate(() => !!document.querySelector('.video-workspace canvas'))
   console.log(videoOk ? 'PASS' : 'FAIL', 'switched to Video workspace')
 
-  await page.click('.ws-btn[data-ws="outreach"]')
+  await page.click('.ws-btn[data-ws="outreach"]:visible')
   await page.waitForSelector('.outreach-workspace')
   const outreachOk = await page.evaluate(() => !!document.querySelector('.or-left') && !!document.querySelector('.or-center') && !!document.querySelector('.or-right'))
   console.log(outreachOk ? 'PASS' : 'FAIL', 'switched to Outreach workspace')
 
-  await page.click('.ws-btn[data-ws="graphics"]')
+  await page.click('.ws-btn[data-ws="graphics"]:visible')
   await page.waitForSelector('.stage-canvas')
   const graphicsOk = await page.evaluate(() => !!document.querySelector('.stage-canvas'))
   console.log(graphicsOk ? 'PASS' : 'FAIL', 'switched back to Graphics workspace')
@@ -181,7 +181,7 @@ try {
   console.log(errors.length ? 'FAIL' : 'PASS', 'no console errors', errors.slice(0, 3).join(' | '))
 
   // Home → Quit ends the app (last: nothing runs after it)
-  await page.click('[data-ws="home"]')
+  await page.click('[data-ws="home"]:visible')
   await page.waitForSelector('.home-head-btn.quit')
   await page.screenshot({ path: path.join(root, 'tools', 'out', 'electron-home.png') })
   const closed = new Promise((r) => app.process().once('exit', () => r(true)))
