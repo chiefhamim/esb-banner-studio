@@ -86,26 +86,8 @@ pre {
   scrollbar-color: var(--border-strong) transparent;
 }
 
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: var(--border-strong);
-  border-radius: var(--r-1);
-  border: 2px solid transparent;
-  background-clip: content-box;
-  transition: background-color var(--t-state) var(--ease);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--text-secondary);
-}
+/* The standard properties above are the one scrollbar system: Chromium shows its thin bar and ignores
+   ::-webkit-scrollbar styling while scrollbar-width/scrollbar-color are set, so no webkit rules here. */
 
 /* ---------------------------------------------------------------- Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
