@@ -273,6 +273,7 @@ export function EditorialWorkspace() {
   const [showFbDialog, setShowFbDialog] = useState(false)
   const [publishJobId, setPublishJobId] = useState<number | null>(null)
   const [fbCfg, setFbCfg] = useState(() => getFacebook())
+  useEffect(() => { const f = () => setFbCfg(getFacebook()); window.addEventListener('esb-fb-secrets-ready', f); return () => window.removeEventListener('esb-fb-secrets-ready', f) }, [])
   const [fbOn, setFbOn] = useState(false)
   const fbLink = useFacebookPrefs((s) => s.linkComment)
   const setFbLink = useFacebookPrefs((s) => s.setLinkComment)

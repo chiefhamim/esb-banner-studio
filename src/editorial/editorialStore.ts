@@ -593,6 +593,10 @@ export const useEditorialStore = create<EditorialState>((set, get) => ({
     })
   },
 }))
+// the encrypted AI keys load after the store is made: pick them up when they land (the desk otherwise showed
+// "Connect AI" after every launch, and a save from that state could not tell a missing key from a removed one)
+if (typeof window !== 'undefined') window.addEventListener('esb-ai-secrets-ready', () => useEditorialStore.setState({ ai: loadAiSettings() }))
+
 
 // Autosave: the draft survives restarts and crashes (debounced; images are URLs so this stays small).
 if (typeof localStorage !== 'undefined') {

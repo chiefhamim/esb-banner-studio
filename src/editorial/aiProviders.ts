@@ -185,8 +185,13 @@ const isProvider = (v: unknown): v is AiProviderId => AI_PROVIDERS.some((p) => p
 
 let secureKeysCache: Record<AiProviderId, string> | null = null
 
-/** Load OS-encrypted AI secrets if running in Electron with safeStorage bridge, migrating legacy localStorage keys. */
-export async function initAiSecrets(): Promise<void> {
+/** Load OS-encrypted AI secrets if running in Electron with safeStorage bridge, migrating legacy localStorage keys.
+ * The keys arrive asynchronously; until they do, `loadAiSettings()` has none. Two rules keep that window harmless:
+ * the editorial store re-reads the settings when they land (`esb-ai-secrets-ready`), and a save made before they
+ * landed keeps every stored key the caller could not have seen (it once wrote empty keys over the real ones — the
+ * "key gone after every update" bug). */
+let secretsLoaded = false
+async function loadSecrets(): Promise<void> {
   if (typeof window === 'undefined' || !window.esb?.secretGet) return
   try {
     const enc = await window.esb.secretGet('ai-settings')
@@ -213,6 +218,16 @@ export async function initAiSecrets(): Promise<void> {
     }
   } catch { /* storage init failed */ }
 }
+let secretsReady: Promise<void> = Promise.resolve()
+export function initAiSecrets(): Promise<void> {
+  secretsReady = loadSecrets().finally(() => {
+    secretsLoaded = true
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('esb-ai-secrets-ready'))
+  })
+  return secretsReady
+}
+/** True once the encrypted keys have been read (or there is no secure store). */
+export const aiSecretsLoaded = () => secretsLoaded || typeof window === 'undefined' || !window.esb?.secretGet
 
 // Automatically trigger migration/hydration on module load in browser/Electron environment
 if (typeof window !== 'undefined' && window.esb?.secretGet) {
@@ -252,6 +267,16 @@ export function saveAiSettings(s: AiSettings) {
   const cleanKeys = Object.fromEntries(Object.entries(s.keys).map(([k, v]) => [k, v.trim()])) as AiSettings['keys']
   const hasBridge = typeof window !== 'undefined' && !!window.esb?.secretSet
 
+  if (hasBridge && !aiSecretsLoaded()) {
+    // the caller built `s` before the stored keys were read, so its empty keys mean "not seen", not "removed":
+    // wait for them and keep each stored key the caller left empty
+    void secretsReady.then(() => {
+      const kept = Object.fromEntries(Object.entries(cleanKeys).map(([k, v]) => [k, v || secureKeysCache?.[k as AiProviderId] || ''])) as AiSettings['keys']
+      saveAiSettings({ ...s, keys: kept })
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('esb-ai-secrets-ready'))
+    })
+    return
+  }
   if (hasBridge) {
     secureKeysCache = cleanKeys
     // Save keys into OS-encrypted safeStorage

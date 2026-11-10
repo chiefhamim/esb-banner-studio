@@ -79,6 +79,7 @@ export function SignInSheet({ onClose, onToast }: { onClose: () => void; onToast
   const emailRef = useRef<HTMLInputElement>(null)
   // the Facebook Page connection: checked against Facebook each time the sheet opens, and on demand
   const [fb, setFb] = useState(() => getFacebook())
+  useEffect(() => { const f = () => setFb(getFacebook()); window.addEventListener('esb-fb-secrets-ready', f); return () => window.removeEventListener('esb-fb-secrets-ready', f) }, [])
   const [fbState, setFbState] = useState<{ s: 'idle' | 'checking' | 'ok' | 'bad'; msg?: string }>({ s: 'idle' })
   const [fbDialog, setFbDialog] = useState(false)
   const checkFb = async (cfg = fb, fresh = false) => {

@@ -46,7 +46,8 @@ export async function initFacebookSecrets(): Promise<void> {
 }
 
 if (typeof window !== 'undefined' && window.esb?.secretGet) {
-  void initFacebookSecrets()
+  // the token arrives after the desks mount: tell them, so the Page shows as connected without a restart
+  void initFacebookSecrets().finally(() => window.dispatchEvent(new Event('esb-fb-secrets-ready')))
 }
 
 export function getFacebook(): FacebookConfig | null {
