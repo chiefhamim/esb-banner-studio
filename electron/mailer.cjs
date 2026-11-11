@@ -207,7 +207,7 @@ function validateMail(m) {
   const campaignId = /^[A-Za-z0-9_-]{1,100}$/.test(String(o.campaignId ?? '')) ? String(o.campaignId) : ''
   const bytes = attachments.reduce((n, a) => n + a.content.length, 0) + (design ? design.images.reduce((n, i) => n + i.content.length, 0) : 0)
   if (bytes > MAX_ATTACH_BYTES) throw new Error('Attachments are over 18 MB together — Gmail would refuse the message')
-  return { to: to.toLowerCase(), subject, body, signature, optOut, footerLine, headerBg, footerBg, stripeColors, fontFamily, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, design, vars, campaignId, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
+  return { to: to.toLowerCase(), subject, body, signature, optOut, footerLine, headerBg, footerBg, stripeColors, fontFamily, lang, letterhead: o.letterhead === true, officialPad: o.officialPad === true, attachments, design, vars, campaignId, track: o.track !== false, isTest: o.isTest === true, resend: o.resend === true, followUp: o.followUp === true && o.isTest !== true }
 }
 
 /** May this send go now? Reads the ledger of earlier sends. */
@@ -419,10 +419,11 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
       // tracking is added AFTER the page was built and cut down: the key, the rewritten links and the one pixel come
       // from here, never from the renderer or the HTML it sent (OUTREACH_SYNC_CONTRACT §3)
       let messageKey = null
-      if (tracking && await tracking.enabled().catch(() => false)) {
+      // the campaign's "Track opens and clicks" switch: off = no key, no pixel, links exactly as written
+      if (mail.track !== false && tracking && await tracking.enabled().catch(() => false)) {
         const T = require('./outreach-tracking.cjs')
         messageKey = (newKey || T.newMessageKey)()
-        html = T.trackHtml(html, { key: messageKey, campaignId: mail.campaignId })
+        html = T.trackHtml(html, { key: messageKey, campaignId: mail.campaignId, tracker: tracking.tracker || null, sentAt: clock() })
       }
       // every pad/letterhead image travels inside the message (cid:), never as a link to a server; the QR is built
       // fresh from PAD_VCARD above, not read off the printed pad

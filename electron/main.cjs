@@ -866,13 +866,18 @@ ipcMain.on('esb:start-drag', (event, arg) => {
 // Outreach desk: the account, the encrypted app password and the send ledger live here (electron/mailer.cjs); the
 // renderer can ask for one checked email at a time and read the status, nothing more.
 let mailer = null
-// open/click tracking switches itself on only once esbpowerline.com answers on /api/o and /r (outreach-tracking.cjs)
+// open/click tracking switches itself on only once its endpoints answer (outreach-tracking.cjs): the ESB Mail Tracker
+// Worker when its config is on this PC (~/.config/esb-mail-tracker/secrets.env), else the website's /api/o and /r
 let trackingGate = null
-const outreachTracking = () => (trackingGate ??= require('./outreach-tracking.cjs').createTrackingGate({ env: process.env }))
+const outreachTracking = () => (trackingGate ??= require('./outreach-tracking.cjs').createTrackingGate({ env: process.env, tracker: process.env.ESB_OUTREACH_TRACKING === '0' ? null : require('./outreach-tracking.cjs').loadTrackerConfig() }))
+// the Worker's opens and clicks come back into the event log (outreach-tracker-pull.cjs), every 30 s
+let trackerPull = null
 const outreachMailer = () => (mailer ??= require('./mailer.cjs').createMailer({ dir: app.getPath('userData'), safeStorage: require('electron').safeStorage, nodemailer: require('nodemailer'), tracking: outreachTracking(), pacing: () => (outreachSettings ? outreachSettings.get() : null) }))
 // pcLabel: this computer's name, shown on other PCs as "Sending from …" (the shared send lock); tracking: whether the
 // site's open/click endpoints were live at the last check
-ipcMain.handle('esb:outreach-status', () => ({ ...outreachMailer().status(), pcLabel: require('node:os').hostname().slice(0, 60), tracking: outreachTracking().status() }))
+ipcMain.handle('esb:outreach-status', () => ({ ...outreachMailer().status(), pcLabel: require('node:os').hostname().slice(0, 60), tracking: { ...outreachTracking().status(), pull: trackerPull ? trackerPull.status() : null } }))
+// "Check opens now" (status bar / Activity): one pull from the tracker at once, the answer is how many hits came in
+ipcMain.handle('esb:outreach-tracker-pull', async () => (trackerPull ? { ok: true, added: await trackerPull.poll({ force: true }), status: trackerPull.status() } : { ok: false, error: 'tracker not set up on this PC' }))
 // sends another PC made (the shared ledger): validated, then entered in the mailer's ledger and the event log so no
 // check on this PC — the 7-day repeat rule, the engine's "already sent", follow-up eligibility — can miss them
 ipcMain.handle('esb:outreach-mark-sent', async (_e, raw) => {
@@ -1093,8 +1098,18 @@ app.whenReady().then(() => {
   protocol.handle('esb-media', (request) => videoMedia.serveMedia(request, videoRegistry, { devUrl: DEV_URL, folderFile }))
   // the send results the desk projects onto its campaigns go to the window as they happen (engineClient.ts applyEvents);
   // without this the list only caught up at the next launch
-  const LIVE = new Set(['send.ok', 'send.fail', 'send.skip', 'reply', 'bounce', 'optout'])
+  const LIVE = new Set(['send.ok', 'send.fail', 'send.skip', 'reply', 'bounce', 'optout', 'track.open', 'track.click'])
   outreachEvents = createEventLog({ dir: userData, onAppend: (ev) => { if (LIVE.has(ev.type)) pushToWindow('esb:outreach-push', { kind: 'event', event: ev }) } })
+  {
+    const tracker = outreachTracking().tracker
+    if (tracker) {
+      trackerPull = require('./outreach-tracker-pull.cjs').createTrackerPull({
+        tracker, dir: userData, ledger: () => outreachMailer().ledger(), append: (ev) => outreachEvents.append(ev),
+        log: (m) => console.warn(m),
+      })
+      trackerPull.start(30_000)
+    }
+  }
   outreachJobs = createJobStore({ dir: userData })
   outreachSettings = createSettingsManager({ dir: userData })
   // the Sender dialog's gaps / daily limit used to live only in outreach-smtp.json, which the engine never read —

@@ -303,6 +303,9 @@ export const OutreachComposer = memo(function OutreachComposer() {
               options={[...s.signatures.map((x) => ({ value: x.id, label: x.name })), { value: 'none', label: 'No signature' }]} />
             <button type="button" className="btn" onClick={() => ui.set({ sheet: 'signatures' })}><Icon name="edit" size={14} /><span>Signatures</span></button>
             <div className="spacer" />
+            <span className="or-track-switch" data-tip={c.track !== false ? 'Each letter carries an invisible picture and tracked links, so you see when it is opened and what is clicked. Turn off to send it exactly as written.' : 'Off: no tracking picture, links exactly as written. Opens and clicks will not be known for letters sent now.'}>
+              <Switch checked={c.track !== false} onChange={(v) => s.patch({ track: v })} label="Track opens & clicks" />
+            </span>
             <Switch checked={c.letterhead} onChange={(v) => s.patch({ letterhead: v })} label="ESB letterhead" />
           </div>
           </>)}

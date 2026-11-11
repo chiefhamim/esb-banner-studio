@@ -536,7 +536,7 @@ export function ReviewSendDialog() {
           <dt>Audience</dt><dd>{audience.length} contact{audience.length === 1 ? '' : 's'} · <b>{ready.length} ready</b>{reasons.length ? ` · ${audience.length - ready.length} not sent` : ''}</dd>
           {reasons.length > 0 && <><dt />
             <dd className="or-reasons">{reasons.slice(0, 6).map(([r, n]) => <span key={r}><b>{n}</b> {r.toLowerCase()}</span>)}</dd></>}
-          <dt>With it</dt><dd>{[c.letterhead ? 'ESB letterhead' : 'No letterhead', c.signatureId === 'none' ? 'no signature' : `signature “${s.signatures.find((x) => x.id === c.signatureId)?.name ?? '—'}”`, s.attachments.length ? `${s.attachments.length} file${s.attachments.length === 1 ? '' : 's'}` : 'no files', 'an unsubscribe line'].join(' · ')}</dd>
+          <dt>With it</dt><dd>{[c.letterhead ? 'ESB letterhead' : 'No letterhead', c.signatureId === 'none' ? 'no signature' : `signature “${s.signatures.find((x) => x.id === c.signatureId)?.name ?? '—'}”`, s.attachments.length ? `${s.attachments.length} file${s.attachments.length === 1 ? '' : 's'}` : 'no files', 'an unsubscribe line', c.track !== false ? 'opens & clicks tracked' : 'not tracked'].join(' · ')}</dd>
         </dl>
 
         {/* 5. Schedule timing picker */}

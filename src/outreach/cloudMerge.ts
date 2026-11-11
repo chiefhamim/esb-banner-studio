@@ -29,7 +29,7 @@ export interface SendRow {
 }
 
 /** One row of public.outreach_events (only the columns the desk reads). */
-export interface EventRow { id: number; message_key: string; type: 'open' | 'click'; link: string | null; at: string; ua?: string | null; ip_hash?: string | null }
+export interface EventRow { id: number; message_key: string; type: 'open' | 'click'; link: string | null; at: string; ua?: string | null; ip_hash?: string | null; cls?: string | null; why?: string | null }
 
 export const sendId = (campaignId: string, kind: 'campaign' | 'followup', email: string) => `${campaignId}:${kind}:${email}`.toLowerCase()
 export const testSendId = (t: number, email: string) => `test:${t}:${email}`.toLowerCase()
@@ -252,6 +252,17 @@ export function classifyEvent(ev: Pick<EventRow, 'type' | 'at' | 'ua'>, sentAt?:
   if (bounced) return 'ignore'
   const t = Date.parse(ev.at)
   if (!Number.isFinite(t)) return 'ignore'
+  // the ESB Mail Tracker has already judged the hit (network, agent, timing: cloud/tracker/src/classify.ts).
+  // Gmail's and Yahoo's proxies fetch the picture when the reader opens the letter: a real open. Microsoft's network
+  // and Apple's privacy prefetch load it whether or not anyone reads it: shown apart. Scanners and bots never count.
+  const tc = (ev as { cls?: string | null }).cls
+  if (tc) {
+    const why = String((ev as { why?: string | null }).why ?? '')
+    if (tc === 'human') return 'human'
+    if (tc === 'proxy') return why === 'microsoft-network' ? 'machine' : 'human'
+    if (tc === 'prefetch') return ev.type === 'open' ? 'machine' : 'ignore'
+    return 'ignore'
+  }
   if (sentAt != null && t - sentAt < SCAN_WINDOW_MS) return 'ignore'
   const ua = String(ev.ua ?? '').trim()
   if (!ua) return 'human'

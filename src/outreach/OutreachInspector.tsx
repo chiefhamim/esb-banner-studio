@@ -298,7 +298,7 @@ function ContactTab() {
         {!outside && eng && eng.opens > 0 && <><dt>{OPENED_HUMAN}</dt><dd>{openedText(eng).slice(OPENED_HUMAN.length + 1)}<small className="or-small or-block">Counted once per letter when the picture loads in a mail app. Scanners (within 2 min of sending, bots) and proxy fetches are left out; apps that block pictures never show up.</small></dd></>}
         {!outside && eng && !eng.opens && (eng.machineOpens ?? 0) > 0 && <><dt>{MACHINE_OPEN}</dt><dd>{machineText(eng).slice(MACHINE_OPEN.length + 1)}</dd></>}
         {!outside && eng && eng.clicks > 0 && <><dt>Clicked</dt><dd>{clickedText(eng).slice('Clicked '.length)}</dd></>}
-        {!outside && c && active.status === 'SENT' && !keyOf(c, active.email) && <><dt>Tracking</dt><dd>Not tracked — sent before the site's tracking was live, so opens and clicks are not known</dd></>}
+        {!outside && c && active.status === 'SENT' && !keyOf(c, active.email) && <><dt>Tracking</dt><dd>{c.track === false ? 'Not tracked — tracking was off for this campaign when it was sent' : 'Not tracked — sent while tracking was not available, so opens and clicks are not known'}</dd></>}
         {c && c.sent[active.email] && <><dt>Follow-up</dt><dd>{c.followed[active.email] ? `Sent ${fmtWhen(c.followed[active.email])}` : followUpReason(active, c) ?? 'Due now'}</dd></>}
         {c?.replyLabels?.[active.email] && (
           <>

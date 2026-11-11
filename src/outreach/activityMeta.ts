@@ -14,6 +14,8 @@ export interface EventMeta {
 
 const META: Record<string, EventMeta> = {
   'send.ok': { label: 'Sent', icon: 'send', tone: 'sent' },
+  'track.open': { label: 'Opened', icon: 'eye', tone: 'good' },
+  'track.click': { label: 'Clicked', icon: 'link', tone: 'reply' },
   'send.fail': { label: 'Failed', icon: 'alert', tone: 'bad' },
   'send.retry': { label: 'Retry', icon: 'refresh', tone: 'warn' },
   'send.skip': { label: 'Skipped', icon: 'skipForward', tone: 'warn' },

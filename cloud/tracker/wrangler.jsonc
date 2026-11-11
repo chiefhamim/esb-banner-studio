@@ -1,0 +1,26 @@
+// ESB Mail Tracker — opens, clicks and attachment downloads for Outreach letters (see README.md).
+// Secrets (never in this file): TRACK_SECRET signs every tracking link; API_TOKEN guards the read and file API.
+//   npx wrangler secret put TRACK_SECRET   /   npx wrangler secret put API_TOKEN
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "esb-mail-tracker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // replays hits the database refused (dead letters in R2)
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "observability": { "enabled": true },
+  "vars": {
+    // where a bad or tampered link lands instead of anywhere else
+    "HOME_URL": "https://esbpowerline.com/"
+  },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "esb-mail-tracker", "database_id": "ff14ec8d-7eb0-4c45-b036-f7c0da05a861", "migrations_dir": "migrations" }
+  ],
+  // dead letters: hits the database refused, replayed by the cron (KV: free, no card needed)
+  "kv_namespaces": [
+    { "binding": "DLQ", "id": "053725d2ebfa421c89200113071e0473" }
+  ]
+  // Tracked attachments need R2, which Cloudflare only enables with a payment card on the account. When it is:
+  // "r2_buckets": [{ "binding": "FILES", "bucket_name": "esb-mail-tracker-files" }]
+}

@@ -87,6 +87,7 @@ contextBridge.exposeInMainWorld('esb', {
   gridTestOrigin: process.env.ESB_GRID_TEST_ORIGIN || null,
   startDrag: (filePath) => ipcRenderer.send('esb:start-drag', filePath),
   outreachStatus: () => ipcRenderer.invoke('esb:outreach-status'),
+  outreachTrackerPull: () => ipcRenderer.invoke('esb:outreach-tracker-pull'),
   outreachSave: (settings, password, imapPassword) => ipcRenderer.invoke('esb:outreach-save', settings, password, imapPassword),
   outreachForgetPassword: () => ipcRenderer.invoke('esb:outreach-forget-password'),
   outreachSend: (mail) => ipcRenderer.invoke('esb:outreach-send', mail),

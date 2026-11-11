@@ -11,6 +11,8 @@ import { useOutreachStore } from './outreachStore'
 import { cleanPersonName, nameHasNumber } from './personName'
 import { Icon } from '../ui/Icon'
 
+const PAGE = 50
+
 interface FlaggedItem {
   contact: Contact
   flag: Flag
@@ -25,7 +27,11 @@ interface NeedsYouProps {
 }
 
 export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact }: NeedsYouProps) {
-  const [expandedKind, setExpandedKind] = useState<FlagKind | null>(null)
+  // undefined = the editor has not chosen yet (a lone group starts open); null = all folded. A lone group used to be
+  // forced open, so its header could never fold it (1,076 rows stuck open).
+  const [expandedKind, setExpandedKind] = useState<FlagKind | null | undefined>(undefined)
+  // rows drawn per group: a list of a thousand renders in pieces, "Show more" adds the next page
+  const [shown, setShown] = useState(PAGE)
   const setContactNames = useOutreachStore((x) => x.setContactNames)
   const fixable = (c: Contact) => { const f = cleanPersonName(c.personName); return nameHasNumber(c.personName) && !!f && f !== c.personName ? f : null }
   const fixAll = (items: FlaggedItem[]) => setContactNames(Object.fromEntries(items.flatMap(({ contact }) => { const f = fixable(contact); return f ? [[contact.email, f]] : [] })))
@@ -121,10 +127,12 @@ export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact 
 
       <div className="or-needs-you-groups">
         {groups.map(([kind, group]) => {
-          const isOpen = expandedKind === kind || groups.length === 1
+          const isOpen = expandedKind === undefined ? groups.length === 1 : expandedKind === kind
+          const toggle = () => { setExpandedKind(isOpen ? null : kind); setShown(PAGE) }
           return (
             <div key={kind} className={'or-flag-group' + (isOpen ? ' open' : '')}>
-              <div className="or-flag-group-head" onClick={() => setExpandedKind(isOpen && groups.length > 1 ? null : kind)}>
+              <div className="or-flag-group-head" role="button" tabIndex={0} aria-expanded={isOpen} onClick={toggle}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }}>
                 <div className="or-flag-group-title">
                   <Icon name={isOpen ? 'chevDown' : 'chevRight'} size={12} />
                   <b>{group.title}</b>
@@ -149,7 +157,7 @@ export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact 
               {isOpen && (
                 <div className="or-flag-items">
                   <p className="or-flag-desc">{group.detail}</p>
-                  {group.items.map(({ contact, flag }) => (
+                  {group.items.slice(0, shown).map(({ contact, flag }) => (
                     <div key={contact.email} className="or-flag-row">
                       <div
                         className="or-flag-contact"
@@ -177,6 +185,11 @@ export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact 
                       </div>
                     </div>
                   ))}
+                  {group.items.length > shown && (
+                    <button type="button" className="btn sm or-flag-more" onClick={() => setShown((n) => n + PAGE * 4)}>
+                      Show more ({(group.items.length - shown).toLocaleString()} left)
+                    </button>
+                  )}
                 </div>
               )}
             </div>

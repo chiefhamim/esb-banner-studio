@@ -10,6 +10,7 @@ export type ActivityTab = 'overview' | 'log' | 'reports' | 'session'
 export type LogChip =
   | 'all'
   | 'sent'
+  | 'opens'
   | 'failed'
   | 'replies'
   | 'bounces'
@@ -78,6 +79,8 @@ function chipToEventTypes(chip: LogChip): string[] | undefined {
   switch (chip) {
     case 'sent':
       return ['send.ok']
+    case 'opens':
+      return ['track.open', 'track.click']
     case 'failed':
       return ['send.fail']
     case 'replies':

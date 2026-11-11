@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -48,5 +49,7 @@ export default defineConfig({
   base: './',
   plugins: [react(), devProxyPlugin()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // cloud/tracker has its own suite that runs inside the Workers runtime (cd cloud/tracker && npm test)
+  test: { exclude: ['**/node_modules/**', '**/dist/**', 'cloud/**'] },
 })
 

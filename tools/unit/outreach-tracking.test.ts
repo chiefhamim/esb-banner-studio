@@ -155,6 +155,24 @@ describe('mailer: a key per letter (tests too), pixel and links added after sani
     expect(String(sent[0].html)).toContain('href="https://example.org/"')
     expect(String(sent[0].text)).not.toContain('api/o')
   })
+  it('the campaign switch off: no key, no pixel, links exactly as written — and on again tracks the next one', async () => {
+    const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now, tracking: live, newKey })
+    mailer.saveSettings(settings, 'abcdefghijklmnop')
+    const off = await mailer.send({ to: 'off@example.com', subject: 'S', body: 'See [the site](https://esbpowerline.com/x)', campaignId: 'cmp-9', track: false })
+    expect(off).toMatchObject({ ok: true, messageKey: null })
+    expect(String(sent[0].html)).not.toMatch(PIXEL_RE)
+    expect(String(sent[0].html)).toContain('href="https://esbpowerline.com/x"')
+    const ledger = JSON.parse(readFileSync(join(dir, 'outreach-ledger.json'), 'utf8'))
+    expect(ledger[0].key).toBeUndefined()
+    now += 60e3
+    const on = await mailer.send({ to: 'on@example.com', subject: 'S', body: 'See [the site](https://esbpowerline.com/x)', campaignId: 'cmp-9', track: true })
+    expect(on.messageKey).toMatch(/^[A-Za-z0-9_-]{22}$/)
+    expect(String(sent[1].html).match(PIXEL_RE)?.length).toBe(1)
+    now += 60e3
+    // a payload from before the switch existed (no track field) is tracked, as it always was
+    const old = await mailer.send({ to: 'old@example.com', subject: 'S', body: 'B', campaignId: 'cmp-9' })
+    expect(old.messageKey).toMatch(/^[A-Za-z0-9_-]{22}$/)
+  })
   it('while the site’s tracking is not live, letters go out exactly as before, with no key', async () => {
     const mailer = m.createMailer({ dir, safeStorage, nodemailer, clock: () => now, tracking: { enabled: async () => false } })
     mailer.saveSettings(settings, 'abcdefghijklmnop')

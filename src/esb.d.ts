@@ -44,6 +44,7 @@ export interface EsbBridge {
   siteRevalidate?: (cookies: { name: string; value: string }[], slugs: string[]) => Promise<{ ok: boolean; status: number; error?: string }>
   siteUploadProbe?: (cookies: { name: string; value: string }[]) => Promise<{ ok: boolean; status: number; detail: string }>
   outreachStatus?: () => Promise<EsbOutreachStatus>
+  outreachTrackerPull?: () => Promise<{ ok: boolean; added?: number; error?: string }>
   outreachSave?: (settings: EsbSmtpSettings, password?: string, imapPassword?: string) => Promise<{ ok: true; status: EsbOutreachStatus } | { ok: false; error: string }>
   outreachForgetPassword?: () => Promise<EsbOutreachStatus>
   /** `kind` says why a failed check failed: auth (wrong app password) | network (server unreachable) | tls | other. */
@@ -133,6 +134,8 @@ export interface EsbOutreachMail {
   letterhead?: boolean
   /** The gold-rail official pad (letterhead artwork + a generated contact QR), in place of `letterhead`. */
   officialPad?: boolean
+  /** Track opens and clicks for this letter (pixel + tracked links). Absent = yes; false = sent exactly as written. */
+  track?: boolean
   /** The plain letterhead's footer line, in the letter's own marks — the editor's own text (Letter → Footer text). */
   footerLine?: string
   /** The plain letterhead header's background, #rrggbb — an invalid value is dropped, never inserted as given. */
@@ -273,6 +276,19 @@ export interface OutreachEvent {
   text?: string
   command?: string
   status?: string
+  // ESB Mail Tracker hits (track.open / track.click, electron/outreach-tracker-pull.cjs)
+  messageKey?: string
+  link?: string | null
+  cls?: string | null
+  why?: string | null
+  client?: string | null
+  device?: string | null
+  country?: string | null
+  city?: string | null
+  network?: string | null
+  ua?: string | null
+  hitId?: number
+  test?: boolean
   [key: string]: any
 }
 

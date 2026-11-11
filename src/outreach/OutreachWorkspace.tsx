@@ -158,6 +158,7 @@ export function OutreachWorkspace() {
       ...(c?.design ? [{ label: 'Back to a written letter', icon: 'edit' as const, onClick: async () => { if (await ask({ title: 'Stop using the designed letter?', body: `${c.design!.name} is set aside; its plain-text version stays as the letter to edit. Pick the HTML file again to bring it back.`, ok: 'Use a written letter' })) void s.clearDesign() } }] : []),
       { divider: true },
       { label: 'Signatures', icon: 'edit', onClick: () => ui.set({ sheet: 'signatures' }) },
+      { label: 'Track opens & clicks', checked: !!c && c.track !== false, disabled: !c, onClick: () => s.patch({ track: c?.track === false }) },
       { label: 'ESB letterhead', checked: !!c?.letterhead && !c?.officialPad, disabled: !c || !!c?.officialPad, onClick: () => s.patch({ letterhead: !c?.letterhead }) },
       { label: 'Footer text', icon: 'edit', hint: s.footerBg || s.footerLine !== DEFAULT_FOOTER_LINE ? 'Edited' : s.footerLine ? 'Default' : 'Off', onClick: () => ui.set({ sheet: 'footer' }) },
       { label: 'Header & fonts', icon: 'edit', hint: s.headerBg || s.stripeColors || s.fontFamily !== DEFAULT_FONT_FAMILY ? 'Edited' : 'Default', onClick: () => ui.set({ sheet: 'header' }) },

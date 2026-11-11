@@ -1,0 +1,23 @@
+{
+  "name": "esb-mail-tracker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run",
+    "db:local": "wrangler d1 migrations apply DB --local",
+    "flood": "node scripts/flood.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "deploy": "wrangler deploy",
+    "retest": "node scripts/retest.mjs",
+    "typecheck": "tsc -p .",
+    "madman": "npm run typecheck && node scripts/retest.mjs 5 && node scripts/smoke.mjs && node scripts/flood.mjs --letters=1000 --opens=5 --clicks=2 --conc=100"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.7.0",
+    "@cloudflare/workers-types": "5.20261110.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.12",
+    "wrangler": "4.160.0"
+  }
+}

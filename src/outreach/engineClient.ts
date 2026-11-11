@@ -1,3 +1,4 @@
+import { foldTrackEvents, hydrateTrackerEngagement } from './trackerFold'
 import type {
   OutreachPlan,
   OutreachPlanQuery,
@@ -161,6 +162,8 @@ export const engineClient = {
           useEngineStore.getState().updateFromProgress(payload)
           syncActiveCampaignRun()
         } else if (payload.kind === 'event') {
+          // opens and clicks from the ESB Mail Tracker: folded into the contact's engagement as they arrive
+          if (payload.event.type === 'track.open' || payload.event.type === 'track.click') { void foldTrackEvents([payload.event]); return }
           applyEvents([payload.event])
           syncActiveCampaignRun()
           if (payload.event.type === 'send.ok') refreshMailSoon()
@@ -208,6 +211,22 @@ export const engineClient = {
         if (res && res.events && res.events.length > 0) {
           applyEvents(res.events)
           syncActiveCampaignRun()
+        }
+      }
+    } catch {}
+
+    // tracker opens/clicks: show what was folded before, then fold every one the log holds (idempotent per hit), so
+    // hits that arrived while the window was closed are counted too
+    try {
+      await hydrateTrackerEngagement()
+      if (bridge.outreachEvents) {
+        let before: string | undefined
+        for (let page = 0; page < 50; page++) {
+          const res = await bridge.outreachEvents({ types: ['track.open', 'track.click'], limit: 1000, from: 0, ...(before ? { before } : {}) })
+          const evs = res?.events ?? []
+          if (evs.length) await foldTrackEvents(evs)
+          if (!res?.hasMore || !evs.length) break
+          before = evs[evs.length - 1].id
         }
       }
     } catch {}

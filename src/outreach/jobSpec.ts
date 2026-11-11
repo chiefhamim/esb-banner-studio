@@ -85,6 +85,7 @@ export function buildJobSpec(opts: BuildJobSpecOptions): JobSpec {
     lang: campaign.lang,
     letterhead: campaign.letterhead,
     officialPad: campaign.officialPad,
+    track: campaign.track !== false,
     footerLine: st.footerLine,
     fontFamily: st.fontFamily,
     headerBg: st.headerBg,

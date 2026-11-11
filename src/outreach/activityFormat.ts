@@ -1,4 +1,5 @@
 import { fmtDateTime, fmtTime, fmtWallClock } from '../ui/time'
+import type { IconName } from '../ui/Icon'
 import type { AutopilotSettings, JobSnapshot, LivePlan, OutreachEvent, OutreachStats, PlanWarning } from '../esb'
 
 const DOW_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -357,6 +358,11 @@ export function describeEvent(ev: OutreachEvent): string {
       return `Will retry ${ev.email || ev.to} (attempt ${ev.attempt || 1}): ${ev.error || ev.kind}`
     case 'send.skip':
       return `Skipped ${ev.email || ev.to}: ${ev.reason}`
+    case 'track.open':
+    case 'track.click': {
+      const who = ev.name || ev.email || 'A reader'
+      return ev.type === 'track.open' ? `${who} opened the letter` : `${who} clicked ${linkShort(ev.link)}`
+    }
     case 'reply':
       return `${ev.email || ev.to} replied${ev.unsubscribe ? ' with unsubscribe request' : ''}`
     case 'bounce':
@@ -481,4 +487,210 @@ export function parseDomainOverrides(text: string): { map: Record<string, number
     map[m[1].toLowerCase()] = n
   }
   return { map, bad }
+}
+
+/** Where a tracked open/click came from: "Gmail", "Outlook · Windows · Dhaka, BD". */
+export function trackWhere(ev: { client?: string | null; device?: string | null; city?: string | null; country?: string | null; cls?: string | null }): string {
+  const place = [ev.city, ev.country].filter(Boolean).join(', ')
+  if (ev.cls === 'proxy') return ev.client || ''
+  return [ev.client, ev.device, place].filter(Boolean).join(' · ')
+}
+
+/** A clicked link as a person reads it: host and path, no tracking parameters ("esbpowerline.com/magazine"). */
+export function linkShort(link?: string | null): string {
+  const raw = String(link ?? '')
+  if (raw.startsWith('file:')) return `the file ${raw.slice(5)}`
+  try {
+    const u = new URL(raw)
+    const p = decodeURIComponent(u.pathname).replace(/\/$/, '')
+    return (u.hostname.replace(/^www\./, '') + p).slice(0, 90)
+  } catch {
+    return raw.replace(/^https?:\/\//, '').replace(/[?#].*$/, '').replace(/\/$/, '').slice(0, 90) || 'a link'
+  }
+}
+
+export interface TrackView {
+  /** chip word and tone: a person / a mail provider / a machine that does not count */
+  chip: string
+  tone: 'good' | 'reply' | 'quiet'
+  /** "Chrome · Windows" / "Gmail" */
+  app: string
+  /** "Dhaka, BD" — empty when a proxy hides it */
+  place: string
+  /** who the tracker judged the hit to be, in words */
+  judged: string
+  counted: boolean
+}
+
+export function trackView(ev: OutreachEvent): TrackView {
+  const open = ev.type === 'track.open'
+  const place = ev.cls === 'proxy' ? '' : [ev.city, ev.country].filter(Boolean).join(', ')
+  const app = ev.cls === 'proxy' ? (ev.client || 'Mail provider') : [ev.client, ev.device].filter(Boolean).join(' · ')
+  if (ev.cls === 'scanner' || ev.cls === 'bot') return { chip: 'Scanner', tone: 'quiet', app, place, judged: `A security scanner or bot (${ev.why || ev.cls}) — not counted`, counted: false }
+  if (ev.cls === 'prefetch' || (ev.cls === 'proxy' && ev.why === 'microsoft-network')) {
+    return { chip: 'Auto-loaded', tone: 'quiet', app: app || 'Mail provider', place, judged: ev.why?.startsWith('apple') ? 'Apple Mail loaded the picture on its own — maybe unread' : 'The mail provider loaded the picture — maybe unread', counted: false }
+  }
+  if (ev.cls === 'proxy') return { chip: open ? 'Opened' : 'Clicked', tone: open ? 'good' : 'reply', app, place, judged: `Opened in ${ev.client || 'webmail'} — the provider hides where`, counted: true }
+  return { chip: open ? 'Opened' : 'Clicked', tone: open ? 'good' : 'reply', app, place, judged: 'A person', counted: true }
+}
+
+/** How long something took: "840 ms", "2.2 s", "1 m 05 s". */
+export function fmtMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return ''
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`
+  return fmtDuration(ms / 1000)
+}
+
+const ORD = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`
+
+export interface MetaItem { icon: IconName; text: string; tip?: string }
+export interface EventView {
+  /** one plain sentence; names before addresses */
+  title: string
+  /** quiet icon + word pairs under the title */
+  meta: MetaItem[]
+  /** a second line that matters (the server's error, the bounce reason), shown in its tone */
+  note?: { text: string; tone: 'bad' | 'warn' | 'quiet' }
+  /** label → value rows for the opened row */
+  detail: [string, string][]
+  /** chip word / tone override (tracker rows) */
+  chip?: { label: string; tone: 'sent' | 'reply' | 'good' | 'bad' | 'warn' | 'quiet' }
+}
+
+const WAIT_WORDS: Record<string, string> = { window: 'outside sending hours', cap: 'daily limit reached', gap: 'pacing gap', domain: 'organisation spacing', offline: 'no connection', tls: 'secure connection failed', quota: 'Gmail quota' }
+const PAUSE_WORDS: Record<string, string> = { user: 'by you', quit: 'the app was closed', circuit: 'too many failures in a row', lock: 'another PC took over', network: 'no connection' }
+
+/**
+ * Everything the Log row shows, per event type. `campaign` is the campaign's own name (looked up by the row).
+ * Raw ids, ms counts and ISO times never reach the screen.
+ */
+export function eventView(ev: OutreachEvent, campaign?: string): EventView {
+  const who = ev.name || ev.email || ev.to || ''
+  const addr = ev.email || ev.to || ''
+  const meta: MetaItem[] = []
+  const detail: [string, string][] = []
+  const push = (icon: IconName, text: unknown, tip?: string) => { if (text != null && text !== '' && text !== false) meta.push({ icon, text: String(text), tip }) }
+  const camp = campaign || ev.campaignName || ''
+  const addrMeta = () => { if (ev.name && addr) push('mail', addr) }
+  const run = ev.run === 'followup' ? 'Follow-up' : ''
+  let title = describeEvent(ev)
+  let note: EventView['note']
+  let chip: EventView['chip']
+
+  switch (ev.type) {
+    case 'track.open':
+    case 'track.click': {
+      const t = trackView(ev)
+      chip = { label: t.chip, tone: t.tone }
+      push('monitor', t.app)
+      push('globe', t.place)
+      push('layers', camp)
+      if (ev.link) detail.push(['Link', String(ev.link)])
+      detail.push(['Who', t.judged])
+      if (t.app) detail.push(['Read in', t.app])
+      if (t.place) detail.push(['Place', `${t.place}${ev.network ? ` · ${ev.network}` : ''}`])
+      if (addr) detail.push(['Address', addr])
+      break
+    }
+    case 'send.ok':
+      title = `${run ? 'Follow-up sent' : 'Sent'} to ${who}`
+      addrMeta(); push('users', ev.org); push('layers', camp)
+      if (ev.ms) push('clock', `took ${fmtMs(Number(ev.ms))}`, 'How long the mail server took to accept it')
+      if (Number(ev.attempt) > 1) push('refresh', `${ORD(Number(ev.attempt))} try`)
+      if (addr) detail.push(['Address', addr])
+      if (ev.org) detail.push(['Organisation', String(ev.org)])
+      detail.push(['Tracking', ev.messageKey ? 'On (opens and clicks recorded)' : 'Off'])
+      break
+    case 'send.fail':
+      title = `Could not send to ${who}`
+      addrMeta(); push('layers', camp)
+      if (Number(ev.attempt) > 1) push('refresh', `after ${ev.attempt} tries`)
+      note = { text: String(ev.error || ev.kind || 'The mail server refused it'), tone: 'bad' }
+      if (addr) detail.push(['Address', addr])
+      if (ev.code) detail.push(['Server code', String(ev.code)])
+      break
+    case 'send.retry':
+      title = `Will try ${who} again`
+      addrMeta(); push('layers', camp); push('refresh', `${ORD(Number(ev.attempt) || 1)} try failed`)
+      if (ev.nextAt) push('clock', `next ${fmtTime(Number(ev.nextAt))}`)
+      note = { text: String(ev.error || ev.kind || ''), tone: 'warn' }
+      break
+    case 'send.skip':
+      title = `Skipped ${who}`
+      addrMeta(); push('layers', camp)
+      note = { text: String(ev.reason || 'Not sent'), tone: 'quiet' }
+      break
+    case 'reply':
+      title = ev.unsubscribe ? `${who} asked to unsubscribe` : ev.auto ? `Automatic reply from ${who}` : `${who} replied`
+      push('mail', ev.subject ? `“${String(ev.subject).slice(0, 90)}”` : ''); push('layers', camp)
+      if (ev.subject) detail.push(['Subject', String(ev.subject)])
+      break
+    case 'bounce':
+      title = `Letter to ${who} bounced`
+      push('layers', camp)
+      note = { text: String(ev.reason || 'Returned by the mail system'), tone: 'bad' }
+      break
+    case 'optout':
+      title = ev.on === false ? `${who} is back on the list` : `${who} opted out`
+      push('layers', camp)
+      if (ev.by) push('user', `by ${ev.by}`)
+      break
+    case 'job.created':
+      title = `Batch ready: ${Number(ev.total || 0).toLocaleString()} letters`
+      push('layers', ev.name || camp)
+      if (ev.startAt) push('clock', `starts ${fmtDateTime(Number(ev.startAt))}`)
+      break
+    case 'job.started':
+    case 'job.resumed':
+      title = ev.type === 'job.started' ? 'Sending started' : 'Sending resumed'
+      push('layers', camp); if (ev.by) push('user', `by ${ev.by}`)
+      break
+    case 'job.paused':
+      title = 'Sending paused'
+      push('layers', camp)
+      push('info', PAUSE_WORDS[String(ev.reason)] || ev.reason)
+      if (ev.detail) note = { text: String(ev.detail), tone: 'warn' }
+      break
+    case 'job.waiting':
+      title = 'Waiting'
+      push('layers', camp); push('clock', WAIT_WORDS[String(ev.why)] || ev.why)
+      break
+    case 'job.done':
+    case 'job.stopped': {
+      title = ev.type === 'job.done' ? 'Batch finished' : 'Batch stopped'
+      push('layers', camp)
+      push('send', `${Number(ev.sent || 0).toLocaleString()} sent`)
+      if (Number(ev.failed)) push('alert', `${Number(ev.failed).toLocaleString()} failed`)
+      if (Number(ev.skipped)) push('skipForward', `${Number(ev.skipped).toLocaleString()} skipped`)
+      break
+    }
+    case 'job.skip-gap':
+      title = 'Sent the next letter without waiting'
+      push('layers', camp)
+      break
+    case 'job.names-cleaned':
+      title = `Fixed ${Number(ev.count || 0).toLocaleString()} names in the batch`
+      push('layers', camp)
+      break
+    case 'inbox.checked':
+      title = ev.ok === false ? 'Inbox check failed' : 'Inbox checked'
+      if (ev.scanned != null) push('inbox', `${Number(ev.scanned).toLocaleString()} looked at`)
+      push('mail', `${Number(ev.replies || 0)} ${Number(ev.replies) === 1 ? 'reply' : 'replies'}`)
+      push('undo', `${Number(ev.bounces || 0)} ${Number(ev.bounces) === 1 ? 'bounce' : 'bounces'}`)
+      break
+    case 'engine.start':
+      title = 'Sending engine started'
+      break
+    case 'engine.quit':
+      title = ev.clean === false ? 'Sending engine stopped unexpectedly' : 'Sending engine closed'
+      break
+    case 'settings.migrated':
+      push('sliders', ev.what)
+      break
+    default:
+      push('layers', camp)
+  }
+  detail.push(['Time', fmtDateTime(ev.t)])
+  return { title, meta, note, detail, chip }
 }

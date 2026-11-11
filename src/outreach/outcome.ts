@@ -28,6 +28,14 @@ export interface Engagement {
   lastClick?: number
   /** Which letter keys were seen (o: opened by a person, m: machine open, c: clicked, l: key|link), so a re-fold never counts one twice. */
   keys?: { o: string[]; m: string[]; c: string[]; l: string[] }
+  /** ESB Mail Tracker: every counted hit (open or click), one per hit id, so "opened 3 times" is real. */
+  hits?: number
+  /** Where it was read: "Gmail", "Outlook · Windows · Dhaka, BD" (newest first, at most 6). */
+  seen?: string[]
+  /** country|network of each reader seen directly (not through a proxy), for the forward estimate. */
+  places?: string[]
+  /** Read in two countries or on three networks = likely; two networks on two kinds of device = possible. */
+  forwarded?: 'likely' | 'possible'
 }
 
 export type OutcomeState = 'busy' | 'out' | 'bounced' | 'replied' | 'clicked' | 'opened' | 'sent' | 'failed' | 'noemail' | 'skip' | 'ready'
@@ -67,7 +75,13 @@ export const MACHINE_OPEN = 'Machine open'
 export function openedText(e: Engagement): string {
   if (!e.opens) return ''
   const times = e.firstOpen === e.lastOpen || !e.lastOpen ? when(e.firstOpen) : `first ${when(e.firstOpen)} · last ${when(e.lastOpen)}`
-  return `${OPENED_HUMAN} ${times}`.trim()
+  // ESB Mail Tracker extras: how many times, where, forwarded (only when the tracker saw them)
+  const extra = [
+    e.hits && e.hits > 1 ? `${e.hits} times` : '',
+    e.seen?.length ? `in ${e.seen.slice(0, 2).join('; ')}` : '',
+    e.forwarded === 'likely' ? 'probably forwarded' : e.forwarded === 'possible' ? 'maybe forwarded' : '',
+  ].filter(Boolean).join(' · ')
+  return [`${OPENED_HUMAN} ${times}`.trim(), extra].filter(Boolean).join(' · ')
 }
 
 /** "Machine open" line: only a proxy fetched the picture (Gmail image proxy, Apple Mail Privacy Protection). */

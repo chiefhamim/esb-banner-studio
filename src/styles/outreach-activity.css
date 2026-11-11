@@ -1237,3 +1237,21 @@
 .oa-overview, .oa-kpi-strip, .oa-grid-row-2 { gap: var(--pane-gap); }
 .oa-panel, .oa-kpi-tile { padding: var(--pane-pad); }
 .oa-result { padding: 10px 12px; }
+
+/* ESB Mail Tracker rows: where it was read as quiet icon + word pairs, never a raw URL or id */
+.oa-trk-sub { gap: 2px 14px; }
+.oa-trk-meta { display: inline-flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; }
+.oa-trk-meta svg { flex: none; color: var(--text-3); }
+.oa-trk-meta:last-child { overflow: hidden; text-overflow: ellipsis; }
+
+/* every Log row: quiet icon + word pairs under the title (address, organisation, campaign, how long), one optional
+   note line in its tone (the server's error, the bounce reason). Raw ids, ms counts and ISO times never show. */
+.oa-meta { gap: 2px 14px; }
+.oa-meta-item { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oa-meta-item svg { flex: none; color: var(--text-3); }
+.oa-ev-note { font-size: 11.5px; line-height: 16px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oa-ev-note.bad { color: var(--danger); }
+.oa-ev-note.warn { color: var(--warning); }
+.oa-ev[aria-expanded='true'] .oa-ev-note { white-space: normal; overflow-wrap: anywhere; }
+.oa-kv em { width: 84px; }
+.oa-ev-time { cursor: default; }

@@ -56,7 +56,7 @@ export function mailFor(contact: Contact, c: Campaign): Omit<EsbOutreachMail, 't
   const design = designFor(c)
   return {
     subject: m.subject, body: m.body, optOut: m.optOut, signature: signatureOf(c), lang: c.lang, letterhead: c.letterhead,
-    officialPad: c.officialPad, footerLine: st.footerLine, fontFamily: st.fontFamily,
+    officialPad: c.officialPad, track: c.track !== false, footerLine: st.footerLine, fontFamily: st.fontFamily,
     headerBg: st.headerBg, footerBg: st.footerBg, stripeColors: st.stripeColors,
     ...(design ? { design: designPayload(design), vars: designVars(contact, design.html, opener) } : {}),
   }

@@ -1399,3 +1399,7 @@
 /* Needs you: the group's name and count on one line, its buttons together on the next */
 .or-flag-group-title { flex: 1 0 100%; flex-wrap: nowrap; }
 .or-flag-group-head:has(> .btn:only-of-type) .or-flag-group-title { flex: 1 1 0; }
+
+/* Needs you: the next page of a long group */
+.or-flag-more { align-self: center; margin: 6px auto 2px; display: flex; }
+.or-flag-group-head { cursor: pointer; }
