@@ -8,7 +8,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react'
  * dragging the rail's edge outward past it opens the column again at its last width. Saved per desk per side in
  * localStorage `esb-banner-studio/side-col/<id>`.
  */
-export const RAIL_W = 52
+export const RAIL_W = 60
 
 export interface ColSpec { def: number; min: number; max: number }
 export interface ColState { w: number; collapsed: boolean }

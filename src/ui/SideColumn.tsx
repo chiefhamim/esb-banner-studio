@@ -94,7 +94,14 @@ export function ColumnHandle({ col, label, root, apply, max, foldHost }: {
   const timer = useRef(0)
   const seenW = useRef(col.w)
   const chromeW = useRef(1)
-  const kidMargins = useRef<Map<HTMLElement, number>>(new Map())
+  const kidMargins = useRef<Map<HTMLElement, { sum: number; left: number }>>(new Map())
+  const rowFlex = useRef(false)
+  const measure = (el: HTMLElement) => {
+    chromeW.current = el.offsetWidth - el.clientWidth
+    const cs = getComputedStyle(el)
+    rowFlex.current = cs.display.includes('flex') && cs.flexDirection.startsWith('row')
+    kidMargins.current = new Map(Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement).map((k) => { const s = getComputedStyle(k); const left = parseFloat(s.marginLeft) || 0; return [k, { sum: left + (parseFloat(s.marginRight) || 0), left }] }))
+  }
   useEffect(() => {
     const el = ref.current?.parentElement
     if (!el) return
@@ -103,8 +110,7 @@ export function ColumnHandle({ col, label, root, apply, max, foldHost }: {
     const ro = new ResizeObserver(() => {
       if (col.collapsed || el.classList.contains('col-anim')) return
       seenW.current = el.getBoundingClientRect().width
-      chromeW.current = el.offsetWidth - el.clientWidth
-      kidMargins.current = new Map(Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement).map((k) => { const cs = getComputedStyle(k); return [k, (parseFloat(cs.marginLeft) || 0) + (parseFloat(cs.marginRight) || 0)] }))
+      measure(el)
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -118,35 +124,60 @@ export function ColumnHandle({ col, label, root, apply, max, foldHost }: {
     if (prev === col.collapsed) return
     window.clearTimeout(timer.current)
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    el.classList.remove('col-anim', 'col-anim-in', 'col-anim-out')
+    el.classList.remove('col-anim', 'col-anim-in', 'col-anim-out', 'col-anim-left', 'col-anim-right')
+    for (const it of el.querySelectorAll<HTMLElement>('.col-in-item')) { it.classList.remove('col-in-item'); it.style.removeProperty('--col-i') }
     if (reduce) return
     // the content is pinned to the width it has when open (minus its own margins and the column's border), so it is
     // clipped by the shrinking column and revealed by the growing one instead of reflowing at every width in between
     const open = Math.round(col.collapsed ? seenW.current || col.w : col.w)
     const kids = Array.from(el.children).filter((c): c is HTMLElement => c instanceof HTMLElement && !c.classList.contains('col-rail') && !c.classList.contains('col-handle') && !c.classList.contains('col-fold'))
+    // a column that launched folded has not been measured yet
+    if (!kidMargins.current.size) measure(el)
+    const total = open - chromeW.current
     for (const k of kids) {
-      k.style.width = Math.max(0, open - chromeW.current - (kidMargins.current.get(k) ?? 0)) + 'px'
-      k.style.flex = 'none'
+      const m = kidMargins.current.get(k) ?? { sum: 0, left: 0 }
+      k.style.width = Math.max(0, total - m.sum) + 'px'
       k.style.minWidth = '0'
+      // only a row's children grow along the width; pinning a column's children would push its foot out of the panel
+      if (rowFlex.current) k.style.flex = 'none'
+      // a left column's content is tied to its moving (right) edge, so it slides with the edge as the right column's does
+      if (col.side === 'left') k.style.marginLeft = `calc(100% - ${total - m.left}px)`
     }
-    el.classList.add('col-anim', col.collapsed ? 'col-anim-in' : 'col-anim-out')
+    // opening: the sections that unfold one after another — the column's own blocks, and a scrolling block's first cards
+    const items: HTMLElement[] = []
+    if (!col.collapsed) {
+      for (const k of kids) {
+        const scrolls = /auto|scroll/.test(getComputedStyle(k).overflowY) && k.children.length > 0
+        for (const c of scrolls ? Array.from(k.children) : [k]) if (c instanceof HTMLElement && items.length < 9 && !c.classList.contains('col-fold')) items.push(c)
+      }
+      items.forEach((it, i) => { it.style.setProperty('--col-i', String(i)); it.classList.add('col-in-item') })
+    }
+    el.classList.add('col-anim', col.collapsed ? 'col-anim-in' : 'col-anim-out', 'col-anim-' + col.side)
     timer.current = window.setTimeout(() => {
-      el.classList.remove('col-anim', 'col-anim-in', 'col-anim-out')
-      for (const k of kids) { k.style.removeProperty('width'); k.style.removeProperty('flex'); k.style.removeProperty('min-width') }
-    }, 420)
-  }, [col.collapsed, col.w])
+      el.classList.remove('col-anim', 'col-anim-in', 'col-anim-out', 'col-anim-left', 'col-anim-right')
+      for (const it of items) { it.classList.remove('col-in-item'); it.style.removeProperty('--col-i') }
+      for (const k of kids) { k.style.removeProperty('width'); k.style.removeProperty('flex'); k.style.removeProperty('min-width'); k.style.removeProperty('margin-left') }
+    }, 760)
+  }, [col.collapsed, col.w, col.side])
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
   const edge = col.side === 'left' ? 'r' : 'l'
   const [host, setHost] = useState<HTMLElement | null>(null)
+  // opening, the button joins its host only after the content has arrived: the host fades in, and the button must not
+  const hostReady = useRef(false)
   useLayoutEffect(() => {
-    if (!foldHost || col.collapsed) { setHost(null); return }
-    setHost(ref.current?.parentElement?.querySelector<HTMLElement>(foldHost) ?? null)
+    if (!foldHost || col.collapsed) { hostReady.current = true; setHost(null); return }
+    const find = () => setHost(ref.current?.parentElement?.querySelector<HTMLElement>(foldHost) ?? null)
+    if (!hostReady.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { hostReady.current = true; find(); return }
+    const t = window.setTimeout(find, 760)
+    return () => window.clearTimeout(t)
   }, [foldHost, col.collapsed])
+  // the handle is labelled for resizing ('Resize the media bin'); the button names the panel itself
+  const what = label.replace(/^Resize /, '')
   const foldBtn = (
-      <button type="button" className={'col-fold ' + col.side + (host ? ' in-host' : '')} aria-label={col.collapsed ? `Expand ${label}` : `Collapse ${label}`} data-tip={col.collapsed ? 'Expand' : 'Collapse'} data-tip-pos={col.side === 'left' ? 'right' : 'left'} 
+      <button type="button" className={'col-fold ' + col.side + (host ? ' in-host' : '')} aria-label={col.collapsed ? `Show ${what}` : `Hide ${what}`} aria-expanded={!col.collapsed} data-tip={col.collapsed ? `Show ${what}` : `Hide ${what}`} data-tip-pos={col.side === 'left' ? 'right' : 'left'} 
         onClick={toggle}>
-        <Icon name={col.side === 'left' ? 'panelLeft' : 'panelRight'} size={16} />
+        <FoldGlyph side={col.side} />
       </button>
   )
   return (
@@ -160,6 +191,18 @@ export function ColumnHandle({ col, label, root, apply, max, foldHost }: {
       <i className="grab" />
     </div>
     </>
+  )
+}
+
+/** A sidebar drawn as a window with its pane: the pane is filled while the column is open and empties as it folds. */
+function FoldGlyph({ side }: { side: 'left' | 'right' }) {
+  const l = side === 'left'
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="3.5" />
+      <path d={l ? 'M9.5 4.5v15' : 'M14.5 4.5v15'} />
+      <rect className="cf-pane" x={l ? 5.6 : 15.9} y="6.6" width="2.5" height="10.8" rx="1.1" fill="currentColor" stroke="none" />
+    </svg>
   )
 }
 
@@ -229,8 +272,8 @@ export function ColumnRail({ col, label, items, actions = [], peek = false }: { 
   return (
     <nav className={'col-rail ' + col.side + (col.collapsed ? '' : ' leaving')} aria-label={label} aria-hidden={!col.collapsed || undefined}>
       <div className="col-rail-items">
-        {items.map((it) => (
-          <button key={it.id} type="button" className={'col-rail-btn' + (it.on ? ' on' : '') + (fly?.id === it.id ? ' fly-open' : '')} aria-label={it.label} aria-current={it.on || undefined}
+        {items.map((it, i) => (
+          <button key={it.id} type="button" style={{ ['--i' as string]: i }} className={'col-rail-btn' + (it.on ? ' on' : '') + (fly?.id === it.id ? ' fly-open' : '')} aria-label={it.label} aria-current={it.on || undefined}
             aria-expanded={it.flyout ? fly?.id === it.id : undefined} data-rail-fly={it.flyout ? col.id : undefined}
             data-tip={fly?.id === it.id ? undefined : it.label} data-tip-pos={pos} onClick={(e) => click(it, e)}>
             {icon(it.icon)}
@@ -239,8 +282,8 @@ export function ColumnRail({ col, label, items, actions = [], peek = false }: { 
       </div>
       {actions.length > 0 && (
         <div className="col-rail-foot">
-          {actions.map((a) => (
-            <button key={a.id} type="button" className={'col-rail-btn' + (a.primary ? ' primary' : '')} aria-label={a.label} data-tip={a.label} data-tip-pos={pos} disabled={a.disabled} onClick={a.onClick}>
+          {actions.map((a, j) => (
+            <button key={a.id} type="button" style={{ ['--i' as string]: items.length + j }} className={'col-rail-btn' + (a.primary ? ' primary' : '')} aria-label={a.label} data-tip={a.label} data-tip-pos={pos} disabled={a.disabled} onClick={a.onClick}>
               {icon(a.icon)}
             </button>
           ))}

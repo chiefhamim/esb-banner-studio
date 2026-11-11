@@ -2011,21 +2011,29 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 /* ---------------------------------------------------------------- folding columns: a drawer, not a snap (pass 6)
    The column keeps its content rendered at its open width (inline px, set by SideColumn) while the grid track travels
    on an iOS-sheet curve; the track clips it, the content fades over the first 60 %, the rail fades in over the last 40 %.
-   Opening is the same film backwards. */
+   Opening (pass 17): the content rides the moving edge, and its sections unfold one after another from the outer side
+   (SideColumn marks them .col-in-item with --col-i), each a little behind the edge, so the panel opens like a drawer
+   whose contents settle into place. Folding: the content slips toward the outer edge as it fades, then the rail's
+   tiles arrive top to bottom. */
 .col-anim { position: relative; overflow: hidden; }
-.col-anim-in > :not(.col-rail):not(.col-handle):not(.col-fold) { animation: col-content-out 230ms cubic-bezier(.4, 0, .6, 1) both; }
-.col-anim-out > :not(.col-rail):not(.col-handle):not(.col-fold) { animation: col-content-in 280ms cubic-bezier(.2, 0, 0, 1) 110ms both; }
-.col-anim-in > .col-rail { animation: col-rail-in 240ms cubic-bezier(.2, 0, 0, 1) 170ms both; }
+.col-anim-left { --col-out: -10px; --col-from: -18px; --tile-from: -8px; }
+.col-anim-right { --col-out: 10px; --col-from: 18px; --tile-from: 8px; }
+.col-anim-in > :not(.col-rail):not(.col-handle):not(.col-fold) { animation: col-content-out 200ms cubic-bezier(.4, 0, .6, 1) both; }
+.col-anim-out .col-in-item { animation: col-item-in 520ms var(--col-ease) calc(45ms + var(--col-i, 0) * 28ms) both; }
+.col-anim-in > .col-rail::before { animation: col-content-in 260ms var(--col-ease) 170ms both; }
+.col-anim-in > .col-rail .col-rail-btn { animation: col-tile-in 420ms var(--col-ease) calc(150ms + var(--i, 0) * 22ms) both; }
+@keyframes col-item-in { from { opacity: 0; translate: var(--col-from) 0; } 35% { opacity: 1; } }
+@keyframes col-tile-in { from { opacity: 0; scale: .86; translate: var(--tile-from) 0; } }
 .col-rail { position: absolute; top: 0; bottom: 0; }
 .col-rail.left { left: 0; } .col-rail.right { right: 0; }
-.col-rail.leaving { animation: col-rail-out 150ms cubic-bezier(.4, 0, 1, 1) both; pointer-events: none; }
+.col-rail.leaving { animation: col-rail-out 70ms cubic-bezier(.4, 0, 1, 1) both; pointer-events: none; }
 .col-anim > .col-handle { opacity: 0; }
-@keyframes col-content-out { to { opacity: 0; } }
+@keyframes col-content-out { to { opacity: 0; translate: var(--col-out, 0) 0; } }
 @keyframes col-content-in { from { opacity: 0; } }
 @keyframes col-rail-in { from { opacity: 0; transform: translate3d(-6px, 0, 0); } }
 .col-rail.right { --rail-in: 6px; }
 @keyframes col-rail-out { to { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .col-anim > *, .col-rail, .col-rail.leaving { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .col-anim > *, .col-anim .col-in-item, .col-rail, .col-rail::before, .col-rail .col-rail-btn, .col-rail.leaving { animation: none !important; } }
 
 
 /* category tiles: a word is never cut in the middle ("Commoditie-s"); the chosen tile keeps a weight that fits the same room */
@@ -2037,61 +2045,63 @@ img.ed-avatar { padding: 0; background: var(--fill); }
    One shape everywhere: a plain sidebar icon (no container) in a 36 px hit area as tall as the tab bar it sits
    beside; hover only brightens and slightly grows the icon — no container. Each column's first row starts 10 px from
    the top and 12 px from the edges; the button takes the row's outer end, 6 px from the tabs. Folded, it is the rail's
-   top tile, centred in the 52 px rail, and it fades in WITH the rail's icons (same curve, same delay); opening, it fades
-   back in with the content. */
+   top tile. It lives on the column's INNER edge (the side facing the work), 12 px in, in both states: the rail is 60 px,
+   so folded it is the rail's centred top tile, and while the column travels it rides the moving edge, never fading.
+   Beside tabs it is the row's end; where the column opens with a card it is that card's first or last control, as far
+   in from the card's edge as the card's own icon tile. Idle it is as quiet as the panels' chevrons. Its icon is a little sidebar whose pane is filled while the column is open and empties as it folds. */
 .col-fold {
   position: absolute; z-index: 8; top: var(--fold-top, 10px);
   display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
-  color: var(--text-2); background: transparent; border: 0; border-radius: var(--r-2); cursor: pointer;
-  transition: background-color 120ms var(--ease), color 120ms var(--ease), transform 120ms var(--ease);
+  color: var(--text-3); background: transparent; border: 0; border-radius: var(--r-2); cursor: pointer;
+  transition: background-color 120ms var(--ease), color 160ms var(--ease), transform 120ms var(--ease);
 }
-.col-fold.left { right: var(--fold-inset, 12px); }
-.col-fold.right { left: var(--fold-inset, 12px); }
+.col-fold.left { right: calc((var(--rail-w) - 36px) / 2); }
+.col-fold.right { left: calc((var(--rail-w) - 36px) / 2); }
+/* inside a card the icon sits at the card's own padding (--fold-nudge moves the glyph, the click area stays): the same
+   inset as the card's content, then an even gap to the row it leads; on the rail it is centred again */
+.col-fold > svg { translate: var(--fold-nudge, 0) 0; transition: transform 200ms var(--col-ease), translate 360ms var(--col-ease); }
+.is-railed > .col-fold > svg { translate: none; }
+.col-fold .cf-pane { transform-box: fill-box; transform-origin: left center; opacity: .9; transition: opacity 320ms var(--col-ease), transform 460ms var(--col-ease); }
+.col-fold.right .cf-pane { transform-origin: right center; }
+.col-fold:hover .cf-pane { transform: scaleX(.6); }
+.is-railed > .col-fold .cf-pane { opacity: 0; transform: scaleX(.15); }
+.is-railed > .col-fold:hover .cf-pane { opacity: .5; transform: scaleX(.6); }
 .col-fold, .col-fold:hover, .col-fold:active { background: transparent; box-shadow: none; }
 /* no container, ever: the icon itself answers — it brightens to full ink and grows a touch, and presses in */
-.col-fold > svg { transition: transform 160ms var(--ease); }
 .col-fold:hover { color: var(--text); }
-.col-fold:hover > svg { transform: scale(1.12); }
+.col-fold:hover > svg { transform: scale(1.06); }
 .col-fold:active > svg { transform: scale(.94); }
 .col-fold:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.col-fold > svg { width: 17px; height: 17px; }
+.col-fold > svg { width: 18px; height: 18px; }
 .resizing .col-fold { pointer-events: none; }
-/* folded: the rail's top tile */
-.is-railed > .col-fold { top: 10px; }
-.is-railed > .col-fold.left { left: calc((var(--rail-w) - 36px) / 2); right: auto; }
-.is-railed > .col-fold.right { right: calc((var(--rail-w) - 36px) / 2); left: auto; }
-.is-railed > .col-rail { padding-top: 54px; }
-/* the film: out with the content, in with whatever shows next */
-.col-anim-in > .col-fold { animation: col-rail-in 240ms cubic-bezier(.2, 0, 0, 1) 170ms both; }
-.col-anim-out > .col-fold { animation: col-content-in 280ms cubic-bezier(.2, 0, 0, 1) 110ms both; }
-@media (prefers-reduced-motion: reduce) { .col-anim > .col-fold { animation: none !important; } }
+/* .leaving: is-railed goes the moment a column starts to open, and the rail must fade out from where it stands */
+.is-railed > .col-rail, .col-rail.leaving { padding-top: calc(var(--fold-top, 10px) + 44px); }
+@media (prefers-reduced-motion: reduce) { .col-fold > svg, .col-fold .cf-pane { transition: none; } }
 
-/* every column's first row: 10 px from the top, 12 px from both edges, the fold button's 36 + 6 px kept free */
+/* every column's first row: 10 px from the top, 12 px from both edges, the fold button's room kept free on the outer side */
 :is(.left, .vw-bin-panel, .or-left) > .side-tabs { margin: 10px 54px 4px 12px; }
 .or-right > .side-tabs { margin: 10px 12px 4px 54px; }
-/* Graphics' right column opens with the Inspector card: the button sits in that card's header row */
-.app > .right { --fold-top: 13px; --fold-inset: 18px; }
-/* the button is the Inspector header's first tile: 6 px inside the card, centred on the 44 px header row, 8 px before the title tile */
-.app > .right > .scroll > .pnl:first-child > header { padding-left: 50px; }
+/* Graphics' right column opens with the Inspector card: the button is its header's first tile */
+.app > .right { --fold-top: 13px; --fold-nudge: 3px; }
+.app > .right > .scroll > .pnl:first-child > header { padding-left: 40px; }
 /* Video's clip inspector: its title row makes room */
-.vw-inspector-panel { --fold-top: 18px; }
+.vw-inspector-panel { --fold-top: 18px; --fold-nudge: -9px; }
 .vw-inspector-panel .vw-inspector-head { min-height: 52px; padding-left: 0; }
 /* only the title row makes room for the fold button; the tabs under it use the column's full width */
-.vw-inspector-panel .vw-ih-row { min-height: 52px; padding-left: 48px; }
+.vw-inspector-panel .vw-ih-row { min-height: 52px; padding: 0 12px 0 43px; }
 .vw-inspector-panel .vw-inspector { padding: 0 0 16px 12px; }
 /* News: the brand bar's own height, the brand's own inset */
-.nw-left { --fold-top: 24px; --fold-inset: 20px; }
-/* News' detail card and Editorial's status card: the button is the card's top-right tile, centred on the card's first
-   row, as far from the card's top as from its right edge (8 px); the first row stops short of it */
-.nw-right > .col-fold.right { left: 20px; right: auto; top: 21px; }
-/* the button leads the card's first row, its icon on the card's text edge; the source name follows it */
-.nw-right .nw-detail-top { min-height: 36px; margin-top: -7px; padding-left: 32px; }
+.nw-left { --fold-top: 24px; --fold-nudge: -5px; }
+/* News' detail card and Editorial's status card: the button is the card's corner control on its first row */
+.nw-right { --fold-top: 21px; }
+.nw-right { --fold-nudge: 6px; }
+.nw-right .nw-detail-top { min-height: 36px; margin-top: -7px; padding-left: 28px; }
 /* Editorial's sidebar carries its fold button inside its scroll (SideColumn foldHost), so it scrolls with the status card;
-   it leads the card's row on the left (like every right column), centred on the card whatever its height */
+   it sits beside the card on the outer side, the same place as on the rail */
+.ed-side { --fold-top: 30px; --fold-nudge: 1px; }
 .ed-side > .es-scroll { position: relative; }
-.ed-side .es-status { anchor-name: --es-status; padding-left: 50px; }
-.ed-side > .es-scroll > .col-fold.in-host { left: 20px; right: auto; top: anchor(--es-status center, 30px); translate: 0 -50%; }
-.is-railed.nw-right > .col-fold.right, .is-railed.ed-side > .col-fold.right, .is-railed.ed-side > .col-fold { left: auto; right: calc((var(--rail-w) - 36px) / 2); top: 10px; }
+.ed-side .es-status { padding-left: 44px; }
+.ed-side > .es-scroll > .col-fold.in-host, .app > .right > .scroll.insp > .col-fold.in-host { left: calc((var(--rail-w) - 36px) / 2); right: auto; }
 
 /* ---------------------------------------------------------------- Going to press (PressCountdown.tsx, pass 7)
    The phone's hold-to-publish card, on the desktop: the ESB masthead stripe fills across the top, the seconds badge
@@ -2251,13 +2261,13 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 /* pass 12: Graphics' Inspector carries its own fold button (SideColumn foldHost): it scrolls with the Inspector's
    first header, so the two never part */
 .app > .right > .scroll.insp { position: relative; }
-.app > .right > .scroll.insp > .col-fold.in-host { top: var(--fold-top); left: var(--fold-inset); }
+.app > .right > .scroll.insp > .col-fold.in-host { top: var(--fold-top); }
 .app > .right > .scroll.insp > .pnl:first-of-type > header { position: relative; top: 0; } /* scrolls with the fold beside it */
 /* pass 12: the desk switcher's hover bar sits along the TOP of the icon — at the bottom the pointer covered it */
 .ws-switch .ws-btn::after { top: 3px; bottom: auto; }
 
 /* pass 12: a folded column's rail — a short hairline under the fold button sets it apart from the section icons */
-.is-railed > .col-rail::before { content: ''; position: absolute; top: 50px; left: 50%; width: 22px; height: 1px; margin-left: -11px; border-radius: 1px; background: var(--line-3); opacity: .7; }
+.is-railed > .col-rail::before, .col-rail.leaving::before { content: ''; position: absolute; top: calc(var(--fold-top, 10px) + 40px); left: 50%; width: 22px; height: 1px; margin-left: -11px; border-radius: 1px; background: var(--line-3); opacity: .7; }
 .topbar.ed-head .ed-story-chip .or-camp-name { text-overflow: clip; }
 
 /* ---------------------------------------------------------------- pass 13: the desk rail, quieter and balanced
@@ -2438,3 +2448,4 @@ input, textarea, select, [contenteditable], [contenteditable] *, .ProseMirror, .
 .desk-rail-btn.on[data-desk='graphics'] > svg { stroke: url(#rail-ig-graphics); }
 .desk-rail-btn.on[data-desk='video'] > svg { stroke: url(#rail-ig-video); }
 .desk-rail-btn.on[data-desk='outreach'] > svg { stroke: url(#rail-ig-outreach); }
+

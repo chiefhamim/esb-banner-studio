@@ -1,7 +1,7 @@
 /* ---------------------------------------------------------------- side columns that fold to an icon rail (src/ui/SideColumn.tsx)
    Every desk's side column: drag its inner edge narrow and it becomes a 52 px rail of its own sections. The rail keeps
-   the column's surface; only the rail's own buttons are styled here, the expanded column is left as it was. */
-:root { --rail-w: 52px; --col-ease: cubic-bezier(.32, .72, 0, 1); }
+   the column's surface (60 px: the fold button sits 12 px in, as on the open column); only the rail's own buttons are styled here, the expanded column is left as it was. */
+:root { --rail-w: 60px; --col-ease: cubic-bezier(.32, .72, 0, 1); }
 
 /* the grids that hold side columns ease their tracks when a column folds or opens — never while a handle is dragged */
 .side-cols { transition: grid-template-columns 360ms var(--col-ease); }
