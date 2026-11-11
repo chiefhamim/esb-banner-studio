@@ -105,6 +105,30 @@ try {
   await sw.click()
   const p2 = await payload()
   ok(p2.saved === true && p2.test === true, 'on again: tracked')
+  // ── 3. Skipped for another reason: Needs you shows the real blocker and its fix ─────────────────────────────
+  const before = await page.evaluate(async (text) => {
+    const st = window.__outreachStore.getState()
+    st.undoApproveMany?.()
+    await st.createCampaign({ name: 'Blocked check', blueprint: 'blank', subject: 'A note for {organisation}', body: 'Dear {name|Sir},\n\nHello.' })
+    await window.__outreachStore.getState().importList(new File([text], 'ny2.csv', { type: 'text/csv' }))
+    window.__outreachUi.getState().set({ right: 'review' })
+    await new Promise((r) => setTimeout(r, 600))
+    return [...document.querySelectorAll('.or-blocked-row')].map((r) => r.textContent.replace(/\s+/g, ' ').trim())
+  }, csv)
+  console.log('blocked rows:\n  ' + before.join('\n  '))
+  ok(before.some((t) => /not approved yet/.test(t)), 'card names addresses held by the sheet status, with an Approve button')
+  ok(before.some((t) => /No organisation/.test(t) && /fallback/.test(t)), 'card names the missing field and how to fix it')
+  if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'blocked.png') })
+  const readyBefore = await page.evaluate(() => document.querySelector('.or-aud b:nth-of-type(2)')?.textContent)
+  await page.click('.or-blocked-row .btn.primary')
+  await page.click('.dialog button:has-text("Approve addresses")')
+  await page.waitForTimeout(500)
+  const after = await page.evaluate(() => [...document.querySelectorAll('.or-blocked-row')].map((r) => r.textContent.replace(/\s+/g, ' ').trim()))
+  ok(!after.some((t) => /not approved yet/.test(t)), 'after Approve, no address is held by the sheet status')
+  // every contact here also lacks {organisation}, so the approved ones move to that group instead of to ready
+  const missingN = (rows) => Number((rows.find((t) => /No organisation/.test(t)) ?? '').replace(/,/g, '').match(/^\d+/)?.[0] ?? 0)
+  ok(missingN(after) > missingN(before), `approved addresses now wait only on the missing field (${missingN(before)} → ${missingN(after)})`)
+  void readyBefore
   await browser.close()
 } finally {
   server.kill()

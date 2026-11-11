@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react'
 import type { Campaign, Contact } from './types'
 import { reviewRendered, actionableFlags, type Flag, type FlagKind } from './rendered'
-import { buildMessage } from './compose'
+import { buildMessage, skipReason } from './compose'
 import { inAudience } from './campaign'
 import { ask } from './outreachUi'
 import { useOutreachStore } from './outreachStore'
@@ -39,12 +39,34 @@ export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact 
   // Identify all contacts in audience that have actionable, unreviewed flags
   const audienceContacts = useMemo(() => contacts.filter((c) => inAudience(c, campaign.audience)), [contacts, campaign.audience])
 
+  // Contacts that would not be sent anyway (the sheet's status, a missing field, no mail server) are not letter
+  // problems: approving them here changed nothing, so they are listed apart with what really holds them.
+  const blocked = useMemo(() => {
+    const groups = new Map<string, { label: string; fix: 'approve' | 'fallback' | 'none'; field?: string; emails: string[] }>()
+    for (const contact of audienceContacts) {
+      if (contact.status === 'SENT' || contact.status === 'OPTED_OUT' || contact.status === 'BOUNCED' || contact.status === 'REPLIED') continue
+      const why = skipReason(contact, campaign.subject, campaign.body, campaign.openers?.[contact.email]?.text)
+      if (!why) continue
+      let key: string, label: string, fix: 'approve' | 'fallback' | 'none' = 'none', field: string | undefined
+      if (/approve to include/.test(why)) { key = 'approve'; label = 'Address not approved yet (the sheet marks it for review or gives no status)'; fix = 'approve' }
+      else if (why.startsWith('Missing ')) { field = why.slice(8).split(',')[0].trim(); key = `missing:${field}`; label = `No ${field} in the list for these contacts, and the letter uses {${field}}`; fix = 'fallback' }
+      else { key = why.replace(/\s*\(.*?\)/, '').replace(/ — .*/, ''); label = key }
+      const g = groups.get(key) ?? { label, fix, field, emails: [] }
+      g.emails.push(contact.email)
+      groups.set(key, g)
+    }
+    return [...groups.values()].sort((a, b) => b.emails.length - a.emails.length)
+  }, [audienceContacts, campaign.subject, campaign.body, campaign.openers])
+  const blockedSet = useMemo(() => new Set(blocked.flatMap((g) => g.emails)), [blocked])
+  const approveAddresses = useOutreachStore((x) => x.approveMany)
+
   const flaggedItems = useMemo(() => {
     const items: FlaggedItem[] = []
     const reviewedMap = campaign.reviewed || {}
 
     for (const contact of audienceContacts) {
       if (contact.status === 'SENT' || contact.status === 'OPTED_OUT' || contact.status === 'BOUNCED') continue
+      if (blockedSet.has(contact.email)) continue
       const msg = buildMessage(contact, campaign.subject, campaign.body, campaign.lang)
       const flags = actionableFlags(reviewRendered(contact, msg))
       const approvedForContact = new Set(reviewedMap[contact.email] || [])
@@ -56,7 +78,7 @@ export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact 
       }
     }
     return items
-  }, [audienceContacts, campaign.subject, campaign.body, campaign.lang, campaign.reviewed])
+  }, [audienceContacts, campaign.subject, campaign.body, campaign.lang, campaign.reviewed, blockedSet])
 
   // Group by flag kind
   const groups = useMemo(() => {
@@ -104,16 +126,53 @@ export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact 
     onPatchCampaign({ reviewed })
   }
 
+  const approveBlocked = async (emails: string[]) => {
+    const ok = await ask({
+      title: `Approve ${emails.length.toLocaleString()} addresses for sending?`,
+      body: 'The list marks these addresses for review, or gives them no status. Approving says you have checked them and they may be emailed, in this campaign and later ones. Addresses with no mail server are still never sent.',
+      ok: 'Approve addresses',
+    })
+    if (ok) approveAddresses(emails)
+  }
+
+  const blockedCard = blocked.length > 0 && (
+    <div className="or-blocked">
+      <div className="or-needs-you-title">
+        <Icon name="skipForward" size={15} />
+        <b>Skipped for another reason ({blockedSet.size.toLocaleString()})</b>
+      </div>
+      <span className="or-needs-you-sub">Approving letters above does not change these. This is what holds them:</span>
+      {blocked.map((g) => (
+        <div key={g.label} className="or-blocked-row">
+          <span className="or-blocked-n">{g.emails.length.toLocaleString()}</span>
+          <span className="or-blocked-why">
+            {g.label}
+            {g.fix === 'fallback' && <small>Give it a fallback in the letter, e.g. <code>{`{${g.field}|your organisation}`}</code>, and they become ready.</small>}
+            {g.fix === 'none' && <small>These cannot be sent.</small>}
+          </span>
+          {g.fix === 'approve' && <button type="button" className="btn xs primary" onClick={() => void approveBlocked(g.emails)}>Approve {g.emails.length.toLocaleString()}</button>}
+        </div>
+      ))}
+    </div>
+  )
+
   if (flaggedItems.length === 0) {
     return (
-      <div className="or-needs-you-empty">
-        <Icon name="check" size={14} />
-        <span>No messages need your review. All letters pass spot checks.</span>
-      </div>
+      <>
+        {blockedCard}
+        {!blocked.length && (
+          <div className="or-needs-you-empty">
+            <Icon name="check" size={14} />
+            <span>No messages need your review. All letters pass spot checks.</span>
+          </div>
+        )}
+      </>
     )
   }
 
   return (
+    <>
+    {blockedCard}
     <div className="or-needs-you">
       <div className="or-needs-you-head">
         <div className="or-needs-you-title">
@@ -197,5 +256,6 @@ export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact 
         })}
       </div>
     </div>
+    </>
   )
 }
