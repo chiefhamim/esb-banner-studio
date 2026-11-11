@@ -122,7 +122,7 @@
 .or-empty b { color: var(--text); font-size: 14px; }
 .or-empty p { margin: 0; font-size: 12px; line-height: 18px; max-width: 280px; }
 .or-empty > svg { color: var(--text-3); }
-.or-note { margin: 0; font-size: 11.5px; line-height: 16px; color: var(--warning); }
+.or-note { margin: 0; font-size: 12px; line-height: 16px; color: var(--warning); }
 .or-wide { width: 100%; justify-content: center; }
 .or-actions { display: flex; gap: 6px; }
 .or-actions .btn { flex: 1; justify-content: center; height: 32px; min-height: 32px; border-radius: var(--r-2); }
@@ -155,7 +155,7 @@
 .or-fchip.on { color: var(--sel-ink, var(--on-ink)); background: var(--sel, var(--ink)); }
 .or-fchip.on span { color: inherit; opacity: .75; }
 .or-fchip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.or-filter button { flex: 1 1 auto; min-width: 0; padding: 0 6px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.or-filter button { flex: 1 1 auto; min-width: 0; padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .or-list { display: flex; flex: 1; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; padding: 8px 6px 8px 10px; scrollbar-gutter: stable; }
 
 /* A row is a quiet card; its state is the chip on the right. The 3 px coloured edge came from the Editorial story
@@ -172,7 +172,7 @@
 .or-row-main { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 1px; }
 .or-row-main > * { overflow-wrap: anywhere; white-space: normal; }
 .or-row-main b { font-size: 13px; line-height: 18px; font-weight: 600; }
-.or-row-main span { font-size: 11.5px; line-height: 16px; color: var(--text-2); }
+.or-row-main span { font-size: 12px; line-height: 16px; color: var(--text-2); }
 .or-row > .or-chip { margin-top: 1px; }
 .or-row-main .or-row-mail { color: var(--text-3); }
 
@@ -212,7 +212,7 @@
 .or-src-ic { display: grid; place-items: center; flex: none; width: 26px; height: 26px; color: var(--text-2); background: var(--fill); border-radius: var(--r-1); }
 .or-src-t { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; }
 .or-src-t b, .or-src-t span { overflow-wrap: anywhere; white-space: normal; }
-.or-src-t b { font-size: 12.5px; line-height: 17px; }
+.or-src-t b { font-size: 13px; line-height: 17px; }
 .or-src-t span { font-size: 11px; line-height: 15px; color: var(--text-3); }
 .or-src .ibtn { width: 26px; height: 26px; }
 .or-points { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
@@ -221,7 +221,7 @@
 .or-points input { flex: none; margin: 2px 0 0; accent-color: var(--sel, var(--ink)); }
 .or-points span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .or-points b { font-size: 12px; line-height: 17px; font-weight: 600; }
-.or-points q, .or-checks q { font-size: 11.5px; line-height: 16px; color: var(--text-2); font-style: italic; overflow-wrap: anywhere; }
+.or-points q, .or-checks q { font-size: 12px; line-height: 16px; color: var(--text-2); font-style: italic; overflow-wrap: anywhere; }
 .or-points li:not(.on) b { color: var(--text-3); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text) 30%, transparent); }
 
 /* ---------------------------------------------------------------- centre: the letter */
@@ -234,7 +234,7 @@
 .or-toolbar > .or-letter-select { flex: 1 1 200px; min-width: 150px; }
 .or-toolbar .spacer { display: none; }
 .or-toolbar .spacer { flex: 1 1 0; }
-.or-suggest { flex: none; display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 46%; height: 24px; padding: 0 10px; font: 500 11.5px/1 var(--font-ui); color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-pill); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
+.or-suggest { flex: none; display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 46%; height: 24px; padding: 0 10px; font: 500 12px/1 var(--font-ui); color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-pill); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
 .or-suggest span { overflow-wrap: anywhere; white-space: normal; }
 .or-suggest:hover { color: var(--text); background: var(--fill-hover); }
 .or-suggest svg { flex: none; color: var(--warning); }
@@ -254,12 +254,12 @@
 .or-line-input { flex: 1 1 auto; min-width: 0; height: 38px; padding: 0; font: 500 13px/1 var(--font-ui); color: var(--text); background: none; border: 0; outline: none; }
 .or-line-input.or-subject { font-size: 14px; font-weight: 600; }
 .or-link { min-width: 0; line-height: 20px; overflow-wrap: anywhere; white-space: normal; padding: 0; font-size: 13px; font-weight: 500; font-family: var(--font-ui); color: var(--or-sent); background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-.or-inline-warn { margin: 6px 16px 0; font-size: 11.5px; color: var(--warning); }
+.or-inline-warn { margin: 6px 16px 0; font-size: 12px; color: var(--warning); }
 .or-variants { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 16px 0; }
 .or-fmt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 10px 16px 0; padding: 4px 6px; background: var(--fill); border-radius: var(--r-2); }
 .or-fmt .ibtn { width: 28px; height: 28px; }
 .or-fmt-sep { width: 1px; height: 18px; margin: 0 6px; background: color-mix(in srgb, var(--text) 16%, transparent); }
-.or-tag, .or-variant { height: 24px; padding: 0 9px; font: 500 11.5px/1 var(--font-ui); color: var(--text-2); background: var(--card); border: 0; border-radius: var(--r-pill); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
+.or-tag, .or-variant { height: 24px; padding: 0 9px; font: 500 12px/1 var(--font-ui); color: var(--text-2); background: var(--card); border: 0; border-radius: var(--r-pill); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
 .or-tag::before { content: '{'; opacity: .55; }
 .or-tag::after { content: '}'; opacity: .55; }
 .or-tag:hover, .or-variant:hover { color: var(--text); background: var(--fill-hover); }
@@ -281,12 +281,12 @@
 .or-design-meta b { font-size: 13px; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
 .or-design-meta span { font-size: 12px; color: var(--text-2); }
 .or-design-note { margin: var(--s-4) 16px 0; font-size: 12px; line-height: 18px; color: var(--text-2); }
-.or-design-note code { font: 500 11.5px/1 var(--font-ui); padding: 1px 4px; border-radius: var(--r-1); background: var(--fill); color: var(--text); }
+.or-design-note code { font: 500 12px/1 var(--font-ui); padding: 1px 4px; border-radius: var(--r-1); background: var(--fill); color: var(--text); }
 .or-design-text { min-height: 160px; margin-top: var(--s-4); color: var(--text-2); font-size: 13px; border-top: 1px dashed var(--card-line) !important; }
 .or-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--card-line); }
 .or-foot > .select { max-width: 260px; }
 .or-foot .spacer { flex: 1 1 0; }
-.or-foot .switch { font-size: 12.5px; }
+.or-foot .switch { font-size: 13px; }
 .or-warnings { display: flex; flex-direction: column; gap: 4px; padding: 0 16px 12px; }
 .or-warnings p { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 10px; font-size: 12px; line-height: 16px; color: var(--warning); background: var(--warning-soft); border-radius: var(--r-2); }
 .or-warnings p > span { flex: 1 1 auto; min-width: 0; }
@@ -294,7 +294,7 @@
 .or-warnings svg { flex: none; }
 
 .or-preview { gap: 12px; padding: 16px; }
-.or-preview dl, .or-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 12.5px; line-height: 18px; }
+.or-preview dl, .or-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 13px; line-height: 18px; }
 .or-preview dt, .or-facts dt { color: var(--text-3); }
 .or-preview dd, .or-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .or-preview-warn { margin: 0; padding: 6px 10px; font-size: 12px; color: var(--warning); background: var(--warning-soft); border-radius: var(--r-2); }
@@ -303,7 +303,7 @@
 
 .or-files { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; min-height: 48px; background: var(--card); border: 1px solid var(--card-line); border-radius: var(--r-3); box-shadow: var(--card-shadow); }
 .or-files-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
-.or-files-head .btn.sm { height: 30px; padding: 0 12px; gap: 6px; font-size: 12.5px; }
+.or-files-head .btn.sm { height: 30px; padding: 0 12px; gap: 6px; font-size: 13px; }
 .or-files-head > svg { color: var(--text-3); }
 .or-files-head b { font-size: 13px; }
 .or-files-head .spacer { flex: 1 1 0; }
@@ -346,7 +346,7 @@
 .or-contact span { font-size: 12px; line-height: 17px; color: var(--text-2); overflow-wrap: anywhere; }
 .or-purposes { display: flex; flex-wrap: wrap; gap: 4px; }
 .or-test { display: flex; flex-wrap: wrap; gap: 6px; }
-.or-test .or-input { height: 32px; padding: 0 10px; font-size: 12.5px; }
+.or-test .or-input { height: 32px; padding: 0 10px; font-size: 13px; }
 .or-test .btn { flex: none; }
 .or-test .btn.sending {
   opacity: 1 !important;
@@ -360,7 +360,7 @@
 }
 /* a send-test result (ok or the real server error) wraps rather than overflowing the card — errors can run long */
 .or-test .or-chip { gap: 5px; white-space: normal; height: auto; min-height: 22px; line-height: 1.4; max-width: 100%; }
-.or-right .switch { font-size: 12.5px; line-height: 18px; }
+.or-right .switch { font-size: 13px; line-height: 18px; }
 .or-checks { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .or-checks li { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: var(--r-2); }
 .or-checks li > svg { flex: none; margin-top: 2px; }
@@ -370,7 +370,7 @@
 .or-checks li.bad { background: var(--danger-soft); }
 .or-checks li span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .or-checks b { font-size: 12px; line-height: 17px; font-weight: 600; }
-.or-checks small { font-size: 11.5px; line-height: 16px; color: var(--text-2); overflow-wrap: anywhere; }
+.or-checks small { font-size: 12px; line-height: 16px; color: var(--text-2); overflow-wrap: anywhere; }
 
 /* ---------------------------------------------------------------- dialogs */
 .or-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -389,7 +389,7 @@
 .or-when input[type=radio] { margin: 3px 0 0; accent-color: var(--sel, var(--ink)); }
 .or-when label > span { display: flex; flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px; }
 .or-when b { font-size: 13px; }
-.or-when small { font-size: 11.5px; line-height: 16px; color: var(--text-2); }
+.or-when small { font-size: 12px; line-height: 16px; color: var(--text-2); }
 .or-at { width: 100%; }
 
 /* narrow windows (down to the app's 900 px minimum): three narrower columns; stacking the sending column under the
@@ -424,7 +424,7 @@
 .or-fu-row { display: flex; align-items: flex-end; gap: 12px; }
 .or-fu-row .field { flex: 0 1 260px; }
 .or-fu-row .select { width: 100%; }
-.or-fu-count { padding-bottom: 8px; font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.or-fu-count { padding-bottom: 8px; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .or-fu-count b { color: var(--text); }
 .or-tpl-list { display: flex; flex-direction: column; gap: 6px; }
 .or-tpl { align-items: center; cursor: default; }
@@ -482,14 +482,14 @@
 
 /* Sources: the story in full before it is added, PDF / Word like Editorial, every source readable whole */
 .or-story { display: flex; flex-direction: column; gap: 8px; }
-.or-story-scroll { max-height: 300px; overflow-y: auto; padding: 10px 12px; background: var(--card); border-radius: var(--r-2); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent); font-size: 12.5px; line-height: 1.55; }
-.or-story-scroll b { display: block; margin-bottom: 6px; font-size: 13.5px; line-height: 1.35; }
+.or-story-scroll { max-height: 300px; overflow-y: auto; padding: 10px 12px; background: var(--card); border-radius: var(--r-2); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent); font-size: 13px; line-height: 1.55; }
+.or-story-scroll b { display: block; margin-bottom: 6px; font-size: 14px; line-height: 1.35; }
 .or-story-scroll p { margin: 0 0 8px; color: var(--text-2); }
 .or-story-scroll .or-story-deck { color: var(--text); font-weight: 500; }
 .or-drop { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; padding: 18px 12px; color: var(--text-2); text-align: center; background: var(--card); border: 1px dashed color-mix(in srgb, var(--text) 22%, transparent); border-radius: var(--r-3); cursor: pointer; transition: background var(--t-1) var(--ease), border-color var(--t-1) var(--ease); }
 .or-drop:hover:not(:disabled) { background: var(--fill-hover); border-color: color-mix(in srgb, var(--text) 35%, transparent); }
 .or-drop b { color: var(--text); font-size: 13px; }
-.or-drop span { font-size: 11.5px; line-height: 16px; }
+.or-drop span { font-size: 12px; line-height: 16px; }
 .or-src-file { flex: none; }
 .or-src-more { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; height: 24px; padding: 0 8px 0 6px; font: 500 12px/1 var(--font-ui); color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-pill); cursor: pointer; }
 .or-src-more:hover { color: var(--text); background: var(--fill-hover); }
@@ -510,20 +510,20 @@
 .or-view-pdf { display: flex; flex-direction: column; gap: 12px; width: 100%; align-items: center; }
 .or-view-pdf canvas { max-width: 100%; height: auto; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
 .or-view-doc { align-self: stretch; padding: 24px 28px; color: #1f2937; background: #fff; border-radius: var(--r-2); font-size: 14px; line-height: 1.6; box-shadow: 0 0 0 1px var(--card-line); }
-.or-view-text { align-self: stretch; margin: 0; padding: 12px; font: 12.5px/1.5 var(--font-ui); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--fill); border-radius: var(--r-2); }
+.or-view-text { align-self: stretch; margin: 0; padding: 12px; font: 13px/1.5 var(--font-ui); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--fill); border-radius: var(--r-2); }
 .or-attached-note { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--success); }
 
 /* Activity (header): Editorial's panel, Outreach's entries */
 .or-tp-pop { width: min(440px, 92vw); }
 .or-tp-list { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow-y: auto; margin: 0; padding: 4px 8px 10px; list-style: none; }
-.or-tp-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 7px 8px; border-radius: var(--r-2); font-size: 12.5px; line-height: 17px; }
+.or-tp-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 7px 8px; border-radius: var(--r-2); font-size: 13px; line-height: 17px; }
 .or-tp-row:hover { background: var(--fill); }
 .or-tp-mark { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: var(--text-3); background: var(--fill); }
 .or-tp-row.ok .or-tp-mark { color: var(--success); background: var(--success-soft); }
 .or-tp-row.warn .or-tp-mark { color: var(--warning); background: var(--warning-soft); }
 .or-tp-row.error .or-tp-mark { color: var(--danger); background: var(--danger-soft); }
 .or-tp-text { overflow-wrap: anywhere; color: var(--text); }
-.or-tp-row time { color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.or-tp-row time { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ed-tp-count.or-tp-bad { color: var(--danger); background: var(--danger-soft); }
 /* a chip is as wide as its name; only a name longer than the tray wraps, never letter by letter */
 .or-file-chip { width: max-content; max-width: 100%; }
@@ -592,7 +592,7 @@
 .or-autopilot-actions .btn.xs {
   height: 26px;
   padding: 0 10px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   gap: 5px;
 }
@@ -615,14 +615,14 @@
 /* "Only send in a time window" is off (AutopilotCard AnyHourWarning) */
 .or-any-hour {
   display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
-  margin: 6px 0 0; padding: 5px 8px; border-radius: 6px;
+  margin: 6px 0 0; padding: 5px 8px; border-radius: var(--r-ctl);
   font-size: 12px; line-height: 16px;
   color: var(--warning); background: var(--warning-soft);
 }
 .or-any-hour .or-link-btn { color: var(--warning); font-weight: 600; }
 .or-any-hour .or-link-btn:hover { color: var(--text); }
 /* the Send footer's "why it waits" line */
-.or-wait-why { display: block; width: 100%; font-size: 11.5px; color: var(--text-2); }
+.or-wait-why { display: block; width: 100%; font-size: 12px; color: var(--text-2); }
 
 
 /* ---------------------------------------------------------------- Banner row & Autopilot pill */
@@ -734,7 +734,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .or-rs-check-row.good { color: var(--success); }
 .or-rs-check-row.warn { color: var(--warning); }
@@ -829,7 +829,7 @@
   color: var(--warning);
 }
 .or-needs-you-sub {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-2);
 }
 .or-needs-you-empty {
@@ -875,7 +875,7 @@
   background: var(--warning-soft);
   color: var(--warning);
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
 }
 .or-flag-items {
   padding: 8px 10px;
@@ -886,7 +886,7 @@
   background: var(--surface);
 }
 .or-flag-desc {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-2);
   margin: 0;
 }
@@ -903,7 +903,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 11.5px;
+  font-size: 12px;
   cursor: pointer;
   flex: 1;
   min-width: 0;
@@ -922,7 +922,7 @@
   white-space: nowrap;
 }
 .or-flag-sample {
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--warning);
   background: var(--warning-soft);
   padding: 2px 4px;
@@ -1066,7 +1066,7 @@
 @keyframes or-plane-trail { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
 /* specificity above studio.css's .btn:not(.primary):not(.ghost):not(.ai-btn) fill */
 .or-test .btn.or-test-btn.is-sent:not(.primary):not(.ghost), .or-test .btn.or-test-btn.is-sent:not(.primary):not(.ghost):hover, :root[data-theme=dark] .or-test .btn.or-test-btn.is-sent:not(.primary):not(.ghost) { color: #fff; background: var(--success); box-shadow: 0 0 0 1px var(--success), 0 4px 14px -6px var(--success); }
-.or-test-btn.is-sent .or-plane .icon { animation: or-plane-land 420ms cubic-bezier(.16, 1, .3, 1); }
+.or-test-btn.is-sent .or-plane .icon { animation: or-plane-land 420ms var(--spring); }
 @keyframes or-plane-land { 0% { transform: scale(.2) rotate(-30deg); opacity: 0; } 60% { transform: scale(1.25) rotate(0); opacity: 1; } 100% { transform: scale(1); } }
 .or-test .btn.or-test-btn.is-failed:not(.primary):not(.ghost), .or-test .btn.or-test-btn.is-failed:not(.primary):not(.ghost):hover, :root[data-theme=dark] .or-test .btn.or-test-btn.is-failed:not(.primary):not(.ghost) { color: #fff; background: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
 .or-test-btn.is-failed { animation: or-plane-shake 360ms cubic-bezier(.36, .07, .19, .97); }
@@ -1132,7 +1132,7 @@
 .or-hours { display: flex; flex-direction: column; gap: 8px; }
 .or-hours-row, .or-tz-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .or-hours-row > input[type=time] { width: 118px; }
-.or-hours-row > span { color: var(--text-2); font-size: 12.5px; }
+.or-hours-row > span { color: var(--text-2); font-size: 13px; }
 .or-tz-row select, .or-tz-row input { max-width: 260px; }
 .or-days { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
 .or-plan {
@@ -1140,11 +1140,11 @@
   padding: 10px 12px; border-radius: 10px;
   background: var(--fill); border: 1px solid var(--line);
 }
-.or-plan-ic { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--text-2); background: var(--surface); }
+.or-plan-ic { display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--r-ctl); color: var(--text-2); background: var(--surface); }
 .or-plan-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .or-plan-line { margin: 2px 0 0; font-size: 13px; line-height: 19px; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
 .or-plan-warn {
-  display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 5px 8px; border-radius: 6px;
+  display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 5px 8px; border-radius: var(--r-ctl);
   font-size: 12px; line-height: 17px; color: var(--warning); background: var(--warning-soft);
 }
 .or-plan-warn svg { flex: none; margin-top: 2px; }
@@ -1164,14 +1164,14 @@
 /* the 64 px number-field width squeezed the Exceptions textarea into a sliver; it takes the row */
 .or-adv-ctl textarea.input { width: 100%; min-height: 64px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; line-height: 1.5; resize: vertical; }
 .or-adv-why { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-2); }
-.or-sending-foot { margin: 0; font-size: 11.5px; }
+.or-sending-foot { margin: 0; font-size: 12px; }
 @media (max-width: 700px) {
   .or-pace-grid { grid-template-columns: minmax(0, 1fr); }
   .or-days { margin-left: 0; }
 }
 
 /* Sender dialog: the pace is shown, edited in Sending settings */
-.or-pace-link { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--fill); font-size: 12.5px; color: var(--text-2); }
+.or-pace-link { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--fill); font-size: 13px; color: var(--text-2); }
 .or-pace-link > span { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
 .or-pace-link .or-link-btn { margin-left: auto; }
 .or-adv-label { font-size: 13px; font-weight: 500; color: var(--text); }
@@ -1245,7 +1245,7 @@
 .or-aud[open] .or-aud-chev { transform: rotate(90deg); }
 .or-aud-k { flex: none; font-weight: 600; color: var(--text); }
 .or-aud-v { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
-.or-aud-badge { flex: none; padding: 2px 7px; font: 600 10.5px/14px var(--ui); color: var(--text-2); background: var(--raised); border-radius: var(--r-pill, 999px); box-shadow: var(--raised-shadow); font-variant-numeric: tabular-nums; }
+.or-aud-badge { flex: none; padding: 2px 7px; font: 600 11px/14px var(--ui); color: var(--text-2); background: var(--raised); border-radius: var(--r-pill, 999px); box-shadow: var(--raised-shadow); font-variant-numeric: tabular-nums; }
 .or-aud-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 8px 8px; }
 .or-aud-body .select { width: 100%; }
 /* the four check counts as a 2 × 2 of filter chips; the dots between them were only there for a wrapped line */
@@ -1275,16 +1275,16 @@
 :root .or-aud, :root[data-theme] .or-aud { background: none; border-radius: 0; border-top: 1px solid var(--line-2); padding-top: 4px; }
 :root .or-aud > summary { min-height: 30px; padding: 0 2px; border-radius: var(--r-1); }
 :root .or-aud > summary:hover { background: none; color: var(--text); }
-:root .or-aud-k { font: 700 10.5px/14px var(--ui); letter-spacing: var(--track-kicker, .09em); text-transform: uppercase; color: var(--text-3); }
+:root .or-aud-k { font: 700 11px/14px var(--ui); letter-spacing: var(--track-kicker, .09em); text-transform: uppercase; color: var(--text-3); }
 :root .or-aud-badge { background: none; box-shadow: none; padding: 0; color: var(--text-3); font-weight: 500; }
 :root .or-aud-body { gap: 6px; padding: 2px 0 8px; }
 /* sheet, group and purpose each take the full width, so no choice is cut to "Any purp" */
 :root .or-aud-body .or-pair { display: flex; flex-direction: column; gap: 6px; }
 /* address check: four figures in one well; each filters the list */
 .or-check-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px; background: var(--fill); border-radius: var(--r-2); }
-.or-check-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; padding: 6px 2px 5px; color: var(--text-2); background: none; border: 0; border-radius: 6px; cursor: pointer; transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease); }
+.or-check-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; padding: 6px 2px 5px; color: var(--text-2); background: none; border: 0; border-radius: var(--r-ctl); cursor: pointer; transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease); }
 .or-check-cell b { font: 700 14px/18px var(--ui); color: var(--text); font-variant-numeric: tabular-nums; }
-.or-check-cell span { font: 500 10.5px/13px var(--ui); color: var(--text-3); white-space: nowrap; }
+.or-check-cell span { font: 500 11px/13px var(--ui); color: var(--text-3); white-space: nowrap; }
 .or-check-cell.is-zero b { color: var(--text-3); font-weight: 600; }
 .or-check-cell:hover:not(.on) { background: var(--fill-hover); }
 .or-check-cell.on { background: var(--raised); box-shadow: var(--raised-shadow); }
@@ -1316,7 +1316,7 @@
   flex: 0 0 auto; width: auto; min-width: 0; height: 36px; padding: 4px; gap: 2px; border: 0; border-radius: 8px; box-sizing: border-box; display: inline-flex; align-items: center; }
 :root:root .or-body .or-toolbar > .seg-ctl > button, :root:root .or-body .or-toolbar > .or-ai-well > .btn {
   flex: 0 0 88.3px !important; width: 88.3px !important; min-width: 0 !important; max-width: none !important; height: 28px !important; min-height: 28px !important;
-  padding: 0 6px !important; gap: 6px; font-size: 13px; font-weight: 500; line-height: 1; border-radius: 6px; justify-content: center !important; box-sizing: border-box !important; }
+  padding: 0 6px !important; gap: 6px; font-size: 13px; font-weight: 500; line-height: 1; border-radius: var(--r-ctl); justify-content: center !important; box-sizing: border-box !important; }
 :root:root .or-body .or-toolbar > .or-ai-well > .btn { border: 0; }
 :root:root .or-body .or-toolbar > .or-ai-well > .btn:not(.ai-btn) { color: var(--text-2); background: transparent; box-shadow: none; }
 :root:root .or-body .or-toolbar > .or-ai-well > .btn:not(.ai-btn):hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
@@ -1369,7 +1369,7 @@
 :root:root .or-body .or-toolbar > .seg-ctl > button.on {
   flex: 0 0 36px !important; width: 36px !important; min-width: 36px !important; max-width: 36px !important; height: 28px !important; min-height: 28px !important;
   padding: 0 !important; gap: 0 !important; justify-content: center !important; }
-:root:root .or-body .or-toolbar > .or-lang-seg > button { font-size: 11.5px; letter-spacing: .02em; }
+:root:root .or-body .or-toolbar > .or-lang-seg > button { font-size: 12px; letter-spacing: .02em; }
 :root:root .or-body .or-toolbar > .or-view-seg .seg-label, :root:root .or-body .or-toolbar > .or-ai-well > .btn > span, :root:root .or-body .or-toolbar > .or-ai-well > .btn .chev { display: none !important; }
 :root:root .or-body .or-toolbar > .or-view-seg svg, :root:root .or-body .or-toolbar > .or-ai-well > .btn > svg { display: block !important; width: 15px; height: 15px; }
 /* the words come back: every option is one 72 × 28 labelled button (fits "Preview"), 13 px text; only Write keeps its
@@ -1409,7 +1409,7 @@
 .or-blocked-row { display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 10px; padding: 8px 10px; border-radius: var(--r-2); background: var(--card); }
 .or-blocked-n { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 36px; }
 .or-blocked-why { display: flex; flex-direction: column; gap: 2px; font-size: 12px; line-height: 17px; color: var(--text); overflow-wrap: anywhere; }
-.or-blocked-why small { font-size: 11.5px; color: var(--text-2); }
+.or-blocked-why small { font-size: 12px; color: var(--text-2); }
 .or-blocked-why code { font-family: inherit; font-weight: 600; }
 
 /* Contact facts: the label column never takes more than a third of the pane, so the values keep room (a long label once

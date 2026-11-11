@@ -125,7 +125,7 @@
 .nw-trend { display: flex; flex-wrap: wrap; gap: 6px 5px; padding: 3px 4px 6px; box-sizing: border-box; }
 .nw-card .nw-trend { padding: 2px 0 0; }
 .nw-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 10px; font: 500 12.5px/1 var(--font-ui); color: var(--text); background: var(--card); border: 1px solid color-mix(in srgb, var(--card-line) 85%, transparent); border-radius: var(--r-pill); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); cursor: pointer; white-space: nowrap; user-select: none;
-  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), transform .12s var(--ease); }
+  transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-1) var(--ease), transform var(--t-hover) var(--ease); }
 :root[data-theme='dark'] .nw-chip { background: var(--card); border-color: rgba(255, 255, 255, 0.08); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
 .nw-chip[lang='bn'] { font-family: 'Hind Siliguri', var(--font-ui); font-size: 13.5px; font-weight: 600; letter-spacing: 0; padding-top: 1px; }
 .nw-chip small { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 5px; margin-left: 1px; font: 600 10.5px/1 var(--font-ui); color: var(--text-3); background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: var(--r-pill); font-variant-numeric: tabular-nums; box-sizing: border-box; transition: background-color var(--t-1) var(--ease), color var(--t-1) var(--ease); }
@@ -147,13 +147,13 @@
 .nw-toolbar { position: relative; display: flex; align-items: center; gap: 8px; flex: none; min-height: 34px; }
 /* the check's progress: a slim track in the gap under the toolbar, so it takes no room and nothing covers it */
 .nw-progress { position: absolute; left: 0; right: 0; bottom: -7px; height: 3px; overflow: hidden; background: color-mix(in srgb, var(--nw-teal) 14%, transparent); border-radius: var(--r-pill); pointer-events: none; }
-.nw-progress > span { display: block; width: max(6%, var(--p)); height: 100%; background: linear-gradient(90deg, #14b8a6, #0e7490); border-radius: inherit; transition: width .35s cubic-bezier(.16, 1, .3, 1); }
+.nw-progress > span { display: block; width: max(6%, var(--p)); height: 100%; background: linear-gradient(90deg, #14b8a6, #0e7490); border-radius: inherit; transition: width .35s var(--spring); }
 :root[data-theme='dark'] .nw-progress > span { background: linear-gradient(90deg, #5eead4, #2dd4bf); }
 .nw-search { position: relative; display: flex; align-items: center; flex: 1 1 auto; max-width: 520px; min-width: 200px; }
 .nw-search > svg { position: absolute; left: 11px; color: var(--text-3); pointer-events: none; }
 .nw-search input[type='search'] { width: 100%; height: 34px; padding: 0 34px; border-radius: var(--r-2); font-size: 13px; }
 .nw-search input::-webkit-search-cancel-button { display: none; }
-.nw-search-x { position: absolute; right: 4px; display: grid; place-items: center; width: 24px; height: 24px; color: var(--text-3); background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.nw-search-x { position: absolute; right: 4px; display: grid; place-items: center; width: 24px; height: 24px; color: var(--text-3); background: none; border: 0; border-radius: var(--r-ctl); cursor: pointer; }
 .nw-search-x:hover { color: var(--text); background: var(--fill-hover); }
 .nw-kbd { position: absolute; right: 8px; display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; font: 600 11px/1 var(--font-ui); color: var(--text-3); background: var(--fill); border-radius: 5px; pointer-events: none; }
 .nw-filter { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 10px 0 8px; font: 600 12.5px/1 var(--font-ui); color: var(--text); background: var(--card); border: 1px solid color-mix(in srgb, var(--card-line) 85%, transparent); border-radius: var(--r-2); box-shadow: var(--card-shadow); cursor: pointer; white-space: nowrap; }
@@ -208,7 +208,7 @@
 :root[data-theme='dark'] .nw-ribbon { color: #042f2e; background: linear-gradient(90deg, #5eead4, #2dd4bf); }
 @keyframes nw-ribbon-in { from { transform: rotate(-45deg) translateY(14px); opacity: 0; } }
 .nw-row.is-new .nw-row-acts { padding-right: 34px; }
-.nw-row.is-arriving { animation: nw-arrive .5s cubic-bezier(.16, 1, .3, 1) both; }
+.nw-row.is-arriving { animation: nw-arrive .5s var(--spring) both; }
 @keyframes nw-arrive { from { opacity: 0; transform: translateY(-4px); } }
 .nw-row-main { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; padding: 12px 12px 13px 16px; text-align: left; color: inherit; background: none; border: 0; border-radius: var(--r-2); cursor: pointer; }
 .nw-row-main:focus-visible { outline: 2px solid var(--nw-teal); outline-offset: -2px; }
@@ -245,10 +245,10 @@
   padding: 0 20px;
   gap: 8px;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 700;
   border-radius: var(--r-2);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 25%, transparent);
-  transition: transform .18s var(--ease), box-shadow .18s var(--ease), background-color .18s var(--ease);
+  transition: transform var(--t-surface) var(--ease), box-shadow var(--t-surface) var(--ease), background-color var(--t-surface) var(--ease);
 }
 .nw-empty .nw-scan-btn:hover {
   transform: translateY(-1.5px);
@@ -261,7 +261,7 @@
 /* ---------------------------------------------------------------- right: cards, as Outreach's inspector */
 .nw-card { flex: none; display: flex; flex-direction: column; gap: 12px; padding: 15px; background: var(--card); border: 1px solid color-mix(in srgb, var(--card-line) 80%, transparent); border-radius: var(--r-3); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
 :root[data-theme='dark'] .nw-card { border-color: rgba(255, 255, 255, 0.07); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }
-.nw-detail { gap: 12px; animation: nw-swap .24s cubic-bezier(.16, 1, .3, 1) both; }
+.nw-detail { gap: 12px; animation: nw-swap .24s var(--spring) both; }
 @keyframes nw-swap { from { opacity: .4; transform: translateY(3px); } }
 .nw-detail-top { display: flex; align-items: center; gap: 8px; min-height: 22px; }
 .nw-detail-src { min-width: 0; padding: 0; font: 600 13px/18px var(--font-ui); background: none; border: 0; cursor: pointer; }
@@ -291,7 +291,7 @@
 .nw-right-foot { flex: none; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: var(--side); border-top: 1px solid var(--card-line); }
 .nw-foot-note { margin: 0; font: 500 12px/17px var(--font-ui); color: var(--text-2); }
 .nw-foot-note b { color: var(--text); font-weight: 600; }
-.nw-go { height: 38px; min-height: 38px; justify-content: center; gap: 8px; font-size: 13.5px; font-weight: 650; border-radius: var(--r-2); }
+.nw-go { height: 38px; min-height: 38px; justify-content: center; gap: 8px; font-size: 13.5px; font-weight: 700; border-radius: var(--r-2); }
 .nw-foot-acts { display: flex; gap: 8px; }
 .nw-foot-acts .btn { flex: 1; height: 32px; justify-content: center; gap: 6px; font-size: 12.5px; }
 
@@ -314,8 +314,8 @@
 @media (max-width: 1100px) { .nw-body { grid-template-columns: var(--nw-lw, clamp(240px, 27vw, 268px)) minmax(0, 1fr); } .nw-right { display: none; } }
 
 /* ---------------------------------------------------------------- toast: the app's, above the status bar, with an Undo */
-.nw-toast { bottom: 44px; cursor: default; animation: nw-toast-in .26s cubic-bezier(.16, 1, .3, 1) both; }
-.nw-toast-undo { margin: -4px -8px -4px 0; padding: 4px 10px; font: 600 13px/1 var(--font-ui); color: inherit; background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.nw-toast { bottom: 44px; cursor: default; animation: nw-toast-in .26s var(--spring) both; }
+.nw-toast-undo { margin: -4px -8px -4px 0; padding: 4px 10px; font: 600 13px/1 var(--font-ui); color: inherit; background: none; border: 0; border-radius: var(--r-ctl); cursor: pointer; }
 .nw-toast-undo:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
 @keyframes nw-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 
@@ -355,10 +355,10 @@
 /* ---------------------------------------------------------------- left column sections fold open and shut */
 .nw-fold-pick { font-weight: 600; color: var(--nw-teal-ink); }
 :root[data-theme='dark'] .nw-fold-pick { color: var(--nw-teal); }
-.nw-fold-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s cubic-bezier(.16, 1, .3, 1); }
+.nw-fold-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s var(--spring); }
 .nw-fold.open .nw-fold-body { grid-template-rows: 1fr; }
 .nw-fold-inner { min-height: 0; overflow: hidden; }
-.nw-fold:not(.open) .nw-fold-inner { opacity: 0; transition: opacity .15s; }
+.nw-fold:not(.open) .nw-fold-inner { opacity: 0; transition: opacity var(--t-state); }
 .nw-fold.open .nw-fold-inner { opacity: 1; transition: opacity .25s .05s; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -416,7 +416,7 @@
 .nw-row.on { background: color-mix(in srgb, var(--nw-teal) 7%, var(--card)); border-color: color-mix(in srgb, var(--nw-teal) 55%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--nw-teal) 55%, transparent), 0 6px 18px -8px color-mix(in srgb, var(--nw-teal) 30%, transparent); }
 :root[data-theme='dark'] .nw-row.on { background: color-mix(in srgb, var(--nw-teal) 8%, var(--card)); border-color: color-mix(in srgb, var(--nw-teal) 50%, transparent); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--nw-teal) 50%, transparent), 0 6px 18px -8px color-mix(in srgb, var(--nw-teal) 24%, transparent); }
 .nw-row.on .nw-hl { color: var(--text); }
-.nw-row { transition: background-color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow 160ms var(--ease), transform 120ms var(--ease); }
+.nw-row { transition: background-color var(--t-1) var(--ease), border-color var(--t-1) var(--ease), box-shadow var(--t-state) var(--ease), transform var(--t-hover) var(--ease); }
 .nw-row:has(.nw-row-main:active) { transform: scale(.995); }
 
 /* before a headline is picked the panel shows the EnergyWatch card: the fold button leads its first row too, centred
@@ -467,7 +467,7 @@
 .nw-kw-chip.is-empty { color: var(--text-3); }
 .nw-kw-chip.on { color: var(--nw-teal-ink); background: var(--nw-teal-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nw-teal) 42%, transparent); }
 :root[data-theme='dark'] .nw-kw-chip.on { color: var(--nw-teal); }
-.nw-kw-pick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 28px; padding: 0 11px; font: 500 12.5px/1 var(--font-ui); color: inherit; background: none; border: 0; border-radius: inherit; cursor: pointer; transition: transform .12s var(--ease); }
+.nw-kw-pick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 28px; padding: 0 11px; font: 500 12.5px/1 var(--font-ui); color: inherit; background: none; border: 0; border-radius: inherit; cursor: pointer; transition: transform var(--t-hover) var(--ease); }
 .nw-kw-pick:active { transform: scale(.97); }
 .nw-kw-pick:focus-visible { outline: 2px solid var(--nw-teal); outline-offset: 1px; }
 .nw-kw-pick > span { overflow: hidden; text-overflow: clip; white-space: nowrap; }

@@ -50,4 +50,14 @@ function isAppUrl(url, allowed) {
   return allowed.some((a) => a && strip(a) === want)
 }
 
-module.exports = { IMAGE_EXT, DRAG_EXT, MAX_IMAGE_FETCH_BYTES, imageFileName, dragFileName, isImageBytes, safeImageFetchOptions, isProjectPath, isAppUrl }
+/** The frame an IPC call came from is the app's own page: the built index.html exactly, or (in development) any page of the dev server's origin. */
+function isAppFrame(url, allowed) {
+  if (isAppUrl(url, allowed)) return true
+  try {
+    const u = new URL(String(url || ''))
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+    return allowed.some((a) => { try { const d = new URL(String(a || '')); return (d.protocol === 'http:' || d.protocol === 'https:') && d.origin === u.origin } catch { return false } })
+  } catch { return false }
+}
+
+module.exports = { IMAGE_EXT, DRAG_EXT, MAX_IMAGE_FETCH_BYTES, imageFileName, dragFileName, isImageBytes, safeImageFetchOptions, isProjectPath, isAppUrl, isAppFrame }

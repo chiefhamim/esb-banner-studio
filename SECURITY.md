@@ -10,9 +10,13 @@ This repository is **public**. Treat every committed byte as world-readable.
   every table the CMS touches** (`Article`, `profiles`, the media buckets, and anything the site reads
   anonymously). Without RLS, an anon key allows reads and writes it should not.
 
-  **NOT VERIFIED — the maintainer must check RLS policies in the Supabase dashboard for every table and
-  bucket the app reads or writes, or rotate the key.** This cannot be verified from this repository without
-  project credentials, and no rotation was performed by the overnight build.
+  **Checked 2026-11-12 against the live project** (Supabase security advisor and `pg_policies`): every table in
+  `public` has RLS on. `Article` is readable by anyone only when `PUBLISHED`; insert, update and the full list
+  need a staff role taken from the JWT's `app_metadata` (which a user cannot edit). The `outreach_*` tables need
+  `outreach_is_staff()`. `profiles` is owner-only. Every other table is closed to the API (deny-all policy, or
+  RLS with no policy). Storage has no object policies, so the anon key cannot write to a bucket; uploads go
+  through the site. One advisor warning is open and is a dashboard setting, not code: **leaked-password
+  protection is off** (Authentication, Password security). Re-run the advisor after any schema change.
 
 - The site's public base URL and Graph API host names. Nothing else that identifies an account.
 
@@ -20,7 +24,8 @@ This repository is **public**. Treat every committed byte as world-readable.
 
 - API keys for AI providers (Gemini, Anthropic, OpenAI, OpenRouter), the Facebook Page access token, the
   esbpowerline.com staff session, SMTP/IMAP app passwords. These live only in the app's own storage: the AI
-  keys, Page token and site session in `localStorage` under `esb-banner-studio/*`; the mail app password
+  keys, Page token and staff session (access and refresh tokens) encrypted by the main process with `safeStorage`
+  in `app-secrets.json` (the staff session since 2026-11-12; an older plain copy in `localStorage` is moved on first start); the mail app password
   encrypted by the main process with `safeStorage` (DPAPI) in the userData folder. The Outreach ledger, event
   log and campaign data stay in userData as well.
 - `.env*` files, `release-*/`, `dist/`, `tools/out/`, `node_modules/`, and bulky artifacts (see `.gitignore`).

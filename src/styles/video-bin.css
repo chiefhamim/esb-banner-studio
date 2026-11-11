@@ -34,7 +34,7 @@
 .vw-bin-proxy.make .vw-bin-proxy-label { flex: 1 1 auto; color: var(--text-3); }
 .vw-bin-proxy .btn.xs.vw-bin-proxy-btn { flex: none; height: 28px; min-height: 28px; margin-left: auto; padding: 0 10px; }
 .vw-bin-bar { position: relative; flex: 1 1 auto; min-width: 32px; max-width: 72px; height: 4px; overflow: hidden; background: var(--fill-active, var(--fill-hover)); border-radius: 2px; }
-.vw-bin-bar > span { position: absolute; inset: 0 auto 0 0; background: var(--text-2); border-radius: 2px; transition: width .2s linear; }
+.vw-bin-bar > span { position: absolute; inset: 0 auto 0 0; background: var(--text-2); border-radius: 2px; transition: width var(--t-surface) linear; }
 .vw-bin-tag { font-size: 11px; line-height: 15px; color: var(--text-3); white-space: nowrap; cursor: default; }
 
 .vw-media-card .btn.xs.vw-bin-use-found, .vw-media-card .btn.xs.vw-relink { height: 28px; min-height: 28px; }
@@ -46,7 +46,7 @@
 
 /* the import mode row and the browser note line up with the rows' thumbnails (each row has 6 px of padding) */
 .vw-bin-import-mode { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; padding: 0 6px; }
-.vw-bin-import-label { font-size: 11.5px; color: var(--text-3); }
+.vw-bin-import-label { font-size: 12px; color: var(--text-3); }
 .vw-bin-content .vw-bin-note { padding: 0 6px; }
 
 @media (prefers-reduced-motion: reduce) { .vw-bin-bar > span { transition: none; } }

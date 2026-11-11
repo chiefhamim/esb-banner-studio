@@ -57,6 +57,24 @@ const APP_URLS = [DEV_URL, pathToFileURL(INDEX_FILE).href]
 const defaultDir = () => path.join(app.getPath('pictures'), 'ESB Banners')
 let win
 
+// Every bridge call must come from the editor window's own top-level page. The preload only runs there today, but this
+// is checked on each call rather than assumed: a frame, a second window or a page the window was somehow steered to
+// (all of which the sandbox and the navigation guard already block) still could not reach the file, mail or secret
+// handlers. Wrapping the two registration functions covers every handler below, including ones added later.
+const trustedSender = (e) => {
+  try {
+    const frame = e.senderFrame
+    return !!frame && !!win && !win.isDestroyed() && e.sender === win.webContents && frame === win.webContents.mainFrame && guard.isAppFrame(frame.url, APP_URLS)
+  } catch { return false }
+}
+const ipcHandle = ipcMain.handle.bind(ipcMain)
+ipcMain.handle = (channel, fn) => ipcHandle(channel, (e, ...args) => {
+  if (!trustedSender(e)) throw new Error('This call is not allowed from here')
+  return fn(e, ...args)
+})
+const ipcOn = ipcMain.on.bind(ipcMain)
+ipcMain.on = (channel, fn) => ipcOn(channel, (e, ...args) => { if (trustedSender(e)) fn(e, ...args) })
+
 const fsScope = new FsScope()
 
 let outreachEvents = null

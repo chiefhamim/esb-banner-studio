@@ -26,7 +26,7 @@
   position: relative; display: grid; flex: none; place-items: center;
   width: 36px; height: 36px; padding: 0; color: var(--text-2);
   background: transparent; border: 0; border-radius: var(--r-2); cursor: pointer;
-  transition: background-color 120ms var(--col-ease), color 120ms var(--col-ease), transform 120ms var(--col-ease);
+  transition: background-color var(--t-hover) var(--col-ease), color var(--t-hover) var(--col-ease), transform var(--t-hover) var(--col-ease);
 }
 .col-rail-btn:hover:not(:disabled) { color: var(--text); background: var(--fill-hover); }
 .col-rail-btn:active:not(:disabled) { transform: scale(.97); }
@@ -61,7 +61,7 @@
 .col-fly.right { transform-origin: right top; }
 @keyframes col-fly-in { from { opacity: 0; transform: translateX(var(--fly-dx, -4px)) scale(.98); } }
 .col-fly.right { --fly-dx: 4px; }
-.col-fly-h { display: flex; flex: none; align-items: center; gap: 8px; padding: 11px 14px 9px; font: 600 12.5px/1.2 var(--ui); color: var(--text-2); border-bottom: 1px solid var(--line-2); }
+.col-fly-h { display: flex; flex: none; align-items: center; gap: 8px; padding: 11px 14px 9px; font: 600 13px/1.2 var(--ui); color: var(--text-2); border-bottom: 1px solid var(--line-2); }
 .col-fly-h > svg { color: var(--text-3); }
 .col-fly-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px; }
 @media (prefers-reduced-motion: reduce) { .col-fly { animation: none; } }

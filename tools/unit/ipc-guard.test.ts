@@ -58,3 +58,18 @@ describe('isAppUrl', () => {
     expect(g.isAppUrl('https://evil.example/', allowed)).toBe(false)
   })
 })
+
+describe('isAppFrame', () => {
+  const file = 'file:///C:/app/dist/index.html'
+  it('accepts the built page, with a hash or query', () => {
+    expect(g.isAppFrame(file + '#home', [undefined, file])).toBe(true)
+  })
+  it('accepts any page of the dev server origin, and only that origin', () => {
+    expect(g.isAppFrame('http://localhost:5173/', ['http://localhost:5173', file])).toBe(true)
+    expect(g.isAppFrame('http://localhost:5174/', ['http://localhost:5173', file])).toBe(false)
+    expect(g.isAppFrame('https://evil.example/', [undefined, file])).toBe(false)
+  })
+  it('rejects other files, blank and data pages', () => {
+    for (const u of ['file:///C:/app/dist/other.html', 'about:blank', 'about:srcdoc', 'data:text/html,x', '', null]) expect(g.isAppFrame(u as string, [undefined, file])).toBe(false)
+  })
+})

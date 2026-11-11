@@ -36,9 +36,9 @@
   background: var(--h-glass); border: .5px solid var(--h-hair); border-radius: 18px; box-shadow: var(--h-shine), var(--h-shadow);
   -webkit-backdrop-filter: blur(26px) saturate(1.8); backdrop-filter: blur(26px) saturate(1.8);
 }
-.home-shell .format-card, .home-shell .recent-card { cursor: pointer; text-align: left; transition: transform .45s var(--h-spring), box-shadow .3s ease, background .25s ease; }
+.home-shell .format-card, .home-shell .recent-card { cursor: pointer; text-align: left; transition: transform .45s var(--h-spring), box-shadow .3s var(--ease), background .25s var(--ease); }
 .home-shell .format-card:hover, .home-shell .recent-card:hover { transform: translateY(-3px); background: var(--h-glass-hi); box-shadow: var(--h-shine), var(--h-shadow-up); }
-.home-shell .format-card:active, .home-shell .recent-card:active { transform: translateY(-1px) scale(.985); transition-duration: .12s; }
+.home-shell .format-card:active, .home-shell .recent-card:active { transform: translateY(-1px) scale(.985); transition-duration: var(--t-hover); }
 .home-shell .format-card:focus-visible, .home-shell .recent-card:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 .home-shell .format-card { flex-direction: row; align-items: flex-start; gap: 14px; padding: 16px; }
 .home-shell .format-glyph { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: color-mix(in srgb, var(--text) 5%, transparent); box-shadow: inset 0 0 0 .5px var(--h-hair); }
@@ -47,13 +47,13 @@
 .home-shell .format-body { min-width: 0; flex: 1; }
 .home-shell .format-head { gap: 8px; }
 .home-shell .format-name { font-size: 14px; font-weight: 600; letter-spacing: -.012em; }
-.home-shell .format-tag { flex: none; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 999px; padding: 1px 8px; font-size: 10.5px; }
-.home-shell .format-dims { margin-top: 3px; font-size: 11.5px; color: var(--text-2); font-weight: 450; }
-.home-shell .format-note { margin-top: 6px; font-size: 11.5px; line-height: 16px; color: var(--text-3); }
+.home-shell .format-tag { flex: none; background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: var(--r-pill); padding: 1px 8px; font-size: 11px; }
+.home-shell .format-dims { margin-top: 3px; font-size: 12px; color: var(--text-2); font-weight: 500; }
+.home-shell .format-note { margin-top: 6px; font-size: 12px; line-height: 16px; color: var(--text-3); }
 .home-shell .recent-card { padding: 14px 16px; gap: 14px; }
 .home-shell .recent-icon { width: 40px; height: 40px; border-radius: 12px; background: color-mix(in srgb, var(--text) 5%, transparent); }
-.home-shell .recent-name { font-size: 13.5px; letter-spacing: -.01em; }
-.home-shell .empty-notice { padding: 22px; text-align: center; font-size: 12.5px; border-style: solid; }
+.home-shell .recent-name { font-size: 14px; letter-spacing: -.01em; }
+.home-shell .empty-notice { padding: 22px; text-align: center; font-size: 13px; border-style: solid; }
 /* alert + footer */
 .home-shell .home-footer { justify-content: center; gap: 12px; border: 0; padding-top: 4px; }
 /* arrival: sections and cards rise in one after another */
@@ -97,11 +97,11 @@
   background: var(--h-glass-hi); border: .5px solid var(--h-hair); box-shadow: var(--h-shine), var(--h-shadow);
   -webkit-backdrop-filter: blur(24px) saturate(1.8); backdrop-filter: blur(24px) saturate(1.8);
 }
-.home-shell .home-topbar .ws-home-btn { width: 36px; height: 36px; border-radius: 999px; }
-.home-shell .home-topbar .ws-switch { height: 36px; padding: 3px; border-radius: 999px; }
-.home-shell .home-topbar .ws-switch .ws-btn { height: 30px; padding: 0 14px; border-radius: 999px; font-weight: 550; }
-.home-shell .home-head-actions { height: 36px; padding: 3px; gap: 2px; border-radius: 999px; }
-.home-shell .home-head-btn { height: 30px; min-width: 30px; border-radius: 999px; background: transparent; }
+.home-shell .home-topbar .ws-home-btn { width: 36px; height: 36px; border-radius: var(--r-pill); }
+.home-shell .home-topbar .ws-switch { height: 36px; padding: 3px; border-radius: var(--r-pill); }
+.home-shell .home-topbar .ws-switch .ws-btn { height: 30px; padding: 0 14px; border-radius: var(--r-pill); font-weight: 600; }
+.home-shell .home-head-actions { height: 36px; padding: 3px; gap: 2px; border-radius: var(--r-pill); }
+.home-shell .home-head-btn { height: 30px; min-width: 30px; border-radius: var(--r-pill); background: transparent; }
 .home-shell .home-head-btn:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
 .home-shell .home-head-btn.quit { padding: 0 12px 0 10px; }
 /* ---- less glass, more newsroom: solid surfaces, tighter corners, ESB's own stripe. Later rules win over the glassy ones above. ---- */
@@ -112,7 +112,7 @@
 .home-shell .home-topbar .ws-home-btn { width: 32px; height: 32px; border: 0; border-radius: var(--r-2); }
 .home-shell .home-topbar .ws-home-btn.on { background: var(--raised); box-shadow: var(--raised-shadow); }
 .home-shell .home-topbar .ws-switch { height: 32px; padding: 2px; border-radius: 8px; }
-.home-shell .home-topbar .ws-switch .ws-btn { height: 28px; padding: 0 10px; border-radius: 6px; font-weight: 500; }
+.home-shell .home-topbar .ws-switch .ws-btn { height: 28px; padding: 0 10px; border-radius: var(--r-ctl); font-weight: 500; }
 .home-shell .home-head-actions { height: auto; padding: 0; gap: 6px; background: none; }
 .home-shell .home-head-btn { height: 32px; min-width: 32px; border-radius: 8px; background: var(--fill); }
 .home-shell .home-head-btn:hover { background: var(--fill-hover); }
@@ -121,11 +121,11 @@
   -webkit-backdrop-filter: none; backdrop-filter: none;
 }
 :root[data-theme=dark] .home-shell .format-card, :root[data-theme=dark] .home-shell .recent-card, :root[data-theme=dark] .home-shell .empty-notice { background: color-mix(in srgb, #181614 82%, transparent); }
-.home-shell .format-card, .home-shell .recent-card { transition: border-color .15s ease, box-shadow .2s ease, transform .15s ease; }
+.home-shell .format-card, .home-shell .recent-card { transition: border-color var(--t-state) var(--ease), box-shadow var(--t-surface) var(--ease), transform var(--t-state) var(--ease); }
 .home-shell .format-card:hover, .home-shell .recent-card:hover { transform: translateY(-1px); background: var(--card, #fff); border-color: var(--ink); box-shadow: var(--h-shadow-up); }
 :root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: #1b1b26; border-color: rgba(255, 255, 255, .5); }
 .home-shell .format-card:active, .home-shell .recent-card:active { transform: none; }
-.home-shell .format-glyph, .home-shell .recent-icon { border-radius: 6px; background: var(--fill); box-shadow: none; }
+.home-shell .format-glyph, .home-shell .recent-icon { border-radius: var(--r-ctl); background: var(--fill); box-shadow: none; }
 .home-shell .format-glyph i { border-radius: 2px; box-shadow: none; }
 .home-shell .format-card:hover .format-glyph i { transform: none; }
 .home-shell .format-tag { border-radius: 4px; padding: 1px 6px; }
@@ -139,7 +139,7 @@
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 14px; row-gap: 2px; align-items: center; text-align: left;
   padding: clamp(12px, 2.2vh, 18px) 16px; cursor: pointer; color: var(--text);
   background: color-mix(in srgb, var(--card, #fff) 92%, transparent); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: var(--h-shadow);
-  transition: border-color .15s ease, box-shadow .2s ease, transform .15s ease, background .15s ease;
+  transition: border-color var(--t-state) var(--ease), box-shadow var(--t-surface) var(--ease), transform var(--t-state) var(--ease), background var(--t-state) var(--ease);
   animation: home-rise .7s var(--h-spring) both; animation-delay: calc(.1s + .05s * var(--i, 0));
 }
 :root[data-theme=dark] .home-shell .launch-tile { background: color-mix(in srgb, #181614 82%, transparent); }
@@ -149,7 +149,7 @@
 .home-shell .launch-tile:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 .home-shell .launch-icon { grid-row: 1 / 3; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 8px; background: var(--ink); color: var(--on-ink, #fff); }
 .home-shell .launch-name { font-size: 15px; font-weight: 600; letter-spacing: -.01em; align-self: end; }
-.home-shell .launch-note { font-size: 11.5px; line-height: 15px; color: var(--text-3); align-self: start; }
+.home-shell .launch-note { font-size: 12px; line-height: 15px; color: var(--text-3); align-self: start; }
 .home-shell .launch-tile:nth-child(1) { --i: 0; }
 .home-shell .launch-tile:nth-child(2) { --i: 1; }
 .home-shell .launch-tile:nth-child(3) { --i: 2; }
@@ -178,22 +178,22 @@
 .home-shell .launch-tile { grid-template-columns: auto 1fr auto; padding: clamp(14px, 2.4vh, 20px) 16px 14px; border-radius: 12px; position: relative; overflow: hidden; }
 .home-shell .launch-tile::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--ink); transform: scaleX(0); transform-origin: left; transition: transform .35s var(--h-spring); }
 .home-shell .launch-tile:hover::before, .home-shell .launch-tile:focus-visible::before { transform: scaleX(1); }
-.home-shell .launch-icon { width: 42px; height: 42px; border-radius: 10px; background: color-mix(in srgb, var(--ink) 9%, transparent); color: var(--ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent); transition: background .2s ease, color .2s ease, box-shadow .2s ease; }
+.home-shell .launch-icon { width: 42px; height: 42px; border-radius: 10px; background: color-mix(in srgb, var(--ink) 9%, transparent); color: var(--ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent); transition: background var(--t-surface) var(--ease), color var(--t-surface) var(--ease), box-shadow var(--t-surface) var(--ease); }
 :root[data-theme=dark] .home-shell .launch-icon { background: rgba(255, 255, 255, .08); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
 .home-shell .launch-tile:hover .launch-icon { background: var(--ink); color: var(--on-ink, #fff); box-shadow: none; }
 :root[data-theme=dark] .home-shell .launch-tile:hover .launch-icon { background: #fff; color: #111; }
-.home-shell .launch-name { font-size: 15px; font-weight: 650; }
+.home-shell .launch-name { font-size: 15px; font-weight: 700; }
 .home-shell .launch-tile:hover { transform: translateY(-2px); }
 .home-shell .home-footer { align-items: center; gap: 12px; font: 500 12px/1 var(--ui); letter-spacing: .01em; color: var(--text-2); }
 .home-shell .home-footer span + span::before { content: ''; display: inline-block; width: 3px; height: 3px; margin: 0 12px 2px 0; border-radius: 50%; background: currentColor; opacity: .5; vertical-align: middle; }
-.home-shell .home-version { font: 600 11px/1 var(--mono); letter-spacing: .04em; padding: 4px 8px; border-radius: 6px; color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.home-shell .home-version { font: 600 11px/1 var(--mono); letter-spacing: .04em; padding: 4px 8px; border-radius: var(--r-ctl); color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
 .home-shell .home-footer .heart { color: #ff3b52; font-size: 13px; }
-.home-shell .home-credit { color: var(--text); font-weight: 650; text-decoration: none; background: linear-gradient(currentColor, currentColor) 0 100% / 0 1.5px no-repeat; transition: background-size .3s var(--h-spring), color .2s ease; padding-bottom: 2px; }
+.home-shell .home-credit { color: var(--text); font-weight: 700; text-decoration: none; background: linear-gradient(currentColor, currentColor) 0 100% / 0 1.5px no-repeat; transition: background-size .3s var(--h-spring), color var(--t-surface) var(--ease); padding-bottom: 2px; }
 .home-shell .home-credit:hover, .home-shell .home-credit:focus-visible { background-size: 100% 1.5px; outline: none; }
 .home-shell .launch-tile { grid-template-columns: auto 1fr; }
 /* ---- quiet hover: the card brightens and its outline firms up. Nothing moves, nothing draws, nothing slides. ---- */
 .home-shell .launch-tile::before { display: none; }
-.home-shell .launch-tile, .home-shell .format-card, .home-shell .recent-card { transition: transform .2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.home-shell .launch-tile, .home-shell .format-card, .home-shell .recent-card { transition: transform var(--t-surface) cubic-bezier(0.2, 0.8, 0.2, 1), background-color var(--t-surface) var(--ease), border-color var(--t-surface) var(--ease), box-shadow var(--t-surface) var(--ease); }
 .home-shell .launch-tile:hover, .home-shell .format-card:hover, .home-shell .recent-card:hover { transform: none; background: var(--card, #fff); border-color: color-mix(in srgb, var(--text) 38%, transparent); box-shadow: var(--h-shadow); }
 :root[data-theme=dark] .home-shell .launch-tile:hover, :root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: #1d1d2a; border-color: rgba(255, 255, 255, .34); }
 .home-shell .launch-tile:active, .home-shell .format-card:active, .home-shell .recent-card:active { background: color-mix(in srgb, var(--card, #fff) 80%, var(--text) 4%); }
@@ -214,7 +214,7 @@
 :root[data-theme=dark] .home-shell .launch-tile + .launch-tile { border-left-color: rgba(255, 255, 255, .14); }
 .home-shell .launch-icon { width: auto; height: auto; background: none !important; box-shadow: none !important; border-radius: 0; color: var(--text-2); }
 .home-shell .launch-icon svg { width: 24px; height: 24px; }
-.home-shell .launch-name { margin-top: auto; font-size: 15px; font-weight: 650; line-height: 20px; }
+.home-shell .launch-name { margin-top: auto; font-size: 15px; font-weight: 700; line-height: 20px; }
 .home-shell .launch-note { font-size: 12px; line-height: 16px; }
 .home-shell .launch-tile:hover { background: color-mix(in srgb, var(--text) 5%, transparent) !important; border-color: inherit; box-shadow: none; }
 .home-shell .launch-tile:hover + .launch-tile, .home-shell .launch-tile + .launch-tile:hover { border-left-color: var(--line-2); }
@@ -259,7 +259,7 @@
   text-align: left;
   cursor: pointer;
   position: relative;
-  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+  transition: background-color var(--t-surface) var(--ease), border-color var(--t-surface) var(--ease), box-shadow var(--t-surface) var(--ease);
 }
 .home-shell .launch-tile:first-child {
   border-top-left-radius: 15px !important;
@@ -305,7 +305,7 @@
   background: color-mix(in srgb, var(--text) 7%, transparent) !important;
   color: var(--text) !important;
   box-shadow: none !important;
-  transition: background-color .18s ease, color .18s ease, box-shadow .18s ease;
+  transition: background-color var(--t-surface) var(--ease), color var(--t-surface) var(--ease), box-shadow var(--t-surface) var(--ease);
 }
 .home-shell .launch-icon svg { width: 20px; height: 20px; }
 .home-shell .launch-tile:hover .launch-icon {
@@ -327,7 +327,7 @@
 }
 .home-shell .launch-name {
   font-size: 14px !important;
-  font-weight: 650 !important;
+  font-weight: 700 !important;
   line-height: 18px !important;
   color: var(--text) !important;
   white-space: nowrap !important;
@@ -365,7 +365,7 @@
 .home-shell .recent-card { padding: 0 14px; }
 .home-shell .empty-notice { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 16px; text-align: center; color: var(--text-3); border-style: dashed; }
 .home-shell .empty-notice span { font-size: 13px; font-weight: 600; color: var(--text-2); margin-top: 6px; }
-.home-shell .empty-notice small { font-size: 11.5px; line-height: 16px; }
+.home-shell .empty-notice small { font-size: 12px; line-height: 16px; }
 /* ---- elevated empty state for recents ---- */
 .home-shell .home-empty-recents {
   flex: 1;
@@ -397,8 +397,8 @@
   color: var(--text-2);
 }
 .home-shell .empty-recents-title {
-  font-size: 13.5px;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--text);
   line-height: 17px;
   margin: 0 0 2px 0;
@@ -406,7 +406,7 @@
   flex: none;
 }
 .home-shell .empty-recents-sub {
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 15px;
   color: var(--text-3);
   margin: 0 0 10px 0;
@@ -430,7 +430,7 @@
   height: 28px;
   padding: 0 12px;
   border-radius: 8px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   border: 1px solid var(--line-2);
@@ -439,12 +439,12 @@
   cursor: pointer;
   white-space: nowrap;
   flex: none;
-  transition: transform .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+  transition: transform var(--t-surface) var(--ease), background-color var(--t-surface) var(--ease), border-color var(--t-surface) var(--ease), box-shadow var(--t-surface) var(--ease);
 }
 .home-shell .empty-recents-btn span {
   margin: 0 !important;
   padding: 0 !important;
-  font-size: 11.5px !important;
+  font-size: 12px !important;
   font-weight: 600 !important;
   line-height: 1 !important;
   color: inherit !important;
@@ -527,8 +527,8 @@
 .home-shell .format-card:hover, .home-shell .recent-card:hover { background: rgba(255, 255, 255, .66); border-color: rgba(255, 255, 255, .9); }
 :root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .32); }
 .home-shell .home-head-btn { background: transparent; }
-.home-shell .home-head-actions { border-radius: 999px; }
-.home-shell .home-version { border-radius: 999px; padding: 4px 10px; background: rgba(255, 255, 255, .5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.home-shell .home-head-actions { border-radius: var(--r-pill); }
+.home-shell .home-version { border-radius: var(--r-pill); padding: 4px 10px; background: rgba(255, 255, 255, .5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 :root[data-theme=dark] .home-shell .home-version { background: rgba(255, 255, 255, .1); }
 /* ---- calmer glass: less blur and see-through, softer edge light ---- */
 .home-bg::after { background: color-mix(in srgb, var(--bg-0) 14%, transparent); }
@@ -546,9 +546,9 @@
 .home-shell .format-card:hover, .home-shell .recent-card:hover { background: rgba(255, 255, 255, .78); }
 :root[data-theme=dark] .home-shell .format-card:hover, :root[data-theme=dark] .home-shell .recent-card:hover { background: rgba(255, 255, 255, .13); }
 /* ---- one typeface for both blocks: the UI sans, no mono labels or sizes ---- */
-.home-shell .section-title { font: 600 12.5px/16px var(--ui); letter-spacing: 0; text-transform: none; color: var(--text-2); }
-.home-shell .format-dims { font: 450 11.5px/15px var(--ui); font-variant-numeric: tabular-nums; color: var(--text-3); }
-.home-shell .format-tag { font: 500 10.5px/14px var(--ui); font-variant-numeric: tabular-nums; }
+.home-shell .section-title { font: 600 13px/16px var(--ui); letter-spacing: 0; text-transform: none; color: var(--text-2); }
+.home-shell .format-dims { font: 500 12px/15px var(--ui); font-variant-numeric: tabular-nums; color: var(--text-3); }
+.home-shell .format-tag { font: 500 11px/14px var(--ui); font-variant-numeric: tabular-nums; }
 /* ---- very light frost ---- */
 .home-bg::after { background: color-mix(in srgb, var(--bg-0) 10%, transparent); }
 :root[data-theme=dark] .home-bg::after { background: color-mix(in srgb, var(--bg-0) 26%, transparent); }
@@ -575,7 +575,7 @@
   transform: translateY(0) scale(0.985);
 }
 .home-shell .format-card .format-glyph i {
-  transition: transform .22s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow .22s ease;
+  transition: transform .22s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow .22s var(--ease);
 }
 .home-shell .format-card:hover .format-glyph i {
   transform: scale(1.08);
@@ -640,14 +640,14 @@
   max-width: 38px;
   padding: 3px;
   gap: 0;
-  border-radius: 999px !important;
+  border-radius: var(--r-pill) !important;
   opacity: .9;
   background: color-mix(in srgb, var(--card, #fff) 88%, transparent);
   border: 1px solid var(--line-2);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);
   backdrop-filter: blur(20px) saturate(1.6);
   box-shadow: 0 2px 10px rgba(40, 30, 20, .08), inset 0 1px 0 rgba(255, 255, 255, .7);
-  transition: width .36s cubic-bezier(.22, 1, .36, 1), max-width .36s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, box-shadow .25s ease, gap .25s ease, padding .25s ease;
+  transition: width .36s cubic-bezier(.22, 1, .36, 1), max-width .36s cubic-bezier(.22, 1, .36, 1), opacity var(--t-surface) var(--ease), box-shadow .25s var(--ease), gap .25s var(--ease), padding .25s var(--ease);
 }
 :root[data-theme=dark] .home-shell .home-head-actions {
   background: color-mix(in srgb, #161626 84%, transparent);
@@ -690,7 +690,7 @@
   pointer-events: none;
   transform: scale(.8);
   flex: none;
-  transition: max-width .32s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, transform .28s ease, padding .2s ease;
+  transition: max-width .32s cubic-bezier(.22, 1, .36, 1), opacity var(--t-surface) var(--ease), transform .28s var(--ease), padding var(--t-surface) var(--ease);
 }
 .home-shell .home-topbar:hover .home-head-btn:not(.home-user-btn),
 .home-shell .home-head-actions:hover .home-head-btn:not(.home-user-btn),
@@ -718,7 +718,7 @@
   opacity: 0;
   overflow: hidden;
   flex: none;
-  transition: max-width .3s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, margin .2s ease;
+  transition: max-width .3s cubic-bezier(.22, 1, .36, 1), opacity var(--t-surface) var(--ease), margin var(--t-surface) var(--ease);
 }
 .home-shell .home-topbar:hover .home-head-sep,
 .home-shell .home-head-actions:hover .home-head-sep,
@@ -733,7 +733,7 @@
 
 .home-shell .home-head-btn {
   height: 30px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -744,7 +744,7 @@
   font-size: 12px;
   font-weight: 500;
   flex: none;
-  transition: background-color .15s ease, color .15s ease;
+  transition: background-color var(--t-state) var(--ease), color var(--t-state) var(--ease);
 }
 .home-shell .home-head-btn:hover {
   background: color-mix(in srgb, var(--text) 8%, transparent);
@@ -770,20 +770,20 @@
   padding: 0;
   margin: 0;
   gap: 0;
-  border-radius: 999px !important;
+  border-radius: var(--r-pill) !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 0;
   background: transparent;
   color: var(--text);
-  font-weight: 550;
+  font-weight: 600;
   cursor: pointer;
   flex: none;
   opacity: 1 !important;
   transform: none !important;
   pointer-events: auto !important;
-  transition: width .32s cubic-bezier(.22, 1, .36, 1), padding .32s cubic-bezier(.22, 1, .36, 1), gap .32s cubic-bezier(.22, 1, .36, 1), background-color .15s ease;
+  transition: width .32s cubic-bezier(.22, 1, .36, 1), padding .32s cubic-bezier(.22, 1, .36, 1), gap .32s cubic-bezier(.22, 1, .36, 1), background-color var(--t-state) var(--ease);
 }
 .home-shell .home-topbar:hover .home-user-btn,
 .home-shell .home-head-actions:hover .home-user-btn,
@@ -806,7 +806,7 @@
 .home-shell .home-user-btn .ed-avatar {
   width: 24px;
   height: 24px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   border-radius: 50% !important;
   flex: none;
@@ -823,7 +823,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   margin: 0;
-  transition: max-width .32s cubic-bezier(.22, 1, .36, 1), opacity .2s ease, margin .32s ease;
+  transition: max-width .32s cubic-bezier(.22, 1, .36, 1), opacity var(--t-surface) var(--ease), margin .32s var(--ease);
 }
 .home-shell .home-topbar:hover .home-user-name,
 .home-shell .home-topbar:hover .home-user-label,
@@ -842,7 +842,7 @@
   max-width: 0;
   width: 0;
   flex: none;
-  transition: opacity .2s ease, width .2s ease, max-width .2s ease, transform .15s ease;
+  transition: opacity var(--t-surface) var(--ease), width var(--t-surface) var(--ease), max-width var(--t-surface) var(--ease), transform var(--t-state) var(--ease);
 }
 .home-shell .home-topbar:hover .home-user-chev,
 .home-shell .home-head-actions:hover .home-user-chev,
@@ -1089,7 +1089,7 @@
 .home-shell .launch-tile:nth-child(3):hover .launch-icon svg, .home-shell .launch-tile:nth-child(3):focus-visible .launch-icon svg { stroke: url(#home-ig-2); }
 .home-shell .launch-tile:nth-child(4):hover .launch-icon svg, .home-shell .launch-tile:nth-child(4):focus-visible .launch-icon svg { stroke: url(#home-ig-3); }
 .home-shell .launch-tile:nth-child(5):hover .launch-icon svg, .home-shell .launch-tile:nth-child(5):focus-visible .launch-icon svg { stroke: url(#home-ig-4); }
-.home-shell .launch-tile:nth-child(-n+5) .launch-icon svg { stroke-width: 2; transition: filter .3s ease; }
+.home-shell .launch-tile:nth-child(-n+5) .launch-icon svg { stroke-width: 2; transition: filter .3s var(--ease); }
 .home-shell .launch-tile:nth-child(-n+5):hover .launch-icon svg { filter: drop-shadow(0 0 5px rgba(120, 110, 255, .45)); }
 .home-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
 /* an unsaved session found after a crash is the first card of Recent projects */
@@ -1230,18 +1230,18 @@
 .home-shell .recent-main.recent-card.recent-card { cursor: pointer; overflow: hidden; align-items: center; gap: 14px; }
 .home-shell .recent-main .recent-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
 .home-shell .recent-main .recent-name { font-size: 14px; line-height: 20px; font-weight: 700; }
-.home-shell .recent-main .recent-path { font-size: 11.5px; line-height: 16px; color: var(--text-3); }
+.home-shell .recent-main .recent-path { font-size: 12px; line-height: 16px; color: var(--text-3); }
 .home-shell .recent-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px/16px var(--ui); color: var(--text-2); }
-.home-shell .recent-warn { display: flex; align-items: center; gap: 6px; margin-top: 2px; font: 700 11.5px/16px var(--ui); color: #d97a1c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-shell .recent-warn { display: flex; align-items: center; gap: 6px; margin-top: 2px; font: 700 12px/16px var(--ui); color: #d97a1c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-shell .recent-warn i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #f0953a; box-shadow: 0 0 0 3px color-mix(in srgb, #f0953a 24%, transparent); }
 :root[data-theme=dark] .home-shell .recent-warn { color: #f5a85a; }
 .home-shell .recent-actions { position: absolute; right: 10px; top: 50%; display: flex; gap: 2px; padding: 4px; border-radius: 10px; background: color-mix(in srgb, var(--card, #fff) 92%, transparent); box-shadow: 0 1px 2px rgba(40, 30, 20, .12), inset 0 0 0 1px var(--line-2); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  opacity: 0; transform: translate(18px, -50%); pointer-events: none; transition: opacity .22s ease, transform .28s var(--ease, ease); transition-delay: 0s; }
+  opacity: 0; transform: translate(18px, -50%); pointer-events: none; transition: opacity .22s var(--ease), transform .28s var(--ease, var(--ease)); transition-delay: 0s; }
 :root[data-theme=dark] .home-shell .recent-actions { background: color-mix(in srgb, #10141c 90%, transparent); }
 .home-shell .recent-main:hover .recent-actions { opacity: 1; transform: translate(0, -50%); pointer-events: auto; transition-delay: 1s; }
 .home-shell .recent-main:focus-within .recent-actions { opacity: 1; transform: translate(0, -50%); pointer-events: auto; transition-delay: 0s; }
 @media (prefers-reduced-motion: reduce) { .home-shell .recent-actions { transition: none; transform: translate(0, -50%); } }
-.home-shell .recent-main .recent-meta { font-size: 11.5px; font-weight: 500; }
+.home-shell .recent-main .recent-meta { font-size: 12px; font-weight: 500; }
 .home-shell .recent-warn i { margin-left: 3px; }
 
 /* ---- Responsive scaling for smaller windows ---- */
@@ -1315,8 +1315,8 @@
 @media (max-width: 1000px) {
   .home-shell .launch-tile { padding: 10px 12px !important; gap: 10px !important; }
   .home-shell .launch-icon { width: 36px !important; height: 36px !important; border-radius: 10px !important; }
-  .home-shell .launch-name { font-size: 13.5px !important; }
-  .home-shell .launch-note { font-size: 10.5px !important; line-height: 13.5px !important; }
+  .home-shell .launch-name { font-size: 14px !important; }
+  .home-shell .launch-note { font-size: 11px !important; line-height: 13.5px !important; }
   .home-shell .format-glyph { display: none; }
   .home-shell .format-card { padding-inline: 14px; }
 }
@@ -1333,7 +1333,7 @@
    and the same 10 px text inset for the heading and the rows */
 .home-user-menu { border-radius: 12px !important; padding: 6px !important; background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--line-2); box-shadow: 0 12px 32px -8px rgba(20, 16, 10, .28), 0 2px 6px rgba(20, 16, 10, .08); }
 :root[data-theme=dark] .home-user-menu { background: var(--surface-raised); border-color: var(--line-2); box-shadow: 0 14px 36px -8px rgba(0, 0, 0, .6), 0 2px 8px rgba(0, 0, 0, .35); }
-.home-user-menu .menu-item, .home-user-menu button { border-radius: 6px !important; padding: 0 10px !important; }
+.home-user-menu .menu-item, .home-user-menu button { border-radius: var(--r-ctl) !important; padding: 0 10px !important; }
 .home-user-menu .menu-head { padding: 6px 10px 4px; }
 .home-user-menu hr { margin: 4px 4px; }
 
@@ -1355,7 +1355,7 @@
   border: 1px solid var(--line-2);
   box-shadow: 0 2px 10px rgba(40, 30, 20, .08);
   clip-path: inset(0 0 0 calc(100% - 38px) round 19px);
-  transition: clip-path .34s cubic-bezier(.22, 1, .36, 1), box-shadow .25s ease;
+  transition: clip-path .34s cubic-bezier(.22, 1, .36, 1), box-shadow .25s var(--ease);
   will-change: clip-path;
 }
 .home-shell .home-topbar:hover .home-head-actions,
@@ -1372,8 +1372,8 @@
 .home-shell .home-head-actions .home-head-btn,
 .home-shell .home-head-actions .home-head-btn:not(.home-user-btn) {
   width: auto; min-width: 32px; max-width: none; height: 32px; padding: 0; margin: 0;
-  border-radius: 999px; transform: none; overflow: visible; pointer-events: auto;
-  opacity: 0; transition: opacity .18s ease, background-color .15s ease, color .15s ease;
+  border-radius: var(--r-pill); transform: none; overflow: visible; pointer-events: auto;
+  opacity: 0; transition: opacity var(--t-surface) var(--ease), background-color var(--t-state) var(--ease), color var(--t-state) var(--ease);
 }
 .home-shell .home-head-actions .home-head-btn.quit { padding: 0 12px 0 10px; gap: 6px; }
 .home-shell .home-topbar:hover .home-head-actions .home-head-btn,
@@ -1389,11 +1389,11 @@
 .home-shell .home-head-actions:hover .home-user-btn,
 .home-shell .home-head-actions.open .home-user-btn {
   opacity: 1 !important; width: auto; min-width: 32px; height: 32px; padding: 0 0 0 12px; gap: 6px; background: transparent;
-  transition: background-color .15s ease;
+  transition: background-color var(--t-state) var(--ease);
 }
 .home-shell .home-head-actions .home-user-btn:hover, .home-shell .home-head-actions .home-user-btn.open { background: color-mix(in srgb, var(--text) 9%, transparent) !important; }
 .home-shell .home-head-actions .home-user-name,
-.home-shell .home-head-actions .home-user-label { max-width: 140px; opacity: 1; margin: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; font: 600 12.5px/1 var(--ui); }
+.home-shell .home-head-actions .home-user-label { max-width: 140px; opacity: 1; margin: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; font: 600 13px/1 var(--ui); }
 .home-shell .home-head-actions .home-user-chev { opacity: .6; width: 12px; max-width: 12px; }
 .home-shell .home-head-actions .home-user-btn .ed-avatar,
 .home-shell .home-head-actions .home-user-ic { order: 9; flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50% !important; }

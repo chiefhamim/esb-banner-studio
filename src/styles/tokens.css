@@ -42,6 +42,7 @@
   /* ---------------------------------------------------------------- Corner Radii */
   --r-0: 0px;
   --r-1: 4px;    /* Keys, tiny chips inside rows, inner handles */
+  --r-ctl: 6px;  /* Small controls (24 and 28 px high), per the control standard */
   --r-2: 8px;    /* Controls: buttons, inputs, cards */
   --r-3: 12px;   /* Panels, popovers, menus */
   --r-4: 16px;   /* Dialogs, floating windows */
@@ -179,7 +180,7 @@
   --t-1: var(--t-hover);
   --t-2: var(--t-state);
   --t-3: var(--t-surface);
-  --ui: "ESB Sans", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ui: "ESB Sans", "Hind Siliguri", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: var(--font-mono);
   --brand-g: #1e9b4a;
   --brand-r: #e52d2d;

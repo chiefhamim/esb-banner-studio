@@ -240,25 +240,77 @@ export async function checkSlugAvailability(slug: string): Promise<'available' |
   }
 }
 
-/** Retrieve the staff session from storage. Sessions from the old desk (newsroom bypass, no token) are discarded. */
-export function getStoredStaffSession(): StaffSession | null {
+/**
+ * The staff session holds the editor's access and refresh tokens, so in the app it is kept by the main process,
+ * encrypted with the operating system's key (safeStorage), and only a copy lives in this page's memory. localStorage
+ * is used only where there is no such store (the browser build and the tests). A session left in localStorage by an
+ * older version is moved into the encrypted store on first start and removed from localStorage.
+ */
+const hasSecretStore = () => typeof window !== 'undefined' && !!window.esb?.secretGet && !!window.esb?.secretSet
+const validSession = (s: StaffSession | null | undefined): s is StaffSession => !!s && s.authType === 'supabase' && !!s.token
+let sessionCache: StaffSession | null = null
+let sessionLoaded = false
+
+const readLocalSession = (): StaffSession | null => {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY)
     if (!raw) return null
     const s = JSON.parse(raw) as StaffSession
-    if (s.authType !== 'supabase' || !s.token) { localStorage.removeItem(SESSION_STORAGE_KEY); return null }
+    if (!validSession(s)) { localStorage.removeItem(SESSION_STORAGE_KEY); return null }
     return s
   } catch {
     return null
   }
 }
 
+async function loadStaffSession(): Promise<void> {
+  if (!hasSecretStore()) return
+  try {
+    const enc = await window.esb!.secretGet!('staff-session')
+    const kept = enc ? (JSON.parse(enc) as StaffSession) : null
+    // a sign-in made while the store was still being read wins over what the store held
+    if (sessionCache) return
+    if (validSession(kept)) { sessionCache = kept; try { localStorage.removeItem(SESSION_STORAGE_KEY) } catch { /* ignore */ } return }
+    const legacy = readLocalSession()
+    if (legacy) {
+      sessionCache = legacy
+      await window.esb!.secretSet!('staff-session', JSON.stringify(legacy))
+      try { localStorage.removeItem(SESSION_STORAGE_KEY) } catch { /* ignore */ }
+    }
+  } catch { /* the store could not be read: the localStorage copy, if any, still works */ }
+}
+let sessionReady: Promise<void> | null = null
+/** Read the encrypted session once at start; resolves when the desks can trust `getStoredStaffSession()`. */
+export function initStaffSession(): Promise<void> {
+  return (sessionReady ??= loadStaffSession().finally(() => {
+    sessionLoaded = true
+    if (sessionCache) try { window.dispatchEvent(new CustomEvent('esb-session', { detail: sessionCache })) } catch { /* no window: tests */ }
+  }))
+}
+if (hasSecretStore()) void initStaffSession()
+
+/** Retrieve the staff session from storage. Sessions from the old desk (newsroom bypass, no token) are discarded. */
+export function getStoredStaffSession(): StaffSession | null {
+  if (sessionCache) return sessionCache
+  // with the encrypted store read and empty, nobody is signed in; before that (and in the browser) localStorage answers
+  if (hasSecretStore() && sessionLoaded) return null
+  return readLocalSession()
+}
+
 export function saveStaffSession(session: StaffSession) {
-  try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session)) } catch { /* ignore */ }
+  if (hasSecretStore()) {
+    sessionCache = session
+    void window.esb!.secretSet!('staff-session', JSON.stringify(session)).catch(() => { /* kept in memory for this run */ })
+    try { localStorage.removeItem(SESSION_STORAGE_KEY) } catch { /* ignore */ }
+  } else {
+    try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session)) } catch { /* ignore */ }
+  }
   try { window.dispatchEvent(new CustomEvent('esb-session', { detail: session })) } catch { /* no window: tests */ }
 }
 
 export function clearStaffSession() {
+  sessionCache = null
+  if (hasSecretStore()) void window.esb!.secretSet!('staff-session', '').catch(() => { /* ignore */ })
   try { localStorage.removeItem(SESSION_STORAGE_KEY) } catch { /* ignore */ }
 }
 
