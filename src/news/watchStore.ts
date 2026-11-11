@@ -136,10 +136,13 @@ export function unwrapLink(link: string): { link: string; google: boolean } {
   return { link, google: false }
 }
 
+/** A word the editor added, as the headline check should look for it: "Tanker" also finds "tankers". */
+const keepTerms = (term: string): string[] => (/^[A-Za-z][A-Za-z -]*$/.test(term) && !/^[A-Z0-9]{2,}$/.test(term) && !/s$/i.test(term) ? [term, `${term}s`] : [term])
+
 export function keywordsFor(p: WatchPrefs): EwKeyword[] {
   return [
     ...EW_KEYWORDS,
-    ...p.keep.map((term) => ({ term, kind: 'strong', category: 'energy' })),
+    ...p.keep.flatMap(keepTerms).map((term) => ({ term, kind: 'strong', category: 'energy' })),
     ...p.never.map((term) => ({ term, kind: 'block', category: null })),
   ]
 }
@@ -664,6 +667,19 @@ export const useWatch = create<WatchState>((set, get) => {
     },
   }
 })
+
+const wordPatterns = new Map<string, RegExp | null>()
+/** Does the headline contain the editor's keyword? English words whole (LPG is not inside "ALPGA", a plural counts); Bangla anywhere in a word, so inflections count. */
+export function titleHasWord(title: string, word: string): boolean {
+  const w = word.normalize('NFC').toLowerCase()
+  const t = title.normalize('NFC').toLowerCase()
+  let re = wordPatterns.get(w)
+  if (re === undefined) {
+    re = /^[\x00-\x7f]+$/.test(w) ? new RegExp(`(?<![a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:s|es)?(?![a-z0-9])`) : null
+    wordPatterns.set(w, re)
+  }
+  return re ? re.test(t) : t.includes(w)
+}
 
 /** Rows to show: filtered by category, time window, and topic/search query, sorted by relevance (when querying) and true timestamp. */
 export function visibleItems(

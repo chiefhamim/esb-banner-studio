@@ -27,10 +27,11 @@ const DEFAULT_SETTINGS = {
   pace: 'manual',
   minDelaySec: 180,
   maxDelaySec: 480,
-  domainMaxPerDay: 3,
+  domainMaxPerDay: 0, // 0 = no daily limit per organisation
   // per-organisation exceptions to domainMaxPerDay: { 'example.gov.bd': 10 } (domain → emails per calendar day, 1–500)
   domainOverrides: {},
-  domainMinGapSec: 20 * 60,
+  domainMinGapSec: 3 * 60,
+  orgLimitLifted: true,
   contactCooldownDays: 30,
   // hard safety under Gmail's real limit (500 a rolling 24 h for a consumer account): however the calendar day resets,
   // never more than this in any 24 h. Not on screen; edit outreach-autopilot.json (50–2000) for a Workspace account.
@@ -89,6 +90,7 @@ function validateSettings(input, currentSettings = DEFAULT_SETTINGS, opts = {}) 
     'autoResume',
     'legacyBackfilled',
     'pacingMigrated',
+    'orgLimitLifted',
     'sharedUpdatedAt',
   ]
 
@@ -208,10 +210,10 @@ function validateSettings(input, currentSettings = DEFAULT_SETTINGS, opts = {}) 
   result.minDelaySec = minD
   result.maxDelaySec = maxD
 
-  // 6. domainMaxPerDay (1..50)
+  // 6. domainMaxPerDay (0 = no limit, up to 500)
   if (safe.domainMaxPerDay !== undefined) {
-    if (!Number.isInteger(safe.domainMaxPerDay) || safe.domainMaxPerDay < 1 || safe.domainMaxPerDay > 50) {
-      return { valid: false, error: 'domainMaxPerDay must be an integer between 1 and 50', field: 'domainMaxPerDay' }
+    if (!Number.isInteger(safe.domainMaxPerDay) || safe.domainMaxPerDay < 0 || safe.domainMaxPerDay > 500) {
+      return { valid: false, error: 'domainMaxPerDay must be an integer between 0 and 500', field: 'domainMaxPerDay' }
     }
     result.domainMaxPerDay = safe.domainMaxPerDay
   }
@@ -307,6 +309,9 @@ function validateSettings(input, currentSettings = DEFAULT_SETTINGS, opts = {}) 
   if (safe.pacingMigrated !== undefined) {
     result.pacingMigrated = !!safe.pacingMigrated
   }
+  if (safe.orgLimitLifted !== undefined) {
+    result.orgLimitLifted = !!safe.orgLimitLifted
+  }
 
   // when the settings every PC shares (SHARED_KEYS) last changed: set by the caller when the values come from another
   // PC (cloud sync), else stamped now — but only if one of them really changed, so re-saving the same dialog never
@@ -357,6 +362,17 @@ function createSettingsManager(options = {}) {
         // 2026-11-02 migration: 'auto' pace → 'manual' and the new ceiling key, written back once; every value the
         // editor chose (limit, gaps, hours, days, organisation limits) is kept exactly
         if (parsed && (parsed.pace === 'auto' || parsed.gmailCeiling24h === undefined)) {
+          try { writeAtomic(currentSettings) } catch {}
+        }
+        // 2026-11-11: the old default of 3 a day per organisation held a campaign's last emails back for days. Lifted once,
+        // only for settings still on that old default; stamped so another PC's older copy cannot bring it back.
+        if (parsed && !parsed.orgLimitLifted) {
+          currentSettings.orgLimitLifted = true
+          if (parsed.domainMaxPerDay === 3 && parsed.domainMinGapSec === 1200) {
+            currentSettings.domainMaxPerDay = 0
+            currentSettings.domainMinGapSec = 180
+            currentSettings.sharedUpdatedAt = Date.now()
+          }
           try { writeAtomic(currentSettings) } catch {}
         }
       } else {

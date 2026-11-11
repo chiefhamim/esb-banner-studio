@@ -16,6 +16,7 @@ import { contactsFromRows, groupNamesOf, readMailingFile } from './directory'
 import type { Sheet } from './directory'
 import { domainOf, type DomainCheckResult } from './addressCheck'
 import { idbDel, idbGet, idbSet } from './idb'
+import { useEngineStore } from './engineStore'
 import { mailFailKind, mailRetryDelay, type MailFailKind } from './mailCheck'
 
 // the mail check's own retry while the server is unreachable (one timer for the whole desk)
@@ -32,7 +33,7 @@ export const uid = (p: string) => `${p}-${Date.now().toString(36)}-${Math.random
 
 /** The desk's own preferences every PC should share (cloud sync, outreach_settings row 'desk'): signatures, saved
  *  templates, the house prompt and the letterhead look. */
-export const DESK_KEYS = ['signatures', 'templates', 'housePrompt', 'footerLine', 'headerBg', 'footerBg', 'stripeColors', 'fontFamily'] as const
+export const DESK_KEYS = ['names', 'signatures', 'templates', 'housePrompt', 'footerLine', 'headerBg', 'footerBg', 'stripeColors', 'fontFamily'] as const
 export type DeskKey = (typeof DESK_KEYS)[number]
 
 interface Saved {
@@ -40,6 +41,8 @@ interface Saved {
   activeId: string | null
   lists: ListMeta[]
   approved: string[]
+  /** The name a letter uses for an address, where the editor changed the sheet's; '' = greet as Sir/Madam. */
+  names: Record<string, string>
   optOut: string[]
   signatures: Signature[]
   templates: Template[]
@@ -97,7 +100,7 @@ export function normalize(c: Campaign): Campaign {
 
 function load(): Saved {
   try { localStorage.removeItem(LEGACY_CONFIG) } catch { /* storage blocked */ }
-  const base: Saved = { campaigns: [], activeId: null, lists: [], approved: [], optOut: [], signatures: [DEFAULT_SIGNATURE], templates: [], housePrompt: '', footerLine: DEFAULT_FOOTER_LINE, headerBg: '', footerBg: '', stripeColors: '', fontFamily: DEFAULT_FONT_FAMILY, bouncedAddrs: {} }
+  const base: Saved = { campaigns: [], activeId: null, lists: [], approved: [], names: {}, optOut: [], signatures: [DEFAULT_SIGNATURE], templates: [], housePrompt: '', footerLine: DEFAULT_FOOTER_LINE, headerBg: '', footerBg: '', stripeColors: '', fontFamily: DEFAULT_FONT_FAMILY, bouncedAddrs: {} }
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null') as Partial<Saved> | null
     if (s) return { ...base, ...s, campaigns: (s.campaigns ?? []).map(normalize), signatures: s.signatures?.length ? s.signatures : base.signatures }
@@ -221,6 +224,8 @@ interface OutreachState extends Saved {
   setView: (v: OutreachState['view']) => void
   setQuery: (q: string) => void
   approve: (email: string, on: boolean) => void
+  /** Change the name letters use for these addresses; the sheet's own name is what comes back when they match it. */
+  setContactNames: (changes: Record<string, string>) => void
   optOutAddress: (email: string, on: boolean) => void
   markSent: (email: string, t: number) => void
   markFailed: (email: string, error: string) => void
@@ -263,7 +268,7 @@ interface OutreachState extends Saved {
 /** The sheet's contacts with what the editor and the ledgers know laid over them. A contact whose overlay did not
  *  change keeps its object, and the array itself is kept when nothing changed, so memoised rows and eligible()'s cache
  *  survive a relay (a log line, an inbox check, an approval elsewhere) instead of re-rendering 2,000 rows. */
-export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'> & { bouncedAddrs?: Record<string, string>; verified?: Record<string, DomainCheckResult> }, c: Campaign | null, mail: EsbOutreachStatus | null): Contact[] {
+export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'> & { names?: Record<string, string>; bouncedAddrs?: Record<string, string>; verified?: Record<string, DomainCheckResult> }, c: Campaign | null, mail: EsbOutreachStatus | null): Contact[] {
   const approved = new Set(s.approved), optOut = new Set(s.optOut), bounced = s.bouncedAddrs ?? {}
   const ledger = new Map((mail?.sentTo ?? []).map((e) => [e.to, e.t]))
   let changed = false
@@ -278,11 +283,13 @@ export function overlay(list: Contact[], s: Pick<Saved, 'approved' | 'optOut'> &
     const mxStatus = noServer ? 'UNDELIVERABLE' : x.mxStatus
     const rawStatus = noServer ? 'No mail server (checked)' : x.rawStatus
     const isApproved = x.approved || approved.has(x.email)
+    const sheetName = x.sheetName ?? x.personName
+    const personName = s.names ? (s.names[x.email] ?? sheetName) : x.personName
     const status: Contact['status'] = optOut.has(x.email) ? 'OPTED_OUT' : bounce ? 'BOUNCED' : replied ? 'REPLIED' : sentAt ? 'SENT' : failed ? 'FAILED' : x.status === 'SENDING' ? 'SENDING' : 'QUEUED'
     const error = bounce ?? failed
-    if (x.mxStatus === mxStatus && x.rawStatus === rawStatus && x.approved === isApproved && x.status === status && x.sentAt === sentAt && x.repliedAt === replied && x.error === error) return x
+    if (x.personName === personName && x.mxStatus === mxStatus && x.rawStatus === rawStatus && x.approved === isApproved && x.status === status && x.sentAt === sentAt && x.repliedAt === replied && x.error === error) return x
     changed = true
-    return { ...x, mxStatus, rawStatus, approved: isApproved, status, sentAt, repliedAt: replied, error }
+    return { ...x, personName, sheetName, mxStatus, rawStatus, approved: isApproved, status, sentAt, repliedAt: replied, error }
   })
   return changed ? out : list
 }
@@ -298,7 +305,7 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
   const saved = load()
   const persist = () => {
     const s = get()
-    save({ campaigns: s.campaigns, activeId: s.activeId, lists: s.lists, approved: s.approved, optOut: s.optOut, signatures: s.signatures, templates: s.templates, housePrompt: s.housePrompt, footerLine: s.footerLine, headerBg: s.headerBg, footerBg: s.footerBg, stripeColors: s.stripeColors, fontFamily: s.fontFamily, bouncedAddrs: s.bouncedAddrs })
+    save({ campaigns: s.campaigns, activeId: s.activeId, lists: s.lists, approved: s.approved, names: s.names, optOut: s.optOut, signatures: s.signatures, templates: s.templates, housePrompt: s.housePrompt, footerLine: s.footerLine, headerBg: s.headerBg, footerBg: s.footerBg, stripeColors: s.stripeColors, fontFamily: s.fontFamily, bouncedAddrs: s.bouncedAddrs })
   }
   const relay = () => set({ contacts: overlay(get().contacts, { ...get(), verified: get().verifiedAddrs }, get().campaign(), get().mail) })
   const patchCampaign = (id: string, p: Partial<Campaign>) => {
@@ -509,6 +516,9 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     },
     deleteList: async (listId) => {
       if (get().run !== 'idle') { get().addLog('warn', 'Stop the batch before deleting a list'); return }
+      // `run` only knows the open campaign: a batch on another campaign that uses this list would lose its contacts view
+      const busy = get().campaigns.find((c) => c.listId === listId && ['queued', 'running', 'waiting', 'paused'].includes(useEngineStore.getState().jobForCampaign(c.id)?.status ?? ''))
+      if (busy) { get().addLog('warn', `${busy.name} is still sending to this list. Stop that batch before deleting it`); return }
       const name = get().lists.find((l) => l.id === listId)?.fileName ?? 'The list'
       for (const c of get().campaigns.filter((x) => x.listId === listId)) {
         set({ campaigns: get().campaigns.map((x) => (x.id === c.id ? { ...x, listId: null, sheet: '', audience: { group: null, purposes: [] }, updatedAt: Date.now() } : x)) })
@@ -538,6 +548,16 @@ export const useOutreachStore = create<OutreachState>((set, get) => {
     setActiveContact: (activeContact) => set({ activeContact }),
     setView: (view) => set({ view }),
     setQuery: (query) => set({ query }),
+    setContactNames: (changes) => {
+      const names = { ...get().names }
+      for (const [email, raw] of Object.entries(changes)) {
+        const name = raw.trim().replace(/\s+/g, ' ')
+        const row = get().contacts.find((x) => x.email === email)
+        if (row && name === (row.sheetName ?? row.personName)) delete names[email]
+        else names[email] = name
+      }
+      set({ names }); persist(); relay()
+    },
     approve: (email, on) => {
       const a = new Set(get().approved)
       if (on) a.add(email); else a.delete(email)

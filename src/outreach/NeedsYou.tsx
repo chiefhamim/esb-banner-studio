@@ -7,6 +7,8 @@ import { reviewRendered, actionableFlags, type Flag, type FlagKind } from './ren
 import { buildMessage } from './compose'
 import { inAudience } from './campaign'
 import { ask } from './outreachUi'
+import { useOutreachStore } from './outreachStore'
+import { cleanPersonName, nameHasNumber } from './personName'
 import { Icon } from '../ui/Icon'
 
 interface FlaggedItem {
@@ -24,6 +26,9 @@ interface NeedsYouProps {
 
 export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact }: NeedsYouProps) {
   const [expandedKind, setExpandedKind] = useState<FlagKind | null>(null)
+  const setContactNames = useOutreachStore((x) => x.setContactNames)
+  const fixable = (c: Contact) => { const f = cleanPersonName(c.personName); return nameHasNumber(c.personName) && !!f && f !== c.personName ? f : null }
+  const fixAll = (items: FlaggedItem[]) => setContactNames(Object.fromEntries(items.flatMap(({ contact }) => { const f = fixable(contact); return f ? [[contact.email, f]] : [] })))
 
   // Identify all contacts in audience that have actionable, unreviewed flags
   const audienceContacts = useMemo(() => contacts.filter((c) => inAudience(c, campaign.audience)), [contacts, campaign.audience])
@@ -125,6 +130,9 @@ export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact 
                   <b>{group.title}</b>
                   <span className="or-flag-count">{group.items.length}</span>
                 </div>
+                {kind === 'odd_name' && group.items.some(({ contact }) => fixable(contact)) && (
+                  <button type="button" className="btn xs primary" onClick={(e) => { e.stopPropagation(); fixAll(group.items) }} data-tip="Take the numbers out of these names, so the letter greets the person properly">Remove the numbers</button>
+                )}
                 <button
                   type="button"
                   className="btn xs"
@@ -155,9 +163,12 @@ export function NeedsYou({ campaign, contacts, onPatchCampaign, onSelectContact 
                         {flag.sample && <code className="or-flag-sample">{flag.sample}</code>}
                       </div>
                       <div className="or-flag-actions">
+                        {kind === 'odd_name' && fixable(contact) && (
+                          <button type="button" className="btn xs primary" onClick={() => setContactNames({ [contact.email]: fixable(contact)! })} data-tip={`The letter will say “${fixable(contact)}”`}>Fix name</button>
+                        )}
                         <button
                           type="button"
-                          className="btn xs primary"
+                          className={'btn xs' + (kind === 'odd_name' && fixable(contact) ? '' : ' primary')}
                           onClick={() => approveItem(contact.email, kind)}
                           data-tip="Include this contact anyway"
                         >

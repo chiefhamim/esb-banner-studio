@@ -1400,3 +1400,5 @@
 .home-shell .home-head-actions .home-user-ic { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
 @media (prefers-reduced-motion: reduce) { .home-shell .home-head-actions { transition: none; } .home-shell .home-head-actions .home-head-btn { transition: none; } }
 .home-shell .home-head-actions .home-head-btn:not(.quit):not(.home-user-btn) { width: 32px !important; min-width: 32px !important; }
+/* the folded circle is 38 px measured from the outer edge: with the 1 px border, 3 px of padding left the avatar 1 px off its centre */
+.home-shell .home-head-actions, .home-shell .home-topbar:hover .home-head-actions, .home-shell .home-head-actions:hover, .home-shell .home-head-actions:focus-within, .home-shell .home-head-actions.open { padding-right: 2px !important; }

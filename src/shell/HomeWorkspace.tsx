@@ -228,7 +228,7 @@ export function HomeWorkspace() {
           )}
         </button>
         {userMenuOpen && userBtnRef.current && (
-          <Popover anchor={{ el: userBtnRef.current }} onClose={() => setUserMenuOpen(false)} align="end" className="menu home-user-menu" minWidth={220}>
+          <Popover anchor={{ el: userBtnRef.current?.closest<HTMLElement>('.home-head-actions') ?? userBtnRef.current }} onClose={() => setUserMenuOpen(false)} align="end" className="menu home-user-menu" minWidth={220}>
             <MenuList items={userMenuItems} onDone={() => setUserMenuOpen(false)} />
           </Popover>
         )}

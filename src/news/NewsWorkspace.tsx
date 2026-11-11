@@ -17,7 +17,7 @@ import { useSideColumn } from '../ui/sideColumnState'
 import { ColumnHandle, ColumnRail, railClass } from '../ui/SideColumn'
 import { fmtDateTime, fmtTime, useClockFormat } from '../ui/time'
 import { relTime } from '../editorial/wire'
-import { FEED_COUNT, PORTALS, PRESS_OFFICES, isPhoneFeed, trendingTopics, useWatch, visibleItems, type WatchCat, type WatchItem } from './watchStore'
+import { FEED_COUNT, PORTALS, PRESS_OFFICES, isPhoneFeed, titleHasWord, trendingTopics, useWatch, visibleItems, type WatchCat, type WatchItem } from './watchStore'
 import { EW_FEEDS, EW_PRESS_SOURCES } from './ewSources'
 import { MAX_RANGE_DAYS, checkRange, useRange } from './rangeSearch'
 import { PORTAL_BRANDS } from './portalBrands'
@@ -67,7 +67,7 @@ function PortalName({ name, size }: { name: string; size?: number }) {
 }
 
 const NEWS_COLS_KEY = 'esb-banner-studio/news/columns'
-const NEWS_COLS_DEFAULT = { lw: 272, rw: 320 }
+const NEWS_COLS_DEFAULT = { lw: 312, rw: 312 }
 const NEWS_LIMITS = { lw: [240, 480], rw: [260, 520] } as const
 
 // ---------------------------------------------------------------- behaviour
@@ -101,18 +101,20 @@ const FOLDS_KEY = 'esb-banner-studio/news/folds'
 const WORDS_KEY = 'esb-banner-studio/news/keywords'
 const loadWords = (): string[] => { try { const v = JSON.parse(localStorage.getItem(WORDS_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 60) : [] } catch { return [] } }
 const norm = (t: string) => t.normalize('NFC').toLowerCase()
-const hasWord = (x: WatchItem, w: string) => norm(x.title).includes(norm(w))
+const hasWord = (x: WatchItem, w: string) => titleHasWord(x.title, w)
 const loadFolds = (): Folds => {
   const d: Folds = { show: true, trending: true, pressWings: false, keywords: true, portals: false }
   try { return { ...d, ...JSON.parse(localStorage.getItem(FOLDS_KEY) ?? '{}') } } catch { return d }
 }
 function Fold({ id, title, icon, aside, open, onToggle, children }: { id: keyof Folds; title: string; icon?: IconName; aside?: React.ReactNode; open: boolean; onToggle: (id: keyof Folds) => void; children: React.ReactNode }) {
   return (
-    <section className={'nw-sec nw-fold' + (open ? ' open' : '')}>
-      <button type="button" className="nw-sec-h nw-fold-h" aria-expanded={open} onClick={() => onToggle(id)}>
-        <Icon name="chevDown" size={13} className="nw-fold-chev" />{icon && <Icon name={icon} size={13} className="nw-fold-ic" />}<span>{title}</span>{aside ? <small>{aside}</small> : null}
-      </button>
-      <div className="nw-fold-body" inert={!open}><div className="nw-fold-inner">{children}</div></div>
+    <section className={'pnl nw-fold' + (open ? ' open' : '')}>
+      <header role="button" aria-expanded={open} tabIndex={0} onClick={() => onToggle(id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(id) } }}>
+        <Icon name="chevRight" size={13} className="pnl-chev" />
+        {icon && <Icon name={icon} size={14} className="pnl-icon" />}
+        <h3><span className="t">{title}</span>{aside ? <small>{aside}</small> : null}</h3>
+      </header>
+      <div className="nw-fold-body" inert={!open}><div className="nw-fold-inner"><div className="pnl-body">{children}</div></div></div>
     </section>
   )
 }
@@ -138,7 +140,28 @@ export function NewsWorkspace() {
   const [cat, setCat] = useState<'all' | WatchCat>('all')
   const [portal, setPortal] = useState<string | null>(null)
   const [words, setWordsRaw] = useState<string[]>(loadWords)
-  const setWords = (next: string[]) => { setWordsRaw(next); try { localStorage.setItem(WORDS_KEY, JSON.stringify(next)) } catch { /* ignore */ } }
+  // The headline check only keeps what its rules accept, so a word of the editor's own that the rules do not know found
+  // nothing and its count stayed at 0: every keyword also goes to the check's "always keep" list.
+  const setWords = (next: string[]) => {
+    setWordsRaw(next)
+    try { localStorage.setItem(WORDS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+    const { prefs: p, setPrefs: save } = useWatch.getState()
+    const gone = words.filter((w) => !next.includes(w))
+    save({ keep: [...new Set([...p.keep.filter((k) => !gone.includes(k)), ...next])] })
+  }
+  /** Read the sources again for a new keyword; a check already running finishes first. */
+  const checkForWords = () => {
+    const w = useWatch.getState()
+    if (!w.running) { void w.run(); return }
+    const stop = useWatch.subscribe((s) => { if (!s.running) { stop(); void s.run() } })
+  }
+  useEffect(() => {
+    const { prefs: p, setPrefs: save } = useWatch.getState()
+    const missing = words.filter((w) => !p.keep.includes(w))
+    if (!missing.length) return
+    save({ keep: [...p.keep, ...missing] })
+    checkForWords()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [onWords, setOnWords] = useState<string[]>([])
   const [wordDraft, setWordDraft] = useState('')
   const addWord = () => {
@@ -146,9 +169,16 @@ export function NewsWorkspace() {
     if (!w) return
     if (!words.some((x) => norm(x) === norm(w))) setWords([...words, w])
     setOnWords((o) => (o.some((x) => norm(x) === norm(w)) ? o : [...o, w]))
+    showEverywhere()
     setWordDraft('')
+    checkForWords()
   }
-  const toggleWord = (w: string) => setOnWords((o) => (o.includes(w) ? o.filter((x) => x !== w) : [...o, w]))
+  // A keyword means every headline with that word: a category or press office left selected would quietly hide most of them.
+  const showEverywhere = () => { setQ(''); setCat('all'); setPortal(null) }
+  const toggleWord = (w: string) => {
+    if (!onWords.includes(w)) showEverywhere()
+    setOnWords((o) => (o.includes(w) ? o.filter((x) => x !== w) : [...o, w]))
+  }
   const removeWord = (w: string) => { setWords(words.filter((x) => x !== w)); setOnWords((o) => o.filter((x) => x !== w)) }
   const [sel, setSel] = useState<string | null>(null)
   const [dialog, setDialog] = useState<null | 'settings' | 'range'>(null)
@@ -221,14 +251,16 @@ export function NewsWorkspace() {
 
   // Category counts & canonical trending topics for the active category
   const catCount = (c: 'all' | WatchCat) => inSearch.filter((x) => (c === 'all' || x.categories.includes(c)) && (!portal || x.source === portal) && (!onWords.length || onWords.some((w) => hasWord(x, w)))).length
-  const wordCount = (w: string) => inSearch.filter((x) => (cat === 'all' || x.categories.includes(cat)) && (!portal || x.source === portal) && hasWord(x, w)).length
-  const trending = useMemo(() => trendingTopics(base, cat, 12), [base, cat])
+  // how many a keyword will show when pressed: everything in the chosen time window, whatever category or source is selected
+  const wordCount = (w: string) => base.filter((x) => hasWord(x, w)).length
+  const wordInDay = onWords.length ? effectiveItems.filter((x) => !hidden.includes(x.key) && onWords.some((w) => hasWord(x, w)) && now - Date.parse(x.published ?? new Date(x.foundAt).toISOString()) <= 24 * 3600_000).length : 0
+  const trending = useMemo(() => trendingTopics(onWords.length ? base.filter((x) => onWords.some((w) => hasWord(x, w))) : base, cat, 12), [base, cat, onWords])
 
   const portalsOff = prefs.portalsOff
   const pressOfficeRows = useMemo(() => {
     const off = new Set(portalsOff)
     const n = new Map<string, number>()
-    for (const x of inSearch) if (x.categories.includes('press')) n.set(x.source, (n.get(x.source) ?? 0) + 1)
+    for (const x of inSearch) if (x.categories.includes('press') && (!onWords.length || onWords.some((w) => hasWord(x, w)))) n.set(x.source, (n.get(x.source) ?? 0) + 1)
     return PRESS_OFFICES.filter((o) => !off.has(o.name)).map((o) => {
       const src = EW_PRESS_SOURCES.find((s) => s.name === o.name)
       const st = src ? feeds[src.id] : undefined
@@ -236,12 +268,12 @@ export function NewsWorkspace() {
       const why = st?.error || 'Unreachable'
       return { name: o.name, office: o.office, count: n.get(o.name) ?? 0, bad, why }
     }).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-  }, [inSearch, feeds, portalsOff])
+  }, [inSearch, feeds, portalsOff, onWords])
 
   const portalRows = useMemo(() => {
     const off = new Set(portalsOff)
     const n = new Map<string, number>()
-    for (const x of inSearch) if (cat === 'all' || x.categories.includes(cat)) n.set(x.source, (n.get(x.source) ?? 0) + 1)
+    for (const x of inSearch) if ((cat === 'all' || x.categories.includes(cat)) && (!onWords.length || onWords.some((w) => hasWord(x, w)))) n.set(x.source, (n.get(x.source) ?? 0) + 1)
     return PORTALS.filter((p) => !off.has(p.name)).map((p) => {
       const fs = EW_FEEDS.filter((f) => isPhoneFeed(f) && f.name === p.name)
       const st = fs.map((f) => feeds[f.id]).filter(Boolean)
@@ -249,7 +281,7 @@ export function NewsWorkspace() {
       const why = fs.filter((f) => feeds[f.id] && !feeds[f.id].ok).map((f) => `${feedKind(f.url)}: ${feeds[f.id].error}`).join(' · ')
       return { name: p.name, count: n.get(p.name) ?? 0, bad, why }
     }).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-  }, [inSearch, cat, feeds, portalsOff])
+  }, [inSearch, cat, feeds, portalsOff, onWords])
 
   const portalsOn = PORTALS.filter((p) => !portalsOff.includes(p.name)).length
   const pressOfficesOn = PRESS_OFFICES.filter((o) => !portalsOff.includes(o.name)).length
@@ -291,7 +323,7 @@ export function NewsWorkspace() {
     say(`${before.length} hidden ${before.length === 1 ? 'headline' : 'headlines'} shown again`, () => { for (const k of before) useWatch.getState().hide(k) })
   }
   const setWindow = (h: number) => { useRange.getState().clear(); useWatch.getState().setPrefs({ maxAgeH: h }) }
-  const clearFilters = () => { setQ(''); setCat('all'); setPortal(null) }
+  const clearFilters = () => { setQ(''); setCat('all'); setPortal(null); setOnWords([]) }
 
   // ---- keyboard: ↑ ↓ move through the headlines, Enter starts a story, / searches
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {})
@@ -397,18 +429,19 @@ export function NewsWorkspace() {
         <input value={wordDraft} onChange={(e) => setWordDraft(e.target.value)} placeholder="Add a keyword" aria-label="Add a keyword" maxLength={60} />
       </form>
       {words.length > 0 && (
-        <div className="nw-nav">
+        <div className="nw-kw-cloud">
           {words.map((w) => {
             const n = wordCount(w)
             const on = onWords.includes(w)
             return (
-              <div key={w} className={'nw-nav-row nw-kw-row' + (on ? ' on' : '') + (n ? '' : ' is-empty')}>
+              <span key={w} className={'nw-kw-chip' + (on ? ' on' : '') + (n ? '' : ' is-empty')}>
                 <button type="button" className="nw-kw-pick" aria-pressed={on} onClick={() => toggleWord(w)} data-tip={on ? 'Show every headline again' : `Only headlines with “${w}”`}>
-                  <span className="nw-nav-label" lang={/[\u0980-\u09ff]/.test(w) ? 'bn' : undefined}>{w}</span>
-                  <span className="nw-count">{n || ''}</span>
+                  {on && <Icon name="check" size={12} strokeWidth={2.6} />}
+                  <span lang={/[\u0980-\u09ff]/.test(w) ? 'bn' : undefined}>{w}</span>
+                  {(n > 0 || on) && <small>{n}</small>}
                 </button>
-                <button type="button" className="nw-kw-x" aria-label={`Remove ${w}`} data-tip="Remove this keyword" onClick={() => removeWord(w)}><Icon name="x" size={12} /></button>
-              </div>
+                <button type="button" className="nw-kw-x" aria-label={`Remove ${w}`} data-tip="Remove this keyword" onClick={() => removeWord(w)}><Icon name="x" size={10} /></button>
+              </span>
             )
           })}
         </div>
@@ -456,7 +489,7 @@ export function NewsWorkspace() {
             </div>
           </div>
           <div className="nw-left-scroll">
-            <Fold id="show" title="Categories" open={folds.show} onToggle={toggleFold} aside={folds.show ? null : cat === 'all' ? 'All' : CAT_LABEL[cat]}>
+            <Fold id="show" title="Categories" icon="grid" open={folds.show} onToggle={toggleFold} aside={folds.show ? null : cat === 'all' ? 'All' : CAT_LABEL[cat]}>
               <div className="nw-nav" role="radiogroup" aria-label="Categories">
                 {cats.map((c) => (
                   <button key={c} type="button" role="radio" aria-checked={cat === c} className={'nw-nav-row' + (cat === c ? ' on' : '') + ' is-' + c} onClick={() => setCat(c)}>
@@ -556,10 +589,13 @@ export function NewsWorkspace() {
                 <h3>{busy ? (range ? 'Searching the portals' : 'Reading portals & official press wings') : filtered ? 'Nothing matches' : base.length || items.length || range ? 'No headlines in this window' : <EwName />}</h3>
                 <p>{busy ? 'Headlines and official government press releases appear here as each source answers.'
                   : cat === 'press' && !items.some((x) => x.categories.includes('press')) ? 'Click Check now to scan official Bangladesh government ministry, division, commission & utility press wings.'
+                  : onWords.length && busy ? `Reading every source for “${onWords.join(', ')}”. Headlines appear here as they are found.`
+                  : onWords.length && !needle && cat === 'all' && !portal ? `No headline with “${onWords.join(', ')}” in ${prefs.maxAgeH === 1 ? 'the last hour' : `the last ${prefs.maxAgeH} hours`}.${wordInDay && prefs.maxAgeH < 24 ? ` ${wordInDay} in the last 24 hours.` : ''}`
                   : filtered ? 'No headline here has those words, that source, or that category.'
                   : range ? 'No Energy & Power or PM & President headlines between these times. Try a wider range.'
                   : items.length ? 'Nothing was published in this window. Try a longer one.'
                   : `Energy & Power, PM & President, and Official Press releases from ${PORTALS.length} Bangladeshi portals and ${PRESS_OFFICES.length} government offices.`}</p>
+                {onWords.length > 0 && !busy && !range && wordInDay > 0 && prefs.maxAgeH < 24 && <button type="button" className="btn primary" onClick={() => setWindow(24)}><Icon name="clock" size={14} />Show the last 24 hours</button>}
                 {filtered && !busy && <button type="button" className="btn" onClick={clearFilters}><Icon name="x" size={14} />Clear filters</button>}
                 {(!filtered || (cat === 'press' && !items.some((x) => x.categories.includes('press')))) && !busy && !range && (
                   <button type="button" className="btn primary nw-scan-btn" onClick={refresh}>

@@ -37,9 +37,10 @@ describe('outreach-settings: schema defaults, validation bounds & atomic persist
       pace: 'manual',
       minDelaySec: 180,
       maxDelaySec: 480,
-      domainMaxPerDay: 3,
+      domainMaxPerDay: 0,
       domainOverrides: {},
-      domainMinGapSec: 1200,
+      domainMinGapSec: 180,
+      orgLimitLifted: true,
       contactCooldownDays: 30,
       gmailCeiling24h: 400,
       traySending: true,
@@ -118,15 +119,15 @@ describe('outreach-settings: schema defaults, validation bounds & atomic persist
   it('validates domain throttling and cooldown bounds', () => {
     const mgr = createSettingsManager({ dir: tmpDir })
 
-    expect(mgr.save({ domainMaxPerDay: 0 })).toEqual({
+    expect(mgr.save({ domainMaxPerDay: -1 })).toEqual({
       ok: false,
-      error: 'domainMaxPerDay must be an integer between 1 and 50',
+      error: 'domainMaxPerDay must be an integer between 0 and 500',
       field: 'domainMaxPerDay',
     })
 
-    expect(mgr.save({ domainMaxPerDay: 51 })).toEqual({
+    expect(mgr.save({ domainMaxPerDay: 501 })).toEqual({
       ok: false,
-      error: 'domainMaxPerDay must be an integer between 1 and 50',
+      error: 'domainMaxPerDay must be an integer between 0 and 500',
       field: 'domainMaxPerDay',
     })
 

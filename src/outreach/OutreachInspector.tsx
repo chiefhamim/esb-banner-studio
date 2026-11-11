@@ -8,6 +8,7 @@ import { engineClient } from './engineClient'
 import { previewDoc } from './previewDoc'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useDesk, useOutreachStore } from './outreachStore'
+import type { Contact } from './types'
 import { useSideColumn } from '../ui/sideColumnState'
 import { ColumnHandle, ColumnRail, railClass } from '../ui/SideColumn'
 import { ask, useOutreachUi, type RightTab } from './outreachUi'
@@ -27,6 +28,7 @@ import { buildMessage } from './compose'
 import { renderEmail, withViewerMargin } from './emailRender'
 import { designPreviewHtml } from './design'
 import { NeedsYou } from './NeedsYou'
+import { cleanPersonName, nameHasNumber } from './personName'
 import { domainOf, roleMailbox, disposableDomain } from './addressCheck'
 import { cloudAgo, lockBlock, useCloud } from './cloudStore'
 import { clickedText, engineSkipText, keyOf, MACHINE_OPEN, machineText, OPENED_HUMAN, openedText, outcomeOf } from './outcome'
@@ -105,6 +107,8 @@ function SendTab() {
   const sendable = c ? sendableQueue(c, s.contacts).length : 0
   const willSend = Math.min(sendable, Math.max(0, limit - used))
   const heldInNeedsYou = Math.max(0, queue.length - sendable)
+  const liveJob = useEngineStore((x) => (c ? x.jobForCampaign(c.id) : undefined))
+  const jobLive = !!liveJob && ['queued', 'running', 'waiting', 'paused'].includes(liveJob.status)
   const active = s.contacts.find((x) => x.id === s.activeContact)
   const sent = c ? Object.keys(c.sent).length : 0
   const failed = c ? Object.keys(c.failed).length : 0
@@ -154,7 +158,7 @@ function SendTab() {
 
       <section className="or-card">
         <header><h3 className="sec-title">{c?.name ?? 'Campaign'}</h3>{c && <span className={'or-chip cs-' + c.status}>{STATUS_TEXT[c.status]}</span>}</header>
-        <p className="or-muted">{!c ? 'Open or create a campaign.' : queue.length ? `${queue.length} in the queue${desktop && set ? ` · ${willSend} clear to go today${heldInNeedsYou > 0 ? ` · ${heldInNeedsYou} wait in Needs you` : ''}` : ''}` : s.contacts.length ? 'Nobody in this audience is ready — see Skipped in Contacts' : c.kind === 'direct' ? 'Type addresses in the To line' : 'Import a list to start'}</p>
+        <p className="or-muted">{!c ? 'Open or create a campaign.' : queue.length ? `${queue.length} in the queue${desktop && set ? ` · ${willSend} clear to go today${heldInNeedsYou > 0 ? ` · ${heldInNeedsYou} wait in Needs you` : ''}` : ''}` : jobLive ? `This run keeps its own copy of the list · ${liveJob.remaining} left to go` : s.contacts.length ? 'Nobody in this audience is ready — see Skipped in Contacts' : c.kind === 'direct' ? 'Type addresses in the To line' : 'Import a list to start'}</p>
         {c?.status === 'scheduled' && c.scheduledAt && s.run === 'idle' && <p className="or-sched"><Icon name="clock" size={13} /><span>Starts {fmtDateTime(c.scheduledAt)} — keep the app open</span><button type="button" className="btn xs" onClick={() => s.patch({ status: 'draft', scheduledAt: null })}>Cancel</button></p>}
         {c && (sent > 0 || failed > 0) && (
           <div className="or-results">
@@ -205,6 +209,23 @@ function SendTab() {
   )
 }
 
+/** The name this person's letters use. Starts as the sheet's; a change holds for this address on every campaign. */
+function NameInLetter({ contact, onSave }: { contact: Contact; onSave: (name: string) => void }) {
+  const [v, setV] = useState(contact.personName)
+  useEffect(() => setV(contact.personName), [contact.personName])
+  const commit = (next = v) => { if (next.trim() !== contact.personName) onSave(next) }
+  const fixed = nameHasNumber(contact.personName) ? cleanPersonName(contact.personName) : ''
+  const sheet = contact.sheetName
+  return (
+    <div className="or-name-edit">
+      <label htmlFor="or-name-input">Name in the letter</label>
+      <input id="or-name-input" className="or-input" value={v} placeholder="Sir/Madam" maxLength={120} onChange={(e) => setV(e.target.value)} onBlur={() => commit()} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} />
+      {fixed && fixed !== contact.personName && <button type="button" className="or-link-btn" onClick={() => commit(fixed)}>Has a number. Use “{fixed}”</button>}
+      {sheet !== undefined && sheet !== contact.personName && <button type="button" className="or-link-btn" onClick={() => commit(sheet)}>Back to the sheet: {sheet || 'no name'}</button>}
+    </div>
+  )
+}
+
 function ContactTab() {
   useClockFormat() // re-render when Home → Settings → Time format changes
   const s = useDesk()
@@ -247,6 +268,7 @@ function ContactTab() {
         <span>{active.email}</span>
         {active.phone && <span>{active.phone}</span>}
       </div>
+      <NameInLetter key={active.email} contact={active} onSave={(name) => s.setContactNames({ [active.email]: name })} />
       <dl className="or-facts">
         {active.sectorGroup && <><dt>Group</dt><dd>{active.groupNo != null ? `${active.groupNo} · ` : ''}{active.sectorGroup}</dd></>}
         {active.purposes.length > 0 && <><dt>Listed for</dt><dd className="or-purposes">{active.purposes.map((p) => <span key={p} className="or-chip">{purposeLabel(p)}</span>)}</dd></>}
@@ -599,7 +621,7 @@ function SendFooter() {
           {/* you decide the pace: a pacing gap can be skipped for the next email (hours, the daily limit and
               per-organisation spacing still hold — the engine checks the next send as usual) */}
           {waiting?.why === 'gap' && !s.current && (
-            <button type="button" className="btn primary" onClick={() => { if (job) void engineClient.control(job.jobId, 'send-next') }} data-tip="Skip this wait and send the next email now (the pace returns after it)"><Icon name="send" size={14} /><span>Send next now</span></button>
+            <button type="button" className="btn primary or-send-next" onClick={() => { if (job) void engineClient.control(job.jobId, 'send-next') }} data-tip="Skip this wait and send the next email now (the pace returns after it)"><Icon name="send" size={14} /><span>Send next now</span></button>
           )}
           {s.run === 'running'
             ? <button type="button" className="btn" onClick={pauseBatch}><Icon name="pause" size={14} /><span>Pause</span></button>

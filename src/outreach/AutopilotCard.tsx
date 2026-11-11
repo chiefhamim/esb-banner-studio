@@ -3,6 +3,7 @@ import { useEngineStore } from './engineStore'
 import { useDesk } from './outreachStore'
 import { ask, useOutreachUi } from './outreachUi'
 import { describeRun } from './activityFormat'
+import { engineClient } from './engineClient'
 import { eligible, pauseBatch, resumeBatch, stopBatch } from './campaign'
 import { Icon } from '../ui/Icon'
 import { useClockFormat } from '../ui/time'
@@ -94,6 +95,15 @@ export function AutopilotCard() {
         {!(desc.reason && desc.nextInText) && <p className="or-muted">{desc.sentence}</p>}
         {desc.nextInText && <p className="or-muted" data-testid="or-wait-reason">{desc.nextInText}{desc.reason ? ` — ${desc.reason}` : ''}</p>}
       </div>
+
+      {!!job?.badNames && job.badNameSample && (
+        <div className="or-name-warn" role="status">
+          <p><b>{job.badNames}</b> {job.badNames === 1 ? 'name' : 'names'} still to send {job.badNames === 1 ? 'carries' : 'carry'} a number, like “{job.badNameSample.old}”.</p>
+          <button type="button" className="btn xs primary" onClick={async () => {
+            if (await ask({ title: `Remove the numbers from ${job.badNames} names?`, body: `“${job.badNameSample!.old}” becomes “${job.badNameSample!.fixed}”. Letters already sent are not changed.`, ok: 'Remove the numbers' })) void engineClient.control(job.jobId, 'clean-names')
+          }}>Remove the numbers</button>
+        </div>
+      )}
 
       <div className="or-autopilot-actions">
         {desc.status === 'sending' || desc.status === 'waiting' ? (

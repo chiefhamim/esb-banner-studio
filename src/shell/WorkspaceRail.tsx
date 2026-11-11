@@ -30,16 +30,6 @@ export function WorkspaceSwitcher() {
   const { wrap, thumb } = useSlidingThumb(current, 'workspace-switch', () => current === useShellStore.getState().workspace)
   return (
     <div className="ws-wrap">
-      {/* the Home icon's hover sheen — same moving gradient and colours as the "Studio" word on the Home screen */}
-      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden focusable="false">
-        <defs>
-          <linearGradient id="ws-home-ig" gradientUnits="userSpaceOnUse" x1="-24" y1="0" x2="0" y2="24" spreadMethod="reflect">
-            <stop offset="0" stopColor="#0aa37a" /><stop offset=".5" stopColor="#1fd3a8" /><stop offset="1" stopColor="#3b82f6" />
-            <animate attributeName="x1" values="-24;0;-24" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
-            <animate attributeName="x2" values="0;24;0" dur="6s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" />
-          </linearGradient>
-        </defs>
-      </svg>
       <button
         type="button"
         className={'ws-home-btn' + (current === 'home' ? ' on' : '')}
@@ -87,21 +77,37 @@ export function useDeskNav(): DeskNav {
   return useSyncExternalStore((f) => { navSubs.add(f); return () => { navSubs.delete(f) } }, readNav)
 }
 
+const DESK_INK = [['news', '#0d9488', '#14b8a6', '#0284c7'], ['editorial', '#0aa37a', '#1fd3a8', '#3b82f6'], ['graphics', '#3b82f6', '#7c5cff', '#d946ef'], ['video', '#ff7a1a', '#ff3b6b', '#b24bf3'], ['outreach', '#0284c7', '#38bdf8', '#818cf8']] as const
+
 /** The desks as a column down the left edge: icon over name, the chosen one on a raised chip that glides between them. */
 export function DeskRail() {
   const current = useShellStore((s) => s.workspace)
   const setWorkspace = useShellStore((s) => s.setWorkspace)
   return (
     <nav className="desk-rail" aria-label="Desks">
-      {[HOME, ...DESKS].map((w) => {
-        const on = current === w.id
-        return (
-          <button key={w.id} type="button" className={'desk-rail-btn' + (on ? ' on' : '')} data-tip={w.title} data-tip-pos="right" aria-label={w.label} aria-current={on ? 'page' : undefined} onClick={() => setWorkspace(w.id)}>
-            <Icon name={w.icon} size={19} />
-            <span>{w.label}</span>
-          </button>
-        )
-      })}
+      {/* the same colours the desk's icon takes on Home when hovered */}
+      <svg className="desk-rail-defs" aria-hidden focusable="false"><defs>
+        {DESK_INK.map(([id, a, b, c]) => (
+          <linearGradient key={id} id={`rail-ig-${id}`} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="24" y2="24">
+            <stop offset="0" stopColor={a} /><stop offset=".5" stopColor={b} /><stop offset="1" stopColor={c} />
+          </linearGradient>
+        ))}
+      </defs></svg>
+      {/* Home sits in a band as tall as the desk's header, on the header's own line, so menus and rail read as one row */}
+      <div className="desk-rail-head">
+        <button type="button" className="ws-home-btn desk-rail-home" data-tip={HOME.title} data-tip-pos="right" aria-label={HOME.label} onClick={() => setWorkspace(HOME.id)}><Icon name={HOME.icon} size={19} /></button>
+      </div>
+      <div className="desk-rail-desks">
+        {DESKS.map((w) => {
+          const on = current === w.id
+          return (
+            <button key={w.id} type="button" data-desk={w.id} className={'desk-rail-btn' + (on ? ' on' : '')} data-tip={w.title} data-tip-pos="right" aria-label={w.label} aria-current={on ? 'page' : undefined} onClick={() => setWorkspace(w.id)}>
+              <Icon name={w.icon} size={19} />
+              <span>{w.label}</span>
+            </button>
+          )
+        })}
+      </div>
       {/* desks down the left: the account lives at the foot of the rail instead of in each desk's header */}
       <div className="desk-rail-foot"><AccountButton /></div>
     </nav>

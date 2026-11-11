@@ -463,7 +463,7 @@ export function warningText(w: PlanWarning): string {
     case 'anyHour':
       return 'Sending hours are off: emails go out at any hour, also at night and at weekends.'
     case 'org':
-      return `${w.inOrgs.toLocaleString()} of the ${w.remaining.toLocaleString()} remaining contacts are in ${w.orgs.toLocaleString()} ${w.orgs === 1 ? 'organisation' : 'organisations'} — at ${w.orgMax} a day each${w.orgGapMin ? `, ${w.orgGapMin} min apart` : ''}, only ${w.today} can go today.`
+      return `${w.inOrgs.toLocaleString()} of the ${w.remaining.toLocaleString()} remaining contacts are in ${w.orgs.toLocaleString()} ${w.orgs === 1 ? 'organisation' : 'organisations'} — ${w.orgMax ? `at ${w.orgMax} a day each${w.orgGapMin ? `, ${w.orgGapMin} min apart` : ''}` : `${w.orgGapMin} min apart in each`}, only ${w.today} can go today.`
   }
 }
 

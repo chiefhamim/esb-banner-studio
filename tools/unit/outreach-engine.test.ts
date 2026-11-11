@@ -329,6 +329,129 @@ describe('outreach-engine: headless send loop, error recovery & lifecycle (§1.5
     expect(h.engine.control(job.jobId, 'send-next').ok).toBe(false)
   })
 
+  // (4d) the mailer's own 30 s floor (Send next now right after a send) is a wait, never a failed attempt
+  it('(4d) a mailer hold waits and retries the same contact without using an attempt', async () => {
+    let holds = 1
+    const h = createTestHarness({
+      settings: { minDelaySec: 1, maxDelaySec: 1 },
+      sendError: () => (holds-- > 0 ? { ok: false, error: 'Too soon after the last email', nextAt: now + 20_000, hold: 'gap' } : { ok: true, messageId: '<ok@example.com>' }),
+    })
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c4d', messages: [{ to: 'u1@ex1.com', subject: '1', body: '1' }] })
+    await h.engine.tick()
+    const snap = h.engine.snapshot()[0]
+    expect(snap.status).toBe('waiting')
+    expect(snap.why).toBe('gap')
+    expect(snap.until).toBe(now + 20_000)
+    expect(snap.failed).toBe(0)
+    expect(h.events.read({ types: ['send.retry', 'send.fail'], limit: 10 }).events.length).toBe(0)
+    now += 20_000
+    await h.engine.tick()
+    expect(h.sentMails.map((m) => m.to)).toEqual(['u1@ex1.com', 'u1@ex1.com'])
+    expect(h.events.read({ types: ['send.ok'], limit: 10 }).events.length).toBe(1)
+  })
+
+  // (4e) the mailer's daily limit holds the job until it frees, inside the sending hours
+  it('(4e) a mailer day-limit hold waits as a cap, with no failure recorded', async () => {
+    const h = createTestHarness({ sendError: () => ({ ok: false, error: 'Daily limit of 100 reached', nextAt: now + 3600_000, hold: 'day' }) })
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c4e', messages: [{ to: 'u1@ex1.com', subject: '1', body: '1' }] })
+    await h.engine.tick()
+    const snap = h.engine.snapshot()[0]
+    expect(snap.why).toBe('cap')
+    expect(snap.failed).toBe(0)
+    expect(snap.wait.kind).toBe('day')
+  })
+
+  // (4f) nothing went out, so the next contact does not wait out a gap
+  it('(4f) a duplicate or a follow-up not due is skipped and the next contact goes at once', async () => {
+    let n = 0
+    const h = createTestHarness({
+      settings: { minDelaySec: 300, maxDelaySec: 300 },
+      sendError: () => (++n === 1 ? { ok: false, error: 'Already emailed', duplicate: true } : n === 2 ? { ok: false, error: 'No earlier letter', notDue: true } : { ok: true, messageId: '<ok@example.com>' }),
+    })
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c4f', messages: [{ to: 'u1@ex1.com', subject: '1', body: '1' }, { to: 'u2@ex2.com', subject: '2', body: '2' }, { to: 'u3@ex3.com', subject: '3', body: '3' }] })
+    await h.engine.tick()
+    await h.engine.tick()
+    await h.engine.tick()
+    expect(h.sentMails.length).toBe(3)
+    const skips = h.events.read({ types: ['send.skip'], limit: 10 }).events.map((e: any) => e.reason).sort()
+    expect(skips).toEqual(['already-sent', 'not-due'])
+    expect(h.engine.snapshot()[0].skipped).toBe(2)
+  })
+
+  // (4g) Resume, a new job or a settings save during a send must not start a second loop
+  it('(4g) a tick that arrives during a send does not run beside it', async () => {
+    let release: (v: any) => void = () => {}
+    let inFlight = 0, most = 0
+    const h = createTestHarness({
+      settings: { minDelaySec: 300, maxDelaySec: 300 },
+      deps: {
+        mailer: {
+          send: () => { inFlight++; most = Math.max(most, inFlight); return new Promise((r) => { release = (v) => { inFlight--; r(v) } }) },
+          status: () => ({}),
+        },
+      },
+    })
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c4g', messages: [{ to: 'u1@ex1.com', subject: '1', body: '1' }, { to: 'u2@ex2.com', subject: '2', body: '2' }] })
+    const first = h.engine.tick()
+    await new Promise((r) => setTimeout(r, 5))
+    await h.engine.tick()
+    await new Promise((r) => setTimeout(r, 5))
+    expect(most).toBe(1)
+    release({ ok: true, messageId: '<a@example.com>' })
+    await first
+    expect(h.engine.snapshot()[0].why).toBe('gap')
+    expect(most).toBe(1)
+  })
+
+  // (4j) a batch already running: numbers come out of the names still to go, and letters already sent are left as they went
+  it('(4j) clean-names repairs only the letters not sent yet', async () => {
+    const h = createTestHarness({ settings: { minDelaySec: 300, maxDelaySec: 300 } })
+    h.engine.start()
+    const greet = (n: string) => `Dear ${n},`
+    const names = ['মোঃ করিম (২০৩৯৯)', 'A. Rahim - 1042', 'No Number Here']
+    const { jobId } = h.engine.submit({ campaignId: 'c4j', messages: names.map((name, i) => ({ to: `u${i}@ex${i}.com`, name, vars: { name }, subject: `For ${name}`, body: greet(name) })) })
+    await h.engine.tick()
+    expect(h.sentMails.length).toBe(1)
+    const before = h.engine.snapshot()[0]
+    expect(before.badNames).toBe(1)
+    expect(before.badNameSample).toEqual({ old: 'A. Rahim - 1042', fixed: 'A. Rahim' })
+    expect(h.engine.control(jobId, 'clean-names')).toMatchObject({ ok: true, count: 1 })
+    expect(h.engine.snapshot()[0].badNames).toBe(0)
+    const m = h.jobs.messages(jobId)
+    expect(m[1]).toMatchObject({ name: 'A. Rahim', subject: 'For A. Rahim', body: 'Dear A. Rahim,' })
+    expect(m[1].vars.name).toBe('A. Rahim')
+    expect(m[0].name).toBe('মোঃ করিম (২০৩৯৯)')
+    expect(m[2].name).toBe('No Number Here')
+  })
+
+  // (4i) the last email ends the job; it does not sit "waiting" through one more gap
+  it('(4i) the job is done right after its last email', async () => {
+    const h = createTestHarness({ settings: { minDelaySec: 300, maxDelaySec: 300 } })
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c4i', messages: [{ to: 'u1@ex1.com', subject: '1', body: '1' }] })
+    await h.engine.tick()
+    expect(h.sentMails.length).toBe(1)
+    await advanceTime(100)
+    expect(h.engine.snapshot()[0].status).toBe('done')
+  })
+
+  // (4h) the desk keeps its old value for an undefined field: a finished wait has to be pushed as null
+  it('(4h) progress clears a finished wait and counts what is left correctly', async () => {
+    const h = createTestHarness({ sendError: () => ({ ok: false, error: '550 5.1.1 User unknown', responseCode: 550 }) })
+    h.engine.start()
+    h.engine.submit({ campaignId: 'c4h', messages: [{ to: 'u1@ex1.com', subject: '1', body: '1' }, { to: 'u2@ex2.com', subject: '2', body: '2' }] })
+    await h.engine.tick()
+    const pushes = h.emitted.filter((e) => e.channel === 'progress').map((e) => e.data)
+    const running = pushes.find((p) => p.status === 'running')
+    expect(running.until).toBeNull()
+    expect(running.why).toBeNull()
+    expect(pushes[pushes.length - 1].remaining).toBe(1)
+  })
+
   // (5) pause finishes the in-flight send then halts, resume continues, stop cancels, pauseAll covers every job
   it('(5) pause finishes the in-flight send then halts, resume continues, stop cancels, pauseAll covers every job', async () => {
     const h = createTestHarness()

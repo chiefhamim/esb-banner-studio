@@ -82,7 +82,7 @@
 .or-log { grid-area: log; max-height: 180px; overflow-y: auto; padding: 8px 16px; background: var(--side); border-bottom: 1px solid var(--card-line); font-size: 12px; line-height: 18px; }
 
 /* --or-lw / --or-rw are set only once the editor drags or folds a column (src/ui/SideColumn.tsx); until then the responsive widths */
-.or-body { grid-area: body; display: grid; grid-template-columns: var(--or-lw, clamp(272px, 22vw, 344px)) minmax(0, 1fr) var(--or-rw, clamp(280px, 22vw, 344px)); min-height: 0; }
+.or-body { grid-area: body; display: grid; grid-template-columns: var(--or-lw, clamp(272px, 22vw, 312px)) minmax(0, 1fr) var(--or-rw, clamp(280px, 22vw, 312px)); min-height: 0; }
 .or-status > span { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* ---------------------------------------------------------------- state colours: one family for rows, chips, dots */
@@ -475,7 +475,10 @@
 .or-foot-note { margin: 0; font-size: 12px; line-height: 17px; color: var(--text-2); }
 .or-foot-note b { color: var(--text); font-variant-numeric: tabular-nums; }
 .or-send-btn { height: 36px; min-height: 36px; font-size: 13px; font-weight: 600; border-radius: var(--r-2); }
-.or-right-foot .or-actions .btn { flex: 1; justify-content: center; }
+.or-right-foot .or-actions { flex-wrap: wrap; }
+.or-right-foot .or-actions .btn { flex: 1 1 0; min-width: 0; justify-content: center; white-space: nowrap; }
+/* its own row: beside Pause and Stop the three did not fit a narrow column and Stop was cut off */
+.or-right-foot .or-actions .or-send-next { flex: 1 0 100%; }
 
 /* Sources: the story in full before it is added, PDF / Word like Editorial, every source readable whole */
 .or-story { display: flex; flex-direction: column; gap: 8px; }
@@ -531,10 +534,10 @@
 .or-file-open .or-file-name { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 /* the New menu: a compact card, each item's hint on its own lines under the name, shown in full, not a long strip */
 /* the New menu hangs exactly under the full-width New button (MenuButton matchWidth), not a fixed 264 px */
-.menu.or-new-menu { box-sizing: border-box; }
+.menu.or-new-menu { box-sizing: border-box; overflow-x: hidden; }
 .menu.or-new-menu .menu-item { height: auto; min-height: 44px; align-items: flex-start; padding-top: 7px; padding-bottom: 7px; line-height: 18px; }
 .menu.or-new-menu .menu-item .icon, .menu.or-new-menu .menu-item > svg { margin-top: 2px; }
-.menu.or-new-menu .mi-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.menu.or-new-menu .mi-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .menu.or-new-menu .mi-label small { display: block; margin: 0; line-height: 16px; white-space: normal; overflow-wrap: anywhere; text-wrap: balance; }
 /* "Show 200 more" at the foot of a long contact list */
 .or-list .or-more { flex: none; margin: 4px 0 8px; color: var(--text-2); font-weight: 500; }
@@ -1381,3 +1384,18 @@
 /* Rewrite opens a menu, so it shows its arrow */
 :root:root .or-body .or-toolbar > .or-ai-well > .or-rewrite .chev { display: block !important; width: 12px; height: 12px; flex: none; margin: 0; opacity: .8; }
 :root:root .or-body .or-toolbar > .or-ai-well > .or-rewrite { gap: 3px !important; }
+
+/* the name a person's letters use, and the warning when names carry a number */
+.or-name-edit { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.or-name-edit label { font: 600 11px/16px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.or-name-edit .or-input { width: 100%; height: 32px; box-sizing: border-box; }
+.or-name-edit [id='or-name-input'] { font-family: var(--font-ui), 'Hind Siliguri'; }
+.or-name-warn { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--warning-soft); border-radius: var(--r-2); }
+.or-name-warn p { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 12px; line-height: 17px; color: var(--text); overflow-wrap: anywhere; }
+.or-name-warn .btn { flex: none; }
+.or-rs-names { flex-wrap: wrap; }
+.or-rs-names > span { flex: 1 1 220px; min-width: 0; }
+
+/* Needs you: the group's name and count on one line, its buttons together on the next */
+.or-flag-group-title { flex: 1 0 100%; flex-wrap: nowrap; }
+.or-flag-group-head:has(> .btn:only-of-type) .or-flag-group-title { flex: 1 1 0; }

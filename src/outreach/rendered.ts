@@ -3,6 +3,7 @@
 
 import type { Contact } from './types'
 import { roleMailbox } from './addressCheck'
+import { cleanPersonName, nameHasNumber } from './personName'
 
 export type FlagKind =
   | 'empty_fragment'
@@ -74,9 +75,10 @@ export function reviewRendered(
     if (name.includes('@')) {
       isOdd = true
       reason = 'Name contains an @ symbol'
-    } else if (/\d/.test(name)) {
+    } else if (nameHasNumber(name)) {
       isOdd = true
-      reason = 'Name contains digits'
+      const fixed = cleanPersonName(name)
+      reason = fixed && fixed !== name ? `Has a number with the name; the letter would say “${name}”, not “${fixed}”` : 'Name contains digits'
     } else if (org && lowerName === org.toLowerCase()) {
       isOdd = true
       reason = 'Name equals the organisation name'

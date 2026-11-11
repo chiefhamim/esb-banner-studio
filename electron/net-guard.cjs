@@ -3,6 +3,8 @@ const http = require('node:http')
 const https = require('node:https')
 const dns = require('node:dns')
 const net = require('node:net')
+const tls = require('node:tls')
+const { X509Certificate } = require('node:crypto')
 const { URL } = require('node:url')
 
 const pkg = require('../package.json')
@@ -238,6 +240,70 @@ async function resolveAndValidateHost(hostname, resolver = null, allowLoopback =
 /**
  * Safe fetch execution with DNS rebind protection, manual redirects, and body cap.
  */
+// Most Bangladeshi government sites send their own certificate without the intermediate that links it to a known root. A
+// browser quietly downloads the missing piece from the address written in the certificate; Node does not, so nearly every
+// official source failed with "unable to verify the first certificate". This does what the browser does. Verification stays
+// on: a downloaded certificate is used only if a root Node already trusts really signed it (directly or through another
+// downloaded one), so a forged certificate pointing at an attacker's own "CA" gains nothing.
+const issuerUrlOf = (cert) => (/CA Issuers - URI:(https?:\/\/\S+)/.exec(cert.infoAccess || '') || [])[1] || null
+const toPem = (der) => `-----BEGIN CERTIFICATE-----\n${der.toString('base64').match(/.{1,64}/g).join('\n')}\n-----END CERTIFICATE-----\n`
+const issuerCache = new Map()
+let trustedRoots = null
+function rootOf(cert) {
+  trustedRoots = trustedRoots || tls.rootCertificates.map((p) => new X509Certificate(p))
+  return trustedRoots.find((r) => cert.checkIssued(r) && cert.verify(r.publicKey)) || null
+}
+
+async function downloadIssuer(url, resolver) {
+  if (issuerCache.has(url)) return issuerCache.get(url)
+  const parsed = new URL(url)
+  const host = await resolveAndValidateHost(parsed.hostname, resolver, false)
+  if (!host.ok) return null
+  const client = parsed.protocol === 'https:' ? https : http
+  const der = await new Promise((done) => {
+    const chunks = []
+    let size = 0
+    const req = client.get({ host: host.ip, port: parsed.port || undefined, path: parsed.pathname + parsed.search, servername: parsed.protocol === 'https:' ? parsed.hostname : undefined, headers: { Host: parsed.host, 'User-Agent': USER_AGENT }, timeout: 5000 }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); done(null); return }
+      res.on('data', (c) => { size += c.length; if (size > 64 * 1024) { req.destroy(); done(null) } else chunks.push(c) })
+      res.on('end', () => done(Buffer.concat(chunks)))
+      res.on('error', () => done(null))
+    })
+    req.on('timeout', () => { req.destroy(); done(null) })
+    req.on('error', () => done(null))
+  })
+  let cert = null
+  try { cert = der ? new X509Certificate(der) : null } catch { cert = null }
+  if (cert) { if (issuerCache.size >= 64) issuerCache.clear(); issuerCache.set(url, cert) }
+  return cert
+}
+
+/** The certificates a site left out, proven to lead to a known root; null when no such chain can be found. */
+async function missingIssuers(ip, port, servername, resolver) {
+  const leaf = await new Promise((done) => {
+    const s = tls.connect({ host: ip, port, servername, rejectUnauthorized: false, timeout: 5000 }, () => {
+      const raw = s.getPeerCertificate(false)?.raw
+      s.destroy()
+      try { done(raw ? new X509Certificate(raw) : null) } catch { done(null) }
+    })
+    s.on('timeout', () => { s.destroy(); done(null) })
+    s.on('error', () => done(null))
+  })
+  const found = []
+  let at = leaf
+  for (let i = 0; at && i < 4; i++) {
+    const url = issuerUrlOf(at)
+    if (!url) return null
+    const issuer = await downloadIssuer(url, resolver)
+    if (!issuer || !at.checkIssued(issuer) || !at.verify(issuer.publicKey)) return null
+    if (issuer.issuer === issuer.subject) return null // a self-signed "root" no one trusts
+    found.push(issuer)
+    if (rootOf(issuer)) return [...tls.rootCertificates, ...found.map((c) => toPem(c.raw))]
+    at = issuer
+  }
+  return null
+}
+
 async function safeFetch(targetUrl, options = {}) {
   const maxBytes = options.maxBytes || MAX_HTML_BYTES
   const allowedTypes = options.allowedTypes || ALLOWED_HTML_TYPES
@@ -248,6 +314,8 @@ async function safeFetch(targetUrl, options = {}) {
 
   let currentUrl = targetUrl
   let redirects = 0
+  let extraCa = null
+  let triedIssuersFor = ''
 
   while (redirects <= MAX_REDIRECTS) {
     const elapsed = Date.now() - startTime
@@ -306,6 +374,7 @@ async function safeFetch(targetUrl, options = {}) {
           'Connection': 'close',
         },
         servername: isHttps ? parsed.hostname : undefined,
+        ...(isHttps && extraCa ? { ca: extraCa } : {}),
         timeout: remainingTime,
       })
 
@@ -348,6 +417,7 @@ async function safeFetch(targetUrl, options = {}) {
             return
           }
         }
+        if (isHttps && err && err.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' && triedIssuersFor !== parsed.hostname) { resolve({ needIssuers: true, error: err.message }); return }
         resolve({ ok: false, code: 'network_error', error: err.message })
       })
 
@@ -439,6 +509,14 @@ async function safeFetch(targetUrl, options = {}) {
 
       req.end()
     })
+
+    if (result.needIssuers) {
+      triedIssuersFor = parsed.hostname
+      const ca = await missingIssuers(hostCheck.ip, port, parsed.hostname, customResolver).catch(() => null)
+      if (!ca) return { ok: false, code: 'network_error', error: result.error }
+      extraCa = ca
+      continue
+    }
 
     if (result.redirect) {
       redirects++

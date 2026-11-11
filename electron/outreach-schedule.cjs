@@ -281,12 +281,13 @@ function isWebmail(domain) {
  * @returns {{ index: number, email: string, domain: string } | { waiting: 'domain', earliestAt: number, domain?: string, kind?: 'limit' | 'spacing', count?: number } | null}
  */
 function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
-  const maxPerDay = cfg.domainMaxPerDay ?? 3
+  // 0 = no daily limit: Gmail limits the sending account, not the organisations it writes to (an override can still set one)
+  const maxPerDay = cfg.domainMaxPerDay ?? 0
   // per-organisation overrides ({ 'bpdb.gov.bd': 10 }): a known large organisation can take more than the default
   const overrides = cfg.domainOverrides && typeof cfg.domainOverrides === 'object' ? cfg.domainOverrides : null
   const maxFor = (dom) => (overrides && Object.prototype.hasOwnProperty.call(overrides, dom) && Number.isInteger(overrides[dom]) ? overrides[dom] : maxPerDay)
   const heldByLimit = new Set()
-  const minGapMs = (cfg.domainMinGapSec ?? (20 * 60)) * 1000
+  const minGapMs = (cfg.domainMinGapSec ?? (3 * 60)) * 1000
   const heldSet = cfg.heldSet || null
   const sentSet = sentIndexes instanceof Set ? sentIndexes : new Set(sentIndexes)
 
@@ -314,7 +315,7 @@ function pickNext(messages, sentIndexes, now, domainStats, cfg = {}) {
     }
 
     const domMax = maxFor(dom)
-    if (st.countToday >= domMax) {
+    if (domMax > 0 && st.countToday >= domMax) {
       // Exceeded daily domain count - free when resetAt arrives
       heldByLimit.add(dom)
       const resetTime = st.resetAt || (now + 24 * 3600 * 1000)
@@ -428,8 +429,8 @@ function livePlan({ now, settings = {}, sendTimes = [], sendDays = 1, lastSendAt
   const minGap = Number.isFinite(settings.minDelaySec) ? settings.minDelaySec : 180
   const maxGap = Number.isFinite(settings.maxDelaySec) && settings.maxDelaySec >= minGap ? settings.maxDelaySec : minGap
   const avgGap = (minGap + maxGap) / 2
-  const orgMax = Number.isFinite(settings.domainMaxPerDay) ? settings.domainMaxPerDay : 3
-  const orgGapMs = (Number.isFinite(settings.domainMinGapSec) ? settings.domainMinGapSec : 1200) * 1000
+  const orgMax = Number.isFinite(settings.domainMaxPerDay) ? settings.domainMaxPerDay : 0
+  const orgGapMs = (Number.isFinite(settings.domainMinGapSec) ? settings.domainMinGapSec : 180) * 1000
   const winOpts = windowOn ? win : { enabled: false }
 
   const limitToday = rampCap(limit, sendDays, ramp)
@@ -499,7 +500,7 @@ function livePlan({ now, settings = {}, sendTimes = [], sendDays = 1, lastSendAt
       for (const [d, n] of queue) {
         if (!d || n <= 0) continue
         const o = orgToday.get(d) || { n: 0, last: 0 }
-        if (o.n >= orgMax) continue
+        if (orgMax > 0 && o.n >= orgMax) continue
         const at = o.last + orgGapMs
         if (at <= t) {
           if (n > best) { best = n; pick = d }
@@ -536,7 +537,7 @@ function livePlan({ now, settings = {}, sendTimes = [], sendDays = 1, lastSendAt
     // name the organisations that hold the queue back: those with more contacts left than one day allows them
     const per = new Map()
     for (const d of doms) if (d && !isWebmail(d)) { const k = String(d).toLowerCase(); per.set(k, (per.get(k) || 0) + 1) }
-    const crowded = [...per.values()].filter((n) => n > orgMax)
+    const crowded = orgMax > 0 ? [...per.values()].filter((n) => n > orgMax) : []
     const orgs = crowded.length || per.size
     const inOrgs = crowded.length ? crowded.reduce((x, n) => x + n, 0) : [...per.values()].reduce((x, n) => x + n, 0)
     // the hours and the daily limit would allow more today than the organisations do

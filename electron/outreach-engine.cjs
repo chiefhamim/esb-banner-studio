@@ -19,6 +19,8 @@ const { classifySendError } = require('./outreach-errors.cjs')
 
 const DAY_MS = 24 * 3600 * 1000
 
+const { nameHasNumber, cleanPersonName } = require('./person-name.cjs')
+
 function createEngine(deps = {}) {
   const clock = deps.clock || (() => Date.now())
   const setTimer = deps.setTimer || setTimeout
@@ -62,8 +64,8 @@ function createEngine(deps = {}) {
           pace: 'manual',
           minDelaySec: 180,
           maxDelaySec: 480,
-          domainMaxPerDay: 3,
-          domainMinGapSec: 20 * 60,
+          domainMaxPerDay: 0,
+          domainMinGapSec: 3 * 60,
           contactCooldownDays: 30,
           autoResume: true,
         }
@@ -187,16 +189,39 @@ function createEngine(deps = {}) {
       jobId: job.id,
       campaignId: job.campaignId,
       status: job.status,
-      why: job.why || undefined,
-      until: job.until || undefined,
+      // null, not undefined: the desk keeps its old value for an undefined field, so a finished wait stayed on screen
+      why: job.why || null,
+      until: job.until || null,
       // what exactly it waits for (organisation + limit / spacing, the gap range, the hours) — the desk words it
       wait: job.wait || null,
-      reason: job.reason || undefined,
+      reason: job.reason || null,
       sent: sentCount,
       total: job.total,
       failed: failedCount,
+      // `sent` already holds every contact that is finished with, failed and skipped ones too
+      remaining: Math.max(0, job.total - sentCount),
       nextAt: job.until || null,
     })
+  }
+
+  // Names still to go that carry a number and have a clean form ("মোঃ মাহফুজার রহমান (২০৩৯৯)")
+  // Remembered until a letter goes or names change: the desk asks on every snapshot and a job can be thousands of letters.
+  const misnamedMemo = new WeakMap()
+  function misnamed(job, list = jobs.messages(job.id) || []) {
+    const memo = misnamedMemo.get(job)
+    const stamp = (job.state.sent || []).length
+    if (memo && memo.stamp === stamp) return memo.out
+    const done = new Set(job.state.sent || [])
+    const out = []
+    list.forEach((m, i) => {
+      if (done.has(i)) return
+      const old = m.name || (m.vars && m.vars.name) || ''
+      if (!nameHasNumber(old)) return
+      const fixed = cleanPersonName(old)
+      if (fixed && fixed !== old) out.push({ i, old, fixed })
+    })
+    misnamedMemo.set(job, { stamp, out })
+    return out
   }
 
   // Bounce circuit breaker: once a campaign has sent BOUNCE_MIN_SENT letters, a bounce rate above BOUNCE_MAX_RATE
@@ -280,9 +305,30 @@ function createEngine(deps = {}) {
     return null
   }
 
-  // Main schedule tick
+  // One pass at a time. A send takes seconds and no timer is armed during it, so Resume, a new job or a settings save in
+  // that window armed a second tick: two loops then ran side by side for the rest of the session, at twice the pace.
+  let ticking = false
+  let tickAgain = false
   async function tick() {
     if (!isRunning) return
+    if (ticking) { tickAgain = true; return }
+    ticking = true
+    try {
+      await runTick()
+    } catch (err) {
+      // an unexpected error (a full disk, say) must not end the loop silently with the job still marked as sending
+      console.error('[outreach-engine] tick failed:', err)
+      if (isRunning && !activeTimer) activeTimer = setTimer(tick, 60000)
+    } finally {
+      ticking = false
+      if (tickAgain) {
+        tickAgain = false
+        if (isRunning && !activeTimer) activeTimer = setTimer(tick, 50)
+      }
+    }
+  }
+
+  async function runTick() {
     if (activeTimer) {
       clearTimer(activeTimer)
       activeTimer = null
@@ -393,7 +439,11 @@ function createEngine(deps = {}) {
     const elapsedSinceLastSendMs = now - lastSendAt
     const effectiveGapMs = Math.round((requiredGapSec * 1000) / speed)
     const gapKey = `${cfg.minDelaySec}|${cfg.maxDelaySec}`
-    if (job.skipGapOnce) {
+    // everyone is dealt with: nothing is left to space out, so the job finishes now instead of after one more gap
+    const allHandled = (job.state.sent || []).length >= jobs.messages(job.id).length
+    if (allHandled) {
+      job.why = null
+    } else if (job.skipGapOnce) {
       // the editor asked for the next email now: this one send goes without the gap
       job.skipGapOnce = false
     } else if (job.why === 'gap' && job.until && job.gapKey === gapKey) {
@@ -423,9 +473,9 @@ function createEngine(deps = {}) {
     const sentIndexes = new Set(job.state.sent || [])
     const heldIndexes = new Set(job.state.held || [])
 
-    const effectiveDomainGapSec = Math.max(1, Math.round((cfg.domainMinGapSec ?? 20 * 60) / speed))
+    const effectiveDomainGapSec = Math.max(1, Math.round((cfg.domainMinGapSec ?? 3 * 60) / speed))
     const pick = pickNext(msgs, sentIndexes, now, domainStats, {
-      domainMaxPerDay: cfg.domainMaxPerDay ?? 3,
+      domainMaxPerDay: cfg.domainMaxPerDay ?? 0,
       domainMinGapSec: effectiveDomainGapSec,
       domainOverrides: cfg.domainOverrides || null,
       heldSet: heldIndexes,
@@ -479,13 +529,14 @@ function createEngine(deps = {}) {
     if (pick.waiting === 'domain') {
       job.status = 'waiting'
       job.why = 'domain'
-      job.until = pick.earliestAt
+      // the real next send: a limit that clears at midnight still waits for the sending hours to open
+      job.until = Math.max(pick.earliestAt, nextOpenAt(pick.earliestAt, win))
       job.wait = {
         domain: pick.domain || null,
         kind: pick.kind || null,
         count: pick.count ?? null,
-        max: pick.max ?? cfg.domainMaxPerDay ?? 3,
-        gapSec: cfg.domainMinGapSec ?? 20 * 60,
+        max: pick.max ?? cfg.domainMaxPerDay ?? 0,
+        gapSec: cfg.domainMinGapSec ?? 3 * 60,
         domainsHeld: pick.domainsHeld ?? 0,
       }
       jobs.saveState(job)
@@ -592,7 +643,8 @@ function createEngine(deps = {}) {
 
     const tEnd = clock()
     const ms = Math.max(1, tEnd - tStart)
-    lastSendAt = tEnd
+    // only a real attempt starts the next gap: the mailer turning a send away put nothing on the wire
+    if (!sendResult.hold && !sendResult.duplicate && !sendResult.notDue) lastSendAt = tEnd
 
     // 7. Handle Result
     if (sendResult.ok) {
@@ -620,14 +672,34 @@ function createEngine(deps = {}) {
       delete job.state.failed[msgIdx]
       jobs.saveState(job)
       pushProgress(job)
-    } else if (sendResult.duplicate) {
-      // the mailer's own ledger refused a repeat (sent within 7 days, perhaps from another PC): a skip, not a failure
-      job.state.skipped[msgIdx] = 'already-sent'
+    } else if (sendResult.hold && Number.isFinite(sendResult.nextAt)) {
+      // the mailer's own gate said "not yet" (its 30 s floor after Send next now, or the day's limit by its ledger).
+      // Nothing is wrong with this contact: wait, then send the same one, without using an attempt.
+      const isGap = sendResult.hold === 'gap'
+      job.status = 'waiting'
+      job.why = isGap ? 'gap' : 'cap'
+      job.until = Math.max(isGap ? sendResult.nextAt : nextOpenAt(sendResult.nextAt, win), clock() + 1000)
+      job.gapKey = gapKey
+      const heldBy = sendResult.hold === 'ceiling' ? (cfg.gmailCeiling24h || GMAIL_SAFE_24H) : (cfg.dailyLimit || 100)
+      job.wait = isGap
+        ? { ...gapWait, gapSec: Math.max(1, Math.ceil((job.until - clock()) / 1000)) }
+        : { kind: sendResult.hold, limit: cfg.dailyLimit || 100, sent: heldBy, ceiling: cfg.gmailCeiling24h || GMAIL_SAFE_24H, ramp: false, resetAt: sendResult.nextAt, resumeAt: job.until, hours: null, tz: tzOf(cfg) }
+      jobs.saveState(job)
+      pushProgress(job)
+      activeTimer = setTimer(tick, Math.max(50, Math.round(job.until - clock())))
+      return
+    } else if (sendResult.duplicate || sendResult.notDue) {
+      // the mailer's own ledger refused it (a repeat within 7 days, perhaps from another PC; a follow-up not due): a
+      // skip, not a failure, and nothing was sent, so the next contact does not wait out a gap
+      const skipReason = sendResult.duplicate ? 'already-sent' : 'not-due'
+      job.state.skipped[msgIdx] = skipReason
       job.state.sent.push(msgIdx)
       delete job.state.failed[msgIdx]
       jobs.saveState(job)
-      events.append({ type: 'send.skip', jobId: job.id, campaignId: job.campaignId, email, run: job.kind, reason: 'already-sent', detail: String(sendResult.error || '').slice(0, 200), dry: job.dry || dryRun })
+      events.append({ type: 'send.skip', jobId: job.id, campaignId: job.campaignId, email, run: job.kind, reason: skipReason, detail: String(sendResult.error || '').slice(0, 200), dry: job.dry || dryRun })
       pushProgress(job)
+      activeTimer = setTimer(tick, 100)
+      return
     } else {
       const errInfo = classifySendError(sendResult)
       const prevAttempt = job.state.failed[msgIdx] || { attempts: 0 }
@@ -762,8 +834,9 @@ function createEngine(deps = {}) {
     }
 
     // 8. Schedule next tick — and say when: the desk's "Next in m:ss" countdown reads job.until
-    const nextWaitMs = Math.max(100, Math.round((requiredGapSec * 1000) / speed))
-    if (job.status === 'running') {
+    const finished = (job.state.sent || []).length >= jobs.messages(job.id).length
+    const nextWaitMs = finished ? 100 : Math.max(100, Math.round((requiredGapSec * 1000) / speed))
+    if (job.status === 'running' && !finished) {
       job.status = 'waiting'
       job.why = 'gap'
       job.until = clock() + nextWaitMs
@@ -956,6 +1029,27 @@ function createEngine(deps = {}) {
       return { ok: true }
     }
 
+    // the editor's "Remove the numbers": the letters not sent yet greet the person by the clean name
+    if (action === 'clean-names') {
+      misnamedMemo.delete(job)
+      const all = [...(jobs.messages(job.id) || [])]
+      const list = misnamed(job, all)
+      for (const { i, old, fixed } of list) {
+        const m = (all[i] = { ...all[i], vars: all[i].vars ? { ...all[i].vars } : all[i].vars })
+        if (m.name) m.name = fixed
+        if (m.vars && m.vars.name) m.vars.name = m.vars.name.split(old).join(fixed)
+        if (typeof m.subject === 'string') m.subject = m.subject.split(old).join(fixed)
+        if (typeof m.body === 'string') m.body = m.body.split(old).join(fixed)
+      }
+      if (list.length) {
+        jobs.rewriteMessages(job.id, all)
+        misnamedMemo.delete(job)
+        events.append({ type: 'job.names-cleaned', jobId: job.id, campaignId: job.campaignId, count: list.length, by: 'user', dry: job.dry })
+      }
+      pushProgress(job)
+      return { ok: true, count: list.length }
+    }
+
     if (action === 'stop') {
       job.status = 'stopped'
       job.reason = 'user'
@@ -1036,7 +1130,12 @@ function createEngine(deps = {}) {
   }
 
   function snapshot() {
-    return jobs.list().map((j) => ({
+    return jobs.list().map((j) => {
+      const open = ['queued', 'running', 'waiting', 'paused'].includes(j.status)
+      const odd = open ? misnamed(j) : []
+      return {
+      badNames: odd.length,
+      badNameSample: odd.length ? { old: odd[0].old, fixed: odd[0].fixed } : null,
       jobId: j.id,
       campaignId: j.campaignId,
       name: j.campaignName,
@@ -1056,7 +1155,8 @@ function createEngine(deps = {}) {
       createdAt: j.createdAt,
       startedAt: j.startedAt,
       endedAt: j.endedAt,
-    }))
+      }
+    })
   }
 
   function isActive() {

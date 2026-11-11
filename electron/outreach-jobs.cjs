@@ -220,6 +220,18 @@ function createJobStore(options = {}) {
     }
   }
 
+  /** The messages of a job after the editor corrected them (names): written whole to a temp file, then renamed. */
+  function rewriteMessages(id, list) {
+    const job = jobs.get(id)
+    if (!job || !Array.isArray(list)) return false
+    const p = messagesPath(id)
+    const tmp = `${p}.tmp`
+    fs.writeFileSync(tmp, list.map((m) => JSON.stringify(m)).join('\n') + '\n', 'utf8')
+    fs.renameSync(tmp, p)
+    job.messages = list
+    return true
+  }
+
   function remove(id) {
     const job = jobs.get(id)
     if (job) {
@@ -245,6 +257,7 @@ function createJobStore(options = {}) {
     list,
     messages,
     saveState,
+    rewriteMessages,
     remove,
     getWriteCount: () => writeCount,
   }

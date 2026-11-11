@@ -22,8 +22,8 @@ const DEFAULT_SETTINGS: AutopilotSettings = {
   pace: 'auto',
   minDelaySec: 180,
   maxDelaySec: 480,
-  domainMaxPerDay: 3,
-  domainMinGapSec: 20 * 60,
+  domainMaxPerDay: 0,
+  domainMinGapSec: 3 * 60,
   contactCooldownDays: 30,
   traySending: true,
   aiAutonomy: 'suggest',
@@ -33,6 +33,18 @@ const DEFAULT_SETTINGS: AutopilotSettings = {
 
 let initialized = false
 let unsubscribePush: (() => void) | null = null
+let mailRefresh: ReturnType<typeof setTimeout> | null = null
+let mailTicker: ReturnType<typeof setInterval> | null = null
+
+/**
+ * "N of 150 today" is the mailer's own count, and it was read only when the desk opened or a batch started, so it sat
+ * at the old figure while emails went out. Asked again after each send (the ledger is written before the event).
+ */
+function refreshMailSoon(): void {
+  if (mailRefresh) return
+  mailRefresh = setTimeout(() => { mailRefresh = null; void useOutreachStore.getState().refreshMail() }, 250)
+}
+const refreshMailIfKnown = (): void => { if (useOutreachStore.getState().mail) refreshMailSoon() }
 
 function getBridge(): EsbBridge | undefined {
   if (typeof window !== 'undefined' && window.esb) {
@@ -80,7 +92,7 @@ export function applyEvents(events: OutreachEvent[]): void {
       campaigns: res.campaigns,
       optOut: res.optOut,
       bouncedAddrs: res.bouncedAddrs,
-      contacts: overlay(st.contacts, { approved: st.approved, optOut: res.optOut, bouncedAddrs: res.bouncedAddrs }, activeCamp, st.mail),
+      contacts: overlay(st.contacts, { approved: st.approved, optOut: res.optOut, bouncedAddrs: res.bouncedAddrs, names: st.names }, activeCamp, st.mail),
     })
   }
 
@@ -151,11 +163,16 @@ export const engineClient = {
         } else if (payload.kind === 'event') {
           applyEvents([payload.event])
           syncActiveCampaignRun()
+          if (payload.event.type === 'send.ok') refreshMailSoon()
         } else if (payload.kind === 'inbox') {
           useOutreachStore.getState().applyInboxResult(payload.result)
         }
       })
     }
+
+    // the day's count also has to turn over at midnight and catch up after the PC slept
+    mailTicker = setInterval(refreshMailIfKnown, 60_000)
+    window.addEventListener('focus', refreshMailIfKnown)
 
     // Subscribe to campaign switches to keep run state in sync
     useOutreachStore.subscribe((state, prev) => {
@@ -201,6 +218,9 @@ export const engineClient = {
       unsubscribePush()
       unsubscribePush = null
     }
+    if (mailTicker) { clearInterval(mailTicker); mailTicker = null }
+    if (mailRefresh) { clearTimeout(mailRefresh); mailRefresh = null }
+    if (typeof window !== 'undefined') window.removeEventListener('focus', refreshMailIfKnown)
     initialized = false
   },
 
@@ -220,9 +240,9 @@ export const engineClient = {
 
   async control(
     jobId: string,
-    action: 'pause' | 'resume' | 'stop' | 'hold' | 'release' | 'send-next',
+    action: 'pause' | 'resume' | 'stop' | 'hold' | 'release' | 'send-next' | 'clean-names',
     arg?: string | number
-  ): Promise<{ ok: boolean; error?: string }> {
+  ): Promise<{ ok: boolean; error?: string; count?: number }> {
     const bridge = getBridge()
     if (!bridge?.outreachJobControl) {
       return { ok: false, error: 'Engine bridge unavailable' }

@@ -4,6 +4,7 @@
 // on start (W:\E-Mail Marketing\…) through a bridge that read any file on the PC; the list is now always picked by
 // the editor.
 
+import { downloadListTemplate } from './listTemplate'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { WorkspaceSwitcher } from '../shell/WorkspaceRail'
@@ -170,6 +171,7 @@ export function OutreachWorkspace() {
       { divider: true },
       { label: 'Contacts', checked: ui.left === 'contacts', onClick: () => openTab('contacts') },
       { label: 'Sender account', icon: 'mail', disabled: !desktop, onClick: () => ui.set({ sheet: 'sender' }) },
+      { label: 'Download list format', icon: 'download', onClick: () => downloadListTemplate() },
     ] },
     { label: 'View', items: [
       { label: 'Compose desk', icon: 'edit', checked: ui.desk === 'compose', onClick: () => ui.set({ desk: 'compose' }) },

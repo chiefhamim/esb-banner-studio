@@ -515,7 +515,6 @@ export function GraphicsWorkspace({ base }: { base: Assets }) {
         </div>
       </header>
 
-      <svg className="corner-join" viewBox="0 0 15 15" aria-hidden focusable="false"><path d="M14.5 .5A14 14 0 0 0 .5 14.5" /></svg>
       <nav className="toolbar">
         <IconButton icon="select" tip="Select (V)" tipPos="right" size={16} active={tool === 'select'} onClick={() => st().setTool('select')} />
         <IconButton icon="hand" tip="Hand — pan (H / Space)" tipPos="right" size={16} active={tool === 'hand'} onClick={() => st().setTool('hand')} />

@@ -320,12 +320,6 @@ export const OutreachComposer = memo(function OutreachComposer() {
         </div>
       ) : preview && (
         <div className="or-sheet or-preview">
-          <dl>
-            <dt>From</dt><dd>{mail ? `${mail.name} <${mail.user}>` : 'No sender yet'}</dd>
-            <dt>To</dt><dd>{preview.who.email ? (preview.who.personName ? `${preview.who.personName} <${preview.who.email}>` : preview.who.email) : 'A recipient with no name (greeted Sir/Madam)'}</dd>
-            <dt>Subject</dt><dd><b>{preview.subject || '(no subject)'}</b></dd>
-            {s.attachments.length > 0 && <><dt>Files</dt><dd>{s.attachments.map((a) => a.name).join(', ')}</dd></>}
-          </dl>
           {active && missingFields(active, c.subject, c.body).length > 0 && <p className="or-preview-warn">This contact will be skipped: missing {missingFields(active, c.subject, c.body).join(', ')}.</p>}
           <div className="or-look" role="group" aria-label="Preview as">
             <Seg<MailLook> className="or-look-seg" value={look} onChange={setLook} options={[{ value: 'light', icon: 'sun', label: 'Light', tip: 'As most mail apps show it' }, { value: 'dark', icon: 'moon', label: 'Dark', tip: 'As the Gmail and Outlook phone apps show it in dark mode' }]} />

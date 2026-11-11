@@ -414,8 +414,18 @@
 .ws-home-btn:active { transform: scale(.96); }
 .ws-home-btn.on { color: var(--text); background: var(--raised); box-shadow: var(--raised-shadow); }
 .ws-home-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-.ws-home-btn svg { transition: filter var(--t-2) var(--ease); }
-.ws-home-btn:hover svg, .ws-home-btn:focus-visible svg { stroke: url(#ws-home-ig); filter: drop-shadow(0 0 4px rgba(120, 110, 255, .4)); }
+/* Hovered, a blended rainbow drifts through the lines of the icon: the icon's own shape masks a moving gradient. Pure CSS, so it
+   costs nothing until hovered and cannot lose a gradient to a parked desk. */
+@property --esb-tri { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@keyframes esb-tri-drift { to { --esb-tri: 42px; } }
+.ws-home-btn:hover svg, .ws-home-btn:focus-visible svg {
+  stroke: transparent;
+  background: repeating-linear-gradient(135deg, #ff3b6b calc(var(--esb-tri) + 0px), #ff7a1a calc(var(--esb-tri) + 6px), #f5b400 calc(var(--esb-tri) + 12px), #1fc978 calc(var(--esb-tri) + 18px), #14b8e6 calc(var(--esb-tri) + 24px), #6d6bff calc(var(--esb-tri) + 30px), #d946ef calc(var(--esb-tri) + 36px), #ff3b6b calc(var(--esb-tri) + 42px));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3Cpath d='M9 22V12h6v10'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3Cpath d='M9 22V12h6v10'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  animation: esb-tri-drift 6s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .ws-home-btn:hover svg, .ws-home-btn:focus-visible svg { animation: none; } }
 .home-head-actions { display: inline-flex; align-items: center; gap: 6px; }
 .home-head-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 32px; height: 32px; padding: 0 8px; font: 500 13px/1 var(--ui); color: var(--text-2); background: var(--fill); border: 0; border-radius: var(--r-2); cursor: pointer; transition: background var(--t-1) var(--ease), color var(--t-1) var(--ease); }
 .home-head-btn:hover { color: var(--text); background: var(--fill-hover); }
@@ -666,15 +676,8 @@ svg.icon.spin { animation: ed-spin 900ms linear infinite; }
 .ed-tp-mark { display: grid; place-items: center; }
 .ed-tp-ms { font: 500 11.5px/1 var(--ui); font-variant-numeric: tabular-nums; }
 
-/* ---------------------------------------------------------------- Graphics: the rail meets the top bar in one rounded line
-   The top bar's bottom line and the rail's right line used to cross at a sharp corner under Home. Both now stop short of the
-   corner and a quarter-circle (.corner-join in GraphicsWorkspace) joins them, so Home sits in the notch they wrap around. */
-.app { position: relative; --corner: 14px; }
-.app > .topbar { border-bottom: 0; }
-.app > .topbar::after { content: ''; position: absolute; left: calc(46px + var(--corner)); right: 0; bottom: 0; height: 1px; background: var(--card-line); pointer-events: none; }
-.app > .toolbar { position: relative; border-right: 0; }
-.app > .toolbar::after { content: ''; position: absolute; right: 0; top: var(--corner); bottom: 0; width: 1px; background: var(--line); pointer-events: none; }
-.app > .corner-join { position: absolute; left: 45px; top: 45px; z-index: 7; width: calc(var(--corner) + 1px); height: calc(var(--corner) + 1px); overflow: visible; pointer-events: none; fill: none; stroke: var(--line); stroke-width: 1; }
+.app { position: relative; }
+.app > .toolbar { position: relative; }
 /* Graphics: Home is centred over the rail (like Select below it) and the switcher starts on the left edge of the Story tabs */
 .app > .topbar { padding-left: 7px; }
 .app .ws-wrap { gap: 15px; } /* 7 + 32 + 15 = 54: the Story tabs' left edge */
@@ -2077,7 +2080,7 @@ img.ed-avatar { padding: 0; background: var(--fill); }
 .vw-inspector-panel .vw-ih-row { min-height: 52px; padding-left: 48px; }
 .vw-inspector-panel .vw-inspector { padding: 0 0 16px 12px; }
 /* News: the brand bar's own height, the brand's own inset */
-.nw-left { --fold-top: 6px; --fold-inset: 14px; }
+.nw-left { --fold-top: 24px; --fold-inset: 20px; }
 /* News' detail card and Editorial's status card: the button is the card's top-right tile, centred on the card's first
    row, as far from the card's top as from its right edge (8 px); the first row stops short of it */
 .nw-right > .col-fold.right { left: 20px; right: auto; top: 21px; }
@@ -2142,7 +2145,21 @@ img.ed-avatar { padding: 0; background: var(--fill); }
    to every other desk's rounded containers. Now: the list's file block is a rounded card like the rows under it, and
    the send column is ONE rounded group (an inset list: sections on hairlines inside one soft container) instead of a
    stack of separately boxed cards. Content and controls unchanged. */
-.or-left > .or-tab > .or-left-head { margin: 2px 12px 8px; padding: 12px; background: var(--card); border: 0; border-radius: var(--r-3); box-shadow: var(--card-shadow); }
+/* the list column is one rounded panel too, the same shape and insets as the send column opposite: the head and the
+   rows inside it on a hairline, instead of a head card narrower than a stack of separate row cards */
+.or-left > .or-tab { flex: 1 1 auto; margin: 2px 12px 12px; overflow: hidden; background: var(--card); border-radius: var(--r-3); box-shadow: var(--card-shadow); }
+:root[data-theme="dark"] .or-left > .or-tab { box-shadow: var(--card-shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.055); }
+.or-left > .or-tab > .or-left-head { flex: none; margin: 0; padding: 12px; background: none; border: 0; border-bottom: 1px solid var(--card-line); border-radius: 0; box-shadow: none; }
+.or-left > .or-tab > .or-list { gap: 2px; padding: 8px 0 8px 8px; }
+.or-left > .or-tab > .or-list .or-row { background: transparent; box-shadow: none; }
+.or-left > .or-tab > .or-list .or-row:hover { background: var(--fill-hover); box-shadow: none; }
+.or-left > .or-tab > .or-list .or-row.on { background: var(--fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent); }
+:root[data-theme="dark"] .or-left > .or-tab > .or-list .or-row { background: transparent; box-shadow: none; }
+:root[data-theme="dark"] .or-left > .or-tab > .or-list .or-row:hover { background: var(--fill-hover); box-shadow: none; }
+:root[data-theme="dark"] .or-left > .or-tab > .or-list .or-row.on { background: var(--fill-hover); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 20%, transparent); }
+@media (max-width: 1180px), (max-height: 900px) {
+  .or-left > .or-tab { overflow-x: hidden; overflow-y: auto; }
+}
 .or-right-scroll { gap: 0; padding: 4px 0 8px 12px; }
 .or-right-scroll > .or-card { padding: 14px 14px 16px; background: var(--card); box-shadow: none; border: 0; border-radius: 0; }
 .or-right-scroll > .or-card:first-child { border-top-left-radius: var(--r-3); border-top-right-radius: var(--r-3); }
@@ -2405,3 +2422,19 @@ input, textarea, select, [contenteditable], [contenteditable] *, .ProseMirror, .
 .soc-tile.on .soc-tile-state { box-shadow: 0 0 0 2px var(--raised); }
 :root[data-theme=dark] .soc-tile.on .soc-tile-state { box-shadow: 0 0 0 2px #2a2a2e; }
 .soc-tile-state.ok { top: 6px; left: 36px; }
+
+/* Desk rail, final. The head band is the desk header continued to the window's edge: same height, same surface, same hairline,
+   Home on the line the menus sit on. The desks begin level with the content cards under it. */
+.desk-rail { gap: 0; padding: 0 0 10px; }
+.desk-rail-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+.desk-rail-head { flex: none; display: grid; place-items: center; align-self: stretch; height: var(--h-app-header); box-sizing: border-box; background: var(--header-bg); border-bottom: 1px solid var(--card-line); }
+.desk-rail-desks { display: flex; flex-direction: column; align-items: center; gap: 2px; padding-top: 6px; }
+.desk-rail-btn:first-child { margin-bottom: 0; }
+.desk-rail-btn:first-child::after { content: none; }
+/* the selected desk wears the colours its icon takes on Home */
+.desk-rail-btn.on[data-desk] > svg { color: transparent; }
+.desk-rail-btn.on[data-desk='news'] > svg { stroke: url(#rail-ig-news); }
+.desk-rail-btn.on[data-desk='editorial'] > svg { stroke: url(#rail-ig-editorial); }
+.desk-rail-btn.on[data-desk='graphics'] > svg { stroke: url(#rail-ig-graphics); }
+.desk-rail-btn.on[data-desk='video'] > svg { stroke: url(#rail-ig-video); }
+.desk-rail-btn.on[data-desk='outreach'] > svg { stroke: url(#rail-ig-outreach); }

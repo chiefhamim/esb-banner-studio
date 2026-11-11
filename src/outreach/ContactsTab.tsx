@@ -3,6 +3,7 @@
 // a coloured edge, like the Editorial story queue. Nothing here is invented: a contact with no name shows its
 // address, a row with no status says so.
 
+import { downloadListTemplate } from './listTemplate'
 import { memo, useDeferredValue, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useOutreachStore } from './outreachStore'
@@ -316,6 +317,7 @@ export const ContactsTab = memo(function ContactsTab() {
               <b className="empty-title">Import your mailing list</b>
               <p>One row per contact, with an Email column. Person Name, Designation, Organization, Sector Group, Purpose and Deliverability Status are read when present. A row that is not marked safe is only sent after you approve it.</p>
               <button type="button" className="btn primary sm" onClick={pick}><Icon name="upload" size={13} /><span>Import list</span></button>
+              <button type="button" className="btn sm" onClick={() => downloadListTemplate()} data-tip="An Excel file in the exact format, with instructions you can give your AI or agent"><Icon name="download" size={13} /><span>Download list format</span></button>
             </div>
           )
         ) : !shown.length ? (

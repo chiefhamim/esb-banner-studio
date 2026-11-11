@@ -1,6 +1,7 @@
 // The desk's sheets: signatures, the house prompt every AI job follows, a name (rename / save as template) and
 // Review & send — the last look before a batch starts, now or at a time.
 
+import { cleanPersonName, nameHasNumber } from './personName'
 import { previewDoc } from './previewDoc'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_FONT_FAMILY, DEFAULT_FOOTER_LINE, uid, useDesk, useOutreachStore } from './outreachStore'
@@ -252,6 +253,7 @@ export function ReviewSendDialog() {
   const ready = eligible(s.contacts, c.subject, c.body, c.audience)
   const room = set ? Math.max(0, set.dailyLimit - (s.mail?.sentToday ?? s.mail?.sent24h ?? 0)) : 0
   const skippedCount = audience.length - ready.length
+  const numberedNames = ready.filter((x) => nameHasNumber(x.personName) && !(c.reviewed?.[x.email] ?? []).includes('odd_name'))
 
   const reasons = useMemo(() => {
     const m = new Map<string, number>()
@@ -486,6 +488,14 @@ export function ReviewSendDialog() {
             <Icon name={attachOk ? 'check' : 'x'} size={14} />
             <span><b>Attachments:</b> {attachOk ? (s.attachments.length ? `${s.attachments.length} attached` : 'None needed') : 'Mentioned in body but not attached'}</span>
           </div>
+          {numberedNames.length > 0 && (
+            <div className="or-rs-check-row warn or-rs-names">
+              <Icon name="info" size={14} />
+              <span><b>Names:</b> {numberedNames.length} carry a number, like “{numberedNames[0].personName}”. They are held back until you decide.</span>
+              <button type="button" className="btn xs primary" onClick={() => s.setContactNames(Object.fromEntries(numberedNames.flatMap((x) => { const f = cleanPersonName(x.personName); return f && f !== x.personName ? [[x.email, f]] : [] })))}>Remove the numbers</button>
+              <button type="button" className="btn xs" onClick={() => ui.set({ right: 'review', sheet: null })}>Review each</button>
+            </div>
+          )}
           <div className={`or-rs-check-row ${testSent ? 'good' : 'warn'}`}>
             <Icon name={testSent ? 'check' : 'info'} size={14} />
             <span><b>Test email:</b> {testSent ? 'Sent to yourself' : 'Not sent to yourself yet'}</span>

@@ -187,9 +187,15 @@ describe('C — a restart keeps the per-organisation counts and the gap', () => 
     await h.engine.tick()
     expect(h.sent).toHaveLength(0)
     expect(c2()).toMatchObject({ status: 'waiting', why: 'domain', wait: { domain: 'desco.gov.bd', kind: 'limit', count: 3, max: 3 } })
-    // freed at the next Dhaka midnight (the organisation's day is a calendar day, like the account's), not 24 h
-    // after the first send and not 24 h after the restart
-    expect(c2().until).toBe(Date.UTC(2026, 10, 1, 18, 0, 0))
+    // freed by the next Dhaka day (a calendar day, like the account's), and the desk names the real next send: when the
+    // sending hours open that morning, not midnight
+    expect(c2().until).toBe(Date.UTC(2026, 10, 2, 3, 0, 0))
+
+    // the limit is lifted while the batch waits: the app closes without a clean quit, and at the next launch it sends straight away instead of sleeping to morning
+    h = engineWith({ get: () => ({ ...mgr.get(), domainMaxPerDay: 0, domainMinGapSec: 0 }) })
+    h.engine.start()
+    await h.engine.tick()
+    expect(h.sent).toHaveLength(1)
   })
 
   it('restart right after a send still waits the gap (the last-send time is rebuilt too)', async () => {

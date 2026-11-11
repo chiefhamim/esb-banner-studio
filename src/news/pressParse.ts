@@ -131,7 +131,8 @@ function absolute(href: string, pageUrl: string): string | null {
 
 /** The releases listed on a National Portal press_release / news page: dated rows or release links, never the menus. */
 export function parseGovPressTable(rawHtml: string, pageUrl: string): ParsedPressItem[] {
-  const html = withoutChrome(decodeNationalPortalHtml(rawHtml))
+  // the new portal leaves its old table cells in comments, with US-style dates: "11/3/2026" was read as 11 March
+  const html = withoutChrome(decodeNationalPortalHtml(rawHtml).replace(/<!--[\s\S]*?-->/g, ''))
   const out: ParsedPressItem[] = []
   const seen = new Set<string>()
   const push = (title: string, link: string, published: string | null) => {

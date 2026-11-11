@@ -44,3 +44,18 @@ describe('resolveGovOfficeName', () => {
     expect(resolveGovOfficeName('https://example.com/x', 'f')).toBeNull()
   })
 })
+
+describe('the new national portal', () => {
+  it('reads the printed date, not the old cell left in a comment', () => {
+    const page = `<table><tbody><tr class="table-tr">
+      <td data-column="id">১</td>
+      <!-- <td>a title kept in a comment</td> --> <!-- <td>11/3/2026</td> -->
+      <td data-column="title">আগামী গ্রীষ্মের আগেই সৌরবিদ্যুৎ উৎপাদন সম্ভব</td>
+      <td data-column="publish_date"><span>০৩-১১-২০২৬</span></td>
+      <td><a href="/pages/news/some-release-6aeaad9798f72df36a8639a8">দেখুন</a></td>
+    </tr></tbody></table>`
+    const [row] = parseGovPressTable(page, 'https://powerdivision.gov.bd/pages/news/')
+    expect(row.title).toBe('আগামী গ্রীষ্মের আগেই সৌরবিদ্যুৎ উৎপাদন সম্ভব')
+    expect(row.published?.slice(0, 10)).toBe('2026-11-03')
+  })
+})

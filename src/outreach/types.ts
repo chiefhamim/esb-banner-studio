@@ -18,6 +18,8 @@ export interface Contact {
   organization: string
   /** '' when the workbook names no person; the greeting then reads "Sir/Madam". */
   personName: string
+  /** The name as the sheet has it, once the editor has changed the one the letter uses. */
+  sheetName?: string
   designation: string
   email: string
   phone: string

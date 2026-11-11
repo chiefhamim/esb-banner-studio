@@ -51,7 +51,7 @@ export interface EsbBridge {
   outreachInbox?: (force?: boolean) => Promise<EsbInboxResult>
   outreachSend?: (mail: EsbOutreachMail) => Promise<{ ok: true; messageId: string; messageKey?: string | null; sent24h: number } | { ok: false; error: string; nextAt?: number; duplicate?: boolean }>
   outreachJobSubmit?: (spec: JobSpec) => Promise<{ ok: true; jobId: string; rejected: { index: number; error: string }[] } | { ok: false; error: string }>
-  outreachJobControl?: (jobId: string, action: 'pause' | 'resume' | 'stop' | 'hold' | 'release' | 'send-next', arg?: string | number) => Promise<{ ok: boolean; error?: string }>
+  outreachJobControl?: (jobId: string, action: 'pause' | 'resume' | 'stop' | 'hold' | 'release' | 'send-next' | 'clean-names', arg?: string | number) => Promise<{ ok: boolean; error?: string; count?: number }>
   outreachPauseAll?: (on: boolean) => Promise<{ ok: boolean }>
   outreachJobs?: () => Promise<JobSnapshot[]>
   outreachEvents?: (q?: { since?: string; before?: string; from?: number; to?: number; jobId?: string; campaignId?: string; types?: string[]; q?: string; limit?: number; includeDry?: boolean }) => Promise<{ events: OutreachEvent[]; hasMore: boolean }>
@@ -187,6 +187,8 @@ export interface AutopilotSettings {
   legacyBackfilled?: boolean
   /** The Sender dialog's old pacing copy was adopted once (outreach-settings.cjs migratePacingFromMailer). */
   pacingMigrated?: boolean
+  /** The old default of 3 emails a day per organisation has been lifted (outreach-settings.cjs load). */
+  orgLimitLifted?: boolean
   /** When the account-wide settings (outreach-settings.cjs SHARED_KEYS) last changed, on any PC (ms). */
   sharedUpdatedAt?: number
   dryRun?: boolean
@@ -237,6 +239,9 @@ export interface JobSnapshot {
   startedAt?: number | null
   endedAt?: number | null
   etaAt?: number | null
+  /** Names still to go that carry an ID number, and the first of them with its clean form. */
+  badNames?: number
+  badNameSample?: { old: string; fixed: string } | null
 }
 
 export interface OutreachEvent {

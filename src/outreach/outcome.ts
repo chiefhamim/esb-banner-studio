@@ -110,6 +110,7 @@ export function engineSkipText(reason: string): string {
   if (reason === 'cooldown') return 'Skipped: emailed within the cooldown period'
   if (reason === 'elsewhere') return 'Skipped: already sent from another PC'
   if (reason === 'already-sent') return 'Skipped: already emailed in the last 7 days (this PC or another)'
+  if (reason === 'not-due') return 'Skipped: no follow-up due for this address'
   return `Skipped: ${reason}`
 }
 

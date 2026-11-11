@@ -233,7 +233,7 @@ describe('C — the live plan', () => {
 describe('D — old settings migrate safely', () => {
   it("the editor's file loads unchanged (plus the new ceiling); an old 'auto' file becomes the fixed gap with its numbers", () => {
     const f = path.join(dir, 'outreach-autopilot.json')
-    const owner = { ...OWNER, contactCooldownDays: 30, traySending: true, aiAutonomy: 'confirm', aiReadsReply: false, autoResume: true, legacyBackfilled: true, pacingMigrated: true, sharedUpdatedAt: 1793595832739 }
+    const owner = { ...OWNER, contactCooldownDays: 30, traySending: true, aiAutonomy: 'confirm', aiReadsReply: false, autoResume: true, legacyBackfilled: true, pacingMigrated: true, orgLimitLifted: true, sharedUpdatedAt: 1793595832739 }
     delete (owner as any).gmailCeiling24h
     fs.writeFileSync(f, JSON.stringify(owner))
     const got = createSettingsManager({ dir }).get()

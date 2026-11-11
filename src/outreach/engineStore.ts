@@ -74,11 +74,11 @@ export const useEngineStore = create<EngineStoreState>((set, get) => ({
     const updated: JobSnapshot = {
       ...existing,
       status: p.status as JobSnapshot['status'],
-      why: (p.why as JobSnapshot['why']) ?? existing.why,
+      why: p.why !== undefined ? (p.why as JobSnapshot['why']) : existing.why,
       until: p.until !== undefined ? p.until : existing.until,
       // every progress push carries the engine's current wait detail (null while sending)
       wait: p.wait !== undefined ? p.wait : existing.wait,
-      reason: (p.reason as JobSnapshot['reason']) ?? existing.reason,
+      reason: p.reason !== undefined ? (p.reason as JobSnapshot['reason']) : existing.reason,
       sent: p.sent,
       total: p.total,
       failed: p.failed,

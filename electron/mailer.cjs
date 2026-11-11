@@ -224,15 +224,15 @@ function ledgerCheck(ledger, now, settings, mail) {
   const cap = capState({ sendTimes: campaign.map((e) => e.t), now, tz: settings.tz || 'Asia/Dhaka', dailyLimit: settings.dailyLimit, ceiling24h: settings.ceiling24h || GMAIL_SAFE_24H })
   if (cap.room <= 0) {
     return cap.limitedBy === 'ceiling'
-      ? { ok: false, reason: `Safety limit of ${settings.ceiling24h || GMAIL_SAFE_24H} emails in 24 hours reached`, nextAt: cap.freesAt }
-      : { ok: false, reason: `Daily limit of ${settings.dailyLimit} reached`, nextAt: cap.freesAt }
+      ? { ok: false, reason: `Safety limit of ${settings.ceiling24h || GMAIL_SAFE_24H} emails in 24 hours reached`, nextAt: cap.freesAt, hold: 'ceiling' }
+      : { ok: false, reason: `Daily limit of ${settings.dailyLimit} reached`, nextAt: cap.freesAt, hold: 'day' }
   }
   const last = campaign[campaign.length - 1]
-  if (last && now - last.t < MIN_GAP_SEC * 1000) return { ok: false, reason: 'Too soon after the last email', nextAt: last.t + MIN_GAP_SEC * 1000 }
+  if (last && now - last.t < MIN_GAP_SEC * 1000) return { ok: false, reason: 'Too soon after the last email', nextAt: last.t + MIN_GAP_SEC * 1000, hold: 'gap' }
   if (mail.followUp) {
     const first = ledger.filter((e) => e.kind === 'campaign' && e.to === mail.to).sort((a, b) => b.t - a.t)[0]
-    if (!first) return { ok: false, reason: `No earlier letter to ${mail.to} to follow up` }
-    if (now - first.t < FOLLOW_MIN_DAYS * DAY) return { ok: false, reason: `The first letter to ${mail.to} went less than ${FOLLOW_MIN_DAYS} days ago` }
+    if (!first) return { ok: false, reason: `No earlier letter to ${mail.to} to follow up`, notDue: true }
+    if (now - first.t < FOLLOW_MIN_DAYS * DAY) return { ok: false, reason: `The first letter to ${mail.to} went less than ${FOLLOW_MIN_DAYS} days ago`, notDue: true }
     const again = ledger.find((e) => e.kind === 'followup' && e.to === mail.to && now - e.t < FOLLOW_ONCE_DAYS * DAY)
     if (again) return { ok: false, reason: `Already followed up ${mail.to} on ${new Date(again.t).toISOString().slice(0, 10)}`, duplicate: true }
     return { ok: true, inReplyTo: first.id || '' }
@@ -402,7 +402,9 @@ function createMailer({ dir, safeStorage, nodemailer, clock = () => Date.now(), 
     if (!saved || !saved.password) return { ok: false, error: 'Save the sender account and app password first' }
     const l = ledger()
     const gate = ledgerCheck(l, clock(), withPacing(saved), mail)
-    if (!gate.ok) return { ok: false, error: gate.reason, nextAt: gate.nextAt, duplicate: !!gate.duplicate }
+    // hold = wait and try this contact again (the gap floor, the day's limit); notDue / duplicate = this contact is not sent to.
+    // Neither is a delivery failure, so the engine must not spend a retry or feed its circuit breaker on them.
+    if (!gate.ok) return { ok: false, error: gate.reason, nextAt: gate.nextAt, duplicate: !!gate.duplicate, ...(gate.hold ? { hold: gate.hold } : {}), ...(gate.notDue ? { notDue: true } : {}) }
     try {
       const { renderEmail, renderDesigned } = await render()
       // to the address whose replies are read: the Reply-To when one is set (a relay provider has no inbox of its own)

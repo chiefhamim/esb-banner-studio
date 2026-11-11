@@ -77,8 +77,8 @@ function SendingForm({ initial, onClose }: { initial: AutopilotSettings; onClose
   const [maxMin, setMaxMin] = useState(Math.round(((initial?.maxDelaySec ?? 480) / 60) * 10) / 10)
   const [dailyLimit, setDailyLimit] = useState(initial?.dailyLimit ?? 100)
   const [warmupRamp, setWarmupRamp] = useState(initial?.ramp ?? true)
-  const [domainMax, setDomainMax] = useState(initial?.domainMaxPerDay ?? 3)
-  const [domainGapMin, setDomainGapMin] = useState(Math.round((initial?.domainMinGapSec ?? 1200) / 60))
+  const [domainMax, setDomainMax] = useState(initial?.domainMaxPerDay ?? 0)
+  const [domainGapMin, setDomainGapMin] = useState(Math.round((initial?.domainMinGapSec ?? 180) / 60))
   // per-organisation exceptions, edited as "domain = N" lines
   const [overridesText, setOverridesText] = useState(() => Object.entries(initial?.domainOverrides ?? {}).map(([d, n]) => `${d} = ${n}`).join('\n'))
   const overrides = useMemo(() => parseDomainOverrides(overridesText), [overridesText])
@@ -123,10 +123,10 @@ function SendingForm({ initial, onClose }: { initial: AutopilotSettings; onClose
     maxDelaySec: Math.round(Number(maxMin) * 60),
     dailyLimit: Math.round(Number(dailyLimit)),
     ramp: warmupRamp,
-    domainMaxPerDay: Math.max(1, Math.min(50, Number(domainMax) || 3)),
+    domainMaxPerDay: Math.max(0, Math.min(500, Math.round(Number(domainMax)) || 0)),
     domainOverrides: overrides.map,
     // 0 is a real choice (no spacing per organisation) — `|| 20` turned it back into 20
-    domainMinGapSec: Math.max(0, Math.min(240, Number.isFinite(Number(domainGapMin)) ? Math.round(Number(domainGapMin)) : 20)) * 60,
+    domainMinGapSec: Math.max(0, Math.min(240, Number.isFinite(Number(domainGapMin)) ? Math.round(Number(domainGapMin)) : 3)) * 60,
     contactCooldownDays: Math.max(7, Math.min(365, Number(cooldownDays) || 30)),
     traySending,
     aiAutonomy: autonomy,
@@ -329,19 +329,19 @@ function SendingForm({ initial, onClose }: { initial: AutopilotSettings; onClose
           <button type="button" className="or-adv-toggle" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)} data-testid="or-advanced">
             <Icon name={advanced ? 'chevDown' : 'chevRight'} size={14} />
             <span>Advanced</span>
-            {!advanced && <span className="or-adv-sum">{`${patch.domainMaxPerDay} a day per organisation, ${domainGapMin} min apart · cooldown ${patch.contactCooldownDays} days · warm-up ${warmupRamp ? 'on' : 'off'} · tray ${traySending ? 'on' : 'off'}`}</span>}
+            {!advanced && <span className="or-adv-sum">{`${patch.domainMaxPerDay ? `${patch.domainMaxPerDay} a day per organisation` : 'No daily limit per organisation'}, ${domainGapMin} min apart · cooldown ${patch.contactCooldownDays} days · warm-up ${warmupRamp ? 'on' : 'off'} · tray ${traySending ? 'on' : 'off'}`}</span>}
           </button>
           {advanced && (
             <div className="or-adv-body">
               <div className="or-adv-row">
                 <div className="or-adv-ctl">
                   <span>At most</span>
-                  <input type="number" className="input" min={1} max={50} value={domainMax} onChange={(e) => setDomainMax(Number(e.target.value))} aria-label="Emails a day per organisation" />
-                  <span>a day per organisation,</span>
+                  <input type="number" className="input" min={0} max={500} value={domainMax} onChange={(e) => setDomainMax(Number(e.target.value))} aria-label="Emails a day per organisation" />
+                  <span>a day per organisation (0 = no limit),</span>
                   <input type="number" className="input" min={0} max={240} value={domainGapMin} onChange={(e) => setDomainGapMin(Number(e.target.value))} aria-label="Minutes between emails to one organisation" />
                   <span>min apart</span>
                 </div>
-                <p className="or-adv-why">Keeps one office from getting several emails in a row. Slows the pace when many remaining contacts share an organisation (the plan above shows how much).</p>
+                <p className="or-adv-why">Gmail has no limit per organisation. The gap keeps one office's mail server from getting a burst of the same letter, and while one office waits the next organisation goes first.</p>
               </div>
               <div className="or-adv-row">
                 <label className="or-adv-ctl" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
