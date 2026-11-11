@@ -1411,3 +1411,8 @@
 .or-blocked-why { display: flex; flex-direction: column; gap: 2px; font-size: 12px; line-height: 17px; color: var(--text); overflow-wrap: anywhere; }
 .or-blocked-why small { font-size: 11.5px; color: var(--text-2); }
 .or-blocked-why code { font-family: inherit; font-weight: 600; }
+
+/* Contact facts: the label column never takes more than a third of the pane, so the values keep room (a long label once
+   squeezed them into one word per line and pushed the chip out sideways) */
+.or-facts dt { max-width: 112px; overflow-wrap: anywhere; }
+.or-facts dd .or-chip { white-space: normal; }

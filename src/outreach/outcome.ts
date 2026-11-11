@@ -58,7 +58,7 @@ export const isEmailSyntax = (s: string) => s.length <= 254 && EMAIL_SYNTAX.test
 const when = (t?: number) => (t ? fmtDateTime(t, { weekday: false }) : '')
 
 export const LABEL: Record<OutcomeState, string> = {
-  busy: 'Sending', out: 'Opted out', bounced: 'Bounced', replied: 'Replied', clicked: 'Clicked', opened: 'Opened (human, approx.)',
+  busy: 'Sending', out: 'Opted out', bounced: 'Bounced', replied: 'Replied', clicked: 'Clicked', opened: 'Opened',
   sent: 'Sent', failed: 'Failed', noemail: 'Not an email', skip: 'Skipped', ready: 'Ready',
 }
 

@@ -157,7 +157,7 @@ describe('outcomeOf: one accurate status per contact, never more than the data s
     expect(o.detail).toMatch(/not proof it was read/)
   })
   it('opened is approximate and says why; clicked names the links', () => {
-    expect(outcomeOf(contact({ status: 'SENT' }), null, eng({ opens: 2, firstOpen: 1, lastOpen: 2 }))).toMatchObject({ st: 'opened', label: 'Opened (human, approx.)' })
+    expect(outcomeOf(contact({ status: 'SENT' }), null, eng({ opens: 2, firstOpen: 1, lastOpen: 2 }))).toMatchObject({ st: 'opened', label: 'Opened' })
     expect(outcomeOf(contact({ status: 'SENT' }), null, eng({ opens: 2 })).detail).toMatch(/some mail apps load it on their own/)
     expect(outcomeOf(contact({ status: 'SENT' }), null, eng({ clicks: 1, links: [{ link: 'wa.me/1', n: 1 }] }))).toMatchObject({ st: 'clicked', detail: 'Clicked wa.me/1' })
   })
